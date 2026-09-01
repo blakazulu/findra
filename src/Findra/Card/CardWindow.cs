@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Threading;
@@ -58,7 +59,7 @@ public sealed class CardWindow : Window
         AddHandler(TextInputEvent, (_, e) => { if (!string.IsNullOrEmpty(e.Text)) { _canvas.Type(e.Text); e.Handled = true; } },
             Avalonia.Interactivity.RoutingStrategies.Tunnel);
 
-        Opened += (_, _) => { Activate(); _canvas.Focus(); };
+        Opened += (_, _) => { Activate(); _canvas.Focus(); _canvas.OnOpened(); };
         Deactivated += (_, _) => { if (!_canvas.Dragging) Close(); };
         Closed += (_, _) => { _closedAt = Stopwatch.GetTimestamp(); _canvas.Stop(); _dim?.Close(); _dim = null; };
     }
@@ -77,8 +78,10 @@ public sealed class CardWindow : Window
         Height = _canvas.CardHeight;
     }
 
-    /// <summary>Put the card so its capsule sits exactly over the widget's capsule
-    /// (<paramref name="capsule"/> in manifest units), then keep it on the monitor.</summary>
+    /// <summary>Put the card so its capsule sits exactly over the widget's capsule.
+    /// <paramref name="capsule"/> is that capsule's rectangle in the widget's own unscaled layout
+    /// units (what CapsuleLayout lays out in), which <paramref name="scale"/> turns into pixels;
+    /// <paramref name="screen"/> is the monitor the whole card is then kept inside.</summary>
     public void PlaceOver(PixelPoint widgetPos, double scale, SKRect capsule, PixelRect screen)
     {
         int w = (int)Math.Ceiling(_canvas.CardWidth), h = (int)Math.Ceiling(SearchCardLayout.Height(SearchCardLayout.MaxRows, true) * scale);
@@ -101,6 +104,16 @@ public sealed class CardWindow : Window
         private readonly DispatcherTimer _timer;
         private readonly DispatcherTimer _debounce;
         private readonly PreviewCache _previews = new(8);
+
+        // The pipe client is owned HERE rather than handed in: the card is the only thing in this
+        // process that asks the helper anything, and a connection nobody else can reach has no
+        // reason to outlive the window. _life is cancelled when the card closes.
+        private readonly CancellationTokenSource _life = new();
+        private readonly SemaphoreSlim _connecting = new(1, 1);
+        private NameClient? _client;
+        private long _connectFailedAt;                  // Stopwatch timestamp; 0 = never failed
+        private CancellationTokenSource? _search;       // the search in flight, cancelled by the next
+        private volatile string _indexLine = "";
 
         private volatile SearchCardState _state = SearchCardState.Empty;
         private int _generation;
@@ -143,11 +156,25 @@ public sealed class CardWindow : Window
             _debounce.Tick += (_, _) => { _debounce.Stop(); RunSearch(); };
         }
 
-        public void Stop() { _timer.Stop(); _debounce.Stop(); _previews.Dispose(); }
+        public void Stop()
+        {
+            _timer.Stop();
+            _debounce.Stop();
+            _previews.Dispose();
+            // The connection goes with the window. Cancel first, so a search still in flight
+            // gives up rather than reconnecting behind a card that is already closing. _life
+            // itself is not disposed: awaits registered on its token may still be unwinding,
+            // and there is no unmanaged resource behind it to release.
+            _life.Cancel();
+            NameClient? c = Interlocked.Exchange(ref _client, null);
+            if (c is not null) CloseClient(c);
+        }
 
-        // The elevated helper streams its own freshness; the index line is a status readout,
-        // not a query, so it is filled from StatusAsync once the pipe client exists (Task 5).
-        private static string IndexLine() => "";
+        // The elevated helper streams its own freshness; the index line is a status readout, not
+        // a query, so it is asked for ONCE when the card opens (RefreshIndexLineAsync) and the
+        // 66 ms tick only ever reads the string that left behind. A status call on the tick
+        // would put a pipe round trip on the UI thread fifteen times a second.
+        private string IndexLine() => _indexLine;
 
         // ---- typing ----
 
@@ -384,41 +411,196 @@ public sealed class CardWindow : Window
             RunSearch();
         }
 
-        // The pipe round trip that answers a query. Task 5 wires this to the name index client;
-        // until then it always throws, and RunSearch's catch turns that into "search failed".
-        private static Task<QueryReply?> RunSearchAsync(string raw, CancellationToken ct)
-            => throw new NotImplementedException();
+        // ---- the pipe ----
+
+        private const string HelperMissing = "the name helper is not running";
+        private static readonly TimeSpan ConnectRetryAfter = TimeSpan.FromSeconds(5);
+
+        /// <summary>
+        /// The connected client, or null when there is nothing to connect to. Connecting is lazy
+        /// and its failure is a normal state, not an exception the user sees: the card opens,
+        /// takes typing and says what is wrong in its index line. Retries are rate limited -
+        /// a five-second connect timeout attempted once per keystroke would freeze the field.
+        /// </summary>
+        private async Task<NameClient?> ClientAsync(CancellationToken ct)
+        {
+            if (_life.IsCancellationRequested) return null;
+            NameClient? have = _client;
+            if (have is not null) return have;
+            if (_connectFailedAt != 0 && Stopwatch.GetElapsedTime(_connectFailedAt) < ConnectRetryAfter) return null;
+
+            await _connecting.WaitAsync(ct).ConfigureAwait(false);
+            try
+            {
+                // Both checks again inside the gate: several keystrokes can arrive while the
+                // first connect is still out, and without this each of them opens its own pipe.
+                if (_client is not null) return _client;
+                if (_connectFailedAt != 0 && Stopwatch.GetElapsedTime(_connectFailedAt) < ConnectRetryAfter) return null;
+                try
+                {
+                    NameClient c = await NameClient.ConnectAsync(TimeSpan.FromSeconds(5), ct).ConfigureAwait(false);
+                    _connectFailedAt = 0;
+                    _client = c;
+                    Log.Info("card", "connected to the name helper");
+                    return c;
+                }
+                catch (OperationCanceledException) { throw; }   // the card is closing, not a failure
+                catch (Exception ex)
+                {
+                    _connectFailedAt = Stopwatch.GetTimestamp();
+                    _indexLine = HelperMissing;
+                    Log.Once("card|connect|" + ex.GetType().Name, "WARN", "card",
+                        $"{HelperMissing} :: {ex.GetType().Name}: {ex.Message}");
+                    return null;
+                }
+            }
+            finally { _connecting.Release(); }
+        }
+
+        /// <summary>The connection died under a question. Drop it so the next search opens a new
+        /// one, rather than throwing forever into a client whose read pump has ended.</summary>
+        private void DropClient()
+        {
+            _connectFailedAt = Stopwatch.GetTimestamp();
+            NameClient? c = Interlocked.Exchange(ref _client, null);
+            if (c is not null) CloseClient(c);
+        }
+
+        private static void CloseClient(NameClient c)
+        {
+            // Nothing waits for a closing pipe, but something has to observe its failure.
+            _ = Task.Run(async () =>
+            {
+                try { await c.DisposeAsync().ConfigureAwait(false); }
+                catch (Exception ex) { Log.Warn("card", "closing the helper connection: " + ex.Message); }
+            });
+        }
+
+        /// <summary>The pipe round trip that answers a query. Null means the helper's answer
+        /// arrived after a newer query had been written: NameClient's generation gate dropped it,
+        /// and painting nothing is exactly what that counter is for.</summary>
+        private async Task<QueryReply?> RunSearchAsync(string raw, CancellationToken ct)
+        {
+            NameClient client = await ClientAsync(ct).ConfigureAwait(false)
+                ?? throw new IOException(HelperMissing);
+            // MaxRows * 8: the card shows eight rows and scrolls through the rest, so one deep
+            // answer beats a second round trip the moment somebody presses PageDown.
+            return await client.SearchAsync(raw, SearchCardLayout.MaxRows * 8, ct).ConfigureAwait(false);
+        }
 
         private void RunSearch()
         {
             string q = _state.Query.Trim();
             if (q.Length == 0) return;
             int gen = Interlocked.Increment(ref _generation);
-            _ = Task.Run(() =>
+            var mine = new CancellationTokenSource();
+            // Cancel the previous search's OWN work - never its request; see SearchOnceAsync.
+            // The replaced source is not disposed: nothing registers a callback or a wait handle
+            // on this token, so there is nothing to release, and disposing one while the search
+            // holding it is still deciding whether to apply its answer is the worse bug.
+            Interlocked.Exchange(ref _search, mine)?.Cancel();
+            SearchSort sort = _state.Sort;
+            _ = Task.Run(() => SearchOnceAsync(q, gen, sort, mine.Token));
+        }
+
+        /// <summary>
+        /// One query, end to end, off the UI thread. Three races have to be lost gracefully, and
+        /// each needs its own guard:
+        /// <list type="bullet">
+        /// <item>the answer lost on the WIRE - a newer query was already written, so NameClient's
+        /// generation gate hands back null and nothing is painted;</item>
+        /// <item>the answer lost to the DEBOUNCE - the user typed again while this request was
+        /// out, so the newer query has not reached the wire yet and the gate cannot see it. Our
+        /// own token catches that, and so does the case where the field was simply cleared
+        /// (SetQuery("") bumps the local generation without ever writing a query at all);</item>
+        /// <item>the answer lost to the UI THREAD - the post below runs later still, so the
+        /// generation is checked once more before any state is replaced.</item>
+        /// </list>
+        /// </summary>
+        private async Task SearchOnceAsync(string raw, int gen, SearchSort sort, CancellationToken ct)
+        {
+            SearchResults r;
+            try
             {
-                SearchResults r;
-                try
-                {
-                    RunSearchAsync(q, CancellationToken.None).GetAwaiter().GetResult();
-                    r = SearchResults.Empty with { Query = q };
-                }
-                catch (Exception ex)
-                {
-                    Log.Once("search|query|" + ex.GetType().Name, "WARN", "search", $"search failed :: {ex.Message}");
-                    r = SearchResults.Empty with { Query = q, Note = "search failed - see the log" };
-                }
-                Dispatcher.UIThread.Post(() =>
-                {
-                    if (gen != _generation) return;   // a newer query is already running
-                    int before = _state.Rows.Count;
-                    var rows = SearchCardState.Filtered(r, _state.Filter);
-                    _state = _state with { Results = r, Rows = rows, Highlight = 0, Scroll = 0, Searching = false };
-                    if (rows.Count != before) CardResized?.Invoke();
-                    HighlightChanged();
-                    InvalidateVisual();
-                });
+                long started = Stopwatch.GetTimestamp();
+                // The REQUEST rides the window's lifetime token, not this search's. Frame writes
+                // a frame as a single buffer, so a cancellation can no longer tear a header from
+                // its payload - but a cancelled overlapped write can still leave part of a buffer
+                // on the wire, and this is one shared full-duplex connection whose replies are
+                // matched by id: desynchronise it once and every later search on it is wrong,
+                // permanently. An abandoned answer costs a round trip that has already happened
+                // and is discarded for free by generation, so it is never cancelled - only ignored.
+                QueryReply? reply = await RunSearchAsync(raw, _life.Token).ConfigureAwait(false);
+                if (reply is null) return;                  // stale on the wire
+                if (ct.IsCancellationRequested) return;     // stale against the debounce
+                double ms = Stopwatch.GetElapsedTime(started).TotalMilliseconds;
+                // Mapping stats every row it keeps, so it belongs out here on the pool: a stat is
+                // tens of microseconds and there are up to MaxRows * 8 of them, which is a
+                // visible hitch if it lands on the UI thread. `size:` and `modified:` are applied
+                // in there too - the helper holds names, not directory entries, and answers those
+                // filters unfiltered by design.
+                r = ResultMapper.Build(raw, reply.Rows, new SearchQuery(raw), sort, ms);
+            }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested || _life.IsCancellationRequested)
+            {
+                return;
+            }
+            catch (Exception ex) when (ex is IOException or OperationCanceledException)
+            {
+                // Nothing to connect to, or a helper that went away mid-question - the client
+                // cancels every waiter when its pump ends, which is the second shape here.
+                DropClient();
+                _indexLine = HelperMissing;
+                Log.Once("card|search|" + ex.GetType().Name, "WARN", "card", $"{HelperMissing} :: {ex.Message}");
+                r = SearchResults.Empty with { Query = raw, Note = HelperMissing };
+            }
+            catch (Exception ex)
+            {
+                Log.Once("search|query|" + ex.GetType().Name, "WARN", "search", $"search failed :: {ex.Message}");
+                r = SearchResults.Empty with { Query = raw, Note = "search failed - see the log" };
+            }
+
+            Dispatcher.UIThread.Post(() =>
+            {
+                if (gen != _generation) return;   // a newer query is already running
+                int before = _state.Rows.Count;
+                var rows = SearchCardState.Filtered(r, _state.Filter);
+                _state = _state with { Results = r, Rows = rows, Highlight = 0, Scroll = 0, Searching = false };
+                if (rows.Count != before) CardResized?.Invoke();
+                HighlightChanged();
+                InvalidateVisual();
             });
         }
+
+        /// <summary>The card is up. Ask the helper once what it holds; the timer only ever reads
+        /// the line this leaves behind.</summary>
+        public void OnOpened() => _ = Task.Run(() => RefreshIndexLineAsync(_life.Token));
+
+        private async Task RefreshIndexLineAsync(CancellationToken ct)
+        {
+            try
+            {
+                NameClient? c = await ClientAsync(ct).ConfigureAwait(false);
+                if (c is null) return;                      // ClientAsync has already said why
+                StatusReply s = await c.StatusAsync(ct).ConfigureAwait(false);
+                long names = 0;
+                var letters = new List<string>(s.Volumes.Count);
+                foreach (VolumeStatus v in s.Volumes) { names += v.Count; letters.Add(v.Letter + ":"); }
+                _indexLine = letters.Count == 0
+                    ? $"no volumes indexed (helper pid {s.ProcessId})"
+                    : $"{Count(names)} names on {string.Join(", ", letters)} (helper pid {s.ProcessId})";
+            }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested) { }
+            catch (Exception ex)
+            {
+                DropClient();
+                _indexLine = HelperMissing;
+                Log.Once("card|status|" + ex.GetType().Name, "WARN", "card", $"{HelperMissing} :: {ex.Message}");
+            }
+        }
+
+        private static string Count(long n)
+            => n >= 1_000_000 ? $"{n / 1_000_000.0:0.0}M" : n >= 1000 ? $"{n / 1000.0:0}k" : n.ToString();
 
         private void SetFilter(int f)
         {
