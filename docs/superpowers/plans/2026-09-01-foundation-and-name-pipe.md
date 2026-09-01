@@ -823,21 +823,55 @@ public class GenerationTests
     }
 
     [Fact]
-    public async Task IsSafeUnderConcurrentAccept()
+    public void RefusesGenerationZeroBeforeAnyQuery()
     {
+        // A reply whose Gen field was never set arrives as 0. Nothing has been issued,
+        // so nothing may be accepted.
         var g = new Generation();
-        long gen = g.Next();
+        Assert.False(g.Accept(0));
+    }
 
-        int accepted = 0;
-        await Task.WhenAll(Enumerable.Range(0, 64).Select(_ => Task.Run(() =>
+    [Fact]
+    public void IsSafeUnderConcurrentAccept()
+    {
+        // Real threads released together on a barrier, repeated. Task.Run work items this
+        // short are usually drained by a single pool thread before a second is even
+        // scheduled, so a pool-based version of this test passes against a plainly
+        // non-atomic implementation - a concurrency test that cannot fail is worse than
+        // none, because it manufactures confidence.
+        for (int round = 0; round < 200; round++)
         {
-            if (g.Accept(gen)) Interlocked.Increment(ref accepted);
-        })));
+            var g = new Generation();
+            long gen = g.Next();
 
-        Assert.Equal(1, accepted);
+            int accepted = 0;
+            var ready = new Barrier(9);
+            var threads = new Thread[8];
+            for (int i = 0; i < threads.Length; i++)
+            {
+                threads[i] = new Thread(() =>
+                {
+                    ready.SignalAndWait();
+                    if (g.Accept(gen)) Interlocked.Increment(ref accepted);
+                });
+                threads[i].Start();
+            }
+
+            ready.SignalAndWait();
+            foreach (Thread t in threads) t.Join();
+
+            Assert.Equal(1, accepted);
+        }
     }
 }
 ```
+
+**On what these tests can and cannot prove.** The `Next()`-racing-`Accept()` window closed by
+the CAS loop is not covered by a test, and deliberately so: hitting it requires `Next()` to
+land between two adjacent instructions on another thread, which no deterministic test can
+force and a probabilistic one would only flake. That correctness is carried by construction
+and by the comment in `Accept`, not by a test. Do not add a racy test that pretends
+otherwise - the reasoning is in the code where the next reader will find it.
 
 - [ ] **Step 2: Run test to verify it fails**
 
@@ -868,11 +902,25 @@ public sealed class Generation
     /// <summary>True at most once, and only for the newest generation issued.</summary>
     public bool Accept(long gen)
     {
-        if (gen != Interlocked.Read(ref _issued)) return false;
-        // Exchange, not CompareExchange against gen-1: generations that were dropped as
-        // stale are never accepted, so _accepted is not a dense sequence. Comparing
-        // against gen-1 would refuse every generation after the first drop.
-        return Interlocked.Exchange(ref _accepted, gen) != gen;
+        // The guard and the mutation have to be one decision. Reading _issued and then
+        // writing _accepted as two separate atomics leaves a window: Next() can land
+        // between them, a newer reply can be accepted in that gap, and this call would
+        // still go on to write its own older generation - showing results for a query the
+        // user already abandoned, and leaving _accepted regressed so the newer generation
+        // could then win a second time. The CAS loop closes it by making _accepted
+        // monotone. The UI thread issues; the pipe reader thread arbitrates. They race.
+        while (true)
+        {
+            long accepted = Interlocked.Read(ref _accepted);
+            if (gen <= accepted) return false;                       // already shown, or older than what is
+            if (gen != Interlocked.Read(ref _issued)) return false;  // stale, or never issued
+
+            // Compare against the value just observed, never against gen - 1: generations
+            // dropped as stale are never accepted, so _accepted is not a dense sequence,
+            // and comparing against gen - 1 would refuse everything after the first drop -
+            // silently killing search.
+            if (Interlocked.CompareExchange(ref _accepted, gen, accepted) == accepted) return true;
+        }
     }
 }
 ```
@@ -880,7 +928,7 @@ public sealed class Generation
 - [ ] **Step 4: Run test to verify it passes**
 
 Run: `dotnet test --filter GenerationTests`
-Expected: PASS, 7 tests.
+Expected: PASS, 8 tests.
 
 - [ ] **Step 5: Commit**
 
@@ -2076,7 +2124,7 @@ Expected: `pipe : UNREACHABLE`, the two-line instruction, exit code 1. No stack 
 - [ ] **Step 7: Run the whole suite**
 
 Run: `dotnet test`
-Expected: PASS - 6 Frame, 5 Message, 7 Generation, 4 NameServer, 3 NameClient, 6 NameIndex, 5 HelperTask, 4 Paths = 40 tests.
+Expected: PASS - 6 Frame, 5 Message, 8 Generation, 4 NameServer, 3 NameClient, 6 NameIndex, 5 HelperTask, 4 Paths = 41 tests.
 
 - [ ] **Step 8: Commit**
 

@@ -1,4 +1,5 @@
 using Findra.Pipe;
+using System.Threading;
 using Xunit;
 
 public class GenerationTests
@@ -49,6 +50,15 @@ public class GenerationTests
     }
 
     [Fact]
+    public void RefusesGenerationZeroBeforeAnyQuery()
+    {
+        // A reply whose Gen field was never set arrives as 0. Nothing has been issued,
+        // so nothing may be accepted.
+        var g = new Generation();
+        Assert.False(g.Accept(0));
+    }
+
+    [Fact]
     public void SlowFirstAnswerNeverBeatsFastSecondAnswer()
     {
         // the adversarial case the spec calls for: "sun" is slow, "sunset" is fast,
@@ -62,17 +72,35 @@ public class GenerationTests
     }
 
     [Fact]
-    public async Task IsSafeUnderConcurrentAccept()
+    public void IsSafeUnderConcurrentAccept()
     {
-        var g = new Generation();
-        long gen = g.Next();
-
-        int accepted = 0;
-        await Task.WhenAll(Enumerable.Range(0, 64).Select(_ => Task.Run(() =>
+        // Real threads released together on a barrier, repeated. Task.Run work items this
+        // short are usually drained by a single pool thread before a second is even
+        // scheduled, so a pool-based version of this test passes against a plainly
+        // non-atomic implementation - a concurrency test that cannot fail is worse than
+        // none, because it manufactures confidence.
+        for (int round = 0; round < 200; round++)
         {
-            if (g.Accept(gen)) Interlocked.Increment(ref accepted);
-        })));
+            var g = new Generation();
+            long gen = g.Next();
 
-        Assert.Equal(1, accepted);
+            int accepted = 0;
+            var ready = new Barrier(9);
+            var threads = new Thread[8];
+            for (int i = 0; i < threads.Length; i++)
+            {
+                threads[i] = new Thread(() =>
+                {
+                    ready.SignalAndWait();
+                    if (g.Accept(gen)) Interlocked.Increment(ref accepted);
+                });
+                threads[i].Start();
+            }
+
+            ready.SignalAndWait();
+            foreach (Thread t in threads) t.Join();
+
+            Assert.Equal(1, accepted);
+        }
     }
 }
