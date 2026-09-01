@@ -101,6 +101,32 @@ public class NameClientTests
     }
 
     [Fact]
+    public async Task ADeadStatusWaiterDoesNotSwallowTheNextReply()
+    {
+        // A status waiter abandoned by a failed write must not consume the reply belonging
+        // to the next caller. Without the skip-on-dequeue loop in the pump, this hangs.
+        var (server, client) = NameServerTests.PairForTests();
+        var cts = new CancellationTokenSource();
+        _ = NameServer.Serve(server, new Dictionary<char, NameIndex> { ['C'] = Sample() }, cts.Token);
+
+        await using var c = new NameClient(client);
+
+        // Strand a waiter the way a failed write would, then prove a real call still works.
+        using (var doomed = new CancellationTokenSource())
+        {
+            await doomed.CancelAsync();
+            await Assert.ThrowsAnyAsync<OperationCanceledException>(
+                () => c.StatusAsync(doomed.Token));
+        }
+
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+        StatusReply status = await c.StatusAsync(timeout.Token);
+        Assert.Equal(Environment.ProcessId, status.ProcessId);
+
+        await cts.CancelAsync();
+    }
+
+    [Fact]
     public async Task DropsAStaleReply()
     {
         // A server that answers the SECOND query first, so the answer to the abandoned

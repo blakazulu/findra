@@ -101,11 +101,16 @@ public sealed class NameClient : IAsyncDisposable
             {
                 // A stranded waiter at the head of a positional queue desynchronises every
                 // later status call permanently, so mark it dead rather than leaving it.
+                // The pump skips dead entries when it dequeues; that is the other half.
                 tcs.TrySetCanceled();
                 throw;
             }
         }
         finally { _writeLock.Release(); }
+
+        // Same race as SearchAsync: the pump may have died between the entry check and the
+        // enqueue. Marking the waiter dead is enough - the pump's skip-on-dequeue discards it.
+        if (_pumpGone) { tcs.TrySetCanceled(); ThrowIfPumpGone(); }
 
         return await tcs.Task.WaitAsync(ct).ConfigureAwait(false);
     }
@@ -144,8 +149,16 @@ public sealed class NameClient : IAsyncDisposable
                             break;
                         }
                         case Envelope.KindStatusReply:
-                            if (_statusWaiters.TryDequeue(out var s)) s.TrySetResult(e.Body<StatusReply>());
+                        {
+                            // Status replies carry no id, so waiters match positionally -
+                            // which means a dead entry at the head would swallow this reply
+                            // and starve whoever queued behind it. TrySetResult returns
+                            // false for an already-completed waiter, so walk past those.
+                            StatusReply s = e.Body<StatusReply>();
+                            while (_statusWaiters.TryDequeue(out var waiting))
+                                if (waiting.TrySetResult(s)) break;
                             break;
+                        }
                         case Envelope.KindJournal:
                             // Plan 3 hooks the indexer up here.
                             break;
