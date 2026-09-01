@@ -31,7 +31,7 @@ public class DerivedTests
         Assert.True(Derived.Contrast(d.Ink, d.Row) >= 4.5, $"{name}: ink on a result row");
         Assert.True(Derived.Contrast(d.Ink, d.RowHover) >= 4.5, $"{name}: ink on a hovered row");
         Assert.True(Derived.Contrast(d.Ink, d.RowSelected) >= 4.5, $"{name}: ink on the selected row");
-        Assert.True(Derived.Contrast(d.Ink, d.Stage) >= 4.5, $"{name}: ink on the preview panel");
+        Assert.True(Derived.Contrast(d.Ink, d.Stage) >= 4.5, $"{name}: ink on a stage badge");
         Assert.True(Derived.Contrast(d.Ink, d.Chip) >= 4.5, $"{name}: ink on a filter chip");
         Assert.True(Derived.Contrast(d.Dim, d.Ground) >= 4.5, $"{name}: dim text on the capsule");
         Assert.True(Derived.Contrast(d.OnAccent, d.Accent) >= 4.5, $"{name}: text on an accent fill");
