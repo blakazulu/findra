@@ -243,7 +243,7 @@ public static class SearchCardPainter
         {
             var rr = new SKRoundRect(cr, cr.Height / 2);
             if (on || hover)
-                using (var p = new SKPaint { Color = d.RowSelected.WithAlpha((byte)(on ? (hover ? 70 : 46) : 26)), IsAntialias = true })
+                using (var p = new SKPaint { Color = on ? d.RowSelected : d.RowHover, IsAntialias = true })
                     canvas.DrawRoundRect(rr, p);
             using (var p = new SKPaint { Color = on ? accent : text.WithAlpha(hover ? (byte)140 : (byte)70), IsAntialias = true, Style = SKPaintStyle.Stroke, StrokeWidth = 1.2f })
                 canvas.DrawRoundRect(rr, p);
@@ -290,7 +290,7 @@ public static class SearchCardPainter
             int n = SearchCardState.CountOf(s.Results, i);
             var rr = new SKRoundRect(r, r.Height / 2);
             if (on)
-                using (var p = new SKPaint { Color = d.RowSelected.WithAlpha(46), IsAntialias = true }) canvas.DrawRoundRect(rr, p);
+                using (var p = new SKPaint { Color = d.RowSelected, IsAntialias = true }) canvas.DrawRoundRect(rr, p);
             using (var p = new SKPaint { Color = on ? accent : hover ? text.WithAlpha(120) : text.WithAlpha(60), IsAntialias = true, Style = SKPaintStyle.Stroke, StrokeWidth = 1.2f })
                 canvas.DrawRoundRect(rr, p);
             var ink = on ? accent : n == 0 ? text.WithAlpha(95) : hover ? text : dim;
@@ -328,7 +328,7 @@ public static class SearchCardPainter
                 bool hi = idx == s.Highlight;
                 bool hover = s.HoverTarget == SearchTarget.Row && s.HoverIndex == idx;
                 if (hi || hover)
-                    using (var p = new SKPaint { Color = d.RowSelected.WithAlpha((byte)(hi ? 40 : 22)), IsAntialias = true })
+                    using (var p = new SKPaint { Color = hi ? d.RowSelected : d.RowHover, IsAntialias = true })
                         canvas.DrawRoundRect(new SKRoundRect(new SKRect(r.Left, r.Top + 3, r.Right, r.Bottom - 3), 9), p);
 
                 // the tile: a kind glyph on a name-hashed tint (no thumbnails in the list - the
@@ -550,7 +550,7 @@ public static class SearchCardPainter
             bool primary = a == 0;
             var rr = new SKRoundRect(ar, ar.Height / 2);
             if (primary || hover)
-                using (var p = new SKPaint { Color = d.RowSelected.WithAlpha((byte)(primary ? (hover ? 70 : 46) : 26)), IsAntialias = true }) canvas.DrawRoundRect(rr, p);
+                using (var p = new SKPaint { Color = primary ? d.RowSelected : d.RowHover, IsAntialias = true }) canvas.DrawRoundRect(rr, p);
             using (var p = new SKPaint { Color = primary ? accent : text.WithAlpha(hover ? (byte)140 : (byte)70), IsAntialias = true, Style = SKPaintStyle.Stroke, StrokeWidth = 1.2f })
                 canvas.DrawRoundRect(rr, p);
             CardText.DrawCentred(canvas, labels[a], ar.MidX, ar.MidY + 4.5f, 12.5f, face, primary ? accent : hover ? text : dim);
@@ -634,7 +634,7 @@ public static class SearchCardPainter
         float max = SearchCardLayout.MaxScroll(count);
         float y = top + (track - thumb) * (max <= 0 ? 0 : scroll / max);
         float x = SearchCardLayout.Pad + SearchCardLayout.ListW + 2;
-        using var p = new SKPaint { Color = d.RowSelected.WithAlpha(90), IsAntialias = true };
+        using var p = new SKPaint { Color = d.RowSelected, IsAntialias = true };
         canvas.DrawRoundRect(new SKRoundRect(new SKRect(x, y, x + 2.5f, y + thumb), 1.3f), p);
     }
 

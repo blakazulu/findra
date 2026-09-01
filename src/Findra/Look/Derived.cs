@@ -24,6 +24,10 @@ public sealed class Derived
     public required SKColor Row { get; init; }
     /// <summary>The highlighted row - accent-tinted, never solid accent.</summary>
     public required SKColor RowSelected { get; init; }
+    /// <summary>A row (or pill, or action) the pointer is over but that is not the current
+    /// selection - the same accent tint as <see cref="RowSelected"/> at roughly half strength,
+    /// so hovering reads as "noticed" without competing with what Enter would act on.</summary>
+    public required SKColor RowHover { get; init; }
     /// <summary>The kind tile inside a row. Unused by the card today - its kind badge paints a
     /// name-hashed gradient pinned dark on every palette, like a file-type tag that should not
     /// shift with theme - but this is the natural token for "a surface above a row", which the
@@ -66,6 +70,7 @@ public sealed class Derived
             Dim         = Mix(p.Ground, p.Ink, 0.55f),
             Row         = Lift(0.055f),
             RowSelected = Tint(0.055f, 0.14f),
+            RowHover    = Tint(0.03f, 0.06f),
             Tile        = Lift(0.11f),
             Chip        = Lift(0.075f),
             Edge        = Lift(0.16f),

@@ -21,6 +21,7 @@ public class DerivedTests
 
         Assert.True(Derived.Contrast(d.Ink, d.Ground) >= 4.5, $"{name}: ink on ground");
         Assert.True(Derived.Contrast(d.Ink, d.Row) >= 4.5, $"{name}: ink on a result row");
+        Assert.True(Derived.Contrast(d.Ink, d.RowHover) >= 4.5, $"{name}: ink on a hovered row");
         Assert.True(Derived.Contrast(d.Ink, d.RowSelected) >= 4.5, $"{name}: ink on the selected row");
         Assert.True(Derived.Contrast(d.Ink, d.Stage) >= 4.5, $"{name}: ink on the preview panel");
         Assert.True(Derived.Contrast(d.Ink, d.Chip) >= 4.5, $"{name}: ink on a filter chip");
@@ -61,7 +62,7 @@ public class DerivedTests
         Derived d = Derived.From(Palette.ByName(name)!);
         foreach ((string label, SKColor c) in new[]
         {
-            ("row", d.Row), ("rowSelected", d.RowSelected), ("tile", d.Tile),
+            ("row", d.Row), ("rowHover", d.RowHover), ("rowSelected", d.RowSelected), ("tile", d.Tile),
             ("chip", d.Chip), ("edge", d.Edge), ("stage", d.Stage),
         })
             Assert.True(Math.Abs(Lstar(c) - Lstar(d.Ground)) >= 3.0,
@@ -83,6 +84,28 @@ public class DerivedTests
         Assert.NotEqual(d.RowSelected, d.Row);
         Assert.True(Derived.Contrast(d.RowSelected, d.Accent) > 1.3,
             $"{name}: the selected row is too close to the accent to sit under it");
+    }
+
+    [Theory, MemberData(nameof(AllPalettes))]
+    public void RowStatesEscalateAwayFromTheGroundInSteps(string name)
+    {
+        // The list paints no fill at all for an ordinary row - it is just the ground showing
+        // through - so the ground itself is "ordinary" here. A hovered row and the selected
+        // (current, Enter-acts-on-it) row must each read as a visibly bigger step up from that,
+        // not two coats of the same faint wash: this is what the "selected row is one RGB unit
+        // from ordinary" bug looked like when measured instead of eyeballed. ~2 L* is roughly
+        // the threshold a glance actually registers, so each step must clear it, and the two
+        // steps must be genuinely ordered rather than merely both non-zero.
+        Derived d = Derived.From(Palette.ByName(name)!);
+        double ground = Lstar(d.Ground), hover = Lstar(d.RowHover), selected = Lstar(d.RowSelected);
+        double groundToHover = Math.Abs(hover - ground);
+        double hoverToSelected = Math.Abs(selected - hover);
+        double groundToSelected = Math.Abs(selected - ground);
+
+        Assert.True(groundToHover >= 2.0, $"{name}: hover is only {groundToHover:0.00} L* from the ground");
+        Assert.True(hoverToSelected >= 2.0, $"{name}: selected is only {hoverToSelected:0.00} L* from hover");
+        Assert.True(groundToSelected > groundToHover,
+            $"{name}: selected ({groundToSelected:0.00} L* from ground) must read further than hover ({groundToHover:0.00})");
     }
 
     [Fact]
