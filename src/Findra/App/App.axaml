@@ -1,0 +1,9 @@
+<Application xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="Findra.App">
+  <!-- The card is drawn directly with SkiaSharp, not with Avalonia controls - Fluent is here
+       only for the tray icon's context menu. -->
+  <Application.Styles>
+    <FluentTheme />
+  </Application.Styles>
+</Application>

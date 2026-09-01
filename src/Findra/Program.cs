@@ -1,3 +1,5 @@
+using Avalonia;
+
 namespace Findra;
 
 public static class Program
@@ -14,6 +16,7 @@ public static class Program
                 args.Length > 1 ? args[1] : "searchshot.png",
                 args.Length > 2 ? args[2] : "results",
                 args.Length > 3 ? args[3] : "Mond"),
+            "--version"     => Hello(),
 
             // A mistyped mode must not look like a success. `--searchprob` falling through to
             // the no-argument greeting exits 0, which is what a script checks, so the typo
@@ -21,8 +24,21 @@ public static class Program
             // caller meant; if it is not one of ours, say so and fail.
             _ when mode.StartsWith("--", StringComparison.Ordinal) => Unknown(mode),
 
-            _               => Hello(),
+            _               => RunUi(),
         };
+    }
+
+    private static int RunUi()
+    {
+        Log.Info("startup", $"findra {Log.Version} starting");
+        try
+        {
+            return AppBuilder.Configure<App>()
+                .UsePlatformDetect()
+                .LogToTrace()
+                .StartWithClassicDesktopLifetime([]);
+        }
+        catch (Exception ex) { Log.Error("startup", "the UI could not start", ex); Log.Flush(); return 1; }
     }
 
     private static int Unknown(string mode)
@@ -33,6 +49,7 @@ public static class Program
         Console.Error.WriteLine("  --searchprobe [query]    the whole query path, end to end");
         Console.Error.WriteLine("  --searchtest             engine self-check");
         Console.Error.WriteLine("  --searchshot out.png <state> <palette>   render a surface, no screen required");
+        Console.Error.WriteLine("  --version                print the version and log location, then exit");
         return 1;
     }
 

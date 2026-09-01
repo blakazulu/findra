@@ -16,8 +16,12 @@
          testing both against a clean restore - so it is suppressed at project level
          here instead, scoped to just this one warning code. -->
     <NoWarn>$(NoWarn);NU1510</NoWarn>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
   </PropertyGroup>
   <ItemGroup>
+    <PackageReference Include="Avalonia" Version="12.1.1" />
+    <PackageReference Include="Avalonia.Desktop" Version="12.1.1" />
+    <PackageReference Include="Avalonia.Themes.Fluent" Version="12.1.1" />
     <PackageReference Include="System.IO.Pipes.AccessControl" Version="5.0.0" />
     <!-- Avalonia.Skia pins a specific SkiaSharp version, and two SkiaSharp majors in one
          process means two native libSkiaSharp binaries. Pinned here ahead of Avalonia
