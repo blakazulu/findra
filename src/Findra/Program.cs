@@ -15,7 +15,7 @@ public static class Program
             "--searchshot"  => Diagnostics.SearchShot.Render(
                 args.Length > 1 ? args[1] : "searchshot.png",
                 args.Length > 2 ? args[2] : "results",
-                args.Length > 3 ? args[3] : "Mond"),
+                args.Length > 3 ? args[3] : null),
             "--version"     => Hello(),
 
             // A mistyped mode must not look like a success. `--searchprob` falling through to
@@ -48,7 +48,8 @@ public static class Program
         Console.Error.WriteLine("  --names                  the elevated name-index helper");
         Console.Error.WriteLine("  --searchprobe [query]    the whole query path, end to end");
         Console.Error.WriteLine("  --searchtest             engine self-check");
-        Console.Error.WriteLine("  --searchshot out.png <state> <palette>   render a surface, no screen required");
+        Console.Error.WriteLine("  --searchshot out.png <state> [palette]   render a surface, no screen required");
+        Console.Error.WriteLine("                           palette defaults to the configured one, not a fixed built-in");
         Console.Error.WriteLine("  --version                print the version and log location, then exit");
         return 1;
     }

@@ -583,12 +583,7 @@ public sealed class CardWindow : Window
                 NameClient? c = await ClientAsync(ct).ConfigureAwait(false);
                 if (c is null) return;                      // ClientAsync has already said why
                 StatusReply s = await c.StatusAsync(ct).ConfigureAwait(false);
-                long names = 0;
-                var letters = new List<string>(s.Volumes.Count);
-                foreach (VolumeStatus v in s.Volumes) { names += v.Count; letters.Add(v.Letter + ":"); }
-                _indexLine = letters.Count == 0
-                    ? $"no volumes indexed (helper pid {s.ProcessId})"
-                    : $"{Count(names)} names on {string.Join(", ", letters)} (helper pid {s.ProcessId})";
+                _indexLine = IndexLineFormatter.IndexLineFor(s);
             }
             catch (OperationCanceledException) when (ct.IsCancellationRequested) { }
             catch (Exception ex)
@@ -598,9 +593,6 @@ public sealed class CardWindow : Window
                 Log.Once("card|status|" + ex.GetType().Name, "WARN", "card", $"{HelperMissing} :: {ex.Message}");
             }
         }
-
-        private static string Count(long n)
-            => n >= 1_000_000 ? $"{n / 1_000_000.0:0.0}M" : n >= 1000 ? $"{n / 1000.0:0}k" : n.ToString();
 
         private void SetFilter(int f)
         {

@@ -21,6 +21,11 @@ public static class SearchProbe
         }}");
         if (detail.Length > 0) Console.WriteLine($"                           {detail}");
 
+        UiStatus.Status? ui = UiStatus.Read();
+        Console.WriteLine(ui is { } u
+            ? $"  ui                     : running (pid {u.Pid}, hotkey {u.Hotkey ?? "none"})"
+            : "  ui                     : not running");
+
         NameClient client;
         try
         {

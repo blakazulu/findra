@@ -15,7 +15,7 @@ internal static class WindowStyle
 {
     private const int GWL_EXSTYLE = -20;
     private const long WS_EX_TOOLWINDOW = 0x00000080; // no taskbar button, not in Alt+Tab
-    private const long WS_EX_APPWINDOW = 0x00040000;  // forces a taskbar button — must be cleared
+    private const long WS_EX_APPWINDOW = 0x00040000;  // forces a taskbar button - must be cleared
     private const long WS_EX_TRANSPARENT = 0x00000020;
     private const long WS_EX_NOACTIVATE = 0x08000000;
 

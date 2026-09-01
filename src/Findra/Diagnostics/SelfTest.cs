@@ -87,6 +87,39 @@ public static class SelfTest
             return null;
         });
 
+        failed += Check("config.json round-trips", () =>
+        {
+            Config c = Config.Default with
+            {
+                DarkPalette = "Verdigris", LightPalette = "Blueprint", Mode = ThemeMode.AlwaysDark,
+                Hotkey = "Ctrl+Alt+F", CapsuleX = 120, CapsuleY = 900, ShowCapsule = false,
+                CheckForUpdates = false,
+            };
+            Config back = Config.Load(c.ToJson());
+            return back == c ? null : "the loaded config does not equal the one that was saved";
+        });
+
+        // Not a pass/fail check by itself - Theme.Resolve always returns SOME palette, honouring
+        // a wrong-side pick rather than rejecting it (App/ThemeTests.cs:
+        // APaletteOnTheWrongSideIsHonouredButNoted). This exists so a hand-edited config.json or
+        // palettes.json is visible here rather than only discovered on someone's desktop.
+        failed += Check("the configured palettes resolve", () =>
+        {
+            Config config = Config.LoadFromDisk();
+            IReadOnlyList<Palette> palettes = PaletteStore.LoadFromDisk();
+
+            foreach (bool windowsIsLight in new[] { false, true })
+            {
+                Palette p = Theme.Resolve(config, windowsIsLight, palettes);
+                string side = windowsIsLight ? "light" : "dark";
+                string note = p.Light == windowsIsLight
+                    ? ""
+                    : $"  (named a {(p.Light ? "light" : "dark")} palette for the {side} side)";
+                Console.WriteLine($"        windows {side,-5} -> '{p.Name}'{note}");
+            }
+            return null;
+        });
+
         failed += Check("the card renders", () =>
         {
             using var surface = SKSurface.Create(new SKImageInfo(

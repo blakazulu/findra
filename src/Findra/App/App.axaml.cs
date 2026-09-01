@@ -138,6 +138,7 @@ internal sealed class Shell
             host.Pressed += () => Dispatcher.UIThread.Post(OpenFromHotkey);
             host.Start(HotkeyChain.Build(_config.Hotkey, Hotkey.DefaultChain));
             _hotkey = host;
+            UiStatus.Write(Environment.ProcessId, host.Landed);
         });
 
         Stage("capsule", () =>
@@ -345,6 +346,7 @@ internal sealed class Shell
     private void Quit()
     {
         Log.Info("app", "quitting");
+        UiStatus.Clear();
         try { _hotkey?.Dispose(); } catch { }
         _hotkey = null;
 

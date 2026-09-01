@@ -8,13 +8,19 @@ namespace Findra.Diagnostics;
 /// Findra's card renders entirely offscreen, so this is not a debugging aid bolted on afterward -
 /// it is how every state the capsule and card can be in gets built and reviewed. It must learn
 /// each new palette and each new surface as they are written.
+///
+/// With no palette argument, every state (not only `capsule`) is shot in the SAME palette the
+/// running app would actually resolve - <see cref="Theme.Resolve"/> over the on-disk config,
+/// the live Windows light/dark setting and the on-disk palette set - so the default shot is the
+/// look someone actually has, not a fixed built-in that could quietly drift from it. An explicit
+/// palette argument always wins over that default.
 /// </summary>
 public static class SearchShot
 {
     public static readonly IReadOnlyList<string> States =
         ["capsule", "empty", "typing", "results", "noresults", "many", "adv", "opening", "openingempty"];
 
-    public static int Render(string outPath, string state, string paletteName = "Mond")
+    public static int Render(string outPath, string state, string? paletteName = null)
     {
         state = state.Trim().ToLowerInvariant();
         if (!States.Contains(state))
@@ -24,16 +30,26 @@ public static class SearchShot
             return 1;
         }
 
-        // Palette.ByName resolves against the palettes loaded from disk, not just the built-ins,
-        // so a shot of a hand-written palette is possible - the same reasoning as the self-test's
-        // legibility check.
-        Palette? palette = Palette.ByName(paletteName);
-        if (palette is null)
+        Palette palette;
+        if (paletteName is null)
         {
-            Console.Error.WriteLine($"searchshot: unknown palette '{paletteName}'");
-            Console.Error.WriteLine("  palettes: " +
-                string.Join(", ", PaletteStore.LoadFromDisk().Select(p => p.Name)));
-            return 1;
+            // No argument: the configured palette, exactly as the running app would resolve it.
+            palette = Theme.Resolve(Config.LoadFromDisk(), Theme.WindowsIsLight(), PaletteStore.LoadFromDisk());
+        }
+        else
+        {
+            // Palette.ByName resolves against the palettes loaded from disk, not just the
+            // built-ins, so a shot of a hand-written palette is possible - the same reasoning as
+            // the self-test's legibility check.
+            Palette? found = Palette.ByName(paletteName);
+            if (found is null)
+            {
+                Console.Error.WriteLine($"searchshot: unknown palette '{paletteName}'");
+                Console.Error.WriteLine("  palettes: " +
+                    string.Join(", ", PaletteStore.LoadFromDisk().Select(p => p.Name)));
+                return 1;
+            }
+            palette = found;
         }
 
         Derived d = Derived.From(palette);

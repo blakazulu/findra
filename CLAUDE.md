@@ -30,9 +30,10 @@ findra.exe --searchprobe [query]      # whole path end to end; must report which
                                       # answered and the current generation counter
 findra.exe --searchmodels             # are models present, do they load, do they agree
 findra.exe --searchindex              # what is indexed, what is queued
-findra.exe --searchshot out.png <empty|typing|results|noresults|many|adv|panel>
+findra.exe --searchshot out.png <capsule|empty|typing|results|noresults|many|adv|opening|openingempty>
 findra.exe --searchtest               # engine self-check
 findra.exe --searchbench [out.md]     # measured numbers, as a pasteable Markdown fragment
+findra.exe --version                  # print the version and log location, then exit
 ```
 
 `--searchshot` must learn every new palette and every new surface as it is written.
