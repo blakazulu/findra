@@ -15,10 +15,15 @@ public static class Frame
         if (payload.Length > MaxPayload)
             throw new InvalidDataException($"frame of {payload.Length} exceeds {MaxPayload}");
 
-        byte[] header = new byte[4];
-        BinaryPrimitives.WriteInt32LittleEndian(header, payload.Length);
-        await s.WriteAsync(header, ct).ConfigureAwait(false);
-        await s.WriteAsync(payload, ct).ConfigureAwait(false);
+        // One write, never two. A header and a payload written as separate awaits can be
+        // torn apart by a cancellation landing between them, leaving an orphan header that
+        // promises bytes which never arrive - and every later frame is then parsed at the
+        // wrong offset, forever, with one log line as the only trace. Per-keystroke query
+        // abandonment makes that a routine event rather than a rare one.
+        byte[] frame = new byte[4 + payload.Length];
+        BinaryPrimitives.WriteInt32LittleEndian(frame, payload.Length);
+        payload.Span.CopyTo(frame.AsSpan(4));
+        await s.WriteAsync(frame, ct).ConfigureAwait(false);
         await s.FlushAsync(ct).ConfigureAwait(false);
     }
 

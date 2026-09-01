@@ -20,15 +20,15 @@ public class MessageTests
     [Fact]
     public void ReplyCarriesTheGenerationItWasAskedWith()
     {
-        var reply = new QueryReply(42, 'C', 1234, new[]
+        var reply = new QueryReply(42, 1234, new[]
         {
-            new NameRow(0xABC, "IMG_4471.HEIC", @"D:\Photos\2025\IMG_4471.HEIC", 0x20, 0.91f, 0),
+            new NameRow('D', 0xABC, "IMG_4471.HEIC", @"D:\Photos\2025\IMG_4471.HEIC", 0x20, 0.91f, 0),
         });
 
         QueryReply got = Envelope.Unpack(Envelope.Pack(Envelope.KindQueryReply, reply)).Body<QueryReply>();
 
         Assert.Equal(42, got.Gen);
-        Assert.Equal('C', got.Volume);
+        Assert.Equal('D', got.Rows[0].Volume);
         Assert.Single(got.Rows);
         Assert.Equal("IMG_4471.HEIC", got.Rows[0].Name);
         Assert.Equal(0xABCu, (uint)got.Rows[0].Frn);
@@ -37,9 +37,9 @@ public class MessageTests
     [Fact]
     public void NonAsciiNamesSurviveTheWire()
     {
-        var reply = new QueryReply(1, 'C', 0, new[]
+        var reply = new QueryReply(1, 0, new[]
         {
-            new NameRow(1, "הסכם-שכירות 2026.docx", @"D:\מסמכים\הסכם-שכירות 2026.docx", 0x20, 1f, 0),
+            new NameRow('D', 1, "הסכם-שכירות 2026.docx", @"D:\מסמכים\הסכם-שכירות 2026.docx", 0x20, 1f, 0),
         });
 
         QueryReply got = Envelope.Unpack(Envelope.Pack(Envelope.KindQueryReply, reply)).Body<QueryReply>();
@@ -68,5 +68,21 @@ public class MessageTests
         byte[] packed = Envelope.Pack("something-new", new QueryRequest(1, "x", 1));
         Envelope e = Envelope.Unpack(packed);
         Assert.Equal("something-new", e.Kind);
+    }
+
+    [Fact]
+    public void AMalformedEnvelopeIsRefusedNotSwallowed()
+    {
+        Assert.Throws<InvalidDataException>(() => Envelope.Unpack("null"u8.ToArray()));
+        Assert.ThrowsAny<Exception>(() => Envelope.Unpack("not json at all"u8.ToArray()));
+    }
+
+    [Fact]
+    public void ANullBodyIsRefusedNotSwallowed()
+    {
+        // This is the shape that used to escape a `catch (JsonException)` guard.
+        Envelope e = Envelope.Unpack(Envelope.Pack(Envelope.KindQuery, new QueryRequest(1, "x", 1)))
+                     with { Json = "null" };
+        Assert.Throws<InvalidDataException>(() => e.Body<QueryRequest>());
     }
 }

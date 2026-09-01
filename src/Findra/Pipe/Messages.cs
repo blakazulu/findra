@@ -6,9 +6,15 @@ namespace Findra.Pipe;
 
 public sealed record QueryRequest(long Gen, string Raw, int Max);
 
-public sealed record NameRow(ulong Frn, string Name, string Path, uint Attributes, float Score, int Match);
+/// <summary>
+/// One answer. <c>Volume</c> lives here rather than on the reply because a reply can carry rows
+/// from every volume at once: a single letter on the envelope would name whichever one happened
+/// to supply the last row, which means nothing as soon as two contribute.
+/// </summary>
+public sealed record NameRow(char Volume, ulong Frn, string Name, string Path, uint Attributes,
+                             float Score, int Match);
 
-public sealed record QueryReply(long Gen, char Volume, long ElapsedTicks, IReadOnlyList<NameRow> Rows);
+public sealed record QueryReply(long Gen, long ElapsedTicks, IReadOnlyList<NameRow> Rows);
 
 public sealed record StatusRequest();
 

@@ -56,7 +56,7 @@ public static class SearchProbe
             Console.WriteLine($"  rows                   : {reply.Rows.Count}");
             Console.WriteLine();
             foreach (NameRow r in reply.Rows.Take(20))
-                Console.WriteLine($"    {r.Score,5:F2}  {r.Path}");
+                Console.WriteLine($"    {r.Score,5:F2}  {r.Volume}:  {r.Path}");
 
             return reply.Rows.Count > 0 ? 0 : 2;
         }

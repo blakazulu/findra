@@ -58,7 +58,7 @@ public class NameClientTests
             await Frame.WriteAsync(server, "this is not an envelope"u8.ToArray(), default);
             QueryRequest req = Envelope.Unpack((await Frame.ReadAsync(server, default))!).Body<QueryRequest>();
             await Frame.WriteAsync(server, Envelope.Pack(Envelope.KindQueryReply,
-                new QueryReply(req.Gen, 'C', 0, new[] { new NameRow(1, "ok.jpg", @"C:\ok.jpg", 0, 1, 0) })), default);
+                new QueryReply(req.Gen, 0, new[] { new NameRow('C', 1, "ok.jpg", @"C:\ok.jpg", 0, 1, 0) })), default);
         });
 
         await using var c = new NameClient(client);
@@ -163,9 +163,9 @@ public class NameClientTests
             QueryRequest second = Envelope.Unpack((await Frame.ReadAsync(server, default))!).Body<QueryRequest>();
 
             await Frame.WriteAsync(server, Envelope.Pack(Envelope.KindQueryReply,
-                new QueryReply(second.Gen, 'C', 0, new[] { new NameRow(1, "new.jpg", @"C:\new.jpg", 0, 1, 0) })), default);
+                new QueryReply(second.Gen, 0, new[] { new NameRow('C', 1, "new.jpg", @"C:\new.jpg", 0, 1, 0) })), default);
             await Frame.WriteAsync(server, Envelope.Pack(Envelope.KindQueryReply,
-                new QueryReply(first.Gen, 'C', 0, new[] { new NameRow(2, "old.jpg", @"C:\old.jpg", 0, 1, 0) })), default);
+                new QueryReply(first.Gen, 0, new[] { new NameRow('C', 2, "old.jpg", @"C:\old.jpg", 0, 1, 0) })), default);
         });
 
         await using var c = new NameClient(client);

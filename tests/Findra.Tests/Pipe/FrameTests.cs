@@ -73,6 +73,21 @@ public class FrameTests
         await Assert.ThrowsAsync<EndOfStreamException>(() => Frame.ReadAsync(ms, default));
     }
 
+    [Fact]
+    public async Task ACancelledWriteLeavesNothingBehind()
+    {
+        // A torn frame is unrecoverable: the peer parses every later frame at the wrong
+        // offset. Cancellation must leave the stream byte-for-byte untouched.
+        var ms = new MemoryStream();
+        using var cancelled = new CancellationTokenSource();
+        await cancelled.CancelAsync();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(
+            () => Frame.WriteAsync(ms, new byte[5000], cancelled.Token));
+
+        Assert.Equal(0, ms.Length);
+    }
+
     private sealed class DripStream(byte[] data, int chunk) : Stream
     {
         private int _pos;

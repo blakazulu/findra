@@ -1,6 +1,5 @@
 using System.Collections.Concurrent;
 using System.IO.Pipes;
-using System.Text.Json;
 
 namespace Findra.Pipe;
 
@@ -167,8 +166,12 @@ public sealed class NameClient : IAsyncDisposable
                             break;
                     }
                 }
-                catch (JsonException ex)
+                catch (Exception ex)
                 {
+                    // Not just JsonException. Body<T> throws InvalidDataException for a body
+                    // that decodes to null - the literal `null` in the Json field - and a
+                    // JsonException-only guard lets that one shape through to kill the pump
+                    // permanently, which is the failure this catch exists to prevent.
                     Log.Warn("pipe", $"undecodable body for '{e.Kind}': {ex.Message}");
                 }
             }
