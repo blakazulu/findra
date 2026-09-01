@@ -74,6 +74,11 @@ public static class SelfTest
                     double ratio = Derived.Contrast(d.Ink, c);
                     if (ratio < 4.5) return $"{p.Name}: ink on {surface} is {ratio:F2}:1, needs 4.5";
                 }
+                // The capsule paints AccentSoft across the whole bar and draws Dim on top of
+                // that, not on the bare ground - so AccentSoft is the pair actually on screen,
+                // same reasoning as the loop above for ink on a derived surface.
+                double dimOnBar = Derived.Contrast(d.Dim, d.AccentSoft);
+                if (dimOnBar < 4.5) return $"{p.Name}: dim text on the capsule's bar fill is {dimOnBar:F2}:1, needs 4.5";
                 double dim = Derived.Contrast(d.Dim, d.Ground);
                 if (dim < 4.5) return $"{p.Name}: dim text on the ground is {dim:F2}:1, needs 4.5";
                 if (Derived.Contrast(d.OnAccent, d.Accent) < 4.5)

@@ -287,7 +287,13 @@ public static class SearchAdvancedPainter
                     4 => "switches Content on", 5 => @"Downloads or C:\Users\you\Pictures",
                     6 => "2026-01-01 · week · 2025", 7 => "2026-03-15", 8 => "1mb · huge", 9 => "100mb", _ => ""
                 };
-                CardText.Draw(canvas, CardText.Ellipsize(ph, face, size, maxW), tx, r.MidY + 4.5f, size, face, d.Fade(70));
+                // 130, not 70: these placeholders are the only place a user learns the query
+                // grammar - `Downloads or C:\Users\you\Pictures`, `2026-01-01 · week · 2025` -
+                // so they must actually be read, not merely present. 70 measured 1.91-2.21:1 on
+                // all six palettes, dark included; 130 clears 3.0 everywhere (3.76-4.61:1) while
+                // staying visibly weaker than a typed value (Fade(200)+ / d.Ink at full weight),
+                // so it still reads as secondary.
+                CardText.Draw(canvas, CardText.Ellipsize(ph, face, size, maxW), tx, r.MidY + 4.5f, size, face, d.Fade(130));
                 if (focus && (int)(s.Clock * 2) % 2 == 0)
                 {
                     using var cp = new SKPaint { Color = accent, StrokeWidth = 1.6f, IsAntialias = true };

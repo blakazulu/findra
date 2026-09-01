@@ -33,7 +33,12 @@ public class DerivedTests
         Assert.True(Derived.Contrast(d.Ink, d.RowSelected) >= 4.5, $"{name}: ink on the selected row");
         Assert.True(Derived.Contrast(d.Ink, d.Stage) >= 4.5, $"{name}: ink on a stage badge");
         Assert.True(Derived.Contrast(d.Ink, d.Chip) >= 4.5, $"{name}: ink on a filter chip");
-        Assert.True(Derived.Contrast(d.Dim, d.Ground) >= 4.5, $"{name}: dim text on the capsule");
+        // Not d.Ground: the capsule paints AccentSoft across the whole bar (CapsulePainter.Paint)
+        // and draws Dim on top of THAT, so AccentSoft is the pair actually on screen. Checking
+        // against the ground alone is the same mistake ink-on-a-derived-surface already made and
+        // was fixed for - a palette can clear 4.5 there and still fail on the real background.
+        Assert.True(Derived.Contrast(d.Dim, d.AccentSoft) >= 4.5, $"{name}: dim text on the capsule's actual bar fill");
+        Assert.True(Derived.Contrast(d.Dim, d.Ground) >= 4.5, $"{name}: dim text on the ground");
         Assert.True(Derived.Contrast(d.OnAccent, d.Accent) >= 4.5, $"{name}: text on an accent fill");
     }
 

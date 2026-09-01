@@ -23,10 +23,17 @@ public sealed class Derived
     public required SKColor Ink { get; init; }
     public required SKColor Ground { get; init; }
 
-    /// <summary>Secondary ink, opaque: the ground carrying about half its weight of ink.
+    /// <summary>Secondary ink, opaque: the ground carrying most of the weight of ink (0.62,
+    /// up from an earlier 0.55 that was fitted against the wrong background - see below).
     /// Painted only by the resting capsule - its placeholder line (15px) and its progress
     /// caption. The card and the popup reduce their own ink through <see cref="Fade"/> instead,
-    /// which is the same arithmetic expressed as an alpha.</summary>
+    /// which is the same arithmetic expressed as an alpha.
+    ///
+    /// Checked against <see cref="AccentSoft"/>, not <see cref="Ground"/>: the capsule paints
+    /// <c>AccentSoft</c> across the whole bar first and draws this text on top of that, so
+    /// <c>AccentSoft</c> is the pair actually on screen. 0.55 cleared 4.5 against the ground and
+    /// still measured 4.13-4.51 against the real background on three palettes - the same error
+    /// class as ink-on-a-derived-surface, just missed for this one property.</summary>
     public required SKColor Dim { get; init; }
 
     /// <summary>The first step off the ground: a resting surface that is not the page. The
@@ -135,7 +142,7 @@ public sealed class Derived
             Ink = p.Ink,
             Ground = p.Ground,
 
-            Dim         = Weight(0.55f),
+            Dim         = Weight(0.62f),
             Row         = Lift(0.055f),
             // The three row states share one lift and escalate by accent tint alone, so the
             // ladder ground < Row < RowHover < RowSelected holds by construction: hover is

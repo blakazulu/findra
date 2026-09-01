@@ -463,7 +463,11 @@ public static class SearchCardPainter
         }
         else
         {
-            CardText.Draw(canvas, CardText.Ellipsize(placeholder, face, size, maxW), tx, cy + size * 0.36f, size, face, derived.Fade(90));
+            // Same fix as the Advanced popup's field placeholders, same reasoning: 90 measured
+            // 2.44-2.81:1 on all six palettes - below even the 3.0 floor placeholder text is
+            // held to elsewhere, and this is the first text any session shows. 130 clears 3.0
+            // everywhere (4.03-4.85:1).
+            CardText.Draw(canvas, CardText.Ellipsize(placeholder, face, size, maxW), tx, cy + size * 0.36f, size, face, derived.Fade(130));
             if (caret && (int)(clock * 2) % 2 == 0)
             {
                 using var cp = new SKPaint { Color = accent, IsAntialias = true, StrokeWidth = 2 };
@@ -510,9 +514,16 @@ public static class SearchCardPainter
             if (row.Kind == ResultKind.Document && row.Excerpt.Length > 0)
             {
                 float y = pic.Top + 26;
+                // Not d.Fade: this excerpt sits on the same name-hashed gradient DrawNoArt
+                // paints below, pinned dark on every palette (see the HSL literals there), not
+                // on the card's ground - so it does not take the card's ink, same as the folder
+                // and glyph shapes drawn on that gradient. White at 220 clears 4.5:1 against the
+                // gradient's lightest point across every hue the name hash can produce, not just
+                // the hue the six shipped palettes happen to hash a given file name to.
+                var onGradient = SKColors.White.WithAlpha((byte)220);
                 foreach (var line in CardText.Wrap(row.Excerpt, face, 12.5f, pic.Width - 24, 6))
                 {
-                    CardText.Draw(canvas, line, pic.Left + 12, y, 12.5f, face, d.Fade(200));
+                    CardText.Draw(canvas, line, pic.Left + 12, y, 12.5f, face, onGradient);
                     y += 17;
                 }
             }
