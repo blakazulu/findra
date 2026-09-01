@@ -9,6 +9,14 @@
     <LangVersion>latest</LangVersion>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <InvariantGlobalization>false</InvariantGlobalization>
+    <!-- System.IO.Pipes.AccessControl (below) is unused until Task 7 wires up the
+         named-pipe ACLs, and 5.0.0 is the only stable release NuGet has ever published
+         for it, so restore always flags NU1510 ("will not be pruned"). Per-package
+         suppression via NoWarn metadata on the PackageReference item (both attribute
+         and child-element form) does not silence NU1510 on this SDK - verified by
+         testing both against a clean restore - so it is suppressed at project level
+         here instead, scoped to just this one warning code. -->
+    <NoWarn>$(NoWarn);NU1510</NoWarn>
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="System.IO.Pipes.AccessControl" Version="5.0.0" />
