@@ -54,6 +54,61 @@ size as text; the app carries the actual consent.
 
 ---
 
+## 2a. Install, resume and uninstall
+
+### Installing over existing state
+
+An install - first ever, a reinstall, or an upgrade - **never discards work that is still
+good**. On startup Findra inspects what is already on disk and continues from it:
+
+| Found | What happens |
+|---|---|
+| Models present and the right size | kept, not re-downloaded |
+| Models partially downloaded | resumed from the byte already fetched |
+| Index present, schema current, queue empty | used as-is; nothing re-indexed |
+| Index present, schema current, queue non-empty | **resumed** - indexing picks up the queue |
+| Index present, schema older | migrated, and only what the migration invalidates is re-queued |
+| Index missing or unreadable | rebuilt, and the UI says so rather than looking idle |
+
+"Done" is a fact the index records, not a guess: it stores its schema version, the USN
+journal position it has consumed per volume, and its pending queue. An index whose queue is
+empty at a journal position the volume still recognises is complete, and Findra says so.
+
+The name index is not part of this - it lives in RAM in the elevated helper and is rebuilt
+by MFT enumeration in a few seconds at every logon. Only content survives restarts.
+
+Re-downloading 2.9 GB of models, or re-indexing a disk that was already done, because an
+upgrade did not look first, is the single most annoying thing this product could do to
+someone. It gets a test.
+
+### Uninstalling
+
+**Removed always:**
+
+- the application files
+- **the `HighestAvailable` scheduled task** - this matters more than the rest. Leaving it
+  behind orphans an elevated logon task pointing at a binary that no longer exists, on a
+  stranger's machine. An uninstaller that misses this is a defect, not an inconvenience.
+- any autostart registry entry
+- the running helper and indexer processes, stopped before files are removed
+
+**Kept by default:**
+
+- `%LOCALAPPDATA%\Findra\models\` - up to 2.9 GB that would otherwise be re-downloaded
+- `%LOCALAPPDATA%\Findra\index\`
+- `%APPDATA%\Findra\config.json` and `palettes.json`
+
+**Deleted only if explicitly asked**, via a checkbox in the uninstaller and a flag on the
+command line. The prompt states the **measured** size it would free - "2.9 GB of models and
+340 MB of index" - not a vague warning. Keeping is the default because reinstalling is
+common and re-downloading gigabytes is expensive; deleting is one click away for someone who
+means it.
+
+**`findra.exe --uninstall` exists as a first-class mode**, because the `git clone &&
+dotnet publish` route has no installer to carry an uninstaller. Without it, everyone who
+built from source is left with an elevated scheduled task and no supported way to remove it.
+It takes `--purge` to also delete models, index and config, and prints what it removed.
+
 ## 3. Process architecture
 
 Three processes. This split is the single most consequential decision here and is built in

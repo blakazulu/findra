@@ -971,7 +971,7 @@ cp /c/Code/Personal/Prism/src/Search/FileKinds.cs   src/Findra/Names/
 
 In all four files:
 1. Change the namespace declaration to `namespace Findra;`.
-2. Rewrite every comment that names the source project. There are 8 such mentions across these four files.
+2. Rewrite every comment that names the source project. There are 6 such mentions across these four files - 4 namespace lines and 2 comments in the volume reader.
 3. Remove any `using` that no longer resolves. If a file references a type not being ported in this task, stub nothing - come back and check whether it belongs in a later plan; `NameIndex` and `SearchQuery` reference only each other, `FileKinds`, `NtfsVolume` and `Log`.
 
 Verify the scrub:
@@ -1277,24 +1277,47 @@ public static class NameServer
                                           List<NameIndex.Hit> hits, CancellationToken ct)
     {
         long started = Stopwatch.GetTimestamp();
+
+        // Never trust the frame. An unclamped Max lets one query collect every record on a
+        // 1.5M-name volume and materialise a path for each, which is memory amplification
+        // against the elevated process; a negative one throws out of List's constructor and
+        // drops the connection.
+        int max = Math.Clamp(req.Max, 1, MaxRows);
+
         var q = new SearchQuery(req.Raw);
-        var rows = new List<NameRow>(Math.Min(req.Max, 512));
+        var rows = new List<NameRow>(Math.Min(max, 512));
         char volume = '?';
+
+        // Search stops scanning once it has `max` CANDIDATES, and Allows then discards some
+        // of them - so capping the scan at the row count answers `sunset ext:png` with
+        // nothing while the .png files sit further down the volume. Over-fetch when the
+        // query filters. The index's own filters-only branch defends against exactly this;
+        // the word-scan path reaches it through here instead.
+        int scan = q.HasFilters ? Math.Min(max * 20, MaxRows) : max;
 
         foreach ((char letter, NameIndex ix) in indexes)
         {
             hits.Clear();
-            ix.Search(q, hits, req.Max);
-            if (hits.Count > 0) volume = letter;
+            ix.Search(q, hits, scan);
             foreach (NameIndex.Hit h in hits)
             {
                 string? path = ix.PathOf(h.Record);
                 if (path is null) continue;
-                rows.Add(new NameRow(ix.Frn(h.Record), ix.Name(h.Record), path,
+
+                // Search is a coarse candidate generator, not the whole query. Its
+                // vectorised word-scan branch never consults q.Exts, q.Kinds, q.Under or
+                // q.NotUnder - those are enforced here, by Allows. Skipping this call
+                // makes `sunset ext:png` return every sunset on the disk.
+                string name = ix.Name(h.Record);
+                bool dir = ix.IsDirectory(h.Record);
+                if (!q.Allows(name, path, FileKinds.Classify(name, dir))) continue;
+
+                volume = letter;   // the volume that ANSWERED, not merely one with candidates
+                rows.Add(new NameRow(ix.Frn(h.Record), name, path,
                                      ix.Attributes(h.Record), h.Score, h.Match));
-                if (rows.Count >= req.Max) break;
+                if (rows.Count >= max) break;
             }
-            if (rows.Count >= req.Max) break;
+            if (rows.Count >= max) break;
         }
 
         var reply = new QueryReply(req.Gen, volume, Stopwatch.GetTimestamp() - started, rows);
@@ -1335,24 +1358,57 @@ public static class NameServer
 
         while (!ct.IsCancellationRequested)
         {
-            var security = new PipeSecurity();
-            var me = WindowsIdentity.GetCurrent().User!;
-            security.AddAccessRule(new PipeAccessRule(me, PipeAccessRights.ReadWrite, AccessControlType.Allow));
+            NamedPipeServerStream server;
+            try
+            {
+                var security = new PipeSecurity();
+                var me = WindowsIdentity.GetCurrent().User!;
+                security.AddAccessRule(new PipeAccessRule(me, PipeAccessRights.ReadWrite, AccessControlType.Allow));
 
-            using var server = NamedPipeServerStreamAcl.Create(
-                PipeName, PipeDirection.InOut, 1, PipeTransmissionMode.Byte,
-                PipeOptions.Asynchronous, 0, 0, security);
+                // FirstPipeInstance: creating a pipe needs no privilege, so without it any
+                // local process can squat this name before the helper starts and feed the UI
+                // paths of its choosing - a click on a fabricated result then launches as
+                // this user. With it, Create fails instead of joining someone else's pipe.
+                server = NamedPipeServerStreamAcl.Create(
+                    PipeName, PipeDirection.InOut, 1, PipeTransmissionMode.Byte,
+                    PipeOptions.Asynchronous | PipeOptions.FirstPipeInstance, 0, 0, security);
+            }
+            catch (Exception ex)
+            {
+                // The one failure that would otherwise leave nothing behind. An unhandled
+                // exception here escapes Main, .NET terminates without running the exit
+                // hook, and a HighestAvailable scheduled task discards stderr - so the log
+                // would never be written for a process whose only diagnostic is the log.
+                Log.Error("pipe", $"cannot create pipe '{PipeName}' - is the name already taken?", ex);
+                Log.Flush();
+                return;
+            }
 
-            await server.WaitForConnectionAsync(ct).ConfigureAwait(false);
-            Log.Info("pipe", "client connected");
-            await Serve(server, indexes, ct).ConfigureAwait(false);
-            Log.Info("pipe", "client gone");
+            using (server)
+            {
+                await server.WaitForConnectionAsync(ct).ConfigureAwait(false);
+                Log.Info("pipe", "client connected");
+                await Serve(server, indexes, ct).ConfigureAwait(false);
+                Log.Info("pipe", "client gone");
+            }
         }
     }
 }
 ```
 
 The pipe ACL grants only the current user. The helper is elevated; an unrestricted pipe from an elevated process is a privilege-escalation surface, and this is the one line that closes it.
+
+**Two-stage filtering, and what this plan deliberately leaves undone.** `NameIndex.Search`
+generates candidates; `SearchQuery.Allows` decides which of them the query actually admits.
+`Allows` is pure string work over the name, path and kind - no file I/O - so it belongs in
+the helper, and Task 6's characterization tests proved what happens without it.
+
+`SearchQuery.AllowsStat` - the `size:`, `dc:` and `da:` filters - is **not** applied in this
+plan. It needs file metadata, which means I/O per candidate, and it is only worth paying on
+rows that already survived ranking. It is applied UI-side on the returned rows in a later
+plan, which is the same staging the engine already uses. Until then, size and date filters
+parse correctly and are not enforced. That is a known gap, recorded here so it is not
+mistaken for a bug when `--searchprobe "report size:>1mb"` over-returns.
 
 - [ ] **Step 4: Run test to verify it passes**
 
@@ -2157,7 +2213,7 @@ git commit -m "Diagnostics: --searchprobe and --searchtest"
 | **2 - The widget** | Palette layer with ground-aware derivation, six palettes, `palettes.json`, the ported card, the capsule, tray, hotkey with fallback chain, `--searchshot` |
 | **3 - Content** | FTS5 document store, document text extraction, the indexer child process, journal-driven enqueue, `--searchindex`, `--searchbench` |
 | **4 - Capabilities** | Model store, vector store, SigLIP-2, e5, Whisper, per-capability gating, the first-run download screen, `--searchmodels` |
-| **5 - Settings and shipping** | Sectioned settings window, drives, exclusions, self-contained publish, winget manifest, **the real README** - screenshots rendered by `--searchshot`, numbers measured by `--searchbench`, each with the command that reproduces it |
+| **5 - Settings and shipping** | Sectioned settings window, drives, exclusions, self-contained publish, winget manifest, `--uninstall` / `--purge` and the installer's uninstaller, **the real README** - screenshots rendered by `--searchshot`, numbers measured by `--searchbench`, each with the command that reproduces it |
 
 `--searchbench` lands in Plan 3 rather than Plan 5 because that is the first plan with both
 halves worth measuring - a live name index behind the pipe, and a content indexer with a

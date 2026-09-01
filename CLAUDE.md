@@ -165,6 +165,32 @@ must never live in the publish folder.
 | `%LOCALAPPDATA%\Findra\index\` | SQLite name, FTS5 and vector stores |
 | `%LOCALAPPDATA%\Findra\logs\` | `findra-YYYYMMDD.log` |
 
+## Install, resume and uninstall
+
+**Installing never discards work that is still good.** On startup, inspect what is on disk
+and continue from it: models present and correctly sized are kept, partial downloads resume
+from the byte already fetched, an index with a current schema is used as-is and a non-empty
+queue is **resumed**, an older schema is migrated with only the invalidated files re-queued.
+"Done" is a fact the index records - schema version, consumed USN position per volume,
+pending queue - not a guess. Re-downloading 2.9 GB or re-indexing a finished disk because an
+upgrade did not look first is the worst thing this product could do to someone; it gets a test.
+
+The name index is exempt - it lives in RAM in the helper and is rebuilt by MFT enumeration
+in seconds at every logon. Only content survives restarts.
+
+**Uninstall always removes** the app files, **the `HighestAvailable` scheduled task**, any
+autostart entry, and stops the helper and indexer first. Missing the scheduled task orphans
+an elevated logon task pointing at a deleted binary on a stranger's machine - that is a
+defect, not an inconvenience.
+
+**Uninstall keeps by default** `%LOCALAPPDATA%\Findra\models\`, `index\`, and
+`%APPDATA%\Findra\` config. Deleting them is opt-in via a checkbox and a flag, and the prompt
+states the **measured** size it would free, not a vague warning.
+
+**`findra.exe --uninstall` is a first-class mode** (with `--purge` to also delete data),
+because the `dotnet publish` route has no installer - without it, everyone who built from
+source is left with an elevated scheduled task and no supported way to remove it.
+
 ## Provenance
 
 Findra starts from an existing search engine held locally at `C:\Code\Personal\Prism\src\Search`
