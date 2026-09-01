@@ -5,5 +5,5 @@ publish/
 .vs/
 installer/Output/
 installer/redist/
-2026-*-command-*.txt
+/2026-*.txt
 .superpowers/

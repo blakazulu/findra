@@ -108,11 +108,17 @@ Replace `src/Findra/Findra.csproj` with:
     <LangVersion>latest</LangVersion>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <InvariantGlobalization>false</InvariantGlobalization>
-    <SelfContained>true</SelfContained>
-    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
-    <PublishSingleFile>false</PublishSingleFile>
   </PropertyGroup>
 </Project>
+```
+
+**Self-contained lives on the publish command, not in the csproj.** A test project that
+references a RID-specific self-contained exe project fails to restore, which would break
+`dotnet test` from here on. The spec requires the *publish* to be self-contained, and this
+is the command that satisfies it - it goes in the README and in Plan 5's packaging task:
+
+```bash
+dotnet publish src/Findra -c Release -r win-x64 --self-contained
 ```
 
 `AllowUnsafeBlocks` is required: the ported `NtfsVolume` uses pointer arithmetic over the USN buffer.
@@ -857,7 +863,10 @@ public sealed class Generation
     public bool Accept(long gen)
     {
         if (gen != Interlocked.Read(ref _issued)) return false;
-        return Interlocked.CompareExchange(ref _accepted, gen, gen - 1) == gen - 1;
+        // Exchange, not CompareExchange against gen-1: generations that were dropped as
+        // stale are never accepted, so _accepted is not a dense sequence. Comparing
+        // against gen-1 would refuse every generation after the first drop.
+        return Interlocked.Exchange(ref _accepted, gen) != gen;
     }
 }
 ```
@@ -916,6 +925,11 @@ grep -ric "prism" src/Findra/Names/    # expected: 0 in every file
 
 These pin the behaviour the pipe depends on. They are characterization tests, not TDD -
 the code already works, and the point is to notice if the port broke it.
+
+**These assertions are predictions, not specification.** They were written from the source's
+signatures without running it. Where the real ported engine behaves differently, change the
+*assertion* to record what actually happens and list every assertion you changed in your
+report. Do not edit ported engine code to satisfy a prediction.
 
 `tests/Findra.Tests/Names/NameIndexTests.cs`:
 
@@ -1030,10 +1044,12 @@ git commit -m "Port the name engine: volume, index, query grammar, file kinds"
 `tests/Findra.Tests/Pipe/NameServerTests.cs`:
 
 ```csharp
-using System.IO.Pipelines;
 using Findra;
 using Findra.Pipe;
 using Xunit;
+using Pipelines = System.IO.Pipelines;   // `using Findra.Pipe` puts the namespace name
+                                         // `Pipe` in scope, so `new Pipe()` would be
+                                         // "namespace used like a type"
 
 public class NameServerTests
 {
@@ -1049,11 +1065,14 @@ public class NameServerTests
     /// <summary>A duplex pair of streams, so a server and a client can talk in-process.</summary>
     private static (Stream Server, Stream Client) Pair()
     {
-        var a = new Pipe();
-        var b = new Pipe();
+        var a = new Pipelines.Pipe();
+        var b = new Pipelines.Pipe();
         return (new DuplexStream(b.Reader.AsStream(), a.Writer.AsStream()),
                 new DuplexStream(a.Reader.AsStream(), b.Writer.AsStream()));
     }
+
+    /// <summary>Task 8's client tests reuse this duplex pair.</summary>
+    public static (Stream Server, Stream Client) PairForTests() => Pair();
 
     [Fact]
     public async Task AnswersAQueryWithResolvedRows()
@@ -1395,28 +1414,32 @@ public class NameClientTests
     [Fact]
     public async Task DropsAStaleReply()
     {
-        // A server that answers the FIRST query slowly and the second immediately,
-        // so the slow answer lands last - exactly the race the counter exists for.
+        // A server that answers the SECOND query first, so the answer to the abandoned
+        // first query lands last - exactly the race the counter exists for.
+        //
+        // Do not gate the second SearchAsync behind the server's first write: the server
+        // cannot write until it has read both frames, and the second frame is only sent
+        // by the call the gate would be blocking. That deadlocks.
         var (server, client) = NameServerTests.PairForTests();
-        var gate = new SemaphoreSlim(0);
-        _ = Task.Run(async () =>
+
+        Task pretendServer = Task.Run(async () =>
         {
-            byte[]? a = await Frame.ReadAsync(server, default);
-            byte[]? b = await Frame.ReadAsync(server, default);
-            QueryRequest first  = Envelope.Unpack(a!).Body<QueryRequest>();
-            QueryRequest second = Envelope.Unpack(b!).Body<QueryRequest>();
+            QueryRequest first  = Envelope.Unpack((await Frame.ReadAsync(server, default))!).Body<QueryRequest>();
+            QueryRequest second = Envelope.Unpack((await Frame.ReadAsync(server, default))!).Body<QueryRequest>();
 
             await Frame.WriteAsync(server, Envelope.Pack(Envelope.KindQueryReply,
                 new QueryReply(second.Gen, 'C', 0, new[] { new NameRow(1, "new.jpg", @"C:\new.jpg", 0, 1, 0) })), default);
-            gate.Release();
             await Frame.WriteAsync(server, Envelope.Pack(Envelope.KindQueryReply,
                 new QueryReply(first.Gen, 'C', 0, new[] { new NameRow(2, "old.jpg", @"C:\old.jpg", 0, 1, 0) })), default);
         });
 
         await using var c = new NameClient(client);
+        // Sequential calls: SearchAsync writes its frame before it suspends, so the
+        // generation order on the wire is deterministic without any synchronisation.
         Task<QueryReply?> slow = c.SearchAsync("sun", 50, default);
-        await gate.WaitAsync();
         Task<QueryReply?> fast = c.SearchAsync("sunset", 50, default);
+
+        await pretendServer;
 
         Assert.NotNull(await fast);
         Assert.Null(await slow);           // the stale answer is dropped, not shown
@@ -1424,11 +1447,7 @@ public class NameClientTests
 }
 ```
 
-Add to `NameServerTests` so the client tests can reuse the duplex pair:
-
-```csharp
-public static (Stream Server, Stream Client) PairForTests() => Pair();
-```
+`NameServerTests.PairForTests()` already exists - it was added in Task 7.
 
 - [ ] **Step 2: Run test to verify it fails**
 
@@ -1667,6 +1686,14 @@ public class HelperTaskTests
 Run: `dotnet test --filter HelperTaskTests`
 Expected: FAIL - `HelperTask` does not exist.
 
+Note: `BuildXml` keeps `encoding="UTF-16"` because schtasks requires it. If
+`XDocument.Parse` refuses the declaration when parsing from a string, bend the *test*, not
+the produced XML - parse from the first element instead:
+
+```csharp
+static XDocument ParseTask(string xml) => XDocument.Parse(xml[xml.IndexOf("<Task")..]);
+```
+
 - [ ] **Step 4: Write HelperTask**
 
 `src/Findra/Startup/HelperTask.cs`:
@@ -1834,7 +1861,12 @@ git commit -m "Register the elevated names helper as a logon task"
 
 **Interfaces:**
 - Consumes: `NameClient` (Task 8), `HelperTask` (Task 9), `Paths`, `Log` (Task 2).
-- Produces: `Findra.Diagnostics.SearchProbe.Run(string[] args) : int`, `Findra.Diagnostics.SelfTest.Run() : int`.
+- Produces: `Findra.Diagnostics.SearchProbe.RunAsync(string[] args) : Task<int>`, `Findra.Diagnostics.SelfTest.Run() : int`.
+
+The probe is async all the way down. The plan's Global Constraints forbid synchronous
+wrappers over the pipe, and the one blocking call allowed - at the top of `Main` - is
+where it goes. A diagnostic that models the wrong pattern is the one a future reader
+copies.
 
 The spec requires `--searchprobe` to report **which process answered** and **the current
 generation counter**. That is what makes a pipe fault visible without a debugger.
@@ -1852,7 +1884,7 @@ namespace Findra.Diagnostics;
 
 public static class SearchProbe
 {
-    public static int Run(string[] args)
+    public static async Task<int> RunAsync(string[] args)
     {
         string query = args.Length > 1 ? string.Join(' ', args[1..]) : "findra";
         Console.WriteLine($"findra --searchprobe  query: \"{query}\"");
@@ -1863,7 +1895,7 @@ public static class SearchProbe
         NameClient client;
         try
         {
-            client = NameClient.ConnectAsync(TimeSpan.FromSeconds(5), default).GetAwaiter().GetResult();
+            client = await NameClient.ConnectAsync(TimeSpan.FromSeconds(5), default);
         }
         catch (Exception ex)
         {
@@ -1876,14 +1908,14 @@ public static class SearchProbe
 
         try
         {
-            StatusReply status = client.StatusAsync(default).GetAwaiter().GetResult();
+            StatusReply status = await client.StatusAsync(default);
             Console.WriteLine($"  answered by            : pid {status.ProcessId}" +
                               $"{(status.ProcessId == Environment.ProcessId ? "  (THIS process - wrong!)" : "  (the helper)")}");
             foreach (VolumeStatus v in status.Volumes)
                 Console.WriteLine($"  volume {v.Letter}               : {v.Count:N0} names, {v.BufferBytes / 1048576} MB");
 
             long started = Stopwatch.GetTimestamp();
-            QueryReply? reply = client.SearchAsync(query, 20, default).GetAwaiter().GetResult();
+            QueryReply? reply = await client.SearchAsync(query, 20, default);
             TimeSpan elapsed = Stopwatch.GetElapsedTime(started);
 
             Console.WriteLine($"  generation             : {client.CurrentGeneration}");
@@ -1899,7 +1931,7 @@ public static class SearchProbe
 
             return reply.Rows.Count > 0 ? 0 : 2;
         }
-        finally { client.DisposeAsync().AsTask().GetAwaiter().GetResult(); }
+        finally { await client.DisposeAsync(); }
     }
 }
 ```
@@ -1990,9 +2022,12 @@ public static class SelfTest
 In `src/Findra/Program.cs`:
 
 ```csharp
-"--searchprobe" => Diagnostics.SearchProbe.Run(args),
+"--searchprobe" => Diagnostics.SearchProbe.RunAsync(args).GetAwaiter().GetResult(),
 "--searchtest"  => Diagnostics.SelfTest.Run(),
 ```
+
+That `GetAwaiter().GetResult()` is the second and last one in the codebase - both sit at a
+`Main` arm, which is the top of the stack, not a wrapper over the pipe.
 
 - [ ] **Step 4: Verify the self-test with no helper running**
 
