@@ -85,12 +85,18 @@ public class DerivedTests
     }
 
     [Fact]
-    public void OnAccentPicksWhicheverOfInkOrGroundIsLegible()
+    public void OnAccentPrefersThePalettesOwnColoursBeforeFallingBackToAnAnchor()
     {
-        // Mond's accent is a bright orange: dark ink belongs on it. Blueprint's is a deep
-        // indigo: the light ground belongs on it. One rule, opposite answers.
+        // Mond's accent is a bright orange: its own dark ink already clears the floor.
+        // Blueprint's is a deep indigo: its own light ground already clears the floor. Neither
+        // needs the white/black anchors - most palettes settle on their own ink or ground.
+        // Porcelain is the one that needs the fallback: its red accent is close enough to both
+        // its own ink and its own ground that neither clears 4.5, so it falls through to the
+        // anchors, landing on white (not black, despite black measuring higher) so the badge
+        // keeps the conventional white-on-red look.
         Assert.True(Derived.Contrast(Derived.From(Palette.Mond).OnAccent, Palette.Mond.Accent) >= 4.5);
         Assert.True(Derived.Contrast(Derived.From(Palette.Blueprint).OnAccent, Palette.Blueprint.Accent) >= 4.5);
+        Assert.Equal(Derived.From(Palette.Porcelain).OnAccent, new SKColor(255, 255, 255));
     }
 
     private static double Lum(SKColor c) => PaletteTests.Luminance(c);

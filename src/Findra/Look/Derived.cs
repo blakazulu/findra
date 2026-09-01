@@ -62,7 +62,7 @@ public sealed class Derived
             Edge        = Lift(0.16f),
             Stage       = Lift(0.09f),
             Shadow      = new SKColor(0, 0, 0, p.Light ? (byte)70 : (byte)120),
-            OnAccent    = Contrast(Black, p.Accent) >= Contrast(White, p.Accent) ? Black : White,
+            OnAccent    = PickOnAccent(p),
             AccentSoft  = Mix(p.Ground, p.Accent, 0.09f),
             AccentGlow  = p.Accent.WithAlpha(p.Light ? (byte)46 : (byte)62),
         };
@@ -70,6 +70,35 @@ public sealed class Derived
 
     private static readonly SKColor White = new(255, 255, 255);
     private static readonly SKColor Black = new(0, 0, 0);
+
+    /// <summary>What sits legibly on a solid fill of this palette's accent.
+    ///
+    /// Preference order, not a two-way pick: the palette's own ink, then its own ground, then
+    /// white or black - the anchors, tried in the direction that extends the ground's own
+    /// polarity (white for a light ground, black for a dark one), then the other one. The
+    /// first candidate that clears 4.5 wins; if somehow none do, the best of the four.
+    ///
+    /// The anchors are a fallback for an accent no palette colour can sit on, not the normal
+    /// path - five of the six built-in palettes settle on their own ground. Porcelain's red
+    /// accent is the outlier: neither its ink (3.17) nor its ground (4.55) clears the floor,
+    /// so it falls through to the anchor stage, where trying white before black keeps the
+    /// conventional white-on-red look rather than flipping to black text on red (even though
+    /// black's contrast there, 4.62, is technically higher).
+    /// </summary>
+    private static SKColor PickOnAccent(Palette p)
+    {
+        SKColor near = p.Light ? White : Black;
+        SKColor far = p.Light ? Black : White;
+        SKColor best = p.Ink;
+        double bestContrast = Contrast(p.Ink, p.Accent);
+        foreach (var candidate in new[] { p.Ink, p.Ground, near, far })
+        {
+            double c = Contrast(candidate, p.Accent);
+            if (c >= 4.5) return candidate;
+            if (c > bestContrast) { best = candidate; bestContrast = c; }
+        }
+        return best;
+    }
 
     /// <summary>Opaque linear blend. Alpha stays at the base's - these are surfaces, not overlays.</summary>
     private static SKColor Mix(SKColor a, SKColor b, float t) => new(
