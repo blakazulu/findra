@@ -104,26 +104,46 @@ public class NameClientTests
     public async Task ADeadStatusWaiterDoesNotSwallowTheNextReply()
     {
         // A status waiter abandoned by a failed write must not consume the reply belonging
-        // to the next caller. Without the skip-on-dequeue loop in the pump, this hangs.
+        // to the next caller. Cancelling cannot produce that state - the token throws at
+        // _writeLock.WaitAsync, before the enqueue, so nothing is ever stranded. The write
+        // itself has to fail AFTER the enqueue with the read side still alive, which is what
+        // FailsFirstWrite arranges. Without the pump's skip-on-dequeue loop, the reply goes
+        // to the corpse and the second call hangs until this test's timeout fails it.
         var (server, client) = NameServerTests.PairForTests();
         var cts = new CancellationTokenSource();
         _ = NameServer.Serve(server, new Dictionary<char, NameIndex> { ['C'] = Sample() }, cts.Token);
 
-        await using var c = new NameClient(client);
+        await using var c = new NameClient(new FailsFirstWrite(client));
 
-        // Strand a waiter the way a failed write would, then prove a real call still works.
-        using (var doomed = new CancellationTokenSource())
-        {
-            await doomed.CancelAsync();
-            await Assert.ThrowsAnyAsync<OperationCanceledException>(
-                () => c.StatusAsync(doomed.Token));
-        }
+        await Assert.ThrowsAsync<IOException>(() => c.StatusAsync(default));   // strands a dead waiter
 
-        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(5));
-        StatusReply status = await c.StatusAsync(timeout.Token);
+        StatusReply status = await c.StatusAsync(default).WaitAsync(TimeSpan.FromSeconds(5));
         Assert.Equal(Environment.ProcessId, status.ProcessId);
 
         await cts.CancelAsync();
+    }
+
+    /// <summary>Fails the first write only; reads and later writes pass straight through.</summary>
+    private sealed class FailsFirstWrite(Stream inner) : Stream
+    {
+        private int _writes;
+        public override ValueTask WriteAsync(ReadOnlyMemory<byte> b, CancellationToken ct) =>
+            Interlocked.Increment(ref _writes) == 1
+                ? ValueTask.FromException(new IOException("simulated transient write failure"))
+                : inner.WriteAsync(b, ct);
+        public override ValueTask<int> ReadAsync(Memory<byte> b, CancellationToken ct) => inner.ReadAsync(b, ct);
+        public override Task FlushAsync(CancellationToken ct) => inner.FlushAsync(ct);
+        public override bool CanRead => true;
+        public override bool CanSeek => false;
+        public override bool CanWrite => true;
+        public override long Length => throw new NotSupportedException();
+        public override long Position { get => throw new NotSupportedException(); set => throw new NotSupportedException(); }
+        public override void Flush() => inner.Flush();
+        public override int Read(byte[] b, int o, int n) => inner.Read(b, o, n);
+        public override void Write(byte[] b, int o, int n) => inner.Write(b, o, n);
+        public override long Seek(long o, SeekOrigin s) => throw new NotSupportedException();
+        public override void SetLength(long v) => throw new NotSupportedException();
+        protected override void Dispose(bool disposing) { if (disposing) inner.Dispose(); base.Dispose(disposing); }
     }
 
     [Fact]
