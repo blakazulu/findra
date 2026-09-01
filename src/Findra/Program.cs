@@ -10,6 +10,10 @@ public static class Program
             "--names"       => RunNames(),
             "--searchprobe" => Diagnostics.SearchProbe.RunAsync(args).GetAwaiter().GetResult(),
             "--searchtest"  => Diagnostics.SelfTest.Run(),
+            "--searchshot"  => Diagnostics.SearchShot.Render(
+                args.Length > 1 ? args[1] : "searchshot.png",
+                args.Length > 2 ? args[2] : "results",
+                args.Length > 3 ? args[3] : "Mond"),
 
             // A mistyped mode must not look like a success. `--searchprob` falling through to
             // the no-argument greeting exits 0, which is what a script checks, so the typo
@@ -28,6 +32,7 @@ public static class Program
         Console.Error.WriteLine("  --names                  the elevated name-index helper");
         Console.Error.WriteLine("  --searchprobe [query]    the whole query path, end to end");
         Console.Error.WriteLine("  --searchtest             engine self-check");
+        Console.Error.WriteLine("  --searchshot out.png <state> <palette>   render a surface, no screen required");
         return 1;
     }
 
