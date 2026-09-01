@@ -22,7 +22,7 @@ dotnet test                                    # TDD applies to new code (see be
 dotnet publish -c Release --self-contained     # self-contained is required, not optional
 ```
 
-Five diagnostic modes are non-negotiable and are built from day one. They are how the app is
+Six diagnostic modes are non-negotiable and are built from day one. They are how the app is
 verified without a screen, and `--searchshot` in particular is how UI gets iterated headlessly:
 
 ```bash
@@ -32,9 +32,27 @@ findra.exe --searchmodels             # are models present, do they load, do the
 findra.exe --searchindex              # what is indexed, what is queued
 findra.exe --searchshot out.png <empty|typing|results|noresults|many|adv|panel>
 findra.exe --searchtest               # engine self-check
+findra.exe --searchbench [out.md]     # measured numbers, as a pasteable Markdown fragment
 ```
 
 `--searchshot` must learn every new palette and every new surface as it is written.
+
+## The README is a product page
+
+It has to sell Findra to someone who has never heard of it, so it carries screenshots and
+numbers - and **both must be real**.
+
+- **Screenshots come from `--searchshot`**, which draws the actual card with the actual
+  painter. Every image is the product, not a mockup. Regenerate by running the command;
+  never hand-edit. Record the command next to each image so anyone can reproduce it.
+- **Every number comes from `--searchbench`** pasted verbatim, with the machine named
+  (CPU, RAM, disk class, Windows build). A number without its machine is marketing, not
+  measurement. Model sizes come from real files on disk, never the declared floors.
+- **No claim appears that a reader cannot reproduce** with a command from the README itself.
+- **No comparative claims against named competitors** - Findra cannot benchmark them fairly.
+
+The README is written last, once the surfaces and the benchmark exist. Until then the repo
+carries a deliberately plain placeholder that promises nothing it cannot yet show.
 
 ## Architecture
 

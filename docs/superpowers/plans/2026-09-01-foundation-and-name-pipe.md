@@ -173,6 +173,12 @@ notice and credit the original author and project page.
 
 - [ ] **Step 5: Write README.md**
 
+This is a **deliberate placeholder**, not the finished front page. The real README is a
+product page carrying screenshots rendered by `--searchshot` and numbers measured by
+`--searchbench`, and neither exists yet - see the spec's §9a. Until then the repo promises
+nothing it cannot show. Write exactly this: no benchmark claims, no comparisons, no
+adjectives it cannot back.
+
 ```markdown
 # Findra
 
@@ -2096,6 +2102,10 @@ git commit -m "Diagnostics: --searchprobe and --searchtest"
 | Plan | Delivers |
 |---|---|
 | **2 - The widget** | Palette layer with ground-aware derivation, six palettes, `palettes.json`, the ported card, the capsule, tray, hotkey with fallback chain, `--searchshot` |
-| **3 - Content** | FTS5 document store, document text extraction, the indexer child process, journal-driven enqueue, `--searchindex` |
+| **3 - Content** | FTS5 document store, document text extraction, the indexer child process, journal-driven enqueue, `--searchindex`, `--searchbench` |
 | **4 - Capabilities** | Model store, vector store, SigLIP-2, e5, Whisper, per-capability gating, the first-run download screen, `--searchmodels` |
-| **5 - Settings and shipping** | Sectioned settings window, drives, exclusions, self-contained publish, winget manifest |
+| **5 - Settings and shipping** | Sectioned settings window, drives, exclusions, self-contained publish, winget manifest, **the real README** - screenshots rendered by `--searchshot`, numbers measured by `--searchbench`, each with the command that reproduces it |
+
+`--searchbench` lands in Plan 3 rather than Plan 5 because that is the first plan with both
+halves worth measuring - a live name index behind the pipe, and a content indexer with a
+throughput to report. The README then has real numbers to quote by the time it is written.
