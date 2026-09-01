@@ -31,9 +31,14 @@ public class PaletteTests
     [Fact]
     public void InkAlwaysContrastsWithItsGround()
     {
+        // A raw luminance delta is the wrong metric and this test used to use it: relative
+        // luminance flatters light grounds, so a delta of 0.5 is a different amount of
+        // readability at each end of the range. The six measured 0.714 to 0.958 against it,
+        // which no palette this project would ship could have failed. Contrast is the metric
+        // the eye is calibrated to and 4.5 is the threshold that means something.
         foreach (Palette p in Palette.BuiltIn)
-            Assert.True(Math.Abs(Luminance(p.Ink) - Luminance(p.Ground)) > 0.5,
-                $"{p.Name}: ink and ground are too close to read");
+            Assert.True(Derived.Contrast(p.Ink, p.Ground) >= 4.5,
+                $"{p.Name}: ink on ground is {Derived.Contrast(p.Ink, p.Ground):0.00}:1, needs 4.5");
     }
 
     [Fact]

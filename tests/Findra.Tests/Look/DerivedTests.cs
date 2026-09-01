@@ -11,13 +11,21 @@ public class DerivedTests
         return d;
     }
 
+    // Not Palette.ByName: that resolves against palettes.json so a user's own entry wins, which
+    // is right for the app and wrong for a test - a hand-written override of "Mond" on the
+    // machine running this would silently change what is being measured.
+    private static Derived Of(string name) =>
+        Derived.From(Palette.BuiltIn.Single(p => p.Name == name));
+
     [Theory, MemberData(nameof(AllPalettes))]
     public void TextIsReadableOnEverySurfaceItLandsOn(string name)
     {
         // The point of the whole exercise: a palette must be legible in either mode without
-        // anyone eyeballing it. 4.5 is the ordinary body-text threshold; the dim secondary
-        // line is held to 3.0, which is the large-text threshold and what it actually is.
-        Derived d = Derived.From(Palette.ByName(name)!);
+        // anyone eyeballing it. 4.5 is the ordinary body-text threshold, and Dim is held to it
+        // too: it is the only text on the resting capsule, at 15px regular, which WCAG does not
+        // call large text (that is 18.66px bold or 24px regular). It was held to 3.0 and passing
+        // at 3.51 on Blueprint - a threshold fitted to the value rather than to the type size.
+        Derived d = Of(name);
 
         Assert.True(Derived.Contrast(d.Ink, d.Ground) >= 4.5, $"{name}: ink on ground");
         Assert.True(Derived.Contrast(d.Ink, d.Row) >= 4.5, $"{name}: ink on a result row");
@@ -25,7 +33,7 @@ public class DerivedTests
         Assert.True(Derived.Contrast(d.Ink, d.RowSelected) >= 4.5, $"{name}: ink on the selected row");
         Assert.True(Derived.Contrast(d.Ink, d.Stage) >= 4.5, $"{name}: ink on the preview panel");
         Assert.True(Derived.Contrast(d.Ink, d.Chip) >= 4.5, $"{name}: ink on a filter chip");
-        Assert.True(Derived.Contrast(d.Dim, d.Ground) >= 3.0, $"{name}: dim text on ground");
+        Assert.True(Derived.Contrast(d.Dim, d.Ground) >= 4.5, $"{name}: dim text on the capsule");
         Assert.True(Derived.Contrast(d.OnAccent, d.Accent) >= 4.5, $"{name}: text on an accent fill");
     }
 
@@ -36,7 +44,7 @@ public class DerivedTests
         // is under it, and each must move in the same direction - away from the ground -
         // whichever side of the line the palette is on. Getting the direction wrong is the
         // classic light-mode bug: a "lighter" row that vanishes into a white page.
-        Derived d = Derived.From(Palette.ByName(name)!);
+        Derived d = Of(name);
         double ground = Lum(d.Ground), row = Lum(d.Row), tile = Lum(d.Tile);
 
         if (d.Palette.Light)
@@ -59,7 +67,7 @@ public class DerivedTests
         // here still let a surface go nearly invisible on a light palette. L* is what the eye
         // actually perceives; ~1 L* is the just-noticeable difference, so 3.0 is "clearly
         // distinct" rather than merely "technically not equal".
-        Derived d = Derived.From(Palette.ByName(name)!);
+        Derived d = Of(name);
         foreach ((string label, SKColor c) in new[]
         {
             ("row", d.Row), ("rowHover", d.RowHover), ("rowSelected", d.RowSelected), ("tile", d.Tile),
@@ -79,33 +87,91 @@ public class DerivedTests
     public void TheSelectedRowIsAccentTintedAndStillNotTheAccent(string name)
     {
         // The selection reads as "this one" without becoming a solid accent block that the
-        // ink then has to fight.
-        Derived d = Derived.From(Palette.ByName(name)!);
-        Assert.NotEqual(d.RowSelected, d.Row);
-        Assert.True(Derived.Contrast(d.RowSelected, d.Accent) > 1.3,
+        // ink then has to fight. Both floors are set where they could actually bite: the
+        // selected row measures 6.4-9.3 L* from a resting one and 3.09-5.76 : 1 against the
+        // accent, so 3.0 and 2.5 leave real headroom without being unfalsifiable. The old
+        // pair - not-equal, and a contrast floor of 1.3 with 3.09 as the closest palette -
+        // could not fail for any tint this derivation is capable of producing.
+        Derived d = Of(name);
+        Assert.True(Math.Abs(Lstar(d.RowSelected) - Lstar(d.Row)) >= 3.0,
+            $"{name}: the selected row is only {Math.Abs(Lstar(d.RowSelected) - Lstar(d.Row)):0.00} L* from a resting one");
+        Assert.True(Derived.Contrast(d.RowSelected, d.Accent) >= 2.5,
             $"{name}: the selected row is too close to the accent to sit under it");
     }
 
     [Theory, MemberData(nameof(AllPalettes))]
     public void RowStatesEscalateAwayFromTheGroundInSteps(string name)
     {
-        // The list paints no fill at all for an ordinary row - it is just the ground showing
-        // through - so the ground itself is "ordinary" here. A hovered row and the selected
-        // (current, Enter-acts-on-it) row must each read as a visibly bigger step up from that,
-        // not two coats of the same faint wash: this is what the "selected row is one RGB unit
-        // from ordinary" bug looked like when measured instead of eyeballed. ~2 L* is roughly
-        // the threshold a glance actually registers, so each step must clear it, and the two
-        // steps must be genuinely ordered rather than merely both non-zero.
-        Derived d = Derived.From(Palette.ByName(name)!);
-        double ground = Lstar(d.Ground), hover = Lstar(d.RowHover), selected = Lstar(d.RowSelected);
-        double groundToHover = Math.Abs(hover - ground);
-        double hoverToSelected = Math.Abs(selected - hover);
-        double groundToSelected = Math.Abs(selected - ground);
+        // Four rungs, not three. Row is the resting fill - the list leaves it unpainted today,
+        // but the popup's inputs and its weakest button take it, and the settings window's rows
+        // will - so it has to be pinned in the chain too. Leaving it out is how RowHover came to
+        // sit within 1.4 L* of Row, and INVERTED on Mond and Brass: harmless only for as long as
+        // nothing paints a resting row next to a hovered one.
+        //
+        // ~2 L* is roughly the threshold a glance registers (1 L* is the just-noticeable
+        // difference), so every step must clear it, and each rung must be further from the
+        // ground than the one below - measured toward the ground's own direction, so the same
+        // assertion holds on a light palette where "further" means darker.
+        Derived d = Of(name);
+        double sign = d.Palette.Light ? -1 : 1;
+        double ground = Lstar(d.Ground);
+        double row = (Lstar(d.Row) - ground) * sign;
+        double hover = (Lstar(d.RowHover) - ground) * sign;
+        double selected = (Lstar(d.RowSelected) - ground) * sign;
 
-        Assert.True(groundToHover >= 2.0, $"{name}: hover is only {groundToHover:0.00} L* from the ground");
-        Assert.True(hoverToSelected >= 2.0, $"{name}: selected is only {hoverToSelected:0.00} L* from hover");
-        Assert.True(groundToSelected > groundToHover,
-            $"{name}: selected ({groundToSelected:0.00} L* from ground) must read further than hover ({groundToHover:0.00})");
+        Assert.True(row >= 2.0, $"{name}: a resting row is only {row:0.00} L* from the ground");
+        Assert.True(hover - row >= 2.0, $"{name}: hover is only {hover - row:0.00} L* from a resting row");
+        Assert.True(selected - hover >= 2.0, $"{name}: selected is only {selected - hover:0.00} L* from hover");
+    }
+
+    [Theory, MemberData(nameof(AllPalettes))]
+    public void SecondaryInkGetsTheSameLightGroundCorrectionTheSurfacesDo(string name)
+    {
+        // Every faded line in the card and the popup asks for ink at an alpha, and an alpha is a
+        // mix fraction in disguise - so it needs the same light-ground correction the lift does,
+        // or it inherits exactly the asymmetry the lift was fixed for. At alpha 130 the ramp
+        // measured 4.29/4.57/4.54 on the dark palettes and 3.23/3.15/3.66 on the light ones
+        // before Fade existed; the card's placeholder at 90 fell from 2.70 to 2.11, and the
+        // popup's at 70 from 2.12 to 1.75.
+        Derived d = Of(name);
+        double at130 = Derived.Contrast(Over(d.Fade(130), d.Ground), d.Ground);
+        Assert.True(at130 >= 3.9, $"{name}: ink at 130 reads {at130:0.00}:1 on the ground");
+    }
+
+    [Fact]
+    public void TheInkRampIsWithinAQuarterOfItselfAcrossLightAndDark()
+    {
+        // The property Fade actually has to hold: the same alpha buys close to the same weight
+        // whichever mode the palette is in. Across the six it spanned 3.15-4.57 (1.45x) before
+        // and 4.03-4.85 (1.20x) after.
+        var at130 = Palette.BuiltIn
+            .Select(p => Derived.From(p))
+            .Select(d => Derived.Contrast(Over(d.Fade(130), d.Ground), d.Ground))
+            .ToList();
+        Assert.True(at130.Max() / at130.Min() <= 1.25,
+            $"the ramp spans {at130.Min():0.00}-{at130.Max():0.00}, a factor of {at130.Max() / at130.Min():0.00}");
+    }
+
+    [Fact]
+    public void FadeIsUntouchedOnADarkGroundAndSaturatesRatherThanWrapping()
+    {
+        // A byte that overflows would wrap to near-zero and paint an invisible line, which is
+        // the worst possible failure for a correction meant to make text more readable.
+        Assert.Equal((byte)130, Derived.From(Palette.Mond).Fade(130).Alpha);
+        Assert.Equal((byte)255, Derived.From(Palette.Paper).Fade(255).Alpha);
+        Assert.Equal((byte)255, Derived.From(Palette.Paper).Fade(220).Alpha);
+        // 215 is the highest alpha anything paints today, and it must not be at the cap.
+        Assert.True(Derived.From(Palette.Paper).Fade(215).Alpha < 255);
+    }
+
+    /// <summary>An alpha-carrying ink composited over an opaque background, the way Skia does.</summary>
+    private static SKColor Over(SKColor fg, SKColor bg)
+    {
+        float a = fg.Alpha / 255f;
+        return new SKColor(
+            (byte)Math.Round(bg.Red   + (fg.Red   - bg.Red)   * a),
+            (byte)Math.Round(bg.Green + (fg.Green - bg.Green) * a),
+            (byte)Math.Round(bg.Blue  + (fg.Blue  - bg.Blue)  * a));
     }
 
     [Fact]

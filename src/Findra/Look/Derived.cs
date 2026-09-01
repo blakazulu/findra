@@ -9,6 +9,11 @@ namespace Findra;
 /// lighter on a dark ground, darker on a light one - so the same arithmetic produces a
 /// readable card in either mode. Hardcoding "slightly lighter" is what makes a dark theme
 /// unreadable when someone inverts it, and it is the reason this type exists at all.
+///
+/// Two corrections carry that idea. <c>Lift</c> moves the ground toward black or white and is
+/// scaled by <see cref="LightLift"/> on a light ground; <c>Weight</c> moves the ground toward
+/// the palette's own ink and is scaled by <see cref="LightInk"/>. They are different numbers
+/// because they measure different journeys - see each constant.
 /// </summary>
 public sealed class Derived
 {
@@ -18,47 +23,110 @@ public sealed class Derived
     public required SKColor Ink { get; init; }
     public required SKColor Ground { get; init; }
 
-    /// <summary>Secondary text: paths, counts, the timing line.</summary>
+    /// <summary>Secondary ink, opaque: the ground carrying about half its weight of ink.
+    /// Painted only by the resting capsule - its placeholder line (15px) and its progress
+    /// caption. The card and the popup reduce their own ink through <see cref="Fade"/> instead,
+    /// which is the same arithmetic expressed as an alpha.</summary>
     public required SKColor Dim { get; init; }
-    /// <summary>A result row's fill.</summary>
+
+    /// <summary>The first step off the ground: a resting surface that is not the page. The
+    /// result list paints no fill for an ordinary row, so today this paints the Advanced popup's
+    /// ten text inputs and the weakest of its three button states. It is the token the settings
+    /// window's list rows will want.</summary>
     public required SKColor Row { get; init; }
-    /// <summary>The highlighted row - accent-tinted, never solid accent.</summary>
+
+    /// <summary>The strongest of the three row states - the current row, the one Enter acts on.
+    /// Accent-tinted, never solid accent. Painted by the selected result row, the active filter
+    /// chip, a latched pill, the primary action under the stage, the scroll thumb, the popup's
+    /// chosen Kind chip and its hovered Apply button.</summary>
     public required SKColor RowSelected { get; init; }
-    /// <summary>A row (or pill, or action) the pointer is over but that is not the current
-    /// selection - the same accent tint as <see cref="RowSelected"/> at roughly half strength,
-    /// so hovering reads as "noticed" without competing with what Enter would act on.</summary>
+
+    /// <summary>The middle step: a row (or pill, or action) the pointer is over but that is not
+    /// the current selection - the same accent tint as <see cref="RowSelected"/> at half
+    /// strength, so hovering reads as "noticed" without competing with what Enter would act on.
+    /// The three states are ordered by construction: ground &lt; Row &lt; RowHover &lt;
+    /// RowSelected, each about 2 L* or more from the last.</summary>
     public required SKColor RowHover { get; init; }
-    /// <summary>The kind tile inside a row. Unused by the card today - its kind badge paints a
-    /// name-hashed gradient pinned dark on every palette, like a file-type tag that should not
-    /// shift with theme - but this is the natural token for "a surface above a row", which the
-    /// settings window will want.</summary>
+
+    /// <summary>A surface above a row - a tile, a thumbnail well, a nested panel. Not yet
+    /// painted; reserved for the settings window. The result list's kind badge does NOT use it:
+    /// that paints a name-hashed gradient pinned dark on every palette, like a file-type tag
+    /// that should not shift with theme.</summary>
     public required SKColor Tile { get; init; }
-    /// <summary>A filter chip's fill.</summary>
+
+    /// <summary>A small pill or tag's own fill, sitting directly on the ground. Not yet
+    /// painted; reserved for the settings window. The card's filter chips take
+    /// <see cref="RowSelected"/> when active and a stroke otherwise, and the row's kind tag now
+    /// reads straight off whatever is under it - the fill it used to draw measured under one L*,
+    /// which is below the threshold an eye registers at all.</summary>
     public required SKColor Chip { get; init; }
-    /// <summary>Hairline borders and separators.</summary>
+
+    /// <summary>Hairline borders and separators. Paints the card's two rules, the popup's
+    /// section lines and the capsule's progress track.</summary>
     public required SKColor Edge { get; init; }
-    /// <summary>The preview panel behind a thumbnail.</summary>
+
+    /// <summary>A small opaque plate laid over unknown content, where ink must stay legible
+    /// whatever is beneath. Painted by the duration badge on the stage's picture; the preview
+    /// panel it is named for draws no fill of its own.</summary>
     public required SKColor Stage { get; init; }
-    /// <summary>The card's drop shadow. Ground-independent by nature.</summary>
+
+    /// <summary>A drop shadow's own colour - black at a ground-dependent alpha, the one place a
+    /// literal colour is correct. Painted by the Advanced popup; the card's own window shadow
+    /// belongs to the compositor.</summary>
     public required SKColor Shadow { get; init; }
-    /// <summary>Whatever is legible when drawn on top of a solid accent fill.</summary>
+
+    /// <summary>Whatever is legible when drawn on top of a solid accent fill. Painted by the `!`
+    /// badge on the Advanced pill, and checked by <c>--searchtest</c>.</summary>
     public required SKColor OnAccent { get; init; }
-    /// <summary>A wash of accent, for a field's interior.</summary>
+
+    /// <summary>A wash of accent over the ground, opaque. Painted by the resting capsule's bar;
+    /// the field interior it was named for takes the ground itself.</summary>
     public required SKColor AccentSoft { get; init; }
-    /// <summary>The halo around the focused field.</summary>
+
+    /// <summary>The halo around a focused or resting control. Painted by the capsule's outer
+    /// glow and by the card field's focus ring.</summary>
     public required SKColor AccentGlow { get; init; }
+
+    /// <summary>
+    /// How much further a mix toward black or white has to travel on a light ground.
+    ///
+    /// Lightness (L*) follows a cube-root curve against relative luminance, and that curve is
+    /// steep near black and shallow near white: the same mix fraction buys far less perceived
+    /// separation on a light ground than on a dark one. This is what makes Paper's rows read as
+    /// clearly as Mond's instead of nearly vanishing into the page.
+    /// </summary>
+    private const float LightLift = 1.4f;
+
+    /// <summary>
+    /// The same correction for a mix toward the palette's own ink, which is a shorter journey
+    /// than one toward an anchor and so needs a smaller number - copying 1.4 here would overshoot
+    /// every secondary line into full ink.
+    ///
+    /// Fitted, not guessed: 1.17 is the multiplier that minimises the worst error when the three
+    /// light palettes' ink-at-130 contrast is matched against the three dark ones (4.29 / 4.57 /
+    /// 4.54 : 1). Before it, the whole secondary ramp carried the identical light/dark asymmetry
+    /// the lift had - ink at 130 measured 3.15-3.66 : 1 on a light ground - because an alpha
+    /// never passed through the correction at all.
+    /// </summary>
+    private const float LightInk = 1.17f;
+
+    /// <summary>Ink at a reduced weight, corrected for the ground.
+    ///
+    /// Every secondary line in the card and the popup - paths, counts, captions, placeholders -
+    /// asks for ink at some alpha. On a light ground that alpha is scaled by
+    /// <see cref="LightInk"/>, so a value chosen while looking at a dark palette lands on the
+    /// same perceived weight in either mode. The result saturates at 255 for a raw alpha of 218
+    /// or more; nothing painted today asks for more than 215.</summary>
+    public SKColor Fade(byte alpha) => Ink.WithAlpha(
+        Palette.Light ? (byte)Math.Min(255, (int)Math.Round(alpha * LightInk)) : alpha);
 
     public static Derived From(Palette p)
     {
         // Away from the ground: toward white on a dark ground, toward black on a light one.
-        //
-        // Equal arithmetic does not produce equal perception. Lightness (L*) follows a
-        // cube-root curve against relative luminance, and that curve is steep near black and
-        // shallow near white: the same mix fraction `t` buys far less perceived separation on
-        // a light ground than on a dark one. Scaling t by 1.4 on light palettes is what makes
-        // Paper's rows read as clearly as Mond's instead of nearly vanishing into the page.
-        SKColor Lift(float t) => Mix(p.Ground, p.Light ? Black : White, p.Light ? t * 1.4f : t);
+        SKColor Lift(float t) => Mix(p.Ground, p.Light ? Black : White, p.Light ? t * LightLift : t);
         SKColor Tint(float t, float toward) => Mix(Lift(t), p.Accent, toward);
+        // Toward the palette's own ink, same correction, its own constant.
+        SKColor Weight(float f) => Mix(p.Ground, p.Ink, p.Light ? Math.Min(1f, f * LightInk) : f);
 
         return new Derived
         {
@@ -67,10 +135,14 @@ public sealed class Derived
             Ink = p.Ink,
             Ground = p.Ground,
 
-            Dim         = Mix(p.Ground, p.Ink, 0.55f),
+            Dim         = Weight(0.55f),
             Row         = Lift(0.055f),
+            // The three row states share one lift and escalate by accent tint alone, so the
+            // ladder ground < Row < RowHover < RowSelected holds by construction: hover is
+            // exactly half of selected's tint. Giving hover a smaller lift as well - which is
+            // what it used to do - put it within 1.4 L* of Row and inverted it on two palettes.
+            RowHover    = Tint(0.055f, 0.07f),
             RowSelected = Tint(0.055f, 0.14f),
-            RowHover    = Tint(0.03f, 0.06f),
             Tile        = Lift(0.11f),
             Chip        = Lift(0.075f),
             Edge        = Lift(0.16f),
@@ -115,7 +187,7 @@ public sealed class Derived
     }
 
     /// <summary>Opaque linear blend. Alpha stays at the base's - these are surfaces, not overlays.</summary>
-    private static SKColor Mix(SKColor a, SKColor b, float t) => new(
+    public static SKColor Mix(SKColor a, SKColor b, float t) => new(
         (byte)Math.Round(a.Red   + (b.Red   - a.Red)   * t),
         (byte)Math.Round(a.Green + (b.Green - a.Green) * t),
         (byte)Math.Round(a.Blue  + (b.Blue  - a.Blue)  * t),
