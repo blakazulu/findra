@@ -2481,10 +2481,11 @@ git commit -m "Diagnostics: --searchprobe and --searchtest"
 
 | Plan | Delivers |
 |---|---|
-| **2 - The widget** | Palette layer with ground-aware derivation, six palettes, `palettes.json`, the ported card, the capsule, tray, hotkey with fallback chain, `--searchshot` |
-| **3 - Content** | FTS5 document store, document text extraction, the indexer child process, journal-driven enqueue, `--searchindex`, `--searchbench` |
-| **4 - Capabilities** | Model store, vector store, SigLIP-2, e5, Whisper, per-capability gating, the first-run download screen, `--searchmodels` |
-| **5 - Settings and shipping** | Sectioned settings window, drives, exclusions, self-contained publish, winget manifest, `--uninstall` / `--purge` and the installer's uninstaller, **the real README** - screenshots rendered by `--searchshot`, numbers measured by `--searchbench`, each with the command that reproduces it |
+| **2 - The look** | Palette layer with ground-aware derivation, six palettes, `palettes.json`, the ported card, the capsule painter, `--searchshot` |
+| **3 - The widget** | The Avalonia window, the desktop capsule and its unfold, tray, hotkey with fallback chain, `config.json`, light/dark follow, and the update check |
+| **4 - Content** | FTS5 document store, document text extraction, the indexer child process, journal-driven enqueue, `--searchindex`, `--searchbench` |
+| **5 - Capabilities** | Model store, vector store, SigLIP-2, e5, Whisper, per-capability gating, the first-run download screen, `--searchmodels` |
+| **6 - Settings and shipping** | Sectioned settings window, drives, exclusions, `--uninstall` / `--purge` and the installer's uninstaller, self-contained publish, winget manifest, **the real README** - screenshots rendered by `--searchshot`, numbers measured by `--searchbench`, each with the command that reproduces it |
 
 `--searchbench` lands in Plan 3 rather than Plan 5 because that is the first plan with both
 halves worth measuring - a live name index behind the pipe, and a content indexer with a

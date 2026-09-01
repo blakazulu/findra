@@ -165,6 +165,28 @@ must never live in the publish folder.
 | `%LOCALAPPDATA%\Findra\index\` | SQLite name, FTS5 and vector stores |
 | `%LOCALAPPDATA%\Findra\logs\` | `findra-YYYYMMDD.log` |
 
+## Versions and updates
+
+Findra knows its version, learns whether a newer one exists, and tells you. **It never
+installs anything by itself** - no self-updater, no background installer, no elevation for
+updates. Replacing a running executable and re-registering an elevated scheduled task are the
+two operations most likely to leave a machine broken; winget already solves that correctly.
+
+The update check is the **one exception** to "nothing leaves the machine", and it is written
+down rather than buried (spec §9b): an anonymous HTTPS GET to the GitHub Releases API, at
+most once per 24 hours, on startup, in the background. No query parameters, no machine or
+install identifier, nothing about files or searches. It never blocks anything - a failure is
+a log line, not a dialog. On by default, disclosed on the first-run screen, and switchable
+off, where off means no request is made.
+
+It reports the action matching how the user installed: `winget upgrade blakazulu.Findra`, or
+a link to the release notes for a source build. The install source is recorded at first run,
+not guessed each launch.
+
+**Compare parsed version numbers, never strings** - `1.10.0` is newer than `1.9.0`, and a
+check that gets that wrong is worse than none, because it tells people they are current when
+they are not.
+
 ## Install, resume and uninstall
 
 **Installing never discards work that is still good.** On startup, inspect what is on disk

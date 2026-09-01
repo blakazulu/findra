@@ -26,7 +26,9 @@ It searches four kinds of thing:
 Names answer in single-digit milliseconds with no model, no network and no wait. Everything
 else is optional and consented to explicitly.
 
-**Non-goals.** No cloud, no telemetry, no account. Nothing leaves the machine. No plugin
+**Non-goals.** No cloud, no telemetry, no account. Nothing about your files, your searches or
+your machine leaves it - the one exception is an update check, which is described in §9b and
+can be switched off. No plugin
 system, no scripting host, no multi-widget suite - Findra is one surface, and the design
 leans on that everywhere.
 
@@ -496,6 +498,60 @@ fairly and a claim it cannot defend is worse than no claim.
 
 The README is written last, once the surfaces and the benchmark exist. Until then the repo
 carries a deliberately plain placeholder that promises nothing it cannot yet show.
+
+## 9b. Versions and updates
+
+Findra knows its own version, learns whether a newer one exists, and tells you. It does not
+install anything by itself.
+
+### The honesty problem, faced first
+
+The line above says nothing leaves the machine. **An update check is a network request, and
+that is a real exception to a promise this product makes loudly.** Pretending otherwise would
+be worse than not checking at all, so it is written down here rather than buried:
+
+- **What is sent:** an anonymous HTTPS GET to the GitHub Releases API for this repository. No
+  query parameters, no machine identifier, no install id, no counters, nothing about your
+  files or searches. GitHub sees an IP address and a user agent, which is unavoidable for
+  any request at all; Findra adds nothing to it.
+- **How often:** at most once every 24 hours, on startup, in the background. Never on a
+  keystroke, never per search.
+- **It never blocks anything.** The check runs after the UI is up. A failure is a log line,
+  not a dialog - a broken network is not an error the user needs to acknowledge.
+- **It can be switched off** in settings, and off means off: no request is made.
+- **It is on by default**, and disclosed on the first-run screen beside the model downloads.
+  A search tool that silently withholds a fix from its users is worse than one that asks for
+  a single anonymous GET a day, but that trade is the user's to see and reverse.
+
+### What it does with the answer
+
+Findra **never updates itself**. It has no self-updater, no elevation for updates, no
+background installer. It tells you what it found and hands you the action appropriate to how
+you installed it:
+
+| Installed via | What Findra says |
+|---|---|
+| winget | the version, and `winget upgrade blakazulu.Findra` |
+| `git clone` + `dotnet publish` | the version, and a link to the release notes |
+| unknown | both |
+
+The install source is recorded at first run, not guessed at every launch.
+
+A self-updater would need to replace a running executable and re-register an elevated
+scheduled task - the two operations in this product most likely to leave a machine in a
+broken state, and the ones a user is least able to recover from. Handing off to winget, which
+already solves this correctly, is worth more than the convenience of doing it here.
+
+### Version identity
+
+The version is the assembly's informational version, set from a single place in the build,
+and it appears in `--searchprobe`, `--searchbench`, the log header and the About section. A
+release is a git tag; the update check compares the running version against the newest
+non-prerelease tag. Prereleases are ignored unless the running build is itself a prerelease.
+
+Comparison is on parsed version numbers, never on string ordering - `1.10.0` is newer than
+`1.9.0`, and a check that gets that wrong is worse than no check, because it tells people
+they are current when they are not.
 
 ## 10. Testing
 
