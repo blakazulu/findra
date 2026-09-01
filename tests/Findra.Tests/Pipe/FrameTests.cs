@@ -74,18 +74,49 @@ public class FrameTests
     }
 
     [Fact]
-    public async Task ACancelledWriteLeavesNothingBehind()
+    public async Task ACancelledWriteCannotLeaveAPartialFrame()
     {
-        // A torn frame is unrecoverable: the peer parses every later frame at the wrong
-        // offset. Cancellation must leave the stream byte-for-byte untouched.
-        var ms = new MemoryStream();
-        using var cancelled = new CancellationTokenSource();
-        await cancelled.CancelAsync();
+        // A torn frame is unrecoverable: the peer reads the next frame as this one's
+        // payload and parses everything after it at the wrong offset, forever.
+        //
+        // Cancelling before the write proves nothing - an implementation that writes the
+        // header and the payload as two separate awaits also leaves zero bytes, because
+        // the first write already sees the cancelled token. The tear only appears when
+        // cancellation lands BETWEEN the two writes, so this stream cancels itself once
+        // the first write has completed. A two-write implementation leaves exactly the
+        // 4-byte header here; a single-write one leaves the whole frame or nothing.
+        var inner = new MemoryStream();
+        using var cts = new CancellationTokenSource();
+        var stream = new CancelsAfterFirstWrite(inner, cts);
 
-        await Assert.ThrowsAnyAsync<OperationCanceledException>(
-            () => Frame.WriteAsync(ms, new byte[5000], cancelled.Token));
+        try { await Frame.WriteAsync(stream, new byte[5000], cts.Token); }
+        catch (OperationCanceledException) { }
 
-        Assert.Equal(0, ms.Length);
+        Assert.True(inner.Length is 0 or 5004,
+            $"partial frame on the wire: {inner.Length} bytes - a peer would misparse everything after it");
+    }
+
+    /// <summary>Cancels the token once the first write has gone through.</summary>
+    private sealed class CancelsAfterFirstWrite(Stream inner, CancellationTokenSource cts) : Stream
+    {
+        private int _writes;
+        public override async ValueTask WriteAsync(ReadOnlyMemory<byte> b, CancellationToken ct)
+        {
+            ct.ThrowIfCancellationRequested();
+            await inner.WriteAsync(b, CancellationToken.None);
+            if (Interlocked.Increment(ref _writes) == 1) await cts.CancelAsync();
+        }
+        public override Task FlushAsync(CancellationToken ct) => Task.CompletedTask;
+        public override bool CanRead => false;
+        public override bool CanSeek => false;
+        public override bool CanWrite => true;
+        public override long Length => inner.Length;
+        public override long Position { get => inner.Position; set => inner.Position = value; }
+        public override void Flush() { }
+        public override int Read(byte[] b, int o, int n) => throw new NotSupportedException();
+        public override void Write(byte[] b, int o, int n) => inner.Write(b, o, n);
+        public override long Seek(long o, SeekOrigin s) => throw new NotSupportedException();
+        public override void SetLength(long v) => throw new NotSupportedException();
     }
 
     private sealed class DripStream(byte[] data, int chunk) : Stream

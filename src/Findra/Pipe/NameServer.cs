@@ -178,8 +178,25 @@ public static class NameServer
                     // here is where journal streaming resumes, so that window gets replayed
                     // rather than lost. Nothing streams the journal yet - the cursor is simply
                     // unreconstructable afterwards, which is why it is taken now.
-                    if (!vol.QueryJournal())
-                        Log.Warn("names", $"{letter}: no USN journal - changes cannot be followed");
+                    //
+                    // Never fatal. QueryJournal returns false only for "this volume has no
+                    // journal support"; every other failure throws - including the create
+                    // path it takes when a volume has no active journal, which is the
+                    // ordinary state of a secondary data drive and needs a privilege that
+                    // may not be held. Letting that escape would abandon the whole volume
+                    // and lose name search for that disk, trading working search for a
+                    // cursor nothing consumes yet. Names must keep working on whatever can
+                    // be read.
+                    try
+                    {
+                        if (!vol.QueryJournal())
+                            Log.Warn("names", $"{letter}: no USN journal - changes cannot be followed");
+                    }
+                    catch (Exception ex)
+                    {
+                        Log.Warn("names", $"{letter}: journal cursor unavailable ({ex.GetType().Name}: " +
+                            $"{ex.Message}) - indexing anyway; changes cannot be followed");
+                    }
 
                     var ix = new NameIndex(letter);
                     long started = Stopwatch.GetTimestamp();
