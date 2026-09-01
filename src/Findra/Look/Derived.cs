@@ -47,7 +47,13 @@ public sealed class Derived
     public static Derived From(Palette p)
     {
         // Away from the ground: toward white on a dark ground, toward black on a light one.
-        SKColor Lift(float t) => Mix(p.Ground, p.Light ? Black : White, t);
+        //
+        // Equal arithmetic does not produce equal perception. Lightness (L*) follows a
+        // cube-root curve against relative luminance, and that curve is steep near black and
+        // shallow near white: the same mix fraction `t` buys far less perceived separation on
+        // a light ground than on a dark one. Scaling t by 1.4 on light palettes is what makes
+        // Paper's rows read as clearly as Mond's instead of nearly vanishing into the page.
+        SKColor Lift(float t) => Mix(p.Ground, p.Light ? Black : White, p.Light ? t * 1.4f : t);
         SKColor Tint(float t, float toward) => Mix(Lift(t), p.Accent, toward);
 
         return new Derived

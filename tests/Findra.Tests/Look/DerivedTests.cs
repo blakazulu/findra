@@ -53,14 +53,25 @@ public class DerivedTests
     [Theory, MemberData(nameof(AllPalettes))]
     public void EveryDerivedColourIsDistinctFromTheGround(string name)
     {
+        // A luminance delta is the wrong metric for a property named "distinct" - relative
+        // luminance flatters light grounds, so a threshold that looked comfortably satisfied
+        // here still let a surface go nearly invisible on a light palette. L* is what the eye
+        // actually perceives; ~1 L* is the just-noticeable difference, so 3.0 is "clearly
+        // distinct" rather than merely "technically not equal".
         Derived d = Derived.From(Palette.ByName(name)!);
         foreach ((string label, SKColor c) in new[]
         {
             ("row", d.Row), ("rowSelected", d.RowSelected), ("tile", d.Tile),
             ("chip", d.Chip), ("edge", d.Edge), ("stage", d.Stage),
         })
-            Assert.True(Math.Abs(Lum(c) - Lum(d.Ground)) > 0.002,
+            Assert.True(Math.Abs(Lstar(c) - Lstar(d.Ground)) >= 3.0,
                 $"{name}: {label} is indistinguishable from the ground");
+    }
+
+    private static double Lstar(SKColor c)
+    {
+        double y = PaletteTests.Luminance(c);
+        return y > 0.008856 ? 116 * Math.Cbrt(y) - 16 : 903.3 * y;
     }
 
     [Theory, MemberData(nameof(AllPalettes))]
