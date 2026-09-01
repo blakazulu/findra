@@ -13,7 +13,7 @@ Or build it:
 
     git clone https://github.com/blakazulu/findra
     cd findra
-    dotnet publish -c Release
+    dotnet publish src/Findra -c Release -r win-x64 --self-contained
 
 ## What it costs
 

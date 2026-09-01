@@ -6,7 +6,7 @@ namespace Findra;
 public enum ResultKind { File, Folder, Photo, Video, Document, Audio }
 
 // What a file IS, from its extension, and whether its contents are worth indexing. One table so the
-// name search, the card's chips, the stage preview and the indexer's queue all agree on it.
+// name search, the card's result rows and their chips, and the indexer's queue all agree on it.
 public static class FileKinds
 {
     private static readonly HashSet<string> Photo = new(StringComparer.OrdinalIgnoreCase)

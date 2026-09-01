@@ -362,8 +362,10 @@ public sealed class NameIndex
         return exts.Contains(ext);
     }
 
-    /// <summary>Records whose (folded) name is exactly <paramref name="name"/> - how the repo
-    /// roots are found without a scan of anything else.</summary>
+    /// <summary>Every record whose folded name equals <paramref name="name"/> exactly. A whole-name
+    /// lookup, not a search: it answers "where are all the files called this" without scoring or
+    /// ranking anything. Nothing in the name pipe calls it yet; it is what a "jump to this exact
+    /// file name" path would use.</summary>
     public List<int> FindExact(string name)
     {
         var needle = Encoding.UTF8.GetBytes(name.ToLowerInvariant());
@@ -381,7 +383,13 @@ public sealed class NameIndex
         return true;
     }
 
-    [Obsolete("kept for the self-test's old call shape", false)]
+    /// <summary>
+    /// The plain word scan on its own, with none of the grammar: no globs, no regex, no
+    /// filters-only walk. Nothing calls it - <see cref="Search(SearchQuery, List{Hit}, int)"/>
+    /// replaced it - and it is kept only as the readable reference for what that branch does
+    /// once the parsing is stripped away.
+    /// </summary>
+    [Obsolete("superseded by the SearchQuery overload; kept as the bare reference scan", false)]
     private void SearchLegacy(string query, List<Hit> into, int max)
     {
         var tokens = Tokens(query);

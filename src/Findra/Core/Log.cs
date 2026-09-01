@@ -14,7 +14,7 @@ namespace Findra;
 // Files: %LOCALAPPDATA%\Findra\logs\findra-YYYYMMDD.log, 7 days retained.
 //
 // Two things that are easy to get wrong and were both bugs once:
-//  * The file is picked from the date of the EVENT, not of process start — otherwise a session
+//  * The file is picked from the date of the EVENT, not of process start - otherwise a session
 //    that spans midnight keeps appending to the starting day's file and "today's log" is a lie.
 //  * EVERY Findra process shares the day's file (the UI, the elevated --names helper, the
 //    --index child, and CLI modes like --searchprobe or --searchtest). Plain File.AppendAllText
@@ -22,7 +22,7 @@ namespace Findra;
 //    therefore serialized on a named mutex, and each line carries its pid so one process's
 //    lines can be told apart from another's.
 //
-// Writes are queued and flushed by a background task — hot paths never touch the disk.
+// Writes are queued and flushed by a background task - hot paths never touch the disk.
 // Rules of use: never log per-frame; perf data is SAMPLED (periodic summaries), and
 // repeating failures are logged once per unique key via Once().
 public static class Log
@@ -32,7 +32,7 @@ public static class Log
     private static readonly object OnceLock = new();
 
     // Serializes appends across processes. Local\ (not Global\) is per-logon-session, which is
-    // exactly the scope we need — the elevated helper and an unelevated UI/CLI run share it — and
+    // exactly the scope we need - the elevated helper and an unelevated UI/CLI run share it - and
     // an unelevated process lacks the privilege to create a Global\ object anyway.
     private static readonly Mutex FileLock = new(false, @"Local\Findra.Log.File");
     private static readonly UTF8Encoding Utf8 = new(encoderShouldEmitUTF8Identifier: false);
@@ -170,7 +170,7 @@ public static class Log
         try
         {
             // if the wait times out something is badly wrong; write anyway rather than drop
-            // diagnostics — a torn line beats a missing one
+            // diagnostics - a torn line beats a missing one
             try { held = FileLock.WaitOne(2000); }
             catch (AbandonedMutexException) { held = true; }   // a writer died mid-flush; it's ours now
 

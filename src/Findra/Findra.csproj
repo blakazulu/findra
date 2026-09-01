@@ -7,7 +7,6 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <LangVersion>latest</LangVersion>
-    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <InvariantGlobalization>false</InvariantGlobalization>
     <!-- System.IO.Pipes.AccessControl (below) is unused until Task 7 wires up the
          named-pipe ACLs, and 5.0.0 is the only stable release NuGet has ever published
