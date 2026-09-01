@@ -10,7 +10,7 @@ using System.Threading.Tasks;
 namespace Findra;
 
 // App-wide diagnostic log. One line per event, greppable:
-//   2026-07-04 01:23:45.678 [WARN ] [sensors] [7284] cpu_temp unmapped (backend=LibreHardwareMonitor)
+//   2026-09-01 01:23:45.678 [WARN ] [pipe] [7284] reply generation 41 discarded, current is 44
 // Files: %LOCALAPPDATA%\Findra\logs\findra-YYYYMMDD.log, 7 days retained.
 //
 // Two things that are easy to get wrong and were both bugs once:
@@ -43,13 +43,14 @@ public static class Log
     private static bool _ready;
     private static int _warns, _errors;
 
-    // App version, as reported in the start banner. "v2.0" hard-coded here once meant a log
-    // couldn't tell you which build produced it.
+    // App version, as reported in the start banner and by every diagnostic mode. Read from the
+    // assembly rather than hard-coded, so a log line can always be tied to the build that
+    // produced it.
     public static string Version =>
         typeof(Log).Assembly.GetName().Version is { } v ? $"{v.Major}.{v.Minor}.{v.Build}" : "?";
 
     // One-line health verdict for this process, written at exit so "was that run OK?" is a single
-    // grep instead of a scan. --logcheck reads these back.
+    // grep instead of a scan.
     public static string SessionSummary()
     {
         var up = DateTime.Now - SessionStart;
@@ -93,11 +94,12 @@ public static class Log
     }
 
     // "One line per event, greppable" is this class's contract, and a caller cannot be trusted to
-    // honour it: LibreHardwareMonitor hands us DIMM names carrying raw SMBIOS padding, so NUL bytes
-    // and binary junk landed mid-line in the files. That looked exactly like a torn concurrent
-    // append and got diagnosed as one for days — the appends were fine all along. Control
-    // characters (including a stray newline, which would split one event across two lines) become
-    // '?' here. Clean text, which is nearly every line, allocates nothing.
+    // honour it: file and folder names come straight off an NTFS volume, and NTFS permits control
+    // characters and unpaired surrogates that no ordinary Explorer rename dialog would ever let a
+    // person type. Left alone, a name like that lands mid-line in the log and looks exactly like a
+    // torn concurrent append even though the appends themselves are fine. Control characters
+    // (including a stray newline, which would split one event across two lines) become '?' here.
+    // Clean text, which is nearly every line, allocates nothing.
     internal static string OneLine(string s)
     {
         bool dirty = false;
