@@ -25,11 +25,21 @@ public sealed record Config
     public string LightPalette { get; init; } = "Paper";
     public ThemeMode Mode { get; init; } = ThemeMode.FollowWindows;
     public string Hotkey { get; init; } = "Alt+Space";
-    public double CapsuleX { get; init; }
-    public double CapsuleY { get; init; }
+    /// <summary>Where the capsule was left, in physical pixels, or null when it has never been
+    /// dragged anywhere. Null rather than a sentinel: (0,0) is the top-left corner of the primary
+    /// monitor, which is a place a user is entitled to park the capsule and expect to find it
+    /// again, so it cannot also mean "no saved position".</summary>
+    public int? CapsuleX { get; init; }
+    public int? CapsuleY { get; init; }
     public bool ShowCapsule { get; init; } = true;
     public bool CheckForUpdates { get; init; } = true;
     public DateTime? LastUpdateCheck { get; init; }
+
+    /// <summary>The release tag the last successful check returned, or null when no check has
+    /// ever come back with one. Remembered so the ~23 launches in 24 that are not due for a check
+    /// can still say whether an update is waiting, instead of going quiet for a day.</summary>
+    public string? LatestKnownVersion { get; init; }
+
     public string? InstallSource { get; init; }
 
     public static Config Default { get; } = new();

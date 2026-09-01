@@ -57,12 +57,64 @@ public static class CardPlacement
 {
     public const double FromTop = 0.28;
 
+    /// <summary>The card at its worst case, in physical pixels: the width it always has, and the
+    /// height it reaches once a full page of results lands. Placement has to reserve that height
+    /// up front, because the card grows in place and is never moved again - clamping against the
+    /// empty card puts the grown one off the bottom of a short screen.</summary>
+    public static PixelSize GrownSize(double zoom, double scaling) => new(
+        (int)Math.Round(SearchCardLayout.Width * zoom * scaling),
+        (int)Math.Round(SearchCardLayout.Height(SearchCardLayout.MaxRows, true) * zoom * scaling));
+
     public static PixelPoint Centred(PixelRect workingArea, int width, int height)
     {
         int x = workingArea.X + (workingArea.Width - width) / 2;
         int y = workingArea.Y + (int)Math.Round(workingArea.Height * FromTop);
         return CapsulePlacement.Clamp(new PixelPoint(x, y), workingArea, width, height);
     }
+
+    /// <summary>Where a card opened from the hotkey or the tray goes: centred, and kept inside the
+    /// monitor at the size it will have with results in it, which is the same worst case
+    /// <see cref="CardWindow.PlaceOver"/> already clamps the capsule-opened card against.</summary>
+    public static PixelPoint CentredGrown(PixelRect workingArea, double zoom, double scaling)
+    {
+        PixelSize grown = GrownSize(zoom, scaling);
+        return Centred(workingArea, grown.Width, grown.Height);
+    }
+}
+
+/// <summary>
+/// What Findra remembers about updates between launches, and the words that state wears.
+///
+/// A check runs at most once a day, so on the other twenty-three launches in twenty-four there is
+/// no live answer to show. The tag the last successful check returned is kept in the config and
+/// turned back into a state here - pure, so both the state and the menu wording have tests.
+/// </summary>
+public static class UpdateMemory
+{
+    /// <summary>The state to open with, from the tag the last successful check recorded.</summary>
+    public static UpdateState Remembered(string running, string? latestKnown)
+    {
+        if (string.IsNullOrWhiteSpace(latestKnown)) return UpdateState.NotDue;
+
+        // Compare returns zero both for "the same version" and for "one of these did not parse",
+        // so an unparseable remembered tag would otherwise read as "up to date" - a claim made on
+        // no information, which spec 9b calls worse than not checking at all.
+        string trimmed = latestKnown.Trim();
+        if (trimmed.Length > 0 && (trimmed[0] == 'v' || trimmed[0] == 'V')) trimmed = trimmed[1..];
+        if (!Version.TryParse(trimmed, out _)) return UpdateState.Unknown;
+
+        return UpdateCheck.Compare(running, latestKnown) < 0 ? UpdateState.Available : UpdateState.Current;
+    }
+
+    /// <summary>What the tray's "Check for updates" item says once a check the user asked for has
+    /// come back. A menu item that never changes leaves a click looking like it did nothing.</summary>
+    public static string CheckedHeader(UpdateState state, string? latest) => state switch
+    {
+        UpdateState.Available when !string.IsNullOrWhiteSpace(latest) => $"Checked: {latest} available",
+        UpdateState.Current => "Checked: up to date",
+        UpdateState.Disabled => "Update checks are turned off",
+        _ => "Checked: could not reach GitHub",
+    };
 }
 
 /// <summary>
@@ -99,6 +151,7 @@ internal sealed class Shell
     private HotkeyHost? _hotkey;
     private TrayIcon? _tray;
     private NativeMenuItem? _showCapsuleItem;
+    private NativeMenuItem? _checkForUpdatesItem;
     private CardWindow? _card;
 
     private UpdateState _update = UpdateState.NotDue;
@@ -120,6 +173,15 @@ internal sealed class Shell
             // between light and dark mid-session lands with the settings surface in a later plan.
             _palette = Theme.Resolve(_config, Theme.WindowsIsLight(), palettes);
             Log.Info("startup", $"palette '{_palette.Name}' ({(_palette.Light ? "light" : "dark")}), mode {_config.Mode}");
+
+            // What the last successful check found, so a launch that is not due for one still says
+            // whether an update is waiting instead of going quiet for the rest of the day.
+            _latest = _config.LatestKnownVersion;
+            _update = UpdateMemory.Remembered(Log.Version, _latest);
+            if (_update is UpdateState.Available or UpdateState.Current)
+                Log.Info("startup", _update is UpdateState.Available
+                    ? $"the last check found {_latest}, which is newer than {Log.Version}; the tray says so"
+                    : $"the last check found {_latest}: up to date");
         });
 
         // EnsureRunning asks the scheduler to start the helper and then waits up to five seconds
@@ -135,9 +197,11 @@ internal sealed class Shell
         Stage("hotkey", () =>
         {
             var host = new HotkeyHost();
-            host.Pressed += () => Dispatcher.UIThread.Post(OpenFromHotkey);
-            host.Start(HotkeyChain.Build(_config.Hotkey, Hotkey.DefaultChain));
+            host.Pressed += () => Dispatcher.UIThread.Post(() => OpenCentred(fromClick: false));
+            // Owned before it is started: Start creates a real window, and a throw inside it would
+            // otherwise leave that window with nobody holding it and nobody to Dispose it.
             _hotkey = host;
+            host.Start(HotkeyChain.Build(_config.Hotkey, Hotkey.DefaultChain));
             UiStatus.Write(Environment.ProcessId, host.Landed);
         });
 
@@ -176,7 +240,10 @@ internal sealed class Shell
         Screens? screens = ScreenSource();
         Screen? primary = screens?.Primary ?? screens?.All.FirstOrDefault();
 
-        var saved = new PixelPoint((int)Math.Round(_config.CapsuleX), (int)Math.Round(_config.CapsuleY));
+        // Null means never dragged. (0,0) is a position like any other - the top-left corner of
+        // the primary monitor - and has to be honoured rather than read as "no saved position".
+        bool everPlaced = _config.CapsuleX.HasValue && _config.CapsuleY.HasValue;
+        var saved = new PixelPoint(_config.CapsuleX ?? 0, _config.CapsuleY ?? 0);
         Screen? on = screens?.ScreenFromPoint(saved);
         double scaling = (on ?? primary)?.Scaling ?? 1.0;
 
@@ -184,7 +251,6 @@ internal sealed class Shell
         int h = (int)Math.Round(CapsuleLayout.Height * Zoom * scaling);
 
         IReadOnlyList<PixelRect> all = screens?.All.Select(s => s.Bounds).ToArray() ?? Array.Empty<PixelRect>();
-        bool everPlaced = _config.CapsuleX != 0 || _config.CapsuleY != 0;
 
         PixelPoint at;
         if (everPlaced && all.Count > 0 && CapsulePlacement.IsOnAnyScreen(new PixelRect(saved.X, saved.Y, w, h), all))
@@ -253,10 +319,18 @@ internal sealed class Shell
         catch (Exception ex) { Log.Error("app", "the card could not open from the capsule", ex); _card = null; }
     }
 
-    /// <summary>Opening from the hotkey dims the monitor under the CURSOR, which is not
-    /// necessarily the one the capsule rests on. Two open paths, two dim behaviours.</summary>
-    private void OpenFromHotkey()
+    /// <summary>The open path shared by the hotkey, the tray icon and the tray's Search item. It
+    /// dims the monitor under the CURSOR, which is not necessarily the one the capsule rests on -
+    /// two open paths, two dim behaviours.
+    ///
+    /// <paramref name="fromClick"/> is true for the two tray routes. A mouse click deactivates an
+    /// open card, and the card closes and nulls itself out BEFORE the handler runs, so without the
+    /// guard a click that dismissed the card would immediately open a fresh one. WM_HOTKEY moves
+    /// no focus and closes nothing, so the hotkey does not take the guard and keeps its plain
+    /// toggle: pressed while the card is open, it closes it.</summary>
+    private void OpenCentred(bool fromClick)
     {
+        if (fromClick && CardWindow.JustClosed) return;
         if (_card is not null) { CloseCard(); return; }
 
         try
@@ -268,9 +342,9 @@ internal sealed class Shell
 
             CardWindow card = NewCard();
             if (s is not null) card.ShowDim(s.Bounds, s.Scaling);
-            int w = (int)Math.Round(SearchCardLayout.Width * Zoom * scaling);
-            int h = (int)Math.Round(SearchCardLayout.Height(0, false) * Zoom * scaling);
-            card.Position = CardPlacement.Centred(work, w, h);
+            // Against the card WITH results in it. It opens empty, but it grows in place the
+            // moment the first results land and is never placed again.
+            card.Position = CardPlacement.CentredGrown(work, Zoom, scaling);
             card.Show();
         }
         catch (Exception ex) { Log.Error("app", "the card could not open", ex); _card = null; }
@@ -283,7 +357,7 @@ internal sealed class Shell
         var menu = new NativeMenu();
 
         var search = new NativeMenuItem("Search");
-        search.Click += (_, _) => OpenFromHotkey();
+        search.Click += (_, _) => OpenCentred(fromClick: true);
         menu.Items.Add(search);
 
         _showCapsuleItem = new NativeMenuItem("Show capsule")
@@ -302,6 +376,7 @@ internal sealed class Shell
         var check = new NativeMenuItem("Check for updates");
         check.Click += (_, _) => _ = RunUpdateCheck(force: true);
         menu.Items.Add(check);
+        _checkForUpdatesItem = check;
 
         var quit = new NativeMenuItem("Quit");
         quit.Click += (_, _) => Quit();
@@ -309,7 +384,7 @@ internal sealed class Shell
 
         var icon = new TrayIcon { Menu = menu, ToolTipText = Tooltip(), IsVisible = true };
         if (TrayIconFactory.Draw(_palette) is { } drawn) icon.Icon = drawn;
-        icon.Clicked += (_, _) => OpenFromHotkey();
+        icon.Clicked += (_, _) => OpenCentred(fromClick: true);
 
         TrayIcon.SetIcons(_app, new TrayIcons { icon });
         _tray = icon;
@@ -377,17 +452,38 @@ internal sealed class Shell
 
             await Dispatcher.UIThread.InvokeAsync(() =>
             {
-                // Only the timestamp is taken back. The config may have moved on since the request
+                // Only the timestamp and the tag are taken back, and both are merged onto the
+                // CURRENT config on the UI thread. The config may have moved on since the request
                 // started - a capsule dragged, the capsule toggled off - and writing the whole
                 // record back would undo it.
-                if (result.Config.LastUpdateCheck != _config.LastUpdateCheck)
+                Config merged = _config;
+                if (result.Config.LastUpdateCheck != merged.LastUpdateCheck)
+                    merged = merged with { LastUpdateCheck = result.Config.LastUpdateCheck };
+
+                bool answered = result.State is UpdateState.Current or UpdateState.Available;
+                if (answered && !string.IsNullOrWhiteSpace(result.Latest) &&
+                    result.Latest != merged.LatestKnownVersion)
+                    merged = merged with { LatestKnownVersion = result.Latest };
+
+                if (!ReferenceEquals(merged, _config))
                 {
-                    _config = _config with { LastUpdateCheck = result.Config.LastUpdateCheck };
+                    _config = merged;
                     _config.Save();
                 }
 
-                _update = result.State;
-                _latest = result.Latest;
+                // A not-due or failed check carries no tag, and must not erase what the last
+                // successful one found - remembering it is the whole point of writing it down.
+                if (answered)
+                {
+                    _update = result.State;
+                    _latest = result.Latest;
+                }
+
+                // A check the user asked for has to visibly answer. The header goes back to
+                // "Check for updates" on the next launch, where the item is built fresh.
+                if (force && _checkForUpdatesItem is not null)
+                    _checkForUpdatesItem.Header = UpdateMemory.CheckedHeader(result.State, result.Latest);
+
                 RefreshTooltip();
                 if (result.Advice is { } advice) Log.Info("startup", advice);
             });

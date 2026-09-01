@@ -64,10 +64,12 @@ public sealed class HotkeyHost : IDisposable
 
     [DllImport("user32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]
-    private static extern bool GetCursorPos(out Point point);
+    private static extern bool GetCursorPos(out NativePoint point);
 
+    // Named for Win32's POINT rather than "Point": Avalonia.Point is in scope in this file, and a
+    // nested type that silently wins the name is a trap for whoever edits it next.
     [StructLayout(LayoutKind.Sequential)]
-    private struct Point { public int X, Y; }
+    private struct NativePoint { public int X, Y; }
 
     private readonly Window _host;
     private readonly Win32Properties.CustomWndProcHookCallback _hook;
@@ -127,7 +129,7 @@ public sealed class HotkeyHost : IDisposable
         IntPtr hwnd = Handle();
         if (hwnd == IntPtr.Zero)
         {
-            Log.Warn("hotkey", "no hotkey combination could be registered; the capsule and the tray still open the card");
+            Log.Warn("hotkey", "the hotkey host window has no handle, so no combination could be registered; the capsule and the tray still open the card");
             return;
         }
 
@@ -149,7 +151,7 @@ public sealed class HotkeyHost : IDisposable
     /// happens to rest on.</summary>
     public static PixelPoint CursorPosition()
     {
-        try { if (GetCursorPos(out Point p)) return new PixelPoint(p.X, p.Y); }
+        try { if (GetCursorPos(out NativePoint p)) return new PixelPoint(p.X, p.Y); }
         catch (Exception ex) { Log.Once("hotkey|cursor", "WARN", "hotkey", "the cursor position could not be read: " + ex.Message); }
         return new PixelPoint(0, 0);
     }

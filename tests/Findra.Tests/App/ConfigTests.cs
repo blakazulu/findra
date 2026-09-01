@@ -22,12 +22,32 @@ public class ConfigTests
             DarkPalette = "Verdigris", LightPalette = "Blueprint", Mode = ThemeMode.AlwaysDark,
             Hotkey = "Ctrl+Alt+F", CapsuleX = 120, CapsuleY = 900, ShowCapsule = false,
             CheckForUpdates = false, LastUpdateCheck = new DateTime(2026, 3, 4, 5, 6, 7, DateTimeKind.Utc),
-            InstallSource = "winget",
+            LatestKnownVersion = "1.9.0", InstallSource = "winget",
         };
 
         Config back = Config.Load(c.ToJson());
 
         Assert.Equal(c, back);
+    }
+
+    [Fact]
+    public void ACapsuleThatWasNeverDraggedHasNoSavedPosition()
+    {
+        // Null, not (0,0): the shell asks HasValue rather than guessing from the numbers.
+        Assert.Null(Config.Default.CapsuleX);
+        Assert.Null(Config.Default.CapsuleY);
+    }
+
+    [Fact]
+    public void ACapsuleParkedAtTheOriginComesBackAsZeroAndNotAsNeverPlaced()
+    {
+        // The top-left corner of the primary monitor is somewhere a user is allowed to leave the
+        // capsule, and it has to be found there again on the next launch.
+        Config back = Config.Load((Config.Default with { CapsuleX = 0, CapsuleY = 0 }).ToJson());
+        Assert.NotNull(back.CapsuleX);
+        Assert.NotNull(back.CapsuleY);
+        Assert.Equal(0, back.CapsuleX!.Value);
+        Assert.Equal(0, back.CapsuleY!.Value);
     }
 
     [Fact]
