@@ -726,7 +726,7 @@ public sealed record Envelope(string Kind, string Json)
 - [ ] **Step 4: Run test to verify it passes**
 
 Run: `dotnet test --filter MessageTests`
-Expected: PASS, 5 tests.
+Expected: PASS, 6 tests.
 
 - [ ] **Step 5: Commit**
 
@@ -1904,7 +1904,7 @@ public sealed class NameClient : IAsyncDisposable
 - [ ] **Step 4: Run test to verify it passes**
 
 Run: `dotnet test --filter NameClientTests`
-Expected: PASS, 5 tests.
+Expected: PASS, 6 tests.
 
 - [ ] **Step 5: Prove the test is load-bearing**
 
@@ -2000,6 +2000,27 @@ public class HelperTaskTests
         Assert.Equal("false", doc.Descendants(ns + "StopIfGoingOnBatteries").Single().Value);
         Assert.Equal("PT0S",  doc.Descendants(ns + "ExecutionTimeLimit").Single().Value);
     }
+
+    [Fact]
+    public void XmlNamesTheUserAndRunsHiddenAndEnabled()
+    {
+        // Nothing here can be exercised without elevation, so these assertions are the
+        // only thing between a correct task and one that registers cleanly and then never
+        // fires. A dropped UserId, LogonType, or an Enabled of false all produce exactly
+        // that: schtasks accepts the XML, and the helper never starts.
+        var doc = XDocument.Parse(HelperTask.BuildXml(@"C:\Findra\findra.exe"));
+        XNamespace ns = "http://schemas.microsoft.com/windows/2004/02/mit/task";
+
+        string me = System.Security.Principal.WindowsIdentity.GetCurrent().Name;
+        var userIds = doc.Descendants(ns + "UserId").ToList();
+        Assert.Equal(2, userIds.Count);                       // the trigger and the principal
+        Assert.All(userIds, u => Assert.Equal(me, u.Value));
+
+        Assert.Equal("InteractiveToken", doc.Descendants(ns + "LogonType").Single().Value);
+        Assert.Equal("IgnoreNew", doc.Descendants(ns + "MultipleInstancesPolicy").Single().Value);
+        Assert.Equal("true", doc.Descendants(ns + "Hidden").Single().Value);
+        Assert.All(doc.Descendants(ns + "Enabled"), e => Assert.Equal("true", e.Value));
+    }
 }
 ```
 
@@ -2088,7 +2109,22 @@ $"""
             { RedirectStandardOutput = true, RedirectStandardError = true, UseShellExecute = false, CreateNoWindow = true };
             using Process? p = Process.Start(psi);
             if (p is null) return false;
-            p.WaitForExit(5000);
+
+            // Redirecting without draining can deadlock: the child blocks writing into a
+            // full pipe buffer while we sit in WaitForExit. `/xml ONE` prints the entire
+            // task definition on success, which is comfortably enough to fill it. Start
+            // both reads before waiting.
+            Task<string> stdout = p.StandardOutput.ReadToEndAsync();
+            Task<string> stderr = p.StandardError.ReadToEndAsync();
+
+            if (!p.WaitForExit(5000))
+            {
+                try { p.Kill(entireProcessTree: true); } catch { }
+                Log.Warn("startup", "schtasks /query did not return within 5s");
+                return false;
+            }
+
+            Task.WaitAll([stdout, stderr], TimeSpan.FromSeconds(1));
             return p.ExitCode == 0;
         }
         catch (Exception ex) { Log.Warn("startup", "task query failed: " + ex.Message); return false; }
@@ -2164,7 +2200,7 @@ Task 10 rather than by a unit test - it talks to the real scheduler.
 - [ ] **Step 4: Run test to verify it passes**
 
 Run: `dotnet test --filter HelperTaskTests`
-Expected: PASS, 5 tests.
+Expected: PASS, 6 tests.
 
 - [ ] **Step 5: Commit**
 
@@ -2392,7 +2428,7 @@ Expected: `pipe : UNREACHABLE`, the two-line instruction, exit code 1. No stack 
 - [ ] **Step 7: Run the whole suite**
 
 Run: `dotnet test`
-Expected: PASS - 6 Frame, 5 Message, 8 Generation, 5 NameServer, 6 NameClient, 6 NameIndex, 5 HelperTask, 4 Paths = 45 tests.
+Expected: PASS - 6 Frame, 5 Message, 8 Generation, 5 NameServer, 6 NameClient, 6 NameIndex, 6 HelperTask, 4 Paths = 46 tests.
 
 - [ ] **Step 8: Commit**
 
