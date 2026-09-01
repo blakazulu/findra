@@ -1202,6 +1202,15 @@ public class NameServerTests
         public override bool CanWrite => true;
         public override long Length => throw new NotSupportedException();
         public override long Position { get => throw new NotSupportedException(); set => throw new NotSupportedException(); }
+        // Without this, disposing one end never completes the underlying pipe, so the other
+        // end's read blocks forever instead of seeing EOF - and any test that simulates a
+        // dropped connection silently becomes a test of its own timeout.
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing) { read.Dispose(); write.Dispose(); }
+            base.Dispose(disposing);
+        }
+
         public override void Flush() => write.Flush();
         public override Task FlushAsync(CancellationToken ct) => write.FlushAsync(ct);
         public override int Read(byte[] b, int o, int c) => read.Read(b, o, c);
@@ -1365,6 +1374,15 @@ public static class NameServer
                 var me = WindowsIdentity.GetCurrent().User!;
                 security.AddAccessRule(new PipeAccessRule(me, PipeAccessRights.ReadWrite, AccessControlType.Allow));
 
+                // SetOwner is not decoration. The client connects with CurrentUserOnly, and
+                // that flag compares the pipe's OWNER against the client's token owner - not
+                // its user. This process is elevated, so its default token owner is
+                // BUILTIN\Administrators, while the normal-integrity UI's owner is the user
+                // SID. Without this line the two never match and every connect fails with
+                // UnauthorizedAccessException. Nothing in the unit suite catches it, because
+                // nothing in the unit suite connects a real pipe.
+                security.SetOwner(me);
+
                 // FirstPipeInstance: creating a pipe needs no privilege, so without it any
                 // local process can squat this name before the helper starts and feed the UI
                 // paths of its choosing - a click on a fabricated result then launches as
@@ -1511,19 +1529,120 @@ public class NameClientTests
     }
 
     [Fact]
-    public async Task GenerationAdvancesWithEachSearch()
+    public async Task ReturnsStatusFromTheServer()
     {
         var (server, client) = NameServerTests.PairForTests();
         var cts = new CancellationTokenSource();
         _ = NameServer.Serve(server, new Dictionary<char, NameIndex> { ['C'] = Sample() }, cts.Token);
 
         await using var c = new NameClient(client);
-        await c.SearchAsync("sun", 50, default);
-        long first = c.CurrentGeneration;
-        await c.SearchAsync("sunset", 50, default);
+        StatusReply status = await c.StatusAsync(default);
 
-        Assert.Equal(first + 1, c.CurrentGeneration);
+        Assert.Equal(Environment.ProcessId, status.ProcessId);
+        Assert.Equal('C', status.Volumes[0].Letter);
         await cts.CancelAsync();
+    }
+
+    [Fact]
+    public async Task ADeadStatusWaiterDoesNotSwallowTheNextReply()
+    {
+        // A status waiter abandoned by a failed write must not consume the reply belonging
+        // to the next caller. Cancelling cannot produce that state - the token throws at
+        // _writeLock.WaitAsync, before the enqueue, so nothing is ever stranded. The write
+        // itself has to fail AFTER the enqueue with the read side still alive, which is what
+        // FailsFirstWrite arranges. Without the pump's skip-on-dequeue loop, the reply goes
+        // to the corpse and the second call hangs until this test's timeout fails it.
+        var (server, client) = NameServerTests.PairForTests();
+        var cts = new CancellationTokenSource();
+        _ = NameServer.Serve(server, new Dictionary<char, NameIndex> { ['C'] = Sample() }, cts.Token);
+
+        await using var c = new NameClient(new FailsFirstWrite(client));
+
+        await Assert.ThrowsAsync<IOException>(() => c.StatusAsync(default));   // strands a dead waiter
+
+        StatusReply status = await c.StatusAsync(default).WaitAsync(TimeSpan.FromSeconds(5));
+        Assert.Equal(Environment.ProcessId, status.ProcessId);
+
+        await cts.CancelAsync();
+    }
+
+    /// <summary>Fails the first write only; reads and later writes pass straight through.</summary>
+    private sealed class FailsFirstWrite(Stream inner) : Stream
+    {
+        private int _writes;
+        public override ValueTask WriteAsync(ReadOnlyMemory<byte> b, CancellationToken ct) =>
+            Interlocked.Increment(ref _writes) == 1
+                ? ValueTask.FromException(new IOException("simulated transient write failure"))
+                : inner.WriteAsync(b, ct);
+        public override ValueTask<int> ReadAsync(Memory<byte> b, CancellationToken ct) => inner.ReadAsync(b, ct);
+        public override Task FlushAsync(CancellationToken ct) => inner.FlushAsync(ct);
+        public override bool CanRead => true;
+        public override bool CanSeek => false;
+        public override bool CanWrite => true;
+        public override long Length => throw new NotSupportedException();
+        public override long Position { get => throw new NotSupportedException(); set => throw new NotSupportedException(); }
+        public override void Flush() => inner.Flush();
+        public override int Read(byte[] b, int o, int n) => inner.Read(b, o, n);
+        public override void Write(byte[] b, int o, int n) => inner.Write(b, o, n);
+        public override long Seek(long o, SeekOrigin s) => throw new NotSupportedException();
+        public override void SetLength(long v) => throw new NotSupportedException();
+        protected override void Dispose(bool disposing) { if (disposing) inner.Dispose(); base.Dispose(disposing); }
+    }
+
+    [Fact]
+    public async Task KeepsServingAfterAnUndecodableFrame()
+    {
+        // One malformed reply must not end the pump. If it does, the transport stays
+        // writable and every later search awaits a completion nobody will ever make -
+        // a search box that stops responding, with a log line as the only trace.
+        var (server, client) = NameServerTests.PairForTests();
+
+        Task pretendServer = Task.Run(async () =>
+        {
+            await Frame.ReadAsync(server, default);
+            await Frame.WriteAsync(server, "this is not an envelope"u8.ToArray(), default);
+            QueryRequest req = Envelope.Unpack((await Frame.ReadAsync(server, default))!).Body<QueryRequest>();
+            await Frame.WriteAsync(server, Envelope.Pack(Envelope.KindQueryReply,
+                new QueryReply(req.Gen, 'C', 0, new[] { new NameRow(1, "ok.jpg", @"C:\ok.jpg", 0, 1, 0) })), default);
+        });
+
+        await using var c = new NameClient(client);
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+        Task<QueryReply?> poisoned = c.SearchAsync("first", 50, timeout.Token);
+
+        QueryReply? survived = await c.SearchAsync("second", 50, timeout.Token);
+
+        Assert.NotNull(survived);
+        Assert.Equal("ok.jpg", survived!.Rows[0].Name);
+        await pretendServer;
+    }
+
+    [Fact]
+    public async Task FailsFastOnceThePumpIsGone()
+    {
+        // A closed connection must surface as an exception, never as an await that
+        // never returns. Note the deliberate `default` token: a caller with no timeout
+        // is exactly the case that would hang forever.
+        var (server, client) = NameServerTests.PairForTests();
+        await using var c = new NameClient(client);
+
+        server.Dispose();                                   // the helper goes away
+
+        async Task Attempt()
+        {
+            while (true)
+            {
+                try { await c.SearchAsync("anything", 50, default); }
+                catch (IOException) { return; }             // the contract: the pump is gone
+                catch (ObjectDisposedException) { return; } // the write faulted first - also fail-fast
+                await Task.Delay(20);
+            }
+        }
+
+        // The timeout is the TEST's guard, never the client's. If it trips, the client hung
+        // and this must FAIL - do not catch OperationCanceledException here and call that a
+        // pass, which would turn a hang into a green test.
+        await Attempt().WaitAsync(TimeSpan.FromSeconds(5));
     }
 
     [Fact]
@@ -1556,8 +1675,10 @@ public class NameClientTests
 
         await pretendServer;
 
-        Assert.NotNull(await fast);
-        Assert.Null(await slow);           // the stale answer is dropped, not shown
+        QueryReply? winner = await fast;
+        Assert.NotNull(winner);
+        Assert.Equal("new.jpg", winner!.Rows[0].Name);   // the RIGHT reply, not merely a non-null one
+        Assert.Null(await slow);                          // the stale answer is dropped, not shown
     }
 }
 ```
@@ -1576,6 +1697,7 @@ Expected: FAIL - `NameClient` does not exist.
 ```csharp
 using System.Collections.Concurrent;
 using System.IO.Pipes;
+using System.Text.Json;
 
 namespace Findra.Pipe;
 
@@ -1592,6 +1714,8 @@ public sealed class NameClient : IAsyncDisposable
     private readonly ConcurrentQueue<TaskCompletionSource<StatusReply>> _statusWaiters = new();
     private readonly CancellationTokenSource _reader = new();
     private readonly Task _pump;
+    private volatile bool _pumpGone;
+    private bool _disposed;
 
     public long CurrentGeneration => _gen.Current;
 
@@ -1603,8 +1727,13 @@ public sealed class NameClient : IAsyncDisposable
 
     public static async Task<NameClient> ConnectAsync(TimeSpan timeout, CancellationToken ct)
     {
+        // CurrentUserOnly is the client half of the squatting defence. The server sets
+        // FirstPipeInstance so nobody can take the name first; this makes the client verify
+        // the server is running as the same user before it trusts a single path it returns.
+        // Without it, a pipe from another account could feed fabricated results into the
+        // card, and a click would launch them as this user.
         var pipe = new NamedPipeClientStream(".", NameServer.PipeName,
-            PipeDirection.InOut, PipeOptions.Asynchronous);
+            PipeDirection.InOut, PipeOptions.Asynchronous | PipeOptions.CurrentUserOnly);
         await pipe.ConnectAsync((int)timeout.TotalMilliseconds, ct).ConfigureAwait(false);
         return new NameClient(pipe);
     }
@@ -1612,36 +1741,81 @@ public sealed class NameClient : IAsyncDisposable
     /// <summary>Null means the answer arrived after a newer query had been issued.</summary>
     public async Task<QueryReply?> SearchAsync(string raw, int max, CancellationToken ct)
     {
-        long gen = _gen.Next();
-        var tcs = new TaskCompletionSource<QueryReply>(TaskCreationOptions.RunContinuationsAsynchronously);
-        _pending[gen] = tcs;
+        ThrowIfPumpGone();
+
+        long gen;
+        TaskCompletionSource<QueryReply> tcs;
 
         await _writeLock.WaitAsync(ct).ConfigureAwait(false);
         try
         {
-            await Frame.WriteAsync(_transport, Envelope.Pack(Envelope.KindQuery,
-                new QueryRequest(gen, raw, max)), ct).ConfigureAwait(false);
+            // Stamp, register and write as one unit under the lock. Stamping outside it
+            // bumps the generation for a query that may never reach the wire, and Accept
+            // would then reject the genuinely-newest reply that did.
+            gen = _gen.Next();
+            tcs = new TaskCompletionSource<QueryReply>(TaskCreationOptions.RunContinuationsAsynchronously);
+            _pending[gen] = tcs;
+            try
+            {
+                await Frame.WriteAsync(_transport, Envelope.Pack(Envelope.KindQuery,
+                    new QueryRequest(gen, raw, max)), ct).ConfigureAwait(false);
+            }
+            catch { _pending.TryRemove(gen, out _); throw; }   // never reached the wire; do not leak it
         }
         finally { _writeLock.Release(); }
 
-        QueryReply reply = await tcs.Task.WaitAsync(ct).ConfigureAwait(false);
+        // The pump may have died between the check above and the registration. Whichever
+        // side loses that race, one of them sees the other: the pump's drain either finds
+        // this entry, or this re-check finds the flag.
+        if (_pumpGone) { _pending.TryRemove(gen, out _); ThrowIfPumpGone(); }
+
+        QueryReply reply;
+        try { reply = await tcs.Task.WaitAsync(ct).ConfigureAwait(false); }
+        catch { _pending.TryRemove(gen, out _); throw; }
+
         return _gen.Accept(reply.Gen) ? reply : null;
     }
 
     public async Task<StatusReply> StatusAsync(CancellationToken ct)
     {
+        ThrowIfPumpGone();
+
         var tcs = new TaskCompletionSource<StatusReply>(TaskCreationOptions.RunContinuationsAsynchronously);
-        _statusWaiters.Enqueue(tcs);
 
         await _writeLock.WaitAsync(ct).ConfigureAwait(false);
         try
         {
-            await Frame.WriteAsync(_transport, Envelope.Pack(Envelope.KindStatus, new StatusRequest()), ct)
-                .ConfigureAwait(false);
+            // Status replies carry no id, so waiters are matched positionally. Enqueue
+            // inside the lock: enqueuing before it lets two concurrent callers queue in one
+            // order and write in the other, and each then receives the other's reply.
+            _statusWaiters.Enqueue(tcs);
+            try
+            {
+                await Frame.WriteAsync(_transport, Envelope.Pack(Envelope.KindStatus, new StatusRequest()), ct)
+                    .ConfigureAwait(false);
+            }
+            catch
+            {
+                // A stranded waiter at the head of a positional queue desynchronises every
+                // later status call permanently, so mark it dead rather than leaving it.
+                // The pump skips dead entries when it dequeues; that is the other half.
+                tcs.TrySetCanceled();
+                throw;
+            }
         }
         finally { _writeLock.Release(); }
 
+        // Same race as SearchAsync: the pump may have died between the entry check and the
+        // enqueue. Marking the waiter dead is enough - the pump's skip-on-dequeue discards it.
+        if (_pumpGone) { tcs.TrySetCanceled(); ThrowIfPumpGone(); }
+
         return await tcs.Task.WaitAsync(ct).ConfigureAwait(false);
+    }
+
+    private void ThrowIfPumpGone()
+    {
+        if (_pumpGone)
+            throw new IOException("the name helper connection is closed");
     }
 
     private async Task PumpAsync(CancellationToken ct)
@@ -1653,24 +1827,46 @@ public sealed class NameClient : IAsyncDisposable
                 byte[]? payload = await Frame.ReadAsync(_transport, ct).ConfigureAwait(false);
                 if (payload is null) break;
 
-                Envelope e = Envelope.Unpack(payload);
-                switch (e.Kind)
+                // Guard decoding per frame. One undecodable reply must not end the pump:
+                // the transport stays writable, so a dead reader turns every later search
+                // into an await nobody will ever complete. The server guards its own
+                // decode for the same reason - this is the matching half.
+                Envelope e;
+                try { e = Envelope.Unpack(payload); }
+                catch (Exception ex) { Log.Warn("pipe", "undecodable frame from the helper: " + ex.Message); continue; }
+
+                try
                 {
-                    case Envelope.KindQueryReply:
+                    switch (e.Kind)
                     {
-                        QueryReply r = e.Body<QueryReply>();
-                        if (_pending.TryRemove(r.Gen, out var waiter)) waiter.TrySetResult(r);
-                        break;
+                        case Envelope.KindQueryReply:
+                        {
+                            QueryReply r = e.Body<QueryReply>();
+                            if (_pending.TryRemove(r.Gen, out var waiter)) waiter.TrySetResult(r);
+                            break;
+                        }
+                        case Envelope.KindStatusReply:
+                        {
+                            // Status replies carry no id, so waiters match positionally -
+                            // which means a dead entry at the head would swallow this reply
+                            // and starve whoever queued behind it. TrySetResult returns
+                            // false for an already-completed waiter, so walk past those.
+                            StatusReply s = e.Body<StatusReply>();
+                            while (_statusWaiters.TryDequeue(out var waiting))
+                                if (waiting.TrySetResult(s)) break;
+                            break;
+                        }
+                        case Envelope.KindJournal:
+                            // Plan 3 hooks the indexer up here.
+                            break;
+                        default:
+                            Log.Info("pipe", $"client ignoring unknown kind '{e.Kind}'");
+                            break;
                     }
-                    case Envelope.KindStatusReply:
-                        if (_statusWaiters.TryDequeue(out var s)) s.TrySetResult(e.Body<StatusReply>());
-                        break;
-                    case Envelope.KindJournal:
-                        // Plan 3 hooks the indexer up here.
-                        break;
-                    default:
-                        Log.Info("pipe", $"client ignoring unknown kind '{e.Kind}'");
-                        break;
+                }
+                catch (JsonException ex)
+                {
+                    Log.Warn("pipe", $"undecodable body for '{e.Kind}': {ex.Message}");
                 }
             }
         }
@@ -1678,6 +1874,10 @@ public sealed class NameClient : IAsyncDisposable
         catch (Exception ex) { Log.Error("pipe", "client pump ended", ex); }
         finally
         {
+            // Set the flag BEFORE draining. A caller registering concurrently either has
+            // its entry found by the drain below, or sees this flag on its own re-check -
+            // one of the two always happens, so nobody is left awaiting a dead pump.
+            _pumpGone = true;
             foreach (var kv in _pending) kv.Value.TrySetCanceled();
             while (_statusWaiters.TryDequeue(out var s)) s.TrySetCanceled();
         }
@@ -1685,11 +1885,20 @@ public sealed class NameClient : IAsyncDisposable
 
     public async ValueTask DisposeAsync()
     {
+        if (_disposed) return;
+        _disposed = true;
+
         await _reader.CancelAsync().ConfigureAwait(false);
         try { await _pump.ConfigureAwait(false); } catch { }
         _transport.Dispose();
         _reader.Dispose();
-        _writeLock.Dispose();
+
+        // _writeLock is deliberately NOT disposed. SemaphoreSlim.Dispose does not complete
+        // queued async waiters - it neither resumes nor faults them - so disposing it while
+        // a caller is parked on WaitAsync hangs that caller silently, and the Release in
+        // its finally then throws ObjectDisposedException out of a finally block, masking
+        // whatever it was really failing on. Nothing here allocates its wait handle, so
+        // there is nothing to release.
     }
 }
 ```
@@ -1697,7 +1906,7 @@ public sealed class NameClient : IAsyncDisposable
 - [ ] **Step 4: Run test to verify it passes**
 
 Run: `dotnet test --filter NameClientTests`
-Expected: PASS, 3 tests. `DropsAStaleReply` is the one that matters - it must fail if `SearchAsync` returns `reply` unconditionally.
+Expected: PASS, 5 tests.
 
 - [ ] **Step 5: Prove the test is load-bearing**
 
@@ -2185,7 +2394,7 @@ Expected: `pipe : UNREACHABLE`, the two-line instruction, exit code 1. No stack 
 - [ ] **Step 7: Run the whole suite**
 
 Run: `dotnet test`
-Expected: PASS - 6 Frame, 5 Message, 8 Generation, 4 NameServer, 3 NameClient, 6 NameIndex, 5 HelperTask, 4 Paths = 41 tests.
+Expected: PASS - 6 Frame, 5 Message, 8 Generation, 5 NameServer, 6 NameClient, 6 NameIndex, 5 HelperTask, 4 Paths = 45 tests.
 
 - [ ] **Step 8: Commit**
 
