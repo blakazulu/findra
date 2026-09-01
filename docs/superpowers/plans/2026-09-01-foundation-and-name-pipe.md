@@ -33,7 +33,6 @@ C:\Code\Personal\Prism\src\Search\NameIndex.cs      555 lines
 C:\Code\Personal\Prism\src\Search\SearchQuery.cs    470 lines
 C:\Code\Personal\Prism\src\Search\FileKinds.cs       78 lines
 C:\Code\Personal\Prism\src\App\Log.cs               234 lines
-C:\Code\Personal\Prism\src\App\StartupManager.cs    208 lines
 ```
 
 Copy verbatim, then change the namespace, rewrite any comment that names the source project, and change literal strings (`prism-*.log`, `"prism"`, `Prism.exe`) to their Findra equivalents. Do not restructure ported code beyond that.
@@ -58,7 +57,6 @@ Copy verbatim, then change the namespace, rewrite any comment that names the sou
 | `src/Findra/Pipe/NameServer.cs` | helper side: owns the index, answers requests |
 | `src/Findra/Pipe/NameClient.cs` | client side: async request/reply, generation arbitration |
 | `src/Findra/Pipe/Generation.cs` | monotonic counter + staleness rule |
-| `src/Findra/Startup/StartupManager.cs` | ported scheduled-task registration |
 | `src/Findra/Startup/HelperTask.cs` | registers/queries the `--names` logon task |
 | `src/Findra/Diagnostics/SearchProbe.cs` | `--searchprobe` |
 | `src/Findra/Diagnostics/SelfTest.cs` | `--searchtest` |
@@ -1926,24 +1924,24 @@ git commit -m "Async name client that drops stale answers"
 ## Task 9: Helper registration
 
 **Files:**
-- Create: `src/Findra/Startup/StartupManager.cs` (ported), `src/Findra/Startup/HelperTask.cs`
+- Create: `src/Findra/Startup/HelperTask.cs`
 - Test: `tests/Findra.Tests/Startup/HelperTaskTests.cs`
 
 **Interfaces:**
 - Consumes: `Log` (Task 2).
 - Produces: `Findra.Startup.HelperTask.TaskName : string` (`"Findra names helper"`), `HelperTask.BuildXml(string exePath) : string`, `HelperTask.IsRegistered() : bool`, `HelperTask.Register(string exePath) : bool`, `HelperTask.EnsureRunning() : bool`.
 
-- [ ] **Step 1: Port StartupManager**
+**`StartupManager` is deliberately NOT ported in this plan.** Nothing here calls it, and it
+carries an unresolved design question: the source's version branches on whether the current
+process is elevated, because in that codebase the whole app elevates. Findra's UI never
+does - only `--names` elevates, and that is `HelperTask`'s job with its own task name and
+XML. So in Findra `StartupManager` means one narrow thing: *start the unelevated UI at
+logon*, via the `Run` key, with no elevation branch at all.
 
-```bash
-cp /c/Code/Personal/Prism/src/App/StartupManager.cs src/Findra/Startup/
-```
+That belongs in the plan that first has a UI to start and a settings toggle to drive it.
+Porting it here would mean shipping unused code containing a branch that can never be taken.
 
-Change the namespace to `Findra.Startup`, rewrite comments naming the source project, change
-the task name and any registry Run-key value name to Findra's, and delete `MigrateLegacy` -
-Findra has no legacy install to migrate from.
-
-- [ ] **Step 2: Write the failing test**
+- [ ] **Step 1: Write the failing test**
 
 `tests/Findra.Tests/Startup/HelperTaskTests.cs`:
 
@@ -2005,7 +2003,7 @@ public class HelperTaskTests
 }
 ```
 
-- [ ] **Step 3: Run test to verify it fails**
+- [ ] **Step 2: Run test to verify it fails**
 
 Run: `dotnet test --filter HelperTaskTests`
 Expected: FAIL - `HelperTask` does not exist.
@@ -2018,7 +2016,7 @@ the produced XML - parse from the first element instead:
 static XDocument ParseTask(string xml) => XDocument.Parse(xml[xml.IndexOf("<Task")..]);
 ```
 
-- [ ] **Step 4: Write HelperTask**
+- [ ] **Step 3: Write HelperTask**
 
 `src/Findra/Startup/HelperTask.cs`:
 
@@ -2163,12 +2161,12 @@ $"""
 somewhere to show "the helper could not start". It is covered by the end-to-end check in
 Task 10 rather than by a unit test - it talks to the real scheduler.
 
-- [ ] **Step 5: Run test to verify it passes**
+- [ ] **Step 4: Run test to verify it passes**
 
 Run: `dotnet test --filter HelperTaskTests`
 Expected: PASS, 5 tests.
 
-- [ ] **Step 6: Commit**
+- [ ] **Step 5: Commit**
 
 ```bash
 git add -A
