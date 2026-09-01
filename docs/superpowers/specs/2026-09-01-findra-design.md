@@ -238,6 +238,47 @@ already per-file and resumable; that is preserved.
 
 ---
 
+### Running on whatever hardware is there
+
+Findra goes on winget, so it lands on machines nobody chose for it: AMD and Intel CPUs,
+NVIDIA / AMD / Intel GPUs, integrated graphics, discrete cards, and machines with no usable
+accelerator at all. **No capability may require a particular vendor**, and the app must never
+fail because of what silicon it found.
+
+**Detect at runtime, never assume.** The execution provider is chosen when the indexer
+starts, by trying each in order and taking the first that initialises:
+
+| Workload | Order tried | Why |
+|---|---|---|
+| ONNX models (SigLIP-2, e5) | DirectML → CPU | DirectML is DirectX 12, so one path covers NVIDIA, AMD and Intel, discrete or integrated |
+| Whisper | Vulkan → CPU | same breadth for the ggml runtime |
+
+Vendor-locked providers are deliberately not used. CUDA would mean NVIDIA only and a
+separate large runtime; ROCm is not a Windows story. A single portable path that works
+everywhere beats a fast path that works for a third of users and a support burden for the
+rest.
+
+**CPU is a supported configuration, not a failure state.** A machine with no usable GPU
+indexes more slowly and searches at the same speed - queries embed one short string, which is
+trivial either way. The only visible difference is how long the initial content index takes,
+and the UI says so plainly rather than appearing stuck.
+
+**No CPU-feature assumptions.** No AVX-512 requirement, no hand-written intrinsics that
+assume a vendor. Anything the runtime can select for itself, it selects.
+
+**`--searchmodels` must report the chosen provider and why**, including every provider it
+tried and the reason each was rejected. This is the difference between a solvable support
+question and an unsolvable one - "it's slow on my laptop" is unanswerable, "DirectML failed
+to initialise, fell back to CPU" is a bug report.
+
+**`--searchbench` records the accelerator** alongside the CPU, RAM, disk and Windows build.
+A throughput number without the silicon beside it is meaningless.
+
+**Architecture.** Nothing in the source may assume x64 - no hardcoded RID, no x64-only
+intrinsics - so Windows on ARM stays reachable. x64 ships first because it is the whole
+market today; arm64 is added when there is demand, and the cost of keeping it possible is
+close to zero while the cost of retrofitting it is not.
+
 ## 7. Look
 
 ### Palettes

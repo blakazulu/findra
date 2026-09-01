@@ -835,17 +835,22 @@ public class GenerationTests
     public void IsSafeUnderConcurrentAccept()
     {
         // Real threads released together on a barrier, repeated. Task.Run work items this
-        // short are usually drained by a single pool thread before a second is even
-        // scheduled, so a pool-based version of this test passes against a plainly
-        // non-atomic implementation - a concurrency test that cannot fail is worse than
-        // none, because it manufactures confidence.
+        // short are usually drained by a single pool thread before a second is scheduled,
+        // so a pool-based version never actually overlaps and cannot fail at all.
+        //
+        // Be precise about what this does and does not prove. It races the duplicate axis
+        // only - many replies carrying one generation, _issued pinned - and so it catches
+        // unsynchronised duplicate suppression or a CAS with the wrong comparand. It does
+        // NOT catch a Next() landing inside an in-flight Accept(); that axis is closed by
+        // construction in Accept, not by this test. Claiming otherwise here would be the
+        // same false confidence the pool version gave.
         for (int round = 0; round < 200; round++)
         {
             var g = new Generation();
             long gen = g.Next();
 
             int accepted = 0;
-            var ready = new Barrier(9);
+            using var ready = new Barrier(9);
             var threads = new Thread[8];
             for (int i = 0; i < threads.Length; i++)
             {

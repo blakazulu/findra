@@ -114,6 +114,29 @@ speech              ─  whisper-turbo + [e5 pair]              550 MB (+270 if 
   no candidates, and the card offers the download.
 - Enabling a capability later re-queues **only the files it covers**.
 
+## Hardware portability
+
+Findra ships on winget and lands on machines nobody chose for it - AMD or Intel CPUs,
+NVIDIA / AMD / Intel GPUs, integrated or discrete, or no usable accelerator at all.
+**No capability may require a particular vendor**, and nothing may fail because of the
+silicon it found.
+
+- **Detect at runtime, never assume.** Try providers in order, take the first that
+  initialises: ONNX (SigLIP-2, e5) is **DirectML → CPU**; Whisper is **Vulkan → CPU**.
+  Both cover NVIDIA, AMD and Intel in one path.
+- **No vendor-locked providers.** CUDA means NVIDIA only plus a large separate runtime;
+  ROCm is not a Windows story. A portable path everywhere beats a fast path for a third
+  of users.
+- **CPU is a supported configuration, not a failure state.** Only the initial content
+  index is slower - queries embed one short string. The UI says so rather than looking stuck.
+- **No CPU-feature assumptions** - no AVX-512 requirement, no vendor-specific intrinsics.
+- **`--searchmodels` reports the chosen provider and every one it rejected, with reasons.**
+  "It's slow on my laptop" is unanswerable; "DirectML failed to initialise, fell back to
+  CPU" is a bug report.
+- **`--searchbench` records the accelerator** beside the CPU, RAM, disk and Windows build.
+- **Never assume x64** - no hardcoded RID in source, no x64-only intrinsics. x64 ships
+  first; keeping arm64 reachable costs nothing now and a lot later.
+
 ## Palettes
 
 A palette is `name`, `accent`, `ink`, `ground`, `light`. Everything else - fills, rows, tiles,
