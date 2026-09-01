@@ -87,4 +87,39 @@ public class PaletteStoreTests
             Assert.Equal(b.Light, got.Light);
         }
     }
+
+    [Fact]
+    public void TheDefaultFileGenuinelyParsesRatherThanFallingBack()
+    {
+        // Load returns the six built-ins unchanged when parsing throws, which is exactly
+        // what a correct parse of DefaultJson also produces - so the test above cannot tell
+        // the two apart. Appending a marker can: it only survives if the document parsed.
+        int close = PaletteStore.DefaultJson.LastIndexOf(']');
+        string withMarker = PaletteStore.DefaultJson[..close] +
+            ", { \"name\": \"ParseMarker\", \"accent\": \"#010203\", \"ink\": \"#EEEEEE\", " +
+            "\"ground\": \"#101010\", \"light\": false } ]";
+
+        var list = PaletteStore.Load(withMarker);
+
+        Assert.Equal(7, list.Count);
+        Assert.Contains(list, p => p.Name == "ParseMarker");
+    }
+
+    [Fact]
+    public void HexRejectsWhatIsNotAColour()
+    {
+        // A hand-edited file gets typos. Each of these must cost its own entry and nothing else.
+        var list = PaletteStore.Load("""
+        [
+          { "name": "FiveChars", "accent": "#12345",  "ink": "#EEEEEE", "ground": "#101010", "light": false },
+          { "name": "Empty",     "accent": "",        "ink": "#EEEEEE", "ground": "#101010", "light": false },
+          { "name": "JustHash",  "accent": "#",       "ink": "#EEEEEE", "ground": "#101010", "light": false },
+          { "name": "NotHex",    "accent": "#ZZZZZZ", "ink": "#EEEEEE", "ground": "#101010", "light": false }
+        ]
+        """);
+
+        Assert.Equal(6, list.Count);
+        foreach (string bad in new[] { "FiveChars", "Empty", "JustHash", "NotHex" })
+            Assert.DoesNotContain(list, p => p.Name == bad);
+    }
 }
