@@ -8,8 +8,8 @@ public static class Program
         return mode switch
         {
             "--names"       => RunNames(),
-            "--searchprobe" => 0,   // Task 10
-            "--searchtest"  => 0,   // Task 10
+            "--searchprobe" => Diagnostics.SearchProbe.RunAsync(args).GetAwaiter().GetResult(),
+            "--searchtest"  => Diagnostics.SelfTest.Run(),
             _               => Hello(),
         };
     }
