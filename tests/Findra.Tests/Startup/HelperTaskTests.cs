@@ -52,4 +52,25 @@ public class HelperTaskTests
         Assert.Equal("false", doc.Descendants(ns + "StopIfGoingOnBatteries").Single().Value);
         Assert.Equal("PT0S",  doc.Descendants(ns + "ExecutionTimeLimit").Single().Value);
     }
+
+    [Fact]
+    public void XmlNamesTheUserAndRunsHiddenAndEnabled()
+    {
+        // Nothing here can be exercised without elevation, so these assertions are the
+        // only thing between a correct task and one that registers cleanly and then never
+        // fires. A dropped UserId, LogonType, or an Enabled of false all produce exactly
+        // that: schtasks accepts the XML, and the helper never starts.
+        var doc = XDocument.Parse(HelperTask.BuildXml(@"C:\Findra\findra.exe"));
+        XNamespace ns = "http://schemas.microsoft.com/windows/2004/02/mit/task";
+
+        string me = System.Security.Principal.WindowsIdentity.GetCurrent().Name;
+        var userIds = doc.Descendants(ns + "UserId").ToList();
+        Assert.Equal(2, userIds.Count);                       // the trigger and the principal
+        Assert.All(userIds, u => Assert.Equal(me, u.Value));
+
+        Assert.Equal("InteractiveToken", doc.Descendants(ns + "LogonType").Single().Value);
+        Assert.Equal("IgnoreNew", doc.Descendants(ns + "MultipleInstancesPolicy").Single().Value);
+        Assert.Equal("true", doc.Descendants(ns + "Hidden").Single().Value);
+        Assert.All(doc.Descendants(ns + "Enabled"), e => Assert.Equal("true", e.Value));
+    }
 }

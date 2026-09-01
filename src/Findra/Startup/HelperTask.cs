@@ -65,7 +65,22 @@ $"""
             { RedirectStandardOutput = true, RedirectStandardError = true, UseShellExecute = false, CreateNoWindow = true };
             using Process? p = Process.Start(psi);
             if (p is null) return false;
-            p.WaitForExit(5000);
+
+            // Redirecting without draining can deadlock: the child blocks writing into a
+            // full pipe buffer while we sit in WaitForExit. `/xml ONE` prints the entire
+            // task definition on success, which is comfortably enough to fill it. Start
+            // both reads before waiting.
+            Task<string> stdout = p.StandardOutput.ReadToEndAsync();
+            Task<string> stderr = p.StandardError.ReadToEndAsync();
+
+            if (!p.WaitForExit(5000))
+            {
+                try { p.Kill(entireProcessTree: true); } catch { }
+                Log.Warn("startup", "schtasks /query did not return within 5s");
+                return false;
+            }
+
+            Task.WaitAll([stdout, stderr], TimeSpan.FromSeconds(1));
             return p.ExitCode == 0;
         }
         catch (Exception ex) { Log.Warn("startup", "task query failed: " + ex.Message); return false; }
