@@ -24,7 +24,10 @@ public sealed class Derived
     public required SKColor Row { get; init; }
     /// <summary>The highlighted row - accent-tinted, never solid accent.</summary>
     public required SKColor RowSelected { get; init; }
-    /// <summary>The kind tile inside a row.</summary>
+    /// <summary>The kind tile inside a row. Unused by the card today - its kind badge paints a
+    /// name-hashed gradient pinned dark on every palette, like a file-type tag that should not
+    /// shift with theme - but this is the natural token for "a surface above a row", which the
+    /// settings window will want.</summary>
     public required SKColor Tile { get; init; }
     /// <summary>A filter chip's fill.</summary>
     public required SKColor Chip { get; init; }
@@ -80,7 +83,7 @@ public sealed class Derived
     ///
     /// The anchors are a fallback for an accent no palette colour can sit on, not the normal
     /// path - five of the six built-in palettes settle on their own ground. Porcelain's red
-    /// accent is the outlier: neither its ink (3.17) nor its ground (4.55) clears the floor,
+    /// accent is the outlier: neither its ink (4.178) nor its ground (4.390) clears the floor,
     /// so it falls through to the anchor stage, where trying white before black keeps the
     /// conventional white-on-red look rather than flipping to black text on red (even though
     /// black's contrast there, 4.62, is technically higher).

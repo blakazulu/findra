@@ -78,5 +78,24 @@ public class CapsuleTests
         // in this band changes between the two renders.
         Assert.True(differing > 200,
             $"the progress line was not drawn below the bar ({differing} pixels differ)");
+
+        // That proves the band responds to the progress arguments. It does NOT yet prove the
+        // guard, because idle and busy differ in fraction as well as text - deleting the
+        // guard only drops the count, it does not collapse it. This third render isolates it:
+        // a fraction is supplied but there is nothing to say, so a working guard draws
+        // nothing and the band must be pixel-identical to idle. Without the guard, the
+        // fraction alone paints a 62% track and this fails.
+        using SKBitmap nothingToSay = Render(Palette.Mond, "", 0.62f);
+        Assert.Equal(0, DifferBelowTheBar(idle, nothingToSay));
+    }
+
+    /// <summary>Pixels that differ between two renders in the band where progress is drawn.</summary>
+    private static int DifferBelowTheBar(SKBitmap a, SKBitmap b)
+    {
+        int n = 0, from = (int)((CapsuleLayout.Height + CapsuleLayout.BarH) / 2f) + 8;
+        for (int y = from; y < a.Height; y++)
+            for (int x = 0; x < a.Width; x++)
+                if (a.GetPixel(x, y) != b.GetPixel(x, y)) n++;
+        return n;
     }
 }
