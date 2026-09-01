@@ -19,5 +19,9 @@
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="System.IO.Pipes.AccessControl" Version="5.0.0" />
+    <!-- Avalonia.Skia pins a specific SkiaSharp version, and two SkiaSharp majors in one
+         process means two native libSkiaSharp binaries. Pinned here ahead of Avalonia
+         landing so the palette's colour type never has to move once the UI arrives. -->
+    <PackageReference Include="SkiaSharp" Version="3.119.4" />
   </ItemGroup>
 </Project>
