@@ -32,7 +32,7 @@ public class ResultMapperTests
     [Fact]
     public void ADirectoryIsAFolderEvenWhenItsNameLooksLikeAFile()
     {
-        // "My.Photos" has an extension as far as a string is concerned; the attribute decides
+        // "My.jpg" has an extension as far as a string is concerned; the attribute decides
         SearchResult r = ResultMapper.Map(Row("My.jpg", attributes: Dir | Arch), ResultMapper.Stat.Missing);
         Assert.Equal(ResultKind.Folder, r.Kind);
     }
@@ -200,5 +200,108 @@ public class ResultMapperTests
             SearchSort.Best, 0.4, (_, _) => ResultMapper.Stat.Missing);
         Assert.Empty(r.Rows);
         Assert.Equal("sunset", r.Query);
+    }
+
+    // ---- the total order ----
+    //
+    // List.Sort is unstable, so a comparer that returns zero for two rows leaves their order to
+    // whatever the sort happened to do with them - and the same query would then shuffle its own
+    // results between runs, which reads as the card flickering. The tiebreaks are the only thing
+    // stopping that, and until these tests existed, replacing both of them with `return 0` left
+    // every test in this file green.
+
+    private static string[] NamesOf(IEnumerable<NameRow> rows, SearchSort sort = SearchSort.Best)
+        => ResultMapper.Build("x", rows.ToList(), new SearchQuery("x"), sort, 1.0,
+                              (_, _) => ResultMapper.Stat.Missing)
+                       .Rows.Select(x => x.Path).ToArray();
+
+    [Fact]
+    public void RowsTiedOnScoreAreOrderedByTheShorterPath()
+    {
+        // A hit near the top of the disk explains itself; it goes first.
+        var deep = Row("a.txt", @"C:\projects\archive\2019\notes\a.txt");
+        var shallow = Row("a.txt", @"C:\a.txt");
+
+        Assert.Equal(new[] { @"C:\a.txt", @"C:\projects\archive\2019\notes\a.txt" },
+                     NamesOf(new[] { deep, shallow }));
+    }
+
+    [Fact]
+    public void RowsTiedOnScoreAndPathLengthAreOrderedByThePathItself()
+    {
+        // Same score, same kind, same name, same path length: ordinal on the path is the last
+        // tiebreak, and it is what makes the order a total one rather than an arbitrary one.
+        var b = Row("a.txt", @"C:\bbb\a.txt");
+        var a = Row("a.txt", @"C:\aaa\a.txt");
+
+        Assert.Equal(new[] { @"C:\aaa\a.txt", @"C:\bbb\a.txt" }, NamesOf(new[] { b, a }));
+        Assert.Equal(new[] { @"C:\aaa\a.txt", @"C:\bbb\a.txt" }, NamesOf(new[] { a, b }));
+    }
+
+    [Fact]
+    public void TheSameRowsInAnyStartingOrderComeOutTheSameWay()
+    {
+        // The mutation this catches: with the tiebreaks gone, these permutations come back in
+        // different orders and the card appears to shuffle itself between identical queries.
+        var rows = new List<NameRow>
+        {
+            Row("a.txt", @"C:\ddd\a.txt"), Row("a.txt", @"C:\aaa\a.txt"),
+            Row("a.txt", @"C:\ccc\a.txt"), Row("a.txt", @"C:\bbb\a.txt"),
+            Row("a.txt", @"C:\eee\deeper\a.txt"), Row("a.txt", @"C:\f\a.txt"),
+        };
+
+        string[] expected = NamesOf(rows);
+        var reversed = new List<NameRow>(rows);
+        reversed.Reverse();
+        var rotated = new List<NameRow>(rows.Skip(3));
+        rotated.AddRange(rows.Take(3));
+
+        Assert.Equal(expected, NamesOf(reversed));
+        Assert.Equal(expected, NamesOf(rotated));
+        Assert.Equal(expected, NamesOf(rows.OrderBy(x => x.Path, StringComparer.Ordinal)));
+    }
+
+    [Fact]
+    public void NewestAndLargestFallBackToTheSameTotalOrderWhenTheirKeyTies()
+    {
+        // Every row here has the same missing stat, so Newest and Largest tie on their own key
+        // for all of them and land entirely on the tiebreak. Both must still be deterministic.
+        var rows = new List<NameRow>
+        {
+            Row("a.txt", @"C:\ccc\a.txt"), Row("a.txt", @"C:\aaa\a.txt"), Row("a.txt", @"C:\bbb\a.txt"),
+        };
+        string[] expected = { @"C:\aaa\a.txt", @"C:\bbb\a.txt", @"C:\ccc\a.txt" };
+
+        Assert.Equal(expected, NamesOf(rows, SearchSort.Newest));
+        Assert.Equal(expected, NamesOf(rows, SearchSort.Largest));
+
+        var reversed = new List<NameRow>(rows);
+        reversed.Reverse();
+        Assert.Equal(expected, NamesOf(reversed, SearchSort.Newest));
+        Assert.Equal(expected, NamesOf(reversed, SearchSort.Largest));
+    }
+
+    // ---- the score clamp ----
+
+    [Theory]
+    [InlineData(2.5f, 1f)]
+    [InlineData(1.0001f, 1f)]
+    [InlineData(-0.5f, 0f)]
+    [InlineData(float.PositiveInfinity, 1f)]
+    [InlineData(float.NegativeInfinity, 0f)]
+    public void AScoreFromOffProcessIsClampedIntoZeroToOne(float given, float expected)
+    {
+        // The score arrives over a pipe. The card paints it as a bar and the comparer sorts on
+        // it, so a value outside 0..1 - from a helper one version off, or a corrupted frame -
+        // must not reach either.
+        Assert.Equal(expected, ResultMapper.Map(Row("a.txt", score: given), ResultMapper.Stat.Missing).Score);
+    }
+
+    [Fact]
+    public void AScoreAlreadyInRangeIsLeftExactlyAsItArrived()
+    {
+        Assert.Equal(0f, ResultMapper.Map(Row("a.txt", score: 0f), ResultMapper.Stat.Missing).Score);
+        Assert.Equal(1f, ResultMapper.Map(Row("a.txt", score: 1f), ResultMapper.Stat.Missing).Score);
+        Assert.Equal(0.42f, ResultMapper.Map(Row("a.txt", score: 0.42f), ResultMapper.Stat.Missing).Score, 5);
     }
 }

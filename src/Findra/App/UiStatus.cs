@@ -52,20 +52,43 @@ public static class UiStatus
         catch (Exception ex) { Log.Warn("app", "could not remove ui.json: " + ex.Message); }
     }
 
-    /// <summary>Null for a missing file, unparsable content, or a pid that is no longer alive -
-    /// three different facts on disk that all mean the same thing to a caller: the UI is not
-    /// running.</summary>
-    public static Status? Read(string? path = null)
+    /// <summary>The process name a live pid has to carry for this file to be believed. Windows
+    /// reports it without the extension.</summary>
+    public const string ProcessName = "findra";
+
+    /// <summary>Null for a missing file, unparsable content, a pid that is no longer alive, or a
+    /// live pid belonging to some other program - four different facts on disk that all mean the
+    /// same thing to a caller: the UI is not running.
+    ///
+    /// <para>The name check is what stops a crash from being reported as a running Findra. The
+    /// file survives a crash naming a pid Windows is free to hand to anything; once it does, a
+    /// pid-only check says "running (pid N, hotkey Alt+Space)" about a process that has never
+    /// heard of Findra, and the first thing anyone does with that answer is go looking for a bug
+    /// in the hotkey.</para></summary>
+    /// <param name="path">Defaults to <see cref="DefaultPath"/>; a test passes a temp path.</param>
+    /// <param name="expectedProcessName">Defaults to <see cref="ProcessName"/>. A test overrides
+    /// it because no test run is ever named findra, and a live pid it can actually produce is the
+    /// only way to exercise the alive branch at all.</param>
+    public static Status? Read(string? path = null, string? expectedProcessName = null)
     {
         path ??= DefaultPath;
+        expectedProcessName ??= ProcessName;
         try
         {
             if (!File.Exists(path)) return null;
             Record? r = JsonSerializer.Deserialize<Record>(File.ReadAllText(path), Opts);
             if (r is null) return null;
 
-            try { System.Diagnostics.Process.GetProcessById(r.Pid); }
-            catch (ArgumentException) { return null; }   // no such pid: stale, from a crash or an old run
+            // Everything is caught, not just ArgumentException: GetProcessById can also throw
+            // InvalidOperationException for a process that exited between the lookup and the read,
+            // and Win32Exception when the name cannot be read at all. Every one of those means the
+            // same thing here, and none of them may reach a caller who only asked a yes/no.
+            string name;
+            try { name = System.Diagnostics.Process.GetProcessById(r.Pid).ProcessName; }
+            catch { return null; }   // no such pid, or nothing that can be identified: not running
+
+            if (!string.Equals(name, expectedProcessName, StringComparison.OrdinalIgnoreCase))
+                return null;         // the pid was reused; this file is a leftover
 
             return new Status(r.Pid, r.Hotkey, r.StartedAtUtc);
         }
