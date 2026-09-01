@@ -73,4 +73,15 @@ public class HelperTaskTests
         Assert.Equal("true", doc.Descendants(ns + "Hidden").Single().Value);
         Assert.All(doc.Descendants(ns + "Enabled"), e => Assert.Equal("true", e.Value));
     }
+
+    [Fact]
+    public void XmlSurvivesAPathContainingAnAmpersand()
+    {
+        // `&` is legal in a Windows path. Unescaped it produces XML schtasks rejects,
+        // so registration fails and the helper never starts - on someone else's machine.
+        var doc = XDocument.Parse(HelperTask.BuildXml(@"D:\Tools & Utils\findra.exe"));
+        XNamespace ns = "http://schemas.microsoft.com/windows/2004/02/mit/task";
+
+        Assert.Equal(@"""D:\Tools & Utils\findra.exe""", doc.Descendants(ns + "Command").Single().Value);
+    }
 }

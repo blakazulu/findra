@@ -1,20 +1,31 @@
 using System.Diagnostics;
+using System.Security;
 using System.Security.Principal;
 
 namespace Findra.Startup;
+
+/// <summary>What a scheduled-task query could establish - including that it could not.</summary>
+public enum HelperTaskState { Registered, NotRegistered, Unknown }
 
 /// <summary>
 /// Registers the one elevated thing Findra needs: a logon task that starts
 /// `findra.exe --names` at HighestAvailable. One UAC prompt, once, ever.
 /// </summary>
-/// <summary>What a scheduled-task query could establish - including that it could not.</summary>
-public enum HelperTaskState { Registered, NotRegistered, Unknown }
-
 public static class HelperTask
 {
     public const string TaskName = "Findra names helper";
 
-    public static string BuildXml(string exePath) =>
+    /// <summary>
+    /// The task definition. Both interpolated values are XML-escaped: `&amp;` is legal in a
+    /// Windows path (`D:\Tools &amp; Utils\findra.exe`) and in an account name, and unescaped it
+    /// produces XML schtasks rejects - registration fails and the helper never starts, on
+    /// someone else's machine rather than this one.
+    /// </summary>
+    public static string BuildXml(string exePath)
+    {
+        string exe = SecurityElement.Escape(exePath) ?? "";
+        string user = SecurityElement.Escape(WindowsIdentity.GetCurrent().Name) ?? "";
+        return
 $"""
 <?xml version="1.0" encoding="UTF-16"?>
 <Task version="1.4" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">
@@ -24,12 +35,12 @@ $"""
   <Triggers>
     <LogonTrigger>
       <Enabled>true</Enabled>
-      <UserId>{WindowsIdentity.GetCurrent().Name}</UserId>
+      <UserId>{user}</UserId>
     </LogonTrigger>
   </Triggers>
   <Principals>
     <Principal id="Author">
-      <UserId>{WindowsIdentity.GetCurrent().Name}</UserId>
+      <UserId>{user}</UserId>
       <LogonType>InteractiveToken</LogonType>
       <RunLevel>HighestAvailable</RunLevel>
     </Principal>
@@ -48,12 +59,13 @@ $"""
   </Settings>
   <Actions Context="Author">
     <Exec>
-      <Command>"{exePath}"</Command>
+      <Command>"{exe}"</Command>
       <Arguments>--names</Arguments>
     </Exec>
   </Actions>
 </Task>
 """;
+    }
 
     /// <summary>
     /// Query the XML form, never the CSV form: `schtasks /query /fo csv` column
