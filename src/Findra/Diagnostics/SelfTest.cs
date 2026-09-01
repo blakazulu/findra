@@ -1,3 +1,5 @@
+using SkiaSharp;
+
 namespace Findra.Diagnostics;
 
 /// <summary>
@@ -49,6 +51,29 @@ public static class SelfTest
             ix.Search(new SearchQuery("findra-selftest"), hits);
             if (hits.Count != 1) return $"expected 1 hit, got {hits.Count}";
             if (ix.PathOf(hits[0].Record) != @"C:\findra-selftest.txt") return "path rebuild wrong";
+            return null;
+        });
+
+        failed += Check("every palette derives readable colours", () =>
+        {
+            foreach (Palette p in PaletteStore.LoadFromDisk())
+            {
+                Derived d = Derived.From(p);
+                if (Derived.Contrast(d.Ink, d.Ground) < 4.5)
+                    return $"{p.Name}: ink on ground is {Derived.Contrast(d.Ink, d.Ground):F1}:1, needs 4.5";
+                if (Derived.Contrast(d.OnAccent, d.Accent) < 4.5)
+                    return $"{p.Name}: text on the accent is unreadable";
+            }
+            return null;
+        });
+
+        failed += Check("the card renders", () =>
+        {
+            using var surface = SKSurface.Create(new SKImageInfo(
+                (int)SearchCardLayout.Width, 400, SKColorType.Bgra8888, SKAlphaType.Premul));
+            SearchCardPainter.Paint(surface.Canvas, SearchCardState.Empty,
+                                    Derived.From(Palette.DefaultDark), SKTypeface.Default);
+            surface.Canvas.Flush();
             return null;
         });
 
