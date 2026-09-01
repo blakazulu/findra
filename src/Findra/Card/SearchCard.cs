@@ -193,10 +193,13 @@ public sealed record SearchCardState(
 /// <summary>The paint pass. Pure: state in, pixels out.</summary>
 public static class SearchCardPainter
 {
-    private static readonly SKColor CardBg = new(16, 16, 18, 246);
-
-    public static void Paint(SKCanvas canvas, SearchCardState s, SKColor accent, SKColor text, SKTypeface face)
+    public static void Paint(SKCanvas canvas, SearchCardState s, Derived d, SKTypeface face)
     {
+        SKColor accent = d.Accent; SKColor text = d.Ink;
+        // The card's own face: opaque-ish rather than fully opaque, same as the source, so the
+        // window keeps a hair of softness at its own edge.
+        SKColor cardBg = d.Ground.WithAlpha(246);
+
         bool hasQuery = s.HasQuery;
         int count = s.Rows.Count;
         float w = SearchCardLayout.Width, h = SearchCardLayout.Height(count, hasQuery, s.AdvOpen);
@@ -223,13 +226,13 @@ public static class SearchCardPainter
         }
 
         var card = new SKRoundRect(new SKRect(0, 0, w, h), SearchCardLayout.Radius);
-        using (var bg = new SKPaint { Color = CardBg, IsAntialias = true }) canvas.DrawRoundRect(card, bg);
+        using (var bg = new SKPaint { Color = cardBg, IsAntialias = true }) canvas.DrawRoundRect(card, bg);
         using (var edge = new SKPaint { Color = accent.WithAlpha(52), IsAntialias = true, Style = SKPaintStyle.Stroke, StrokeWidth = 1.4f })
             canvas.DrawRoundRect(card, edge);
 
         // ---- the field: the same capsule shape the desktop capsule shows at rest, now with a caret in it ----
         var f = SearchCardLayout.FieldRect();
-        DrawCapsule(canvas, f, accent, text, s.Query, s.Caret,
+        DrawCapsule(canvas, f, accent, text, d, s.Query, s.Caret,
             hasQuery ? "" : s.Content ? "Describe a photo, words in a document, speech…" : "Search files, photos, words…",
             face, caret: true, clock: s.Clock, focused: true, caretSlot: s.CaretSlot);
 
@@ -240,7 +243,7 @@ public static class SearchCardPainter
         {
             var rr = new SKRoundRect(cr, cr.Height / 2);
             if (on || hover)
-                using (var p = new SKPaint { Color = accent.WithAlpha((byte)(on ? (hover ? 70 : 46) : 26)), IsAntialias = true })
+                using (var p = new SKPaint { Color = d.RowSelected.WithAlpha((byte)(on ? (hover ? 70 : 46) : 26)), IsAntialias = true })
                     canvas.DrawRoundRect(rr, p);
             using (var p = new SKPaint { Color = on ? accent : text.WithAlpha(hover ? (byte)140 : (byte)70), IsAntialias = true, Style = SKPaintStyle.Stroke, StrokeWidth = 1.2f })
                 canvas.DrawRoundRect(rr, p);
@@ -249,8 +252,8 @@ public static class SearchCardPainter
             {
                 float bx = cr.Right - 3, by = cr.Top + 3, br = 8f;
                 using (var bp = new SKPaint { Color = accent, IsAntialias = true }) canvas.DrawCircle(bx, by, br, bp);
-                using (var be = new SKPaint { Color = CardBg, IsAntialias = true, Style = SKPaintStyle.Stroke, StrokeWidth = 2f }) canvas.DrawCircle(bx, by, br, be);
-                CardText.DrawCentred(canvas, "!", bx, by + 3.8f, 11.5f, face, new SKColor(16, 16, 18), bold: true);
+                using (var be = new SKPaint { Color = cardBg, IsAntialias = true, Style = SKPaintStyle.Stroke, StrokeWidth = 2f }) canvas.DrawCircle(bx, by, br, be);
+                CardText.DrawCentred(canvas, "!", bx, by + 3.8f, 11.5f, face, d.OnAccent, bold: true);
             }
         }
         Pill(SearchCardLayout.ContentRect(), "Content", s.Content, s.HoverTarget == SearchTarget.Content, false);
@@ -262,7 +265,7 @@ public static class SearchCardPainter
                     ? "a sunset over water  ·  the lease agreement  ·  what was said in a recording  ·  type:photo still narrows"
                     : "*.jpg  ·  \"exact words\"  ·  a | b  ·  !word  ·  ext:pdf  ·  type:photo  ·  in:Downloads  ·  size:huge  ·  modified:week  ·  regex:",
                 SearchCardLayout.Pad + 6, f.Bottom + 24, 12.5f, face, dim);
-            if (s.AdvOpen) SearchAdvancedPainter.Paint(canvas, s, accent, text, face);
+            if (s.AdvOpen) SearchAdvancedPainter.Paint(canvas, s, d, face);
             if (unfolding) canvas.Restore();
             return;
         }
@@ -287,7 +290,7 @@ public static class SearchCardPainter
             int n = SearchCardState.CountOf(s.Results, i);
             var rr = new SKRoundRect(r, r.Height / 2);
             if (on)
-                using (var p = new SKPaint { Color = accent.WithAlpha(46), IsAntialias = true }) canvas.DrawRoundRect(rr, p);
+                using (var p = new SKPaint { Color = d.RowSelected.WithAlpha(46), IsAntialias = true }) canvas.DrawRoundRect(rr, p);
             using (var p = new SKPaint { Color = on ? accent : hover ? text.WithAlpha(120) : text.WithAlpha(60), IsAntialias = true, Style = SKPaintStyle.Stroke, StrokeWidth = 1.2f })
                 canvas.DrawRoundRect(rr, p);
             var ink = on ? accent : n == 0 ? text.WithAlpha(95) : hover ? text : dim;
@@ -300,7 +303,7 @@ public static class SearchCardPainter
             CardText.Draw(canvas, num, x + lw + 5, r.MidY + 4.5f, 10.5f, face, ink.WithAlpha((byte)(ink.Alpha * 0.75)));
         }
 
-        DrawRule(canvas, SearchCardLayout.BodyTop - 4, w, accent);
+        DrawRule(canvas, SearchCardLayout.BodyTop - 4, w, d);
 
         // ---- list ----
         if (count == 0)
@@ -325,7 +328,7 @@ public static class SearchCardPainter
                 bool hi = idx == s.Highlight;
                 bool hover = s.HoverTarget == SearchTarget.Row && s.HoverIndex == idx;
                 if (hi || hover)
-                    using (var p = new SKPaint { Color = accent.WithAlpha((byte)(hi ? 40 : 22)), IsAntialias = true })
+                    using (var p = new SKPaint { Color = d.RowSelected.WithAlpha((byte)(hi ? 40 : 22)), IsAntialias = true })
                         canvas.DrawRoundRect(new SKRoundRect(new SKRect(r.Left, r.Top + 3, r.Right, r.Bottom - 3), 9), p);
 
                 // the tile: a kind glyph on a name-hashed tint (no thumbnails in the list - the
@@ -343,23 +346,23 @@ public static class SearchCardPainter
                 string tag = FileKinds.Label(row.Kind).ToUpperInvariant();
                 float tw = CardText.Measure(tag, face, 9.5f);
                 var tagR = new SKRect(r.Right - tw - 22, r.Top + 17, r.Right - 8, r.Top + 33);
-                using (var p = new SKPaint { Color = text.WithAlpha(hi ? (byte)40 : (byte)24), IsAntialias = true })
+                using (var p = new SKPaint { Color = d.Chip.WithAlpha(hi ? (byte)40 : (byte)24), IsAntialias = true })
                     canvas.DrawRoundRect(new SKRoundRect(tagR, 4), p);
                 CardText.Draw(canvas, tag, tagR.Left + 7, tagR.MidY + 3.5f, 9.5f, face, hi ? text : dim);
             }
-            DrawScrollHint(canvas, count, scroll, accent);
+            DrawScrollHint(canvas, count, scroll, d);
 
             // ---- stage ----
-            DrawStage(canvas, s, accent, text, face);
+            DrawStage(canvas, s, d, accent, text, face);
         }
 
         // ---- footer ----
         var footer = SearchCardLayout.FooterRect(count, hasQuery);
-        DrawRule(canvas, footer.Top, w, accent);
+        DrawRule(canvas, footer.Top, w, d);
         CardText.Draw(canvas, "Enter opens · right-click reveals · drag a row into any app · Ctrl+1/2/3 best / newest / largest",
             SearchCardLayout.Pad + 4, footer.MidY + 4.5f, 11.5f, face, faint);
         CardText.DrawRight(canvas, s.IndexLine, w - SearchCardLayout.Pad - 4, footer.MidY + 4.5f, 11.5f, face, faint);
-        if (s.AdvOpen) SearchAdvancedPainter.Paint(canvas, s, accent, text, face);
+        if (s.AdvOpen) SearchAdvancedPainter.Paint(canvas, s, d, face);
         if (unfolding) canvas.Restore();
     }
 
@@ -411,15 +414,15 @@ public static class SearchCardPainter
         return FieldCaret.Move(cells, query, FieldCaret.Of(cells, query, caret, slot), dir);
     }
 
-    public static void DrawCapsule(SKCanvas canvas, SKRect r, SKColor accent, SKColor text, string query, int caretIndex,
+    public static void DrawCapsule(SKCanvas canvas, SKRect r, SKColor accent, SKColor text, Derived derived, string query, int caretIndex,
         string placeholder, SKTypeface face, bool caret, double clock, bool focused, int caretSlot = -1)
     {
         var rr = new SKRoundRect(r, r.Height / 2);
-        using (var bg = new SKPaint { Color = new SKColor(16, 16, 18, 190), IsAntialias = true }) canvas.DrawRoundRect(rr, bg);
+        using (var bg = new SKPaint { Color = derived.Ground.WithAlpha(190), IsAntialias = true }) canvas.DrawRoundRect(rr, bg);
         if (focused)
         {
             var halo = new SKRoundRect(new SKRect(r.Left - 3, r.Top - 3, r.Right + 3, r.Bottom + 3), r.Height / 2 + 3);
-            using var hp = new SKPaint { Color = accent.WithAlpha(40), IsAntialias = true, Style = SKPaintStyle.Stroke, StrokeWidth = 4 };
+            using var hp = new SKPaint { Color = derived.AccentGlow, IsAntialias = true, Style = SKPaintStyle.Stroke, StrokeWidth = 4 };
             canvas.DrawRoundRect(halo, hp);
         }
         using (var edge = new SKPaint { Color = focused ? accent : accent.WithAlpha(90), IsAntialias = true, Style = SKPaintStyle.Stroke, StrokeWidth = 1.4f })
@@ -468,7 +471,7 @@ public static class SearchCardPainter
     public static (float TextLeft, float Size, float MaxW) FieldText(SKRect r)
         => (r.Left + r.Height * 1.05f, r.Height * 0.40f, r.Right - (r.Left + r.Height * 1.05f) - r.Height * 0.5f);
 
-    private static void DrawStage(SKCanvas canvas, SearchCardState s, SKColor accent, SKColor text, SKTypeface face)
+    private static void DrawStage(SKCanvas canvas, SearchCardState s, Derived d, SKColor accent, SKColor text, SKTypeface face)
     {
         int count = s.Rows.Count;
         var st = SearchCardLayout.StageRect(count, true);
@@ -514,8 +517,11 @@ public static class SearchCardPainter
             string ts = TimeSpan.FromSeconds(row.MomentSeconds).ToString(row.MomentSeconds >= 3600 ? @"h\:mm\:ss" : @"m\:ss");
             float tw = CardText.Measure(ts, face, 11f) + 12;
             var tr = new SKRect(pic.Right - tw - 8, pic.Bottom - 26, pic.Right - 8, pic.Bottom - 8);
-            using (var p = new SKPaint { Color = new SKColor(0, 0, 0, 170), IsAntialias = true }) canvas.DrawRoundRect(new SKRoundRect(tr, 4), p);
-            CardText.Draw(canvas, ts, tr.Left + 6, tr.MidY + 4, 11f, face, SKColors.White);
+            using (var p = new SKPaint { Color = d.Stage, IsAntialias = true }) canvas.DrawRoundRect(new SKRoundRect(tr, 4), p);
+            // Not SKColors.White: the badge behind this is d.Stage now, not a fixed black
+            // scrim, and Ink-on-Stage is the pair Derived already guarantees >= 4.5 contrast on
+            // every palette.
+            CardText.Draw(canvas, ts, tr.Left + 6, tr.MidY + 4, 11f, face, text);
         }
 
         float y2 = pic.Bottom + 24;
@@ -544,7 +550,7 @@ public static class SearchCardPainter
             bool primary = a == 0;
             var rr = new SKRoundRect(ar, ar.Height / 2);
             if (primary || hover)
-                using (var p = new SKPaint { Color = accent.WithAlpha((byte)(primary ? (hover ? 70 : 46) : 26)), IsAntialias = true }) canvas.DrawRoundRect(rr, p);
+                using (var p = new SKPaint { Color = d.RowSelected.WithAlpha((byte)(primary ? (hover ? 70 : 46) : 26)), IsAntialias = true }) canvas.DrawRoundRect(rr, p);
             using (var p = new SKPaint { Color = primary ? accent : text.WithAlpha(hover ? (byte)140 : (byte)70), IsAntialias = true, Style = SKPaintStyle.Stroke, StrokeWidth = 1.2f })
                 canvas.DrawRoundRect(rr, p);
             CardText.DrawCentred(canvas, labels[a], ar.MidX, ar.MidY + 4.5f, 12.5f, face, primary ? accent : hover ? text : dim);
@@ -580,7 +586,10 @@ public static class SearchCardPainter
             // a folder: tab + body, the way every file manager draws it
             float fw = r.Width * (big ? 0.42f : 0.62f), fh = fw * 0.78f;
             float x = r.MidX - fw / 2, y = r.MidY - fh / 2 + fh * 0.08f;
-            using var fp = new SKPaint { Color = text.WithAlpha(big ? (byte)190 : (byte)235), IsAntialias = true };
+            // Not `text`: this glyph sits on a name-hashed gradient that is always dark, on
+            // every palette (see the HSL literals above) - it is not the card's ground, so it
+            // does not take the card's ink. White is what stays legible on it either way.
+            using var fp = new SKPaint { Color = SKColors.White.WithAlpha(big ? (byte)190 : (byte)235), IsAntialias = true };
             var body = new SKRect(x, y + fh * 0.22f, x + fw, y + fh);
             var tab = new SKRect(x, y, x + fw * 0.45f, y + fh * 0.36f);
             canvas.DrawRoundRect(new SKRoundRect(tab, fh * 0.08f), fp);
@@ -588,7 +597,8 @@ public static class SearchCardPainter
             return;
         }
         float size = big ? Math.Min(34f, r.Width * 0.16f) : 9.5f;
-        CardText.DrawCentred(canvas, glyph, r.MidX, r.MidY + size * 0.36f, size, face, text.WithAlpha(big ? (byte)150 : (byte)230), bold: true);
+        // Same reasoning as the folder glyph above: the tile under this is always dark.
+        CardText.DrawCentred(canvas, glyph, r.MidX, r.MidY + size * 0.36f, size, face, SKColors.White.WithAlpha(big ? (byte)150 : (byte)230), bold: true);
     }
 
     private static string Human(long bytes)
@@ -614,7 +624,7 @@ public static class SearchCardPainter
         try { return Path.GetDirectoryName(path) ?? path; } catch { return path; }
     }
 
-    private static void DrawScrollHint(SKCanvas canvas, int count, int scroll, SKColor accent)
+    private static void DrawScrollHint(SKCanvas canvas, int count, int scroll, Derived d)
     {
         int visible = SearchCardLayout.VisibleRows(count);
         if (count <= visible) return;
@@ -624,13 +634,13 @@ public static class SearchCardPainter
         float max = SearchCardLayout.MaxScroll(count);
         float y = top + (track - thumb) * (max <= 0 ? 0 : scroll / max);
         float x = SearchCardLayout.Pad + SearchCardLayout.ListW + 2;
-        using var p = new SKPaint { Color = accent.WithAlpha(90), IsAntialias = true };
+        using var p = new SKPaint { Color = d.RowSelected.WithAlpha(90), IsAntialias = true };
         canvas.DrawRoundRect(new SKRoundRect(new SKRect(x, y, x + 2.5f, y + thumb), 1.3f), p);
     }
 
-    private static void DrawRule(SKCanvas canvas, float y, float w, SKColor accent)
+    private static void DrawRule(SKCanvas canvas, float y, float w, Derived d)
     {
-        using var p = new SKPaint { Color = accent.WithAlpha(34), IsAntialias = false, StrokeWidth = 1 };
+        using var p = new SKPaint { Color = d.Edge, IsAntialias = false, StrokeWidth = 1 };
         canvas.DrawLine(SearchCardLayout.Pad * 0.6f, y, w - SearchCardLayout.Pad * 0.6f, y, p);
     }
 }

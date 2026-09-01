@@ -215,15 +215,16 @@ public static class SearchAdvancedLayout
 
 public static class SearchAdvancedPainter
 {
-    public static void Paint(SKCanvas canvas, SearchCardState s, SKColor accent, SKColor text, SKTypeface face)
+    public static void Paint(SKCanvas canvas, SearchCardState s, Derived d, SKTypeface face)
     {
+        SKColor accent = d.Accent; SKColor text = d.Ink;
         var p = SearchAdvancedLayout.Panel();
         var dim = text.WithAlpha(200);
         var faint = text.WithAlpha(120);
 
-        using (var sh = new SKPaint { Color = SKColors.Black.WithAlpha(120), IsAntialias = true, MaskFilter = SKMaskFilter.CreateBlur(SKBlurStyle.Normal, 14) })
+        using (var sh = new SKPaint { Color = d.Shadow, IsAntialias = true, MaskFilter = SKMaskFilter.CreateBlur(SKBlurStyle.Normal, 14) })
             canvas.DrawRoundRect(new SKRoundRect(p, 14), sh);
-        using (var bg = new SKPaint { Color = new SKColor(16, 16, 18, 252), IsAntialias = true })
+        using (var bg = new SKPaint { Color = d.Ground.WithAlpha(252), IsAntialias = true })
             canvas.DrawRoundRect(new SKRoundRect(p, 14), bg);
         using (var edge = new SKPaint { Color = accent, IsAntialias = true, Style = SKPaintStyle.Stroke, StrokeWidth = 1.4f })
             canvas.DrawRoundRect(new SKRoundRect(p, 14), edge);
@@ -235,7 +236,7 @@ public static class SearchAdvancedPainter
         {
             float y = SearchAdvancedLayout.FieldRect(aboveField).Top - 12;
             CardText.Draw(canvas, label, p.Left + SearchAdvancedLayout.Pad, y, 10.5f, face, faint, bold: true);
-            using var line = new SKPaint { Color = accent.WithAlpha(30), StrokeWidth = 1 };
+            using var line = new SKPaint { Color = d.Edge, StrokeWidth = 1 };
             float lx = p.Left + SearchAdvancedLayout.Pad + CardText.Measure(label, face, 10.5f) + 10;
             canvas.DrawLine(lx, y - 3.5f, p.Right - SearchAdvancedLayout.Pad, y - 3.5f, line);
         }
@@ -255,7 +256,7 @@ public static class SearchAdvancedPainter
 
             bool focus = s.AdvFocus == i;
             var rr = new SKRoundRect(r, 8);
-            using (var fb = new SKPaint { Color = new SKColor(255, 255, 255, 10), IsAntialias = true }) canvas.DrawRoundRect(rr, fb);
+            using (var fb = new SKPaint { Color = d.Row, IsAntialias = true }) canvas.DrawRoundRect(rr, fb);
             using (var fe = new SKPaint { Color = focus ? accent : text.WithAlpha(56), IsAntialias = true, Style = SKPaintStyle.Stroke, StrokeWidth = 1.1f })
                 canvas.DrawRoundRect(rr, fe);
 
@@ -317,7 +318,7 @@ public static class SearchAdvancedPainter
             var r = SearchAdvancedLayout.KindRect(i);
             bool on = adv.Kind == i;
             var rr = new SKRoundRect(r, r.Height / 2);
-            if (on) using (var f = new SKPaint { Color = accent.WithAlpha(46), IsAntialias = true }) canvas.DrawRoundRect(rr, f);
+            if (on) using (var f = new SKPaint { Color = d.RowSelected.WithAlpha(46), IsAntialias = true }) canvas.DrawRoundRect(rr, f);
             using (var e = new SKPaint { Color = on ? accent : text.WithAlpha(56), IsAntialias = true, Style = SKPaintStyle.Stroke, StrokeWidth = 1.1f })
                 canvas.DrawRoundRect(rr, e);
             CardText.DrawCentred(canvas, SearchAdvanced.KindLabels[i], r.MidX, r.MidY + 3.8f, 10.8f, face, on ? accent : dim);
@@ -338,7 +339,7 @@ public static class SearchAdvancedPainter
             bool hover = s.HoverTarget == SearchTarget.AdvButton && s.HoverIndex == i;
             var rr = new SKRoundRect(r, r.Height / 2);
             if (primary || hover)
-                using (var f = new SKPaint { Color = accent.WithAlpha((byte)(primary ? (hover ? 70 : 46) : 26)), IsAntialias = true }) canvas.DrawRoundRect(rr, f);
+                using (var f = new SKPaint { Color = d.RowSelected.WithAlpha((byte)(primary ? (hover ? 70 : 46) : 26)), IsAntialias = true }) canvas.DrawRoundRect(rr, f);
             using (var e = new SKPaint { Color = primary ? accent : text.WithAlpha(hover ? (byte)140 : (byte)70), IsAntialias = true, Style = SKPaintStyle.Stroke, StrokeWidth = 1.2f })
                 canvas.DrawRoundRect(rr, e);
             CardText.DrawCentred(canvas, btns[i], r.MidX, r.MidY + 4.2f, 12.5f, face, primary ? accent : hover ? text : dim);
