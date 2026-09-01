@@ -31,19 +31,27 @@ public static class Hotkey
     ];
 
     /// <summary>Parses a string like "Ctrl+Alt+F" into MOD_* flags and a virtual-key code.
-    /// Anything unrecognised - unknown modifier, unknown key, empty string - returns null
-    /// rather than throwing, because this reads a hand-edited config file.</summary>
+    /// Anything unrecognised returns null rather than throwing, because this reads a
+    /// hand-edited config file: an empty string, any token before the last that is not
+    /// Ctrl/Alt/Shift/Win (case-insensitively, checked one token at a time - a bad token after
+    /// a good one is rejected exactly like a bad token before one), an unrecognised key token,
+    /// a bare key with no modifier at all ("A" - <c>RegisterHotKey</c> with no modifier bits is
+    /// legal Win32 but steals that key process-wide from every app on the desktop, which is
+    /// unrecoverable from inside the app that did it, since the user can no longer type the
+    /// letter anywhere to fix the config), and a modifier-only string with no key
+    /// ("Ctrl+Alt" - the last token is always read as the key, so "Alt" is asked to parse as
+    /// one, fails, and the whole string is rejected).</summary>
     public static (uint Mods, uint Vk)? Parse(string text)
     {
         if (string.IsNullOrWhiteSpace(text)) return null;
 
         string[] parts = text.Split('+', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-        if (parts.Length < 2) return null;
+        if (parts.Length < 2) return null; // a bare key with no modifier - see the doc comment
 
         uint mods = 0;
         for (int i = 0; i < parts.Length - 1; i++)
         {
-            mods |= parts[i].ToUpperInvariant() switch
+            uint bit = parts[i].ToUpperInvariant() switch
             {
                 "CTRL" => MOD_CONTROL,
                 "ALT" => MOD_ALT,
@@ -51,7 +59,12 @@ public static class Hotkey
                 "WIN" => MOD_WIN,
                 _ => 0u,
             };
-            if (mods == 0) return null;
+            // Reject the whole hotkey the moment any modifier token fails to parse, not only
+            // while `mods` is still zero - otherwise a bad token after a good one is silently
+            // dropped instead of failing, and a typo in config.json registers a different
+            // chord than the one written.
+            if (bit == 0) return null;
+            mods |= bit;
         }
 
         uint? vk = ParseKey(parts[^1]);

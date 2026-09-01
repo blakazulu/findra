@@ -46,4 +46,33 @@ public class HotkeyTests
         string? landed = Hotkey.RegisterFirstThatWorks(["Banana+Space", "Alt+Space"], (_, _) => true);
         Assert.Equal("Alt+Space", landed);
     }
+
+    [Fact]
+    public void AnUnrecognisedModifierIsRejectedWhereverItAppears()
+    {
+        // The old implementation only rejected a bad modifier while `mods` was still zero, so
+        // one bad token after a good one was silently dropped instead of failing the parse.
+        Assert.Null(Hotkey.Parse("Ctrl+Banana+F"));
+        Assert.Null(Hotkey.Parse("Banana+Ctrl+F"));
+    }
+
+    [Fact]
+    public void ABareKeyWithNoModifierIsRejected()
+    {
+        // RegisterHotKey with fsModifiers == 0 is legal Win32 and steals that key process-wide
+        // from every app on the desktop - unrecoverable from inside the app that did it, since
+        // the user can no longer type the letter anywhere to fix the config. This is the rule
+        // that "A" (and "Space", with no modifier) must always fail on.
+        Assert.Null(Hotkey.Parse("A"));
+        Assert.Null(Hotkey.Parse("Space"));
+    }
+
+    [Fact]
+    public void AModifierOnlyStringWithNoKeyIsRejected()
+    {
+        // "Ctrl+Alt" has two tokens, but only the first is read as a modifier - the last token
+        // is always the key, so "Alt" here is asked to parse as a key, fails, and the whole
+        // string is rejected rather than silently keying off "Alt" as if it were a letter.
+        Assert.Null(Hotkey.Parse("Ctrl+Alt"));
+    }
 }

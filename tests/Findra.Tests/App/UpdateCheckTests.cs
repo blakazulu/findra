@@ -68,4 +68,129 @@ public class UpdateCheckTests
         Assert.DoesNotContain("winget upgrade", UpdateCheck.Advice("source", "1.2.0"));
         Assert.Contains("github.com/blakazulu/findra", UpdateCheck.Advice("source", "1.2.0"));
     }
+
+    [Fact]
+    public void TheAdviceMatchIsCaseInsensitiveOnInstallSource()
+    {
+        // Nothing writes Config.InstallSource yet, so the casing convention is still up for
+        // grabs - "WinGet" must not silently fall through to the unknown-source branch.
+        Assert.Contains("winget upgrade", UpdateCheck.Advice("WinGet", "1.2.0"));
+    }
+
+    [Fact]
+    public async Task AnUnparseableLatestTagIsUnknownNeverCurrent()
+    {
+        // Spec 9b: telling someone they are current on no information is worse than not
+        // checking at all. Compare("...", "nightly") returns 0 (unparseable never wins), and
+        // routing that 0 straight into ">= 0 => Current" was exactly the bug: it must be
+        // caught before the comparison, not after.
+        UpdateResult r = await UpdateCheck.CheckAsync(Config.Default with { LastUpdateCheck = default },
+            _ => Task.FromResult<string?>("nightly"), DateTime.UtcNow, default);
+
+        Assert.Equal(UpdateState.Unknown, r.State);
+    }
+
+    [Fact]
+    public void CompareIsNullSafe()
+    {
+        // Null is unparseable, same as any other string Version.TryParse rejects - it must
+        // lose the comparison, not throw.
+        Assert.Equal(0, UpdateCheck.Compare(null, "1.0.0"));
+        Assert.Equal(0, UpdateCheck.Compare("1.0.0", null));
+        Assert.Equal(0, UpdateCheck.Compare(null, null));
+    }
+
+    [Fact]
+    public void CreateClientCapsResponseSize()
+    {
+        // UseCookies and AllowAutoRedirect live on the SocketsHttpHandler passed to the
+        // HttpClient constructor; HttpClient does not re-expose either once wrapped, so this
+        // asserts the one setting that is observable from the outside.
+        using HttpClient client = UpdateCheck.CreateClient();
+        Assert.Equal(64 * 1024, client.MaxResponseContentBufferSize);
+    }
+
+    [Fact]
+    public async Task ForceBypassesTheDailyGate()
+    {
+        var now = new DateTime(2026, 5, 1, 12, 0, 0, DateTimeKind.Utc);
+        int calls = 0;
+        Config recent = Config.Default with { LastUpdateCheck = now.AddHours(-3) };
+
+        UpdateResult r = await UpdateCheck.CheckAsync(recent,
+            _ => { calls++; return Task.FromResult<string?>("9.9.9"); }, now, default, force: true);
+
+        Assert.Equal(1, calls);
+        Assert.NotEqual(UpdateState.NotDue, r.State);
+    }
+
+    [Fact]
+    public async Task ForceDoesNotBypassCheckForUpdatesBeingOff()
+    {
+        // Off means off, even when a user forces a check from the tray.
+        bool called = false;
+        Config off = Config.Default with { CheckForUpdates = false };
+
+        UpdateResult r = await UpdateCheck.CheckAsync(off,
+            _ => { called = true; return Task.FromResult<string?>("9.9.9"); }, DateTime.UtcNow, default, force: true);
+
+        Assert.False(called);
+        Assert.Equal(UpdateState.Disabled, r.State);
+    }
+
+    [Fact]
+    public async Task ShutdownDuringFetchDoesNotBurnTheDailyCheck()
+    {
+        // The caller's own token being cancelled means the app is quitting, not that the
+        // network failed - it must not stamp LastUpdateCheck, or a quit during startup would
+        // silently suppress tomorrow's check too.
+        using var cts = new CancellationTokenSource();
+        cts.Cancel();
+        Config config = Config.Default with { LastUpdateCheck = default };
+
+        UpdateResult r = await UpdateCheck.CheckAsync(config,
+            ct => { ct.ThrowIfCancellationRequested(); return Task.FromResult<string?>("9.9.9"); },
+            DateTime.UtcNow, cts.Token);
+
+        Assert.Equal(UpdateState.Unknown, r.State);
+        Assert.Equal(config.LastUpdateCheck, r.Config.LastUpdateCheck);
+    }
+
+    [Fact]
+    public async Task NetworkFailureStillStampsLastUpdateCheck()
+    {
+        // Contrast with ShutdownDuringFetchDoesNotBurnTheDailyCheck: an ordinary failure (and
+        // the internal 10s timeout, which throws the same way) is not a shutdown, so it still
+        // counts against the daily budget.
+        var now = new DateTime(2026, 5, 1, 12, 0, 0, DateTimeKind.Utc);
+        UpdateResult r = await UpdateCheck.CheckAsync(Config.Default with { LastUpdateCheck = default },
+            _ => throw new HttpRequestException("no network"), now, default);
+
+        Assert.Equal(UpdateState.Unknown, r.State);
+        Assert.Equal(now, r.Config.LastUpdateCheck);
+    }
+
+    [Fact]
+    public async Task RunningVersionMatchingTheTaggedReleaseIsCurrent()
+    {
+        UpdateResult r = await UpdateCheck.CheckAsync(Config.Default with { LastUpdateCheck = default },
+            _ => Task.FromResult<string?>("v" + Log.Version), DateTime.UtcNow, default);
+
+        Assert.Equal(UpdateState.Current, r.State);
+    }
+
+    [Fact]
+    public async Task NewerReleaseIsAvailableWithAdvice()
+    {
+        Version running = Version.Parse(Log.Version);
+        string newer = $"{running.Major + 1}.0.0";
+
+        UpdateResult r = await UpdateCheck.CheckAsync(
+            Config.Default with { LastUpdateCheck = default, InstallSource = "source" },
+            _ => Task.FromResult<string?>(newer), DateTime.UtcNow, default);
+
+        Assert.Equal(UpdateState.Available, r.State);
+        Assert.Equal(newer, r.Latest);
+        Assert.False(string.IsNullOrWhiteSpace(r.Advice));
+    }
 }
