@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using System.IO.Pipes;
+using System.Text.Json;
 
 namespace Findra.Pipe;
 
@@ -16,6 +17,8 @@ public sealed class NameClient : IAsyncDisposable
     private readonly ConcurrentQueue<TaskCompletionSource<StatusReply>> _statusWaiters = new();
     private readonly CancellationTokenSource _reader = new();
     private readonly Task _pump;
+    private volatile bool _pumpGone;
+    private bool _disposed;
 
     public long CurrentGeneration => _gen.Current;
 
@@ -41,36 +44,76 @@ public sealed class NameClient : IAsyncDisposable
     /// <summary>Null means the answer arrived after a newer query had been issued.</summary>
     public async Task<QueryReply?> SearchAsync(string raw, int max, CancellationToken ct)
     {
-        long gen = _gen.Next();
-        var tcs = new TaskCompletionSource<QueryReply>(TaskCreationOptions.RunContinuationsAsynchronously);
-        _pending[gen] = tcs;
+        ThrowIfPumpGone();
+
+        long gen;
+        TaskCompletionSource<QueryReply> tcs;
 
         await _writeLock.WaitAsync(ct).ConfigureAwait(false);
         try
         {
-            await Frame.WriteAsync(_transport, Envelope.Pack(Envelope.KindQuery,
-                new QueryRequest(gen, raw, max)), ct).ConfigureAwait(false);
+            // Stamp, register and write as one unit under the lock. Stamping outside it
+            // bumps the generation for a query that may never reach the wire, and Accept
+            // would then reject the genuinely-newest reply that did.
+            gen = _gen.Next();
+            tcs = new TaskCompletionSource<QueryReply>(TaskCreationOptions.RunContinuationsAsynchronously);
+            _pending[gen] = tcs;
+            try
+            {
+                await Frame.WriteAsync(_transport, Envelope.Pack(Envelope.KindQuery,
+                    new QueryRequest(gen, raw, max)), ct).ConfigureAwait(false);
+            }
+            catch { _pending.TryRemove(gen, out _); throw; }   // never reached the wire; do not leak it
         }
         finally { _writeLock.Release(); }
 
-        QueryReply reply = await tcs.Task.WaitAsync(ct).ConfigureAwait(false);
+        // The pump may have died between the check above and the registration. Whichever
+        // side loses that race, one of them sees the other: the pump's drain either finds
+        // this entry, or this re-check finds the flag.
+        if (_pumpGone) { _pending.TryRemove(gen, out _); ThrowIfPumpGone(); }
+
+        QueryReply reply;
+        try { reply = await tcs.Task.WaitAsync(ct).ConfigureAwait(false); }
+        catch { _pending.TryRemove(gen, out _); throw; }
+
         return _gen.Accept(reply.Gen) ? reply : null;
     }
 
     public async Task<StatusReply> StatusAsync(CancellationToken ct)
     {
+        ThrowIfPumpGone();
+
         var tcs = new TaskCompletionSource<StatusReply>(TaskCreationOptions.RunContinuationsAsynchronously);
-        _statusWaiters.Enqueue(tcs);
 
         await _writeLock.WaitAsync(ct).ConfigureAwait(false);
         try
         {
-            await Frame.WriteAsync(_transport, Envelope.Pack(Envelope.KindStatus, new StatusRequest()), ct)
-                .ConfigureAwait(false);
+            // Status replies carry no id, so waiters are matched positionally. Enqueue
+            // inside the lock: enqueuing before it lets two concurrent callers queue in one
+            // order and write in the other, and each then receives the other's reply.
+            _statusWaiters.Enqueue(tcs);
+            try
+            {
+                await Frame.WriteAsync(_transport, Envelope.Pack(Envelope.KindStatus, new StatusRequest()), ct)
+                    .ConfigureAwait(false);
+            }
+            catch
+            {
+                // A stranded waiter at the head of a positional queue desynchronises every
+                // later status call permanently, so mark it dead rather than leaving it.
+                tcs.TrySetCanceled();
+                throw;
+            }
         }
         finally { _writeLock.Release(); }
 
         return await tcs.Task.WaitAsync(ct).ConfigureAwait(false);
+    }
+
+    private void ThrowIfPumpGone()
+    {
+        if (_pumpGone)
+            throw new IOException("the name helper connection is closed");
     }
 
     private async Task PumpAsync(CancellationToken ct)
@@ -82,24 +125,38 @@ public sealed class NameClient : IAsyncDisposable
                 byte[]? payload = await Frame.ReadAsync(_transport, ct).ConfigureAwait(false);
                 if (payload is null) break;
 
-                Envelope e = Envelope.Unpack(payload);
-                switch (e.Kind)
+                // Guard decoding per frame. One undecodable reply must not end the pump:
+                // the transport stays writable, so a dead reader turns every later search
+                // into an await nobody will ever complete. The server guards its own
+                // decode for the same reason - this is the matching half.
+                Envelope e;
+                try { e = Envelope.Unpack(payload); }
+                catch (Exception ex) { Log.Warn("pipe", "undecodable frame from the helper: " + ex.Message); continue; }
+
+                try
                 {
-                    case Envelope.KindQueryReply:
+                    switch (e.Kind)
                     {
-                        QueryReply r = e.Body<QueryReply>();
-                        if (_pending.TryRemove(r.Gen, out var waiter)) waiter.TrySetResult(r);
-                        break;
+                        case Envelope.KindQueryReply:
+                        {
+                            QueryReply r = e.Body<QueryReply>();
+                            if (_pending.TryRemove(r.Gen, out var waiter)) waiter.TrySetResult(r);
+                            break;
+                        }
+                        case Envelope.KindStatusReply:
+                            if (_statusWaiters.TryDequeue(out var s)) s.TrySetResult(e.Body<StatusReply>());
+                            break;
+                        case Envelope.KindJournal:
+                            // Plan 3 hooks the indexer up here.
+                            break;
+                        default:
+                            Log.Info("pipe", $"client ignoring unknown kind '{e.Kind}'");
+                            break;
                     }
-                    case Envelope.KindStatusReply:
-                        if (_statusWaiters.TryDequeue(out var s)) s.TrySetResult(e.Body<StatusReply>());
-                        break;
-                    case Envelope.KindJournal:
-                        // Plan 3 hooks the indexer up here.
-                        break;
-                    default:
-                        Log.Info("pipe", $"client ignoring unknown kind '{e.Kind}'");
-                        break;
+                }
+                catch (JsonException ex)
+                {
+                    Log.Warn("pipe", $"undecodable body for '{e.Kind}': {ex.Message}");
                 }
             }
         }
@@ -107,6 +164,10 @@ public sealed class NameClient : IAsyncDisposable
         catch (Exception ex) { Log.Error("pipe", "client pump ended", ex); }
         finally
         {
+            // Set the flag BEFORE draining. A caller registering concurrently either has
+            // its entry found by the drain below, or sees this flag on its own re-check -
+            // one of the two always happens, so nobody is left awaiting a dead pump.
+            _pumpGone = true;
             foreach (var kv in _pending) kv.Value.TrySetCanceled();
             while (_statusWaiters.TryDequeue(out var s)) s.TrySetCanceled();
         }
@@ -114,10 +175,19 @@ public sealed class NameClient : IAsyncDisposable
 
     public async ValueTask DisposeAsync()
     {
+        if (_disposed) return;
+        _disposed = true;
+
         await _reader.CancelAsync().ConfigureAwait(false);
         try { await _pump.ConfigureAwait(false); } catch { }
         _transport.Dispose();
         _reader.Dispose();
-        _writeLock.Dispose();
+
+        // _writeLock is deliberately NOT disposed. SemaphoreSlim.Dispose does not complete
+        // queued async waiters - it neither resumes nor faults them - so disposing it while
+        // a caller is parked on WaitAsync hangs that caller silently, and the Release in
+        // its finally then throws ObjectDisposedException out of a finally block, masking
+        // whatever it was really failing on. Nothing here allocates its wait handle, so
+        // there is nothing to release.
     }
 }

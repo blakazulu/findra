@@ -117,6 +117,15 @@ public class NameServerTests
         public override bool CanWrite => true;
         public override long Length => throw new NotSupportedException();
         public override long Position { get => throw new NotSupportedException(); set => throw new NotSupportedException(); }
+        // Without this, disposing one end never completes the underlying pipe, so the other
+        // end's read blocks forever instead of seeing EOF - and any test that simulates a
+        // dropped connection silently becomes a test of its own timeout.
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing) { read.Dispose(); write.Dispose(); }
+            base.Dispose(disposing);
+        }
+
         public override void Flush() => write.Flush();
         public override Task FlushAsync(CancellationToken ct) => write.FlushAsync(ct);
         public override int Read(byte[] b, int o, int c) => read.Read(b, o, c);

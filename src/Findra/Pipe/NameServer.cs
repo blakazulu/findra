@@ -154,6 +154,15 @@ public static class NameServer
                 var me = WindowsIdentity.GetCurrent().User!;
                 security.AddAccessRule(new PipeAccessRule(me, PipeAccessRights.ReadWrite, AccessControlType.Allow));
 
+                // SetOwner is not decoration. The client connects with CurrentUserOnly, and
+                // that flag compares the pipe's OWNER against the client's token owner - not
+                // its user. This process is elevated, so its default token owner is
+                // BUILTIN\Administrators, while the normal-integrity UI's owner is the user
+                // SID. Without this line the two never match and every connect fails with
+                // UnauthorizedAccessException. Nothing in the unit suite catches it, because
+                // nothing in the unit suite connects a real pipe.
+                security.SetOwner(me);
+
                 // FirstPipeInstance: creating a pipe needs no privilege, so without it any
                 // local process can squat this name before the helper starts and feed the UI
                 // paths of its choosing - a click on a fabricated result then launches as
