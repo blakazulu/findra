@@ -219,8 +219,11 @@ public static class SearchAdvancedPainter
     {
         SKColor accent = d.Accent; SKColor text = d.Ink;
         var p = SearchAdvancedLayout.Panel();
-        var dim = text.WithAlpha(200);
-        var faint = text.WithAlpha(120);
+        // Every reduced ink in the popup goes through d.Fade, not WithAlpha, for the same
+        // reason the card's does: a raw alpha is a mix fraction wearing a different hat, and it
+        // needs the same light-ground correction or the whole popup reads a step fainter on Paper.
+        var dim = d.Fade(200);
+        var faint = d.Fade(120);
 
         using (var sh = new SKPaint { Color = d.Shadow, IsAntialias = true, MaskFilter = SKMaskFilter.CreateBlur(SKBlurStyle.Normal, 14) })
             canvas.DrawRoundRect(new SKRoundRect(p, 14), sh);
@@ -257,7 +260,7 @@ public static class SearchAdvancedPainter
             bool focus = s.AdvFocus == i;
             var rr = new SKRoundRect(r, 8);
             using (var fb = new SKPaint { Color = d.Row, IsAntialias = true }) canvas.DrawRoundRect(rr, fb);
-            using (var fe = new SKPaint { Color = focus ? accent : text.WithAlpha(56), IsAntialias = true, Style = SKPaintStyle.Stroke, StrokeWidth = 1.1f })
+            using (var fe = new SKPaint { Color = focus ? accent : d.Fade(56), IsAntialias = true, Style = SKPaintStyle.Stroke, StrokeWidth = 1.1f })
                 canvas.DrawRoundRect(rr, fe);
 
             string v = adv.Field(i);
@@ -284,7 +287,7 @@ public static class SearchAdvancedPainter
                     4 => "switches Content on", 5 => @"Downloads or C:\Users\you\Pictures",
                     6 => "2026-01-01 · week · 2025", 7 => "2026-03-15", 8 => "1mb · huge", 9 => "100mb", _ => ""
                 };
-                CardText.Draw(canvas, CardText.Ellipsize(ph, face, size, maxW), tx, r.MidY + 4.5f, size, face, text.WithAlpha(70));
+                CardText.Draw(canvas, CardText.Ellipsize(ph, face, size, maxW), tx, r.MidY + 4.5f, size, face, d.Fade(70));
                 if (focus && (int)(s.Clock * 2) % 2 == 0)
                 {
                     using var cp = new SKPaint { Color = accent, StrokeWidth = 1.6f, IsAntialias = true };
@@ -300,7 +303,7 @@ public static class SearchAdvancedPainter
             var r = SearchAdvancedLayout.CheckRect(i);
             bool on = i == 0 ? adv.MatchCase : adv.WholeWords;
             var box = new SKRect(r.Left, r.MidY - 8, r.Left + 16, r.MidY + 8);
-            using (var be = new SKPaint { Color = on ? accent : text.WithAlpha(90), IsAntialias = true, Style = SKPaintStyle.Stroke, StrokeWidth = 1.3f })
+            using (var be = new SKPaint { Color = on ? accent : d.Fade(90), IsAntialias = true, Style = SKPaintStyle.Stroke, StrokeWidth = 1.3f })
                 canvas.DrawRoundRect(new SKRoundRect(box, 4), be);
             if (on)
             {
@@ -318,8 +321,12 @@ public static class SearchAdvancedPainter
             var r = SearchAdvancedLayout.KindRect(i);
             bool on = adv.Kind == i;
             var rr = new SKRoundRect(r, r.Height / 2);
-            if (on) using (var f = new SKPaint { Color = d.RowSelected.WithAlpha(46), IsAntialias = true }) canvas.DrawRoundRect(rr, f);
-            using (var e = new SKPaint { Color = on ? accent : text.WithAlpha(56), IsAntialias = true, Style = SKPaintStyle.Stroke, StrokeWidth = 1.1f })
+            // Opaque d.RowSelected, the same fill the card's active filter chip takes. Diluting
+            // it to alpha 46 over the ground gave the chosen Kind a 2.2-2.8 L* signal where the
+            // card's equivalent has 13-15.6; the surface is already derived to be exactly one
+            // step off the ground, so drawing it at a fifth of its weight throws that away.
+            if (on) using (var f = new SKPaint { Color = d.RowSelected, IsAntialias = true }) canvas.DrawRoundRect(rr, f);
+            using (var e = new SKPaint { Color = on ? accent : d.Fade(56), IsAntialias = true, Style = SKPaintStyle.Stroke, StrokeWidth = 1.1f })
                 canvas.DrawRoundRect(rr, e);
             CardText.DrawCentred(canvas, SearchAdvanced.KindLabels[i], r.MidX, r.MidY + 3.8f, 10.8f, face, on ? accent : dim);
         }
@@ -338,9 +345,14 @@ public static class SearchAdvancedPainter
             bool primary = i == 2;
             bool hover = s.HoverTarget == SearchTarget.AdvButton && s.HoverIndex == i;
             var rr = new SKRoundRect(r, r.Height / 2);
+            // Three levels, three derived surfaces, no alpha: the row ladder is built so that
+            // ground < Row < RowHover < RowSelected each clear about 2 L*, which is exactly the
+            // hierarchy these buttons want. Apply rests one step up and takes the top step when
+            // the pointer is on it; Clear and Close light only on hover, at the bottom step.
+            // The old 26/46/70 dilution gave all three a 1.2-4.3 L* spread against the ground.
             if (primary || hover)
-                using (var f = new SKPaint { Color = d.RowSelected.WithAlpha((byte)(primary ? (hover ? 70 : 46) : 26)), IsAntialias = true }) canvas.DrawRoundRect(rr, f);
-            using (var e = new SKPaint { Color = primary ? accent : text.WithAlpha(hover ? (byte)140 : (byte)70), IsAntialias = true, Style = SKPaintStyle.Stroke, StrokeWidth = 1.2f })
+                using (var f = new SKPaint { Color = primary ? (hover ? d.RowSelected : d.RowHover) : d.Row, IsAntialias = true }) canvas.DrawRoundRect(rr, f);
+            using (var e = new SKPaint { Color = primary ? accent : d.Fade(hover ? (byte)140 : (byte)70), IsAntialias = true, Style = SKPaintStyle.Stroke, StrokeWidth = 1.2f })
                 canvas.DrawRoundRect(rr, e);
             CardText.DrawCentred(canvas, btns[i], r.MidX, r.MidY + 4.2f, 12.5f, face, primary ? accent : hover ? text : dim);
         }
