@@ -12,7 +12,14 @@ public static class SearchProbe
         Console.WriteLine($"findra --searchprobe  query: \"{query}\"");
         Console.WriteLine();
 
-        Console.WriteLine($"  helper task registered : {(HelperTask.IsRegistered() ? "yes" : "NO")}");
+        (HelperTaskState state, string detail) = HelperTask.Query();
+        Console.WriteLine($"  helper task registered : {state switch
+        {
+            HelperTaskState.Registered    => "yes",
+            HelperTaskState.NotRegistered => "NO",
+            _                             => "UNKNOWN - the query itself failed",
+        }}");
+        if (detail.Length > 0) Console.WriteLine($"                           {detail}");
 
         NameClient client;
         try

@@ -1929,7 +1929,7 @@ git commit -m "Async name client that drops stale answers"
 
 **Interfaces:**
 - Consumes: `Log` (Task 2).
-- Produces: `Findra.Startup.HelperTask.TaskName : string` (`"Findra names helper"`), `HelperTask.BuildXml(string exePath) : string`, `HelperTask.IsRegistered() : bool`, `HelperTask.Register(string exePath) : bool`, `HelperTask.EnsureRunning() : bool`.
+- Produces: `Findra.Startup.HelperTask.TaskName : string` (`"Findra names helper"`), `HelperTask.BuildXml(string exePath) : string`, `HelperTask.Query() : (HelperTaskState State, string Detail)`, `HelperTask.Register(string exePath) : bool`, `HelperTask.EnsureRunning() : bool`.
 
 **`StartupManager` is deliberately NOT ported in this plan.** Nothing here calls it, and it
 carries an unresolved design question: the source's version branches on whether the current
@@ -2051,6 +2051,9 @@ namespace Findra.Startup;
 /// Registers the one elevated thing Findra needs: a logon task that starts
 /// `findra.exe --names` at HighestAvailable. One UAC prompt, once, ever.
 /// </summary>
+/// <summary>What a scheduled-task query could establish - including that it could not.</summary>
+public enum HelperTaskState { Registered, NotRegistered, Unknown }
+
 public static class HelperTask
 {
     public const string TaskName = "Findra names helper";
@@ -2099,8 +2102,14 @@ $"""
     /// <summary>
     /// Query the XML form, never the CSV form: `schtasks /query /fo csv` column
     /// headings are localized, the XML is not.
+    ///
+    /// Three-valued on purpose. Collapsing "not registered" and "the query itself
+    /// failed" into one `false` makes a locked-down machine look identical to a fresh
+    /// one, and the probe exists precisely to tell a stranger which of those they have.
+    /// `Detail` carries schtasks' own stderr when there is any - never parsed, only
+    /// shown, because those messages are localized too.
     /// </summary>
-    public static bool IsRegistered()
+    public static (HelperTaskState State, string Detail) Query()
     {
         try
         {
@@ -2108,7 +2117,7 @@ $"""
                 $"/query /tn \"{TaskName}\" /xml ONE")
             { RedirectStandardOutput = true, RedirectStandardError = true, UseShellExecute = false, CreateNoWindow = true };
             using Process? p = Process.Start(psi);
-            if (p is null) return false;
+            if (p is null) return (HelperTaskState.Unknown, "schtasks could not be started");
 
             // Redirecting without draining can deadlock: the child blocks writing into a
             // full pipe buffer while we sit in WaitForExit. `/xml ONE` prints the entire
@@ -2121,13 +2130,25 @@ $"""
             {
                 try { p.Kill(entireProcessTree: true); } catch { }
                 Log.Warn("startup", "schtasks /query did not return within 5s");
-                return false;
+                return (HelperTaskState.Unknown, "schtasks did not return within 5s");
             }
 
             Task.WaitAll([stdout, stderr], TimeSpan.FromSeconds(1));
-            return p.ExitCode == 0;
+            if (p.ExitCode == 0) return (HelperTaskState.Registered, "");
+
+            // A non-zero exit is almost always "no such task", but schtasks says so in the
+            // user's own language, so do not try to read it - report the state and hand the
+            // message through untouched. Guessing from localized text is the same mistake
+            // as parsing localized CSV headings.
+            string why = stderr.IsCompletedSuccessfully ? stderr.Result.Trim() : "";
+            if (why.Length > 0) Log.Warn("startup", $"schtasks /query exited {p.ExitCode}: {why}");
+            return (HelperTaskState.NotRegistered, why);
         }
-        catch (Exception ex) { Log.Warn("startup", "task query failed: " + ex.Message); return false; }
+        catch (Exception ex)
+        {
+            Log.Warn("startup", "task query failed: " + ex.Message);
+            return (HelperTaskState.Unknown, ex.Message);
+        }
     }
 
     public static bool Register(string exePath)
@@ -2248,7 +2269,14 @@ public static class SearchProbe
         Console.WriteLine($"findra --searchprobe  query: \"{query}\"");
         Console.WriteLine();
 
-        Console.WriteLine($"  helper task registered : {(HelperTask.IsRegistered() ? "yes" : "NO")}");
+        (HelperTaskState state, string detail) = HelperTask.Query();
+        Console.WriteLine($"  helper task registered : {state switch
+        {
+            HelperTaskState.Registered    => "yes",
+            HelperTaskState.NotRegistered => "NO",
+            _                             => "UNKNOWN - the query itself failed",
+        }}");
+        if (detail.Length > 0) Console.WriteLine($"                           {detail}");
 
         NameClient client;
         try
