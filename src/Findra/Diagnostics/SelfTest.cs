@@ -54,13 +54,28 @@ public static class SelfTest
             return null;
         });
 
+        // This runs over PaletteStore.LoadFromDisk(), so it is the only thing standing between a
+        // hand-written palettes.json and someone's desktop. Checking ink against the ground alone
+        // was not enough: a palette can clear 4.5 there and still paint 3.4 on the stage's badge
+        // and 3.6 on a chip, because those are DERIVED surfaces a step off the ground, not the
+        // ground. Every surface ink actually lands on gets checked - the same set DerivedTests
+        // holds the six built-ins to.
         failed += Check("every palette derives readable colours", () =>
         {
             foreach (Palette p in PaletteStore.LoadFromDisk())
             {
                 Derived d = Derived.From(p);
-                if (Derived.Contrast(d.Ink, d.Ground) < 4.5)
-                    return $"{p.Name}: ink on ground is {Derived.Contrast(d.Ink, d.Ground):F1}:1, needs 4.5";
+                foreach ((string surface, SKColor c) in new[]
+                {
+                    ("the ground", d.Ground), ("a result row", d.Row), ("a hovered row", d.RowHover),
+                    ("the selected row", d.RowSelected), ("a chip", d.Chip), ("a stage badge", d.Stage),
+                })
+                {
+                    double ratio = Derived.Contrast(d.Ink, c);
+                    if (ratio < 4.5) return $"{p.Name}: ink on {surface} is {ratio:F2}:1, needs 4.5";
+                }
+                double dim = Derived.Contrast(d.Dim, d.Ground);
+                if (dim < 4.5) return $"{p.Name}: dim text on the ground is {dim:F2}:1, needs 4.5";
                 if (Derived.Contrast(d.OnAccent, d.Accent) < 4.5)
                     return $"{p.Name}: text on the accent is unreadable";
             }
