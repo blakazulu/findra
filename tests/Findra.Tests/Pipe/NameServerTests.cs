@@ -13,6 +13,7 @@ public class NameServerTests
         ix.Upsert(5, 0, NtfsVolume.FileAttributeDirectory, "C:");
         ix.Upsert(100, 5, NtfsVolume.FileAttributeDirectory, "Photos");
         ix.Upsert(101, 100, 0, "sunset over water.jpg");
+        ix.Upsert(102, 100, 0, "sunset over water.png");
         return ix;
     }
 
@@ -40,9 +41,28 @@ public class NameServerTests
 
         QueryReply reply = Envelope.Unpack(raw!).Body<QueryReply>();
         Assert.Equal(1, reply.Gen);
+        Assert.Equal(2, reply.Rows.Count);
+        NameRow jpg = Assert.Single(reply.Rows, r => r.Name == "sunset over water.jpg");
+        Assert.Equal(@"C:\Photos\sunset over water.jpg", jpg.Path);
+        await cts.CancelAsync();
+    }
+
+    [Fact]
+    public async Task AppliesTheFiltersTheIndexScanDoesNotEnforce()
+    {
+        // NameIndex.Search's vectorised word-scan branch never consults q.Exts, so without
+        // the Allows call in AnswerQuery this returns both files. Deleting that line must
+        // fail this test - that is the whole point of it.
+        var (server, client) = Pair();
+        var cts = new CancellationTokenSource();
+        _ = NameServer.Serve(server, new Dictionary<char, NameIndex> { ['C'] = Sample() }, cts.Token);
+
+        await Frame.WriteAsync(client, Envelope.Pack(Envelope.KindQuery,
+            new QueryRequest(1, "sunset ext:png", 50)), default);
+        QueryReply reply = Envelope.Unpack((await Frame.ReadAsync(client, default))!).Body<QueryReply>();
+
         Assert.Single(reply.Rows);
-        Assert.Equal("sunset over water.jpg", reply.Rows[0].Name);
-        Assert.Equal(@"C:\Photos\sunset over water.jpg", reply.Rows[0].Path);
+        Assert.Equal("sunset over water.png", reply.Rows[0].Name);
         await cts.CancelAsync();
     }
 
