@@ -13,8 +13,6 @@ namespace Findra;
 /// </summary>
 public static class Theme
 {
-    private static bool _fallbackLogged;
-
     public static Palette Resolve(Config config, bool windowsIsLight, IReadOnlyList<Palette> available)
     {
         bool light = config.Mode switch
@@ -31,11 +29,10 @@ public static class Theme
             p => string.Equals(p.Name, wanted, StringComparison.OrdinalIgnoreCase));
         if (found is not null) return found;
 
-        if (!_fallbackLogged)
-        {
-            _fallbackLogged = true;
-            Log.Warn("look", $"palette '{wanted}' was not found; falling back to '{fallback.Name}'");
-        }
+        // Once per missing name, not once per process: a second palette going missing later in
+        // the same run is a different event and deserves its own line.
+        Log.Once("look|missing|" + wanted.ToLowerInvariant(), "WARN", "look",
+            $"palette '{wanted}' was not found; falling back to '{fallback.Name}'");
         return fallback;
     }
 
