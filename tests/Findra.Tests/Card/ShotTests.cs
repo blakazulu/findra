@@ -16,7 +16,7 @@ public class ShotTests
     [Theory, MemberData(nameof(EveryStateInEveryPalette))]
     public void EveryStateRendersInEveryPalette(string state, string palette)
     {
-        // 48 renders. This is the whole safety net for a repaint that has no unit tests: if any
+        // 54 renders. This is the whole safety net for a repaint that has no unit tests: if any
         // state in any palette throws or comes out empty, it fails here rather than on someone's
         // desktop. Exit code, file size and bitmap size alone did not earn that description -
         // every one of them passes on a card painted entirely in one colour, which is exactly
@@ -31,7 +31,7 @@ public class ShotTests
             Assert.True(bmp.Width > 100 && bmp.Height > 50);
 
             // Measured, not guessed. With Derived.From returning the ground for all fourteen
-            // fields the eight states span 50-191 distinct colours; as they actually paint they
+            // fields the nine states span 46-191 distinct colours; as they actually paint they
             // span 382-2583. 280 sits between the two with about a third of headroom either way.
             int colours = Distinct(bmp, 0, bmp.Width);
             Assert.True(colours >= 280,

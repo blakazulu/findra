@@ -12,7 +12,7 @@ namespace Findra.Diagnostics;
 public static class SearchShot
 {
     public static readonly IReadOnlyList<string> States =
-        ["capsule", "empty", "typing", "results", "noresults", "many", "adv", "opening"];
+        ["capsule", "empty", "typing", "results", "noresults", "many", "adv", "opening", "openingempty"];
 
     public static int Render(string outPath, string state, string paletteName = "Mond")
     {
@@ -115,6 +115,16 @@ public static class SearchShot
         if (state == "empty")
             return SearchCardState.Empty with { IndexLine = "index: 1.5M names · idle", Clock = 0.2 };
 
+        // The unfold has a Restore on each of the painter's two return paths, and an unbalanced
+        // canvas is exactly what that shape produces when one is missed - so both are shot. This
+        // is the short one, and the one a user actually sees: clicking the capsule opens a card
+        // with no query in it. `opening` below is the same animation over a full result list.
+        if (state == "openingempty")
+            return SearchCardState.Empty with
+            {
+                IndexLine = "index: 1.5M names · idle", Clock = 0.2, OpenedAt = 0.13,
+            };
+
         if (state == "adv")
             return SearchCardState.Empty with
             {
@@ -178,9 +188,9 @@ public static class SearchShot
             // 1.4 L* of Row - and inverted on two palettes - without anything noticing.
             HoverTarget: state == "results" ? SearchTarget.Row : SearchTarget.None,
             HoverIndex: state == "results" ? 2 : -1,
-            // `opening` catches the card mid-unfold: OpenedAt set and a clock partway through the
-            // 220 ms, so the painter takes its SaveLayer + ClipRect branch and has to balance the
-            // canvas on the way out. Every other state renders with the animation already over.
+            // `opening` catches the card mid-unfold with a full list, a third of the way through
+            // the 220 ms: the painter takes its SaveLayer + ClipRect branch and has to balance the
+            // canvas on the long return path. `openingempty` above covers the early one.
             OpenedAt: state == "opening" ? 0.13 : -1);
     }
 
