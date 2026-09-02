@@ -171,7 +171,43 @@ moment rather than an elevation prompt at every launch.
     which leaves somebody with no hotkey and the control that would fix it behind a card the
     hotkey no longer opens.
 
+29. **The first screen, answered by a person.** Nothing about a window can be checked
+    headlessly - `--searchshot firstrun` and `--searchshot firstrundownloading` draw the two
+    surfaces and nothing else. Rename `%APPDATA%\Findra\config.json` and launch, then:
+
+    - the screen appears before the capsule and the tray, and reads as the same object as the
+      settings window - same width, same edge, same pills;
+    - the three preset tiles light one at a time, and touching any row moves the choice to none
+      of them;
+    - ticking Speech ticks the document models under it; unticking Speech takes Hebrew with it;
+    - the Hebrew row is on the screen only on a machine with Hebrew installed;
+    - press "Not now": one administrator prompt, the screen goes, and it does **not** come back
+      at the next launch;
+    - the log carries both `names helper task registered` **and** `the names helper is
+      answering`, and name search works in that same session with no sign-out. This is the half
+      that has no test at any level: registering without starting leaves name search dead for
+      the whole of somebody's first session, and only a real machine can show it does not.
+
+30. **The second act, with the network taken away.** Start again with a renamed config, choose
+    Recommended and press "Get these":
+
+    - one progress bar per capability, not one for the whole download, and a capability whose
+      files were already on disk starts full rather than empty;
+    - pull the network cable mid-download. The screen must say what went wrong and that what
+      arrived was kept - not stop silently - and the log must carry the same. Plug it back in,
+      launch again, and the download resumes from the bytes already fetched rather than from
+      zero;
+    - close the window mid-download and confirm Findra is still in the tray and still fetching;
+    - when a capability lands, the log says how many files were queued for what Findra can now
+      read. That line is the re-queue running on the flow that owns the index's writer, and it
+      is what makes an installed capability start finding things without a restart.
+
+31. **The same line, from the settings window.** Both paths now run the same download
+    controller, so installing a capability from settings must produce the same "queued N
+    file(s)" line in the same session. If it appears on one path and not the other, the two
+    have drifted apart again.
+
 ## Notes
 
-Steps 1 to 4 and 9 to 13 are the ones that have never executed in any form. Steps 5 to 8
+Steps 1 to 4, 9 to 13 and 29 to 31 are the ones that have never executed in any form. Steps 5 to 8
 have been verified by log line and by inspection, but not by eye.

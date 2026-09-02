@@ -1,4 +1,4 @@
-using System.Text.Json;
+﻿using System.Text.Json;
 using System.Text.Json.Serialization;
 
 namespace Findra;
@@ -73,6 +73,11 @@ public sealed record Config
     /// <summary>A duty cycle, 10..100. At 50 the indexer rests as long as it worked.</summary>
     public int IndexPower { get; init; } = 50;
 
+    /// <summary>Whether the first-run screen has been answered. "Not now" answers it: content
+    /// indexing is off by default, so choosing nothing is a complete answer rather than a
+    /// deferral, and a screen that came back would be asking a settled question twice.</summary>
+    public bool FirstRunDone { get; init; }
+
     public static Config Default { get; } = new();
 
     // The compiler-generated record equality compares SearchExclusions and IndexDrives by
@@ -90,6 +95,7 @@ public sealed record Config
         && LatestKnownVersion == other.LatestKnownVersion
         && InstallSource == other.InstallSource
         && IndexContent == other.IndexContent && IndexPower == other.IndexPower
+        && FirstRunDone == other.FirstRunDone
         && TranscribeMinutes == other.TranscribeMinutes
         && SearchExclusions.AsSpan().SequenceEqual(other.SearchExclusions)
         && IndexDrives.AsSpan().SequenceEqual(other.IndexDrives);
@@ -100,7 +106,7 @@ public sealed record Config
         h.Add(DarkPalette); h.Add(LightPalette); h.Add(Mode); h.Add(Hotkey);
         h.Add(CapsuleX); h.Add(CapsuleY); h.Add(ShowCapsule); h.Add(CheckForUpdates);
         h.Add(LastUpdateCheck); h.Add(LatestKnownVersion); h.Add(InstallSource);
-        h.Add(IndexContent); h.Add(IndexPower); h.Add(TranscribeMinutes);
+        h.Add(IndexContent); h.Add(IndexPower); h.Add(TranscribeMinutes); h.Add(FirstRunDone);
         foreach (string s in SearchExclusions) h.Add(s);
         foreach (string s in IndexDrives) h.Add(s);
         return h.ToHashCode();

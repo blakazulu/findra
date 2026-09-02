@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -200,6 +200,59 @@ internal sealed class Shell : ISettingsHost
     private IndexerHost? _indexer;
     private Task? _contentLoop;
 
+    // Work that has to run against the WRITER connection but is asked for from somewhere else -
+    // a download continuation, a settings click. ContentDb.Claim is a thread-id detector rather
+    // than a lock, so there is no safe way to touch the writer off the content loop; this hands
+    // the work to the loop that owns it and waits for the answer. Drained once a second by the
+    // same pump that keeps the indexer's control rows up to date.
+    private readonly ConcurrentQueue<PostedWork> _contentWork = new();
+
+    private sealed record PostedWork(Func<ContentDb, int> Work, TaskCompletionSource<int> Done);
+
+    /// <summary>
+    /// Run <paramref name="work"/> on the flow that owns the index's writer connection, and give
+    /// back what it returned.
+    ///
+    /// <para>Answers 0 immediately when there is no loop to run on. That is a real state rather
+    /// than a defensive one: the first-run screen is answered BEFORE the content index is opened,
+    /// so a download that finished in the seconds between the two has nowhere to post to - and it
+    /// costs nothing, because <see cref="OpenContentIndex"/> runs the same gate itself as it
+    /// starts. A task that never completed would instead leave the download run waiting for ever
+    /// on its own re-queue.</para>
+    /// </summary>
+    private Task<int> OnContentLoopAsync(Func<ContentDb, int> work)
+    {
+        var done = new TaskCompletionSource<int>(TaskCreationOptions.RunContinuationsAsynchronously);
+        if (_content is null || _contentLoop is null || _contentLoop.IsCompleted)
+        {
+            Log.Info("index", "the content index is not open on this flow yet; " +
+                              "the re-queue is planned again the next time Findra starts");
+            done.SetResult(0);
+            return done.Task;
+        }
+
+        _contentWork.Enqueue(new PostedWork(work, done));
+        // Bounded by the shutdown token as well as by the loop, so quitting mid-download does not
+        // leave a continuation parked on a queue nobody will drain again.
+        return done.Task.WaitAsync(_shutdown.Token);
+    }
+
+    /// <summary>Everything posted since the last pump, on the loop's own thread. A throw is the
+    /// caller's answer rather than the loop's death: the queue, the index and every stamp survive,
+    /// and the next start plans exactly the same work.</summary>
+    private void DrainContentWork(ContentDb db)
+    {
+        while (_contentWork.TryDequeue(out PostedWork? posted))
+        {
+            try { posted.Done.TrySetResult(posted.Work(db)); }
+            catch (Exception ex)
+            {
+                Log.Error("index", "work posted to the content loop failed", ex);
+                posted.Done.TrySetException(ex);
+            }
+        }
+    }
+
     public Shell(Application app, IClassicDesktopStyleApplicationLifetime desktop)
     {
         _app = app;
@@ -238,6 +291,11 @@ internal sealed class Shell : ISettingsHost
                     ? $"the last check found {_latest}, which is newer than {Log.Version}; the tray says so"
                     : $"the last check found {_latest}: up to date");
         });
+
+        // Before the capsule, the tray and the content loop. It decides whether there is anything
+        // for the content loop to do, and it is where the one elevated thing Findra needs gets
+        // registered - which nothing in the tree did before it existed.
+        if (!_config.FirstRunDone) Stage("first run", ShowFirstRun);
 
         // EnsureRunning asks the scheduler to start the helper and then waits up to five seconds
         // for the pipe to answer. On the UI thread that is five seconds of nothing on screen.
@@ -281,6 +339,182 @@ internal sealed class Shell : ISettingsHost
     {
         try { body(); }
         catch (Exception ex) { Log.Error("startup", $"the {what} stage failed", ex); }
+    }
+
+    // ---- the first screen ---------------------------------------------------------------------
+
+    /// <summary>
+    /// Spec §6's screen, shown once, before anything else has been built.
+    ///
+    /// <para>Not modal and not awaited: the rest of the startup carries on behind it, so a person
+    /// reading the disclosure is not looking at a desktop with no tray icon. What the screen
+    /// decides - whether content indexing runs at all - is read by the content loop every second
+    /// out of <c>_config</c>, so answering it late costs nothing.</para>
+    /// </summary>
+    private void ShowFirstRun()
+    {
+        var state = new FirstRunState
+        {
+            // Only where there is Hebrew. A 1.5 GB row is a decision, and a Thai machine should
+            // not have to make it.
+            HebrewOffered = Capabilities.HebrewIsOffered(Capabilities.SystemLanguages()),
+            ContentOn = _config.IndexContent,
+            CheckUpdates = _config.CheckForUpdates,
+            // What is actually in the Run key, not a default: a reinstall over an existing entry
+            // must not show the switch off while the entry is there.
+            StartAtLogon = Autostart.IsSet(),
+        };
+
+        var window = new FirstRunWindow(state, _palette);
+        window.Answered += answer => OnFirstRunAnswered(window, answer);
+        window.Show();
+        Log.Info("startup", "the first-run screen is up; nothing is downloaded until it is answered");
+    }
+
+    /// <summary>
+    /// The answer, and everything that follows from it.
+    ///
+    /// <para>The registration is the part that matters most and the part that is easiest to read
+    /// as optional: it happens whatever was chosen, INCLUDING "Not now", because searching by name
+    /// is the half of Findra that is always on and it does not work at all without the scheduled
+    /// task.</para>
+    /// </summary>
+    private void OnFirstRunAnswered(FirstRunWindow window, FirstRunState answer)
+    {
+        _config = FirstRun.Outcome(answer, _config);
+        _config.Save();
+        Log.Info("startup", "the first-run screen was answered: " +
+                            (answer.Chosen.Count == 0
+                                ? "no capabilities"
+                                : string.Join(", ", answer.Chosen.Select(Capabilities.Title))) +
+                            ", looking inside files " + (_config.IndexContent ? "on" : "off") +
+                            ", update checks " + (_config.CheckForUpdates ? "on" : "off"));
+
+        string exe = Environment.ProcessPath ?? "";
+        if (answer.StartAtLogon) Autostart.Set(exe); else Autostart.Clear();
+
+        RegisterAndStartHelper(exe);
+
+        IReadOnlyList<Model> wanted = FirstRun.Wanted(answer);
+        // Always, even when it is empty: the bars are drawn from what is NOT being fetched as
+        // much as from what is, so a selection already on disk shows full rather than "0 of 2".
+        window.NoteFetching(wanted);
+        if (wanted.Count == 0)
+        {
+            // Everything chosen is already here - a reinstall, or somebody who took the same
+            // capabilities from `--models install` first. The startup gate has already planned
+            // whatever they owe the index, so there is nothing to fetch and nothing to queue.
+            Log.Info("models", "everything chosen is already on disk; nothing was fetched");
+            window.NoteFinished("");
+            return;
+        }
+
+        _ = FetchFirstRunAsync(window, wanted);
+    }
+
+    /// <summary>
+    /// Register the scheduled task and START it, in this session.
+    ///
+    /// <para>The second half is the one nothing in the tree had. <c>Start</c>'s <c>names helper</c>
+    /// stage already ran <c>EnsureRunning</c>, before this screen was answered, against a task that
+    /// did not exist - so without this the task is created and the helper does not run until the
+    /// next logon. Name search, the part that is always on and the thing that makes "Not now" a
+    /// safe answer, would be dead for the whole of somebody's first session with Findra.</para>
+    ///
+    /// <para>Off the interface thread, because <c>HelperTask.Register</c> raises the UAC prompt
+    /// itself (<c>UseShellExecute</c> with <c>runas</c>) and then waits for it. A refused prompt
+    /// throws <c>Win32Exception 1223</c> into Register's own catch and returns false - a decision,
+    /// not a fault, so it is logged and the recovery is left to Settings.</para>
+    /// </summary>
+    private static void RegisterAndStartHelper(string exe) => _ = Task.Run(() =>
+    {
+        bool registered = !FirstRun.NeedsHelperRegistration(HelperTask.Query().State)
+                          || HelperTask.Register(exe);
+
+        if (registered && HelperTask.EnsureRunning())
+            Log.Info("startup", "the names helper is answering");
+        else
+            Log.Warn("startup", "the names helper is not answering; " +
+                                "Settings > Opening it can register it again");
+    });
+
+    /// <summary>
+    /// The first-run download, from the interface, with its progress on the screen that asked for
+    /// it.
+    ///
+    /// <para>Awaited inside a task whose exceptions are CAUGHT here rather than left on an
+    /// unobserved <c>Task</c>. That is the whole of the third defect this task exists to fix: a
+    /// dropped network raises an <c>HttpRequestException</c> that Plan 5's downloader does not
+    /// catch, and on screen an unobserved throw is a progress bar that simply stops.</para>
+    /// </summary>
+    private async Task FetchFirstRunAsync(FirstRunWindow window, IReadOnlyList<Model> wanted)
+    {
+        string dir = ModelStore.Dir;
+        Log.Info("models", $"first run: fetching {wanted.Count.ToString(CultureInfo.InvariantCulture)} file(s), " +
+                           $"{Sizes.Human(ModelStore.TotalBytes(wanted))}, into {dir}");
+        string problem = "";
+        try
+        {
+            using var http = new HttpClient(new SocketsHttpHandler { UseCookies = false })
+            {
+                Timeout = Timeout.InfiniteTimeSpan,   // a 1.5 GB file over a slow line is not a hung request
+            };
+
+            IReadOnlyList<DownloadOutcome> outcomes = await FirstRunDownloads.RunAsync(
+                wanted, dir, ModelDownloader.Http(http),
+                p => Dispatcher.UIThread.Post(() => window.NoteProgress(p)),
+                RequeueWhatArrivedAsync, _shutdown.Token).ConfigureAwait(false);
+
+            foreach (DownloadOutcome o in outcomes)
+                if (!o.Complete)
+                {
+                    Log.Warn("models", $"{o.Model.File} did not finish - {o.Problem}; what arrived is kept");
+                    // The FIRST failure is the one shown. A screen carrying seven of them has no
+                    // room for anything else, and they are all the same fault seen seven times.
+                    if (problem.Length == 0) problem = o.Problem ?? "the download did not finish";
+                }
+        }
+        catch (OperationCanceledException)
+        {
+            // Findra quitting, not a fault: the .part files stay and the next run resumes.
+            Log.Info("models", "the download stopped when Findra quit; what arrived is kept");
+            return;
+        }
+        catch (Exception ex)
+        {
+            Log.Error("models", "the first-run download could not run", ex);
+            problem = ex.Message;
+        }
+
+        Dispatcher.UIThread.Post(() => window.NoteFinished(problem));
+    }
+
+    /// <summary>
+    /// Re-queue what a newly-arrived capability can now read, ON THE FLOW THAT OWNS THE WRITER.
+    ///
+    /// <para>This is the obligation Plan 5 left open, and it is why
+    /// <c>FirstRunDownloads.RunAsync</c> takes a callback and no <c>ContentDb</c> at all.
+    /// <c>ContentDb.Claim</c> is a thread-id detector rather than a lock, so the second flow to
+    /// reach the writer connection gets an <c>InvalidOperationException</c> - and a download
+    /// continuation calling <c>CapabilityGate.Apply</c> directly would be that second flow,
+    /// throwing inside a handler nobody is watching. <see cref="OnContentLoopAsync"/> hands the
+    /// work to the loop that holds the connection and waits for its answer.</para>
+    /// </summary>
+    private async Task RequeueWhatArrivedAsync()
+    {
+        CapabilitySet installed = CapabilitySet.Installed(ModelStore.Dir);
+        _installed = installed;
+
+        int requeued = await OnContentLoopAsync(db =>
+            CapabilityGate.Apply(db, CapabilityGate.Plan(installed, CapabilityGate.StampsIn(db))))
+            .ConfigureAwait(false);
+
+        Log.Info("models", requeued > 0
+            ? $"{requeued.ToString("N0", CultureInfo.InvariantCulture)} file(s) were queued for what Findra can now read"
+            : "nothing new to queue - the files these models cover have already been read");
+
+        CapabilitySet shown = installed;
+        Dispatcher.UIThread.Post(() => SettingsWindow.Open?.UseInstalled(shown));
     }
 
     // ---- the content index ------------------------------------------------------------------------
@@ -500,6 +734,11 @@ internal sealed class Shell : ISettingsHost
             // interface thread and cannot block there waiting for a walk to unwind, and a store
             // disposed under a write in flight is worse than one the process exit closes for us.
             // Every write here is a committed transaction, so nothing is lost either way.
+            // Before the stores are disposed, and it is a cancel rather than a result: whoever
+            // posted this is a download continuation, and telling it the re-queue ran when the
+            // connection is about to close would be a lie it writes into the log.
+            while (_contentWork.TryDequeue(out PostedWork? posted)) posted.Done.TrySetCanceled();
+
             try { _indexer?.Dispose(); } catch { }
             try { feeder.Dispose(); } catch { }
             try { _cardStore?.Dispose(); } catch { }
@@ -712,6 +951,11 @@ internal sealed class Shell : ISettingsHost
     /// keep its two control rows matching the settings.</summary>
     private void PumpIndexer(ContentDb db)
     {
+        // First, and before the early return below: whoever posted work is waiting on it, and a
+        // process with no indexer child yet still has a writer connection they can only reach
+        // through here.
+        DrainContentWork(db);
+
         IndexerHost? host = _indexer;
         if (host is null) return;
 
@@ -1252,12 +1496,17 @@ internal sealed class Shell : ISettingsHost
     /// <summary>
     /// Fetch what a capability needs, and tell the window when it is there.
     ///
-    /// <para>What this does NOT do is re-queue the files the new capability covers. That gate has
-    /// to run on the flow that owns the writer connection - <c>ContentDb.Claim</c> is a thread-id
-    /// detector, so a second flow reaching the writer gets an exception rather than a wait - and
-    /// this runs on the pool while the content loop holds it. The shell runs the same gate at
-    /// every start, so the backlog is planned in full the next time Findra opens, and the log says
-    /// so rather than leaving somebody waiting for results that are not coming yet.</para>
+    /// <para>The same controller the first-run screen uses, deliberately. Task 7 shipped this
+    /// against <c>ModelDownloader.GetAllAsync</c> because <c>FirstRunDownloads</c> did not exist
+    /// yet, and the two behaved differently in the two ways that matter: a fetch that threw
+    /// escaped as an unobserved exception rather than becoming an outcome, and nothing re-queued
+    /// the files the new capability covers until the next launch - which reads, to the person who
+    /// just waited for 630 MB, as a download that did not work. One path now, and one policy.
+    /// </para>
+    ///
+    /// <para>The re-queue still cannot happen here: <c>ContentDb.Claim</c> is a thread-id detector
+    /// and this runs on the pool while the content loop holds the writer.
+    /// <see cref="RequeueWhatArrivedAsync"/> is what posts it onto the loop that owns it.</para>
     /// </summary>
     private async Task InstallAsync(Capability c)
     {
@@ -1278,21 +1527,19 @@ internal sealed class Shell : ISettingsHost
             {
                 Timeout = Timeout.InfiniteTimeSpan,   // a 1.5 GB file over a slow line is not a hung request
             };
-            IReadOnlyList<DownloadOutcome> outcomes = await ModelDownloader
-                .GetAllAsync(need, dir, ModelDownloader.Http(http), NoteDownloadProgress, _shutdown.Token)
-                .ConfigureAwait(false);
+            IReadOnlyList<DownloadOutcome> outcomes = await FirstRunDownloads.RunAsync(
+                need, dir, ModelDownloader.Http(http), NoteDownloadProgress,
+                RequeueWhatArrivedAsync, _shutdown.Token).ConfigureAwait(false);
 
             foreach (DownloadOutcome o in outcomes)
                 if (!o.Complete)
-                {
                     // What arrived is kept in the .part file, so pressing the row again resumes.
                     Log.Warn("models", $"{o.Model.File} did not finish - {o.Problem}; what arrived is kept");
-                    return;
-                }
 
             _installed = CapabilitySet.Installed(dir);
-            Log.Info("models", $"{Capabilities.Title(c)} is installed. Its files are read the next time " +
-                               "Findra starts - the queue survives, so nothing is lost by waiting.");
+            Log.Info("models", _installed.Has(c)
+                ? $"{Capabilities.Title(c)} is installed"
+                : $"{Capabilities.Title(c)} is not complete yet; what arrived is kept and the row resumes it");
         }
         catch (OperationCanceledException) { Log.Info("models", "the download stopped when Findra quit; what arrived is kept"); }
         catch (Exception ex) { Log.Error("models", $"{Capabilities.Title(c)} could not be fetched", ex); }

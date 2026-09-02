@@ -1,4 +1,4 @@
-using System.Linq;
+﻿using System.Linq;
 
 using Findra.Startup;   // HelperTaskState, for the settings shot
 using SkiaSharp;
@@ -23,6 +23,7 @@ public static class SearchShot
     [
         "capsule", "empty", "typing", "results", "noresults", "many", "adv", "opening", "openingempty",
         "settings", "settingsopening", "settingssearches", "settingscontent", "settingsabout",
+        "firstrun", "firstrundownloading",
     ];
 
     public static int Render(string outPath, string state, string? paletteName = null)
@@ -67,6 +68,7 @@ public static class SearchShot
         using SKBitmap content =
             state == "capsule" ? RenderCapsule(d, face)
             : state.StartsWith("settings", StringComparison.Ordinal) ? RenderSettings(state, d, face)
+            : state.StartsWith("firstrun", StringComparison.Ordinal) ? RenderFirstRun(state, d, face)
             : RenderCard(state, d, face);
 
         int w = content.Width, h = content.Height;
@@ -161,6 +163,50 @@ public static class SearchShot
         var info = new SKImageInfo(w, h, SKColorType.Bgra8888, SKAlphaType.Premul);
         using SKSurface surface = SKSurface.Create(info);
         SettingsPainter.Paint(surface.Canvas, s, d, face);
+        surface.Canvas.Flush();
+        var bmp = new SKBitmap(info);
+        surface.ReadPixels(info, bmp.GetPixels(), info.RowBytes, 0, 0);
+        return bmp;
+    }
+
+    /// <summary>
+    /// Spec §6's first screen, in both of its acts.
+    ///
+    /// <para>Built on the REAL numbers - every size is <c>Capabilities.MarginalBytes</c> through
+    /// <c>FirstRun.Rows</c>, so a shot of this screen cannot quote a figure the product would not.
+    /// The downloading state carries one capability finished, one part-way AND a problem, because
+    /// those are the three things the second act can be showing and none of them has a unit test
+    /// that looks at pixels.</para>
+    /// </summary>
+    private static SKBitmap RenderFirstRun(string state, Derived d, SKTypeface face)
+    {
+        bool busy = state == "firstrundownloading";
+        var s = new FirstRunState
+        {
+            Chosen = Capabilities.Close([Capability.Photos, Capability.Meaning]),
+            HebrewOffered = true,
+            ContentOn = true,
+            CheckUpdates = true,
+            StartAtLogon = true,
+            Stage = busy ? FirstRunStage.Downloading : FirstRunStage.Choosing,
+            Downloads = busy
+                ?
+                [
+                    new CapabilityProgress(Capability.Photos, 659_000_000, 659_000_000),
+                    new CapabilityProgress(Capability.Meaning, 96_000_000, 283_000_000),
+                ]
+                : [],
+            Problem = busy ? "the connection dropped" : "",
+            // Hovered, because a resting surface never shows what RowHover looks like beside Row -
+            // the defect that let hover sit within 1.4 L* of a resting row on two palettes.
+            HoverTarget = busy ? FirstRunTarget.NotNow : FirstRunTarget.Row,
+            HoverIndex = busy ? -1 : 3,
+        };
+
+        int w = (int)Math.Ceiling(FirstRunLayout.Width), h = (int)Math.Ceiling(FirstRunLayout.Height);
+        var info = new SKImageInfo(w, h, SKColorType.Bgra8888, SKAlphaType.Premul);
+        using SKSurface surface = SKSurface.Create(info);
+        FirstRunPainter.Paint(surface.Canvas, s, d, face);
         surface.Canvas.Flush();
         var bmp = new SKBitmap(info);
         surface.ReadPixels(info, bmp.GetPixels(), info.RowBytes, 0, 0);
