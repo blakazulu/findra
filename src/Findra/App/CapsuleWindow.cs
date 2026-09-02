@@ -218,7 +218,7 @@ public sealed class CapsuleWindow : Window
         {
             if (e.Command.Length == 0) { menu.Items.Add(new Separator()); continue; }
 
-            var item = new MenuItem { Header = e.Header, IsEnabled = e.Enabled };
+            var item = new MenuItem { Header = e.Header };
             if (e.Checked) { item.ToggleType = MenuItemToggleType.CheckBox; item.IsChecked = true; }
             string command = e.Command;   // captured per item, never the loop variable's last value
             item.Click += (_, _) => MenuCommand?.Invoke(command);
