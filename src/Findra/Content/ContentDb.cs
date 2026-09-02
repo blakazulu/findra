@@ -132,12 +132,37 @@ CREATE TABLE IF NOT EXISTS opened(path TEXT PRIMARY KEY, count INTEGER NOT NULL,
     /// <summary>Read the recorded schema version, run whatever steps stand between it and this
     /// build, and stamp the result. A step re-queues only the kinds it invalidated; everything
     /// else on disk is left exactly as it was found.</summary>
+    /// <summary>
+    /// The schema version this open found on disk and migrated FROM.
+    ///
+    /// <para><see cref="SchemaVersion"/> for a database already current AND for a brand-new one:
+    /// an unstamped database with nothing in it has never been written by an older build, so
+    /// there is nothing to migrate it from. Reading it as version zero would run every step over
+    /// an empty index on every fresh install - free while a step is only a re-queue, and not free
+    /// at all if one is ever DDL.</para>
+    ///
+    /// <para>It is recorded because that decision is otherwise invisible. Both branches stamp
+    /// <see cref="SchemaVersion"/> on the way out and a fresh database has no rows for a re-queue
+    /// to move, so "treated as current" and "treated as version zero" leave identical evidence -
+    /// which is exactly why the test that was supposed to stop the second could not fail.</para>
+    /// </summary>
+    public int OpenedFromSchema { get; private set; } = SchemaVersion;
+
+    /// <summary>The reasons of the migration steps this open actually ran, in order. Empty for a
+    /// database already at the current schema and for a brand-new one. It is the readable form of
+    /// the log lines below, and the only way "no step ran" can be asserted rather than assumed.
+    /// </summary>
+    public IReadOnlyList<string> MigrationsRun => _migrationsRun;
+
+    private readonly List<string> _migrationsRun = [];
+
     private void OpenSchema(IReadOnlyList<Migration> steps)
     {
         string? stamped = Get("schema");
         int from;
         if (int.TryParse(stamped, NumberStyles.Integer, CultureInfo.InvariantCulture, out int v)) from = v;
         else from = HasAnyItem() ? 0 : SchemaVersion;   // never stamped + never written = brand new
+        OpenedFromSchema = from;
 
         if (from == SchemaVersion) { Set("schema", Stamp(SchemaVersion)); return; }
         if (from > SchemaVersion)
@@ -150,6 +175,7 @@ CREATE TABLE IF NOT EXISTS opened(path TEXT PRIMARY KEY, count INTEGER NOT NULL,
         foreach (Migration m in steps)
         {
             if (m.To <= from || m.To > SchemaVersion) continue;
+            _migrationsRun.Add(m.Reason);
             int n = RequeueKinds(m.InvalidatedKinds, m.Reason);
             Log.Info("index", $"schema {from} -> {m.To}: {m.Reason}, {n.ToString("N0", CultureInfo.InvariantCulture)} file(s) re-queued");
         }

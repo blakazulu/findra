@@ -1,3 +1,4 @@
+using Microsoft.Data.Sqlite;
 using Findra;
 using Xunit;
 
@@ -56,9 +57,58 @@ public sealed class SchemaTests : IDisposable
     [Fact]
     public void ABrandNewDatabaseIsStampedCurrentRatherThanTreatedAsVersionZero()
     {
-        using var db = new ContentDb(Db());
+        // The stamp alone could never fail for the case this name states. BOTH branches of
+        // OpenSchema stamp SchemaVersion on the way out, so "treated as current" and "treated as
+        // version zero, migrated, then stamped" are indistinguishable to it - and a fresh database
+        // has no items, so a step that re-queues kinds moves no count either. The fact that
+        // separates them is whether a step RAN, and that is what is asserted here.
+        //
+        // Harmless while Migrations is empty. From the first real step it means a brand-new
+        // install runs every migration over an empty database - free if every step is a requeue,
+        // and not free at all if any step is DDL.
+        var everything = new[]
+        {
+            new ContentDb.Migration(1, [(int)ResultKind.Document], "documents re-extracted"),
+        };
+
+        using var db = new ContentDb(Db(), migrations: everything);
 
         Assert.Equal(ContentDb.SchemaVersion.ToString(), db.Get("schema"));
+        Assert.Equal(ContentDb.SchemaVersion, db.OpenedFromSchema);
+        Assert.Empty(db.MigrationsRun);
+    }
+
+    [Fact]
+    public void AnUnstampedDatabaseThatAlreadyHoldsFilesIsTheOneTreatedAsVersionZero()
+    {
+        // The other side of the same decision, so "never migrate anything" cannot pass the test
+        // above. An index written before the stamp existed has real rows in it, and those rows
+        // were written by a build whose schema this one has to migrate from.
+        string path = Db();
+        using (var db = new ContentDb(path))
+        {
+            using var tx = db.Begin();
+            db.Upsert("C", 100, @"C:\a\lease.pdf", ResultKind.Document, 7, 10, ContentDb.StateIndexed, null, [], tx);
+            tx.Commit();
+        }
+
+        // Unstamped, from the side, because there is no API for un-stamping and there should not
+        // be. This is what an index written before the stamp existed looks like on disk.
+        using (var side = new SqliteConnection(new SqliteConnectionStringBuilder { DataSource = path, Pooling = false }.ToString()))
+        {
+            side.Open();
+            using SqliteCommand cmd = side.CreateCommand();
+            cmd.CommandText = "DELETE FROM meta WHERE key='schema'";
+            cmd.ExecuteNonQuery();
+        }
+
+        var step = new[] { new ContentDb.Migration(1, [(int)ResultKind.Document], "documents re-extracted") };
+        using (var db = new ContentDb(path, migrations: step))
+        {
+            Assert.Equal(0, db.OpenedFromSchema);
+            Assert.Equal(["documents re-extracted"], db.MigrationsRun);
+            Assert.Equal(1, db.PendingCount());
+        }
     }
 
     [Fact]
