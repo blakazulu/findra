@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <OutputType>Exe</OutputType>
-    <TargetFramework>net10.0-windows</TargetFramework>
+    <TargetFramework>net10.0-windows10.0.19041.0</TargetFramework>
     <RootNamespace>Findra</RootNamespace>
     <AssemblyName>findra</AssemblyName>
     <Version>0.1.0</Version>
@@ -37,5 +37,23 @@
          process means two native libSkiaSharp binaries. Pinned here ahead of Avalonia
          landing so the palette's colour type never has to move once the UI arrives. -->
     <PackageReference Include="SkiaSharp" Version="3.119.4" />
+    <!-- ONNX Runtime with the DirectML provider: DirectX 12, so one package covers NVIDIA, AMD
+         and Intel, discrete or integrated, and the same package carries the CPU provider that
+         every machine falls back to. Its native assets are per-RID and are resolved by the
+         publish command; nothing here names an architecture. -->
+    <PackageReference Include="Microsoft.ML.OnnxRuntime.DirectML" Version="1.24.4" />
+    <PackageReference Include="Microsoft.ML.Tokenizers" Version="2.0.0" />
+    <!-- Whisper, with the Vulkan runtime beside the CPU one for the same reason DirectML is
+         used rather than CUDA: Vulkan is the portable path across all three vendors. -->
+    <PackageReference Include="Whisper.net" Version="1.9.1" />
+    <PackageReference Include="Whisper.net.Runtime" Version="1.9.1" />
+    <PackageReference Include="Whisper.net.Runtime.Vulkan" Version="1.9.1" />
+    <!-- Media Foundation, through NAudio, is how a sound track becomes 16 kHz mono samples.
+         It decodes with the codecs Windows already has; nothing links a media framework. -->
+    <PackageReference Include="NAudio.Core" Version="3.0.0" />
+    <PackageReference Include="NAudio.Wasapi" Version="3.0.0" />
+    <!-- TensorPrimitives: the dot product the vector search is made of, vectorised by the
+         runtime for whatever instruction set it finds. No intrinsics are written by hand. -->
+    <PackageReference Include="System.Numerics.Tensors" Version="10.0.11" />
   </ItemGroup>
 </Project>

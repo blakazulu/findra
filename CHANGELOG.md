@@ -51,6 +51,9 @@ into a numbered section on the first release.
   video together. It defaults to short clips of about five minutes, offers longer presets
   and no limit at all, and accepts a number of minutes typed in. A recording over the limit
   is skipped rather than failed, so raising the limit later picks up exactly those files.
+- **Findra now needs Windows 10 version 2004 (build 19041) or newer.** Reading words out of
+  pictures, transcribing speech and pulling frames out of video all use decoders Windows only
+  publishes from that build onwards, so the whole application is built against it.
 
 ### Added
 
