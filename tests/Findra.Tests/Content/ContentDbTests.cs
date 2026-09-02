@@ -43,10 +43,10 @@ public sealed class ContentDbTests : IDisposable
         using ContentDb db = Open();
         db.Enqueue("C", 1, @"C:\a.pdf", ResultKind.Document, "new");
         db.Enqueue("C", 2, @"C:\b.pdf", ResultKind.Document, "new");
-        db.Enqueue("C", 3, "", ResultKind.File, "delete");
+        db.Enqueue("C", 3, "", ResultKind.File, ContentDb.ReasonDelete);
 
         ContentDb.Pending first = db.TakeNext()!.Value;
-        Assert.Equal("delete", first.Reason);
+        Assert.Equal(ContentDb.ReasonDelete, first.Reason);
         db.Dequeue(first.Id);
 
         Assert.Equal(@"C:\a.pdf", db.TakeNext()!.Value.Path);

@@ -24,6 +24,12 @@ public sealed class ContentDb : IDisposable
     public const int SegImage = 0, SegText = 1, SegSpeech = 2, SegFrame = 3;
     public const int StateQueued = 0, StateIndexed = 1, StateFailed = 2, StateSkipped = 3;
 
+    /// <summary>The queue reason that means "this file is gone, take it out of the index". It
+    /// crosses from the interface into the indexer and into <see cref="TakeNext"/>'s ordering, so
+    /// it is one constant rather than a literal per reader: a typo in any copy is silent, and
+    /// deletes quietly stop being deletes.</summary>
+    public const string ReasonDelete = "delete";
+
     /// <summary>The relational shape of this database. Bumped only when a change makes rows
     /// already on disk mean something different.</summary>
     public const int SchemaVersion = 1;
@@ -501,6 +507,21 @@ CREATE TABLE IF NOT EXISTS opened(path TEXT PRIMARY KEY, count INTEGER NOT NULL,
         return r.GetInt64(0) == mtime && state is StateIndexed or StateFailed or StateSkipped;
     }
 
+    /// <summary>The state recorded against this file, or <see cref="StateQueued"/> if the index
+    /// has never seen it. A Skipped row is "finished" to the queue feeder - which must not queue
+    /// it again on every pass - and "never opened" to the indexer, which has to run the decoder
+    /// the moment one exists. This is what lets the two disagree without either being wrong, and
+    /// it is why <see cref="IsCurrent"/> above keeps counting Skipped as finished.</summary>
+    public int StateOf(string vol, ulong frn)
+    {
+        using var cmd = _c.CreateCommand();
+        cmd.CommandText = "SELECT state FROM items WHERE vol=$v AND frn=$f";
+        cmd.Parameters.AddWithValue("$v", vol);
+        cmd.Parameters.AddWithValue("$f", unchecked((long)frn));
+        using var r = cmd.ExecuteReader();
+        return r.Read() ? r.GetInt32(0) : StateQueued;
+    }
+
     /// <summary>Every (vol, frn, mtime) the item table knows, for the first pass to diff against.</summary>
     public Dictionary<(string, ulong), long> KnownItems()
     {
@@ -516,7 +537,8 @@ CREATE TABLE IF NOT EXISTS opened(path TEXT PRIMARY KEY, count INTEGER NOT NULL,
     {
         using var cmd = _c.CreateCommand();
         // deletes first (they free vectors), then oldest first
-        cmd.CommandText = "SELECT id, vol, frn, path, kind, reason FROM pending ORDER BY (reason='delete') DESC, id LIMIT 1";
+        cmd.CommandText = "SELECT id, vol, frn, path, kind, reason FROM pending ORDER BY (reason=$d) DESC, id LIMIT 1";
+        cmd.Parameters.AddWithValue("$d", ReasonDelete);
         using var r = cmd.ExecuteReader();
         if (!r.Read()) return null;
         return new Pending(r.GetInt64(0), r.GetString(1), unchecked((ulong)r.GetInt64(2)), r.GetString(3), (ResultKind)r.GetInt32(4), r.GetString(5));

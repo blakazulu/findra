@@ -1,9 +1,15 @@
+using System.Diagnostics;
 using Findra;
+using Microsoft.Data.Sqlite;
 using Xunit;
+using Xunit.Abstractions;
 
 public sealed class IndexerTests : IDisposable
 {
     private readonly string _dir = Path.Combine(Path.GetTempPath(), "findra-ix-" + Guid.NewGuid().ToString("N"));
+    private readonly ITestOutputHelper _out;
+
+    public IndexerTests(ITestOutputHelper output) => _out = output;
 
     private string Under(string name)
     {
@@ -152,5 +158,179 @@ public sealed class IndexerTests : IDisposable
         Assert.NotEmpty(db.Fts("zygomorphic", 10));   // first chunk
         Assert.NotEmpty(db.Fts("brachiate", 10));     // somewhere in the middle
         Assert.NotEmpty(db.Fts("quincunx", 10));      // the very last chunk
+    }
+
+    [Fact]
+    public void ARequeuedSkippedFileIsOpenedAgainWhateverReasonTheRequeueGave()
+    {
+        // The promise every later capability rests on: it arrives, and exactly the rows that
+        // were skipped for want of it are picked up. RequeueKinds takes a free-form reason, so
+        // the indexer must not decide from that string alone whether a file is already
+        // finished - a Skipped row has never been opened, whatever mtime is recorded beside it.
+        // When this fails the counts do not move and nothing is logged, so nothing else notices.
+        string photo = Under("sunset.jpg");
+        File.WriteAllBytes(photo, new byte[64]);
+
+        using ContentDb db = Open();
+        db.Enqueue("C", 1, photo, ResultKind.Photo, "probe");
+
+        var pass1 = new List<string>();
+        Indexer.DrainOnce(db, pass1.Add);
+        foreach (string l in pass1) _out.WriteLine("pass1: " + l);
+        Assert.Equal(1, db.Counts().Skipped);
+
+        int requeued = db.RequeueKinds([(int)ResultKind.Photo], "photos enabled");
+        _out.WriteLine($"requeued: {requeued}, pending now {db.PendingCount()}");
+        Assert.Equal(1, requeued);
+
+        var pass2 = new List<string>();
+        Indexer.DrainOnce(db, pass2.Add);
+        foreach (string l in pass2) _out.WriteLine("pass2: " + l);
+
+        // "current" means the row was dequeued without the decoder ever being asked.
+        Assert.DoesNotContain(pass2, l => l.Contains("current", StringComparison.Ordinal));
+        Assert.Contains(pass2, l => l.Contains("skipped", StringComparison.Ordinal));
+        Assert.Equal(0, db.PendingCount());
+    }
+
+    [Fact]
+    public void AnIndexedFileWhoseBytesDidNotChangeIsStillDequeuedUntouched()
+    {
+        // The other half of that guard. Re-queueing a file that really was indexed, and has not
+        // changed since, must still cost nothing - only Recheck reopens one of those. Losing
+        // this is how "a capability arrived" turns into re-indexing a finished disk.
+        string doc = Under("lease.txt");
+        File.WriteAllText(doc, "the quarterly lease agreement, signed and countersigned");
+
+        using ContentDb db = Open();
+        db.Enqueue("C", 1, doc, ResultKind.Document, "probe");
+        Indexer.DrainOnce(db, _ => { });
+        Assert.Equal(1, db.IndexedCount());
+
+        db.Enqueue("C", 1, doc, ResultKind.Document, "documents enabled");
+        var lines = new List<string>();
+        Indexer.DrainOnce(db, lines.Add);
+        Assert.Contains(lines, l => l.Contains("current", StringComparison.Ordinal));
+
+        db.Enqueue("C", 1, doc, ResultKind.Document, Indexer.Recheck);
+        lines.Clear();
+        Indexer.DrainOnce(db, lines.Add);
+        Assert.Contains(lines, l => l.Contains("indexed", StringComparison.Ordinal));
+    }
+
+    [Theory]
+    [InlineData("doc")]
+    [InlineData("xls")]
+    [InlineData("ppt")]
+    [InlineData("rtf")]
+    [InlineData("odt")]
+    [InlineData("odp")]
+    [InlineData("ods")]
+    public void AFormatWithNoReaderIsSkippedRatherThanReadAsRawBytes(string ext)
+    {
+        // These are documents by classification and unreadable by this build: the legacy binary
+        // Office formats and the OpenDocument zips. Reading their bytes as text indexes
+        // structure words and mojibake and then records the file as indexed, which is worse
+        // than a gap - a gap is visible in --searchindex and a later reader can re-queue
+        // exactly these rows.
+        string f = Under("contract." + ext);
+        File.WriteAllText(f, "the quarterly lease agreement was signed on the fourteenth of March");
+
+        using ContentDb db = Open();
+        db.Enqueue("C", 1, f, ResultKind.Document, "probe");
+        Indexer.DrainOnce(db, _ => { });
+
+        Assert.Equal((0L, 0L, 0L, 1L), db.Counts());
+        Assert.Contains(db.Describe(f), r => r.Contains("no decoder for this format yet", StringComparison.Ordinal));
+        Assert.Empty(db.Fts("lease", 10));
+    }
+
+    [Fact]
+    public void TheWordsInsideAnOpenDocumentZipAreNotFoundByReadingItsBytes()
+    {
+        // Why the format gate is not merely tidy: an .odt read as text indexes the zip's
+        // structure and never its words, because they are deflate-compressed. Recorded as
+        // indexed it becomes a file the index claims to hold and no search can ever return.
+        string odt = Under("contract.odt");
+        using (FileStream fs = File.Create(odt))
+        using (var zip = new System.IO.Compression.ZipArchive(fs, System.IO.Compression.ZipArchiveMode.Create))
+        using (var w = new StreamWriter(zip.CreateEntry("content.xml").Open()))
+            w.Write("<office><text>"
+                    + string.Concat(Enumerable.Repeat("the quarterly lease agreement was signed. ", 400))
+                    + "</text></office>");
+
+        using ContentDb db = Open();
+        db.Enqueue("C", 1, odt, ResultKind.Document, "probe");
+        Indexer.DrainOnce(db, _ => { });
+
+        Assert.Equal(0, db.IndexedCount());
+        Assert.Equal(1, db.Counts().Skipped);
+        Assert.Empty(db.Fts("lease", 10));
+    }
+
+    [Fact]
+    public void CanExtractKnowsWhichFormatsThisBuildCanReadInside()
+    {
+        foreach (string ext in new[] { "pdf", "docx", "pptx", "xlsx", "epub", "html", "htm", "txt", "md", "csv" })
+            Assert.True(DocText.CanExtract("b." + ext), ext + " has a reader in this build");
+        foreach (string ext in new[] { "doc", "xls", "ppt", "rtf", "odt", "odp", "ods" })
+        {
+            Assert.False(DocText.CanExtract("b." + ext), ext + " has no reader in this build");
+            Assert.False(DocText.CanExtract("B." + ext.ToUpperInvariant()), ext + " must match whatever the case");
+        }
+    }
+
+    [Fact]
+    public void TheWorkingLoopStopsAtARowItCannotAdvancePast()
+    {
+        // A row whose failure-recording write ALSO throws is never dequeued, so the next
+        // TakeNext hands back the same one. Without a guard the child spins on it at the 30 ms
+        // working rest - about thirty passes a second, indefinitely, in the process that ships,
+        // with Log.Once suppressing every line after the first. Reproduced the only way it
+        // happens for real: the writes that record an outcome fail.
+        string doc = Under("stuck.txt");
+        File.WriteAllText(doc, "the quarterly lease agreement, signed and countersigned");
+
+        using ContentDb db = Open();
+        db.Enqueue("C", 1, doc, ResultKind.Document, "probe");
+        using (var side = new SqliteConnection(new SqliteConnectionStringBuilder { DataSource = db.Path, Pooling = false }.ToString()))
+        {
+            side.Open();
+            using SqliteCommand cmd = side.CreateCommand();
+            cmd.CommandText = "DROP TABLE items";      // every write about a file now throws
+            cmd.ExecuteNonQuery();
+        }
+
+        int passes = 0;
+        var sw = Stopwatch.StartNew();
+        Indexer.Loop(db, parentPid: 0, running: () => passes++ < 2);
+        sw.Stop();
+        _out.WriteLine($"two passes took {sw.ElapsedMilliseconds.ToString(System.Globalization.CultureInfo.InvariantCulture)} ms");
+
+        Assert.Equal("stuck", db.Get("indexer:state"));
+        Assert.Equal("1", db.Get("indexer:failed"));    // handled once, not once per pass
+        Assert.Equal(1, db.PendingCount());             // and left where a later run can retry it
+    }
+
+    [Fact]
+    public void TheDeleteReasonTheInterfaceWritesIsTheOneTheIndexerAndTheQueueRead()
+    {
+        // One string crosses from the interface into the indexer and into TakeNext's ORDER BY.
+        // A typo in any copy stops deletes jumping the queue and stops them being handled as
+        // deletes at all - the row would be read as a file to index instead.
+        string doc = Under("kept.txt");
+        File.WriteAllText(doc, "the quarterly lease agreement, signed and countersigned");
+
+        using ContentDb db = Open();
+        db.Enqueue("C", 1, doc, ResultKind.Document, "probe");
+        db.Enqueue("C", 2, Under("removed.txt"), ResultKind.Document, ContentDb.ReasonDelete);
+
+        ContentDb.Pending? first = db.TakeNext();
+        Assert.NotNull(first);
+        Assert.Equal(ContentDb.ReasonDelete, first.Value.Reason);   // deletes are taken first
+
+        var lines = new List<string>();
+        Indexer.DrainOnce(db, lines.Add);
+        Assert.Contains(lines, l => l.StartsWith("removed", StringComparison.Ordinal));
     }
 }

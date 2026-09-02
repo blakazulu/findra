@@ -20,6 +20,21 @@ public static class DocText
 {
     public const int MaxChars = 400_000;   // ~100k tokens; past that a file is a corpus, not a document
 
+    /// <summary>Formats Findra classifies as documents and cannot yet read INSIDE: the legacy
+    /// binary Office files and the OpenDocument zips. An .odt's words are deflate-compressed, so
+    /// reading its bytes as text finds zip structure and never the document; a .doc yields
+    /// mojibake. Either way the file would be recorded as indexed and never found, which is worse
+    /// than a gap - a gap is visible and a later reader can re-queue exactly those rows.</summary>
+    private static readonly HashSet<string> NoReader = new(StringComparer.OrdinalIgnoreCase)
+        { "doc", "xls", "ppt", "rtf", "odt", "odp", "ods" };
+
+    /// <summary>Can this build read the words inside that file, or would <see cref="Extract"/>
+    /// fall through to reading its bytes as text? RTF is on the no list deliberately: it is ASCII,
+    /// so a raw read does yield some real words - alongside \fonttbl, \pard and colour tables as
+    /// indexed tokens. A half-good index is harder to reason about than an honest gap, and
+    /// stripping RTF control words is writing a reader.</summary>
+    public static bool CanExtract(string path) => !NoReader.Contains(Path.GetExtension(path).TrimStart('.'));
+
     public static string Extract(string path)
     {
         string ext = Path.GetExtension(path).TrimStart('.').ToLowerInvariant();

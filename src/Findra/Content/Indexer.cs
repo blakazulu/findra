@@ -49,9 +49,15 @@ public sealed class Indexer
     /// the rows that carry it (spec §6, and <see cref="ContentDb.RequeueKinds"/>).</summary>
     private const string NoDecoder = "no decoder for this kind yet";
 
+    /// <summary>Recorded against a file whose FORMAT this build has no reader for, as distinct from
+    /// <see cref="NoDecoder"/>'s "no model for this kind". Reading those bytes as text would index
+    /// zip structure and mojibake and call the file indexed; skipped with a reason of its own, a
+    /// later plan that adds a real reader re-queues exactly these rows and nothing else.</summary>
+    private const string NoFormatDecoder = "no decoder for this format yet";
+
     /// <summary>The queue reason that means "the bytes did not change, what Findra can do with them
-    /// did". The freshness check below must not answer it, or a file re-queued because a capability
-    /// arrived is dequeued untouched and never looked at again.</summary>
+    /// did". It reopens a file the index already holds as indexed; a skipped file is reopened
+    /// whatever the reason says, because it was never opened in the first place.</summary>
     public const string Recheck = "recheck";
 
     private readonly ContentDb _db;
@@ -86,7 +92,7 @@ public sealed class Indexer
         try
         {
             using ContentDb db = ContentDb.OpenOrRebuild(dbPath);
-            new Indexer(db, parent).Loop();
+            Loop(db, parent, () => true);
             Log.Info("index", "indexer down (clean)");
             Log.Flush();
             return 0;
@@ -158,11 +164,19 @@ public sealed class Indexer
         catch (Exception ex) { Log.Once("index|status", "WARN", "index", $"indexer status write failed :: {ex.Message}"); }
     }
 
-    private void Loop()
+    /// <summary>The child's whole working life, driven by a caller that decides when it is over.
+    /// <paramref name="running"/> is asked once per pass, which is what lets something other than
+    /// the process entry point - a diagnostic, a test - put files through the loop the child
+    /// actually runs rather than through a copy of it.</summary>
+    public static void Loop(ContentDb db, int parentPid, Func<bool> running)
+        => new Indexer(db, parentPid).Loop(running);
+
+    private void Loop(Func<bool> running)
     {
         string lastState = "";
+        long stuck = -1;
         var lastStatus = Stopwatch.StartNew();
-        while (true)
+        while (running())
         {
             if (ParentGone()) { Status("stopped"); return; }
 
@@ -186,11 +200,29 @@ public sealed class Indexer
                 Thread.Sleep(2000);
                 continue;
             }
+            ContentDb.Pending item = next.Value;
+            if (item.Id == stuck)
+            {
+                // Handle failed even at recording its own failure, so the row was never dequeued
+                // and TakeNext keeps handing back the same one. At the 30 ms working rest that is
+                // thirty attempts a second for as long as the process lives, with Log.Once
+                // swallowing every line after the first. Rest as if idle instead: the row is left
+                // exactly where it was, a transient cause still clears on the next attempt, and a
+                // permanent one costs the machine one attempt every two seconds rather than the
+                // whole of a core.
+                Log.Once($"index|stuck|{item.Id.ToString(CultureInfo.InvariantCulture)}", "WARN", "index",
+                    $"the queue could not be advanced past {Path.GetFileName(item.Path)} - retrying it slowly");
+                lastState = "stuck";
+                Status("stuck", Path.GetFileName(item.Path));
+                stuck = -1;
+                Thread.Sleep(2000);
+                continue;
+            }
             if (lastState != "indexing") { Log.Info("index", "indexer working"); lastState = "indexing"; }
 
-            ContentDb.Pending item = next.Value;
             var busy = Stopwatch.StartNew();
             _ = Handle(item);
+            stuck = item.Id;
             busy.Stop();
             if (lastStatus.ElapsedMilliseconds > 1500) { Status("indexing", Path.GetFileName(item.Path)); lastStatus.Restart(); UpdateRate(); }
             // The power setting is a duty cycle: at 50% the indexer rests as long as it worked, at
@@ -221,7 +253,7 @@ public sealed class Indexer
         var sw = Stopwatch.StartNew();
         try
         {
-            if (item.Reason == "delete")
+            if (item.Reason == ContentDb.ReasonDelete)
             {
                 using var tx = _db.Begin();
                 // Delete hands back the vector rows its segments pointed at. Nothing in this build
@@ -245,7 +277,15 @@ public sealed class Indexer
                 return "gone";
             }
             long mtime = fi.LastWriteTimeUtc.Ticks;
-            if (item.Reason != Recheck && _db.IsCurrent(item.Vol, item.Frn, mtime))
+            // "Finished" here is not the freshness check on its own. A skipped file carries its
+            // real modification time, so the bytes ARE current - and it was never opened, because
+            // nothing could read it at the time. Re-queueing is how a capability picks those rows
+            // up, and it arrives carrying whatever reason the caller wrote; deciding from that
+            // string alone would dequeue every one of them untouched, move no counter and log
+            // nothing. Recheck stays for reopening a file that genuinely was indexed.
+            if (item.Reason != Recheck
+                && _db.StateOf(item.Vol, item.Frn) != ContentDb.StateSkipped
+                && _db.IsCurrent(item.Vol, item.Frn, mtime))
             {
                 using var tx = _db.Begin();
                 _db.Dequeue(item.Id, tx);
@@ -305,6 +345,7 @@ public sealed class Indexer
     private static (List<ContentDb.Segment>, string?) Document(string path, long bytes)
     {
         if (bytes > MaxDocBytes) return ([], "too large");
+        if (!DocText.CanExtract(path)) return ([], NoFormatDecoder);
         string text = DocText.Extract(path);
         if (text.Length < 40) return ([], "no text");
         var segs = new List<ContentDb.Segment>();
