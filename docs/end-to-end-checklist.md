@@ -89,6 +89,18 @@ as much a test of the download path as of the models.
     plan review rejected a draft over. Turn on a capability after the index is already
     built, and confirm from `--searchindex` that the files it covers are re-queued and
     actually re-read, and that nothing else is disturbed.
+23a. **The transcription limit is obeyed, and a long video is still read for its frames.**
+    With speech and photos both installed and the limit at its five-minute default, index a
+    recording well over the limit and a video well over it. The recording must be *skipped*
+    with "longer than the transcription limit" as its reason; the video must be *indexed* -
+    its frames were read - and carry the same string as a note about what was not heard.
+    No automated test on this plan can see either, because both need a real model and real
+    media: everything below the gate in `Decoders` - photo, audio, video, transcription and
+    the Meaning branch of a document - is unexercised at runtime until this step runs.
+23b. **A video on a speech-only machine is still opened.** Take speech without photos, then
+    index a video with talking in it and search a phrase from the sound track. This is the
+    one case a "which capability covers this kind" lookup silently drops, and the gate is
+    written as an OR precisely for it.
 
 ## The one that hid behind an unelevated agent
 
