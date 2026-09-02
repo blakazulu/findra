@@ -1,0 +1,67 @@
+# End-to-end checklist
+
+Everything here needs an elevated terminal, a screen, or a real disk, so no automated run
+in this project has ever executed it. It accumulates as plans land, and is worked through
+once on a real installed build.
+
+Before starting, tail the log in a spare window so every step's proof appears as it happens:
+
+    Get-Content $env:LOCALAPPDATA\Findra\logs\findra-$(Get-Date -f yyyyMMdd).log -Wait -Tail 20
+
+## From Plan 3, the widget
+
+1. **The elevated helper answers.** In an elevated terminal, `findra --names`. In a normal
+   one, `findra --searchprobe sunset`. The probe should print `pipe : ok`, a helper process
+   id different from its own, a name count, and a generation counter, instead of the
+   unreachable message it prints today.
+2. **The interface starts.** `findra`. Four log lines in order: the palette and mode, the
+   hotkey combination that registered, the capsule's position, the tray icon. A capsule is
+   visible on the desktop.
+3. **Real names.** Press the hotkey the log named, type a word you know is on the disk.
+   Rows appear within a keystroke or two, and the line under the field reads a name count
+   and the helper's process id, not "the name helper is not running". That line is the best
+   proof the pipe answered, because it comes from a different call than the search.
+4. **The ordering fix.** Press Ctrl+1, Ctrl+2 and Ctrl+3 quickly, ten times, then type
+   more. Rows re-sort every time and the searching indicator always comes back down.
+   Failure looks like stale rows with the indicator still spinning.
+5. **Capsule z-order.** Open a maximised window over where the capsule sits, then minimise
+   it. The capsule stays behind, and does not jump forward when clicked.
+6. **No focus theft.** Type in an editor, click the capsule once. The card opens and takes
+   the keyboard; when dismissed, the editor's caret is where you left it. Click the capsule
+   again while the card is open: it closes rather than reopening.
+7. **Drag and save.** Drag the capsule a few hundred pixels, release, quit, relaunch. The
+   new position is in the log and in `config.json`, written once per drag rather than per
+   pixel. Then drag a result row into an Explorer window and confirm the file copies.
+8. **The tray, and quitting.** The icon reads as a capsule at its real size. The tooltip
+   carries the version, the hotkey and the update state. Untick "Show capsule": it
+   disappears and the hotkey still works. Click "Check for updates": the menu item's own
+   text changes. Then Quit, and confirm the log's closing lines, that `ui.json` is gone,
+   and that no `findra` process survives except the elevated helper.
+
+## From Plan 4, content
+
+9. **A real volume enumerates.** With the helper running, watch the first pass on a real
+   disk. `findra --searchindex` should show a rising indexed count, a consumed journal
+   position per volume, and no failures beyond unreadable files.
+10. **The journal streams.** Create and delete a file on C:. The helper's journal line
+    should track that one change rather than the whole disk, and the file should appear in
+    the queue.
+11. **A restart does not re-walk.** Quit and relaunch. The second start must resume from
+    the recorded position rather than walking the disk again. This is the property the
+    specification says must never be got wrong.
+12. **An edited file is re-indexed.** Edit a document while Findra is closed, then start
+    it. The new contents must become searchable. This path only works because the full
+    pass compares modification times, and that has never run against a real disk.
+13. **The indexer child dies with its parent.** Kill the interface without a clean quit.
+    The `findra --index` child must disappear, killed by the job object rather than by its
+    own polling.
+14. **Content search returns real answers.** With documents indexed, press the Content
+    pill and search for a word inside a file rather than in its name. Check the excerpt
+    reads sensibly and points at the right part of the document.
+15. **Hebrew reads correctly.** Index a Hebrew document and search a word in it. The
+    excerpt must read in logical order rather than reversed.
+
+## Notes
+
+Steps 1 to 4 and 9 to 13 are the ones that have never executed in any form. Steps 5 to 8
+have been verified by log line and by inspection, but not by eye.
