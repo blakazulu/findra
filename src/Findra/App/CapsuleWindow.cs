@@ -128,6 +128,17 @@ public sealed class CapsuleWindow : Window
     /// shell writes it to the config; the window itself owns no settings.</summary>
     public event Action<PixelPoint>? Moved;
 
+    /// <summary>Raised with the <see cref="MenuEntry.Command"/> of whatever was chosen from the
+    /// right-click menu. The shell switches on it; this window knows what a menu looks like and
+    /// nothing about what any of it means.</summary>
+    public event Action<string>? MenuCommand;
+
+    /// <summary>What to put in that menu, asked for at the moment of the click rather than stored:
+    /// the tick has to say which palette is on screen NOW, and the content line has to say whether
+    /// the indexer is running NOW. A list captured when the capsule was created would be wrong by
+    /// the first palette change.</summary>
+    public Func<IReadOnlyList<MenuEntry>>? MenuItems { get; set; }
+
     /// <summary>The line under the bar - what the content index is doing, in one sentence, from
     /// <see cref="IndexStatus.Line"/>. Empty means no line is drawn at all: an idle widget with a
     /// permanently visible empty progress bar looks busy when it is not. Set from the shell's
@@ -175,6 +186,7 @@ public sealed class CapsuleWindow : Window
 
         _canvas.Clicked += () => Clicked?.Invoke();
         _canvas.Moved += p => Moved?.Invoke(p);
+        _canvas.RightClicked += ShowMenu;
 
         // WM_WINDOWPOSCHANGING is the only reliable way to stay at the bottom: without it, one
         // click on the capsule (or any Z-order change Windows makes on its own) lifts it above the
@@ -187,6 +199,34 @@ public sealed class CapsuleWindow : Window
             PushToBottom();
         };
         Closed += (_, _) => UnhookMessages();
+    }
+
+    /// <summary>
+    /// Spec §7 surface 4. The list itself is <see cref="CapsuleMenu.Items"/>, which is pure and
+    /// tested; this is only the part that turns it into Avalonia controls.
+    ///
+    /// <para>A checkbox is given only to an entry that is ticked, so the palette names read as a
+    /// list with a mark beside the one in use rather than as six empty boxes.</para>
+    /// </summary>
+    private void ShowMenu()
+    {
+        IReadOnlyList<MenuEntry>? entries = MenuItems?.Invoke();
+        if (entries is null || entries.Count == 0) return;
+
+        var menu = new ContextMenu();
+        foreach (MenuEntry e in entries)
+        {
+            if (e.Command.Length == 0) { menu.Items.Add(new Separator()); continue; }
+
+            var item = new MenuItem { Header = e.Header, IsEnabled = e.Enabled };
+            if (e.Checked) { item.ToggleType = MenuItemToggleType.CheckBox; item.IsChecked = true; }
+            string command = e.Command;   // captured per item, never the loop variable's last value
+            item.Click += (_, _) => MenuCommand?.Invoke(command);
+            menu.Items.Add(item);
+        }
+
+        try { menu.Open(_canvas); }
+        catch (Exception ex) { Log.Warn("app", "the capsule menu would not open: " + ex.Message); }
     }
 
     private void HookMessages()
@@ -257,6 +297,7 @@ public sealed class CapsuleWindow : Window
 
         public event Action? Clicked;
         public event Action<PixelPoint>? Moved;
+        public event Action? RightClicked;
 
         public CapsuleCanvas(Derived derived, double scale)
         {
@@ -270,6 +311,14 @@ public sealed class CapsuleWindow : Window
 
         protected override void OnPointerPressed(PointerPressedEventArgs e)
         {
+            if (e.GetCurrentPoint(this).Properties.IsRightButtonPressed)
+            {
+                // Never armed as a drag or a click: a right press that also moved the capsule
+                // would leave the menu open over a widget that has walked away from under it.
+                RightClicked?.Invoke();
+                e.Handled = true;
+                return;
+            }
             if (!e.GetCurrentPoint(this).Properties.IsLeftButtonPressed) return;
             _pressed = true;
             _travelled = 0;

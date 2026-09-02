@@ -1,3 +1,5 @@
+using Avalonia.Input;
+
 namespace Findra;
 
 /// <summary>
@@ -134,6 +136,56 @@ public static class Hotkey
         "PAGEDOWN" => "PageDown",
         _ => name,
     };
+
+    /// <summary>Shift, Ctrl, Alt, and the two Windows keys - the virtual-key codes that are a
+    /// modifier rather than a chord's key. One list, read by <see cref="SettingsModel.ChordFrom"/>,
+    /// which is the single place that decides a bare modifier is not a chord.</summary>
+    public static readonly IReadOnlyList<uint> ModifierKeys = [0x10, 0x11, 0x12, 0x5B, 0x5C];
+
+    /// <summary>
+    /// The Win32 virtual-key code for a key Avalonia reported, or null when Findra has no name for
+    /// it.
+    ///
+    /// <para>Avalonia's <see cref="Key"/> is not the Win32 numbering: <c>Key.A</c> is 44 and
+    /// <c>VK_A</c> is 0x41. <c>RegisterHotKey</c> wants the Win32 one, so something has to
+    /// translate, and it lives here beside <see cref="Parse"/> rather than in the settings window
+    /// so that it has a test.</para>
+    ///
+    /// <para>It names exactly the three families and the eleven keys <see cref="ParseKey"/> can
+    /// read back, and NOTHING else. A key with no name answers null and the window stays in
+    /// capture: guessing a code that <see cref="Describe"/> can only spell as "0xBB" would save a
+    /// chord to config.json that never registers, on a row reporting a combination that does
+    /// nothing. The modifiers ARE named, so the refusal stays in one place.</para>
+    /// </summary>
+    public static uint? VirtualKeyOf(Key key)
+    {
+        if (key is >= Key.A and <= Key.Z) return (uint)('A' + (key - Key.A));
+        if (key is >= Key.D0 and <= Key.D9) return (uint)('0' + (key - Key.D0));
+        if (key is >= Key.F1 and <= Key.F24) return (uint)(0x70 + (key - Key.F1));
+
+        return key switch
+        {
+            Key.Space => 0x20,
+            Key.Tab => 0x09,
+            Key.Return => 0x0D,
+            Key.Escape => 0x1B,
+            Key.Back => 0x08,
+            Key.Insert => 0x2D,
+            Key.Delete => 0x2E,
+            Key.Home => 0x24,
+            Key.End => 0x23,
+            Key.PageUp => 0x21,
+            Key.PageDown => 0x22,
+
+            Key.LeftShift or Key.RightShift => 0x10,
+            Key.LeftCtrl or Key.RightCtrl => 0x11,
+            Key.LeftAlt or Key.RightAlt => 0x12,
+            Key.LWin => 0x5B,
+            Key.RWin => 0x5C,
+
+            _ => null,
+        };
+    }
 
     /// <summary>Walks the chain in order, skipping any entry that does not parse, and calls
     /// <paramref name="register"/> with each parsed combination until one returns true.

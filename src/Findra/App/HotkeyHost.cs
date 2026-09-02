@@ -146,6 +146,47 @@ public sealed class HotkeyHost : IDisposable
         Log.Info("hotkey", $"registered {Landed}");
     }
 
+    /// <summary>
+    /// Swap the registered combination. Returns false and **restores the previous one** when the
+    /// new combination will not register.
+    ///
+    /// <para>The order matters and there is only one safe one. Windows will not register a second
+    /// hotkey on the same id, so the old registration has to go first - and if the new one then
+    /// fails and nothing puts the old one back, the user is left with no hotkey at all, having
+    /// touched a control that reported a failure. That is worse than the state they were in, and
+    /// the control that would fix it sits behind a card the hotkey no longer opens.</para>
+    ///
+    /// <para>The restore path cannot be exercised headlessly - it needs a real window handle and a
+    /// combination another application already owns - so it is end-to-end checklist step 28 and
+    /// nothing else. No test covers it.</para>
+    /// </summary>
+    public bool Rebind(string chord)
+    {
+        IntPtr hwnd = Handle();
+        if (hwnd == IntPtr.Zero) return false;
+        if (Hotkey.Parse(chord) is not { } want) return false;
+
+        string? previous = Landed;
+        if (_registered) { UnregisterHotKey(hwnd, HotkeyId); _registered = false; }
+
+        if (RegisterHotKey(hwnd, HotkeyId, want.Mods | Hotkey.MOD_NOREPEAT, want.Vk))
+        {
+            _registered = true;
+            Landed = Hotkey.Describe(want.Mods, want.Vk);
+            Log.Info("hotkey", $"rebound to {Landed}");
+            return true;
+        }
+
+        if (previous is not null && Hotkey.Parse(previous) is { } back &&
+            RegisterHotKey(hwnd, HotkeyId, back.Mods | Hotkey.MOD_NOREPEAT, back.Vk))
+        {
+            _registered = true;
+            Landed = previous;
+        }
+        Log.Warn("hotkey", $"{chord} would not register; kept {Landed ?? "nothing"}");
+        return false;
+    }
+
     /// <summary>Where the pointer is, in physical pixels. The hotkey opens the card on the monitor
     /// the user is looking at, which is the one their cursor is on - not the one the capsule
     /// happens to rest on.</summary>

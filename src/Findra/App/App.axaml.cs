@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Globalization;
 using System.Linq;
 using System.Net.Http;
@@ -13,6 +14,7 @@ using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Markup.Xaml;
 using Avalonia.Platform;
+using Avalonia.Platform.Storage;
 using Avalonia.Threading;
 using Findra.Startup;
 
@@ -128,7 +130,7 @@ public static class UpdateMemory
 /// hotkey combination is free, is a degraded Findra that still starts and still says what it lost.
 /// </summary>
 [SupportedOSPlatform("windows")]
-internal sealed class Shell
+internal sealed class Shell : ISettingsHost
 {
     /// <summary>The zoom the capsule and the card are painted at. This is NOT the monitor's DPI:
     /// Avalonia's drawing context already carries the render scaling, so multiplying by it here
@@ -163,6 +165,16 @@ internal sealed class Shell
 
     private UpdateState _update = UpdateState.NotDue;
     private string? _latest;
+
+    // ---- what the settings window and the capsule menu are shown ----
+    //
+    // Three facts about the machine that are NOT settings, kept here because the only places that
+    // can see them are the content loop and the pipe session - and both of those run off the
+    // interface thread, where neither surface may reach. Written there, read here, and nothing
+    // else depends on them, so a stale read costs one repaint of a status line.
+    private volatile bool _everIndexed;
+    private volatile bool _indexerAlive;
+    private IReadOnlyList<string> _drives = [];
 
     // ---- the content index ----
     //
@@ -512,6 +524,10 @@ internal sealed class Shell
         feeder.NoteSessionStarted(() => client.JournalDropped);
 
         StatusReply status = await client.StatusAsync(ct).ConfigureAwait(false);
+        // Every volume the helper reports, not the subset this config chose: the settings window's
+        // Drives row offers all of them and ticks the ones that are chosen, so a letter left out
+        // here is a disk nobody can turn back on.
+        _drives = [.. status.Volumes.Select(v => char.ToUpperInvariant(v.Letter).ToString())];
         IReadOnlyList<char> drives = ChosenDrives(_config, status);
         if (drives.Count == 0)
         {
@@ -754,9 +770,15 @@ internal sealed class Shell
         // The pid is read with the heartbeat because IndexStatus.Alive needs both: the same rows
         // are written by a one-shot drain in some other process, and by this one, and only the
         // recorded pid tells a live child from the last thing a finished drain left behind.
+        bool alive = IndexStatus.Alive(db.Get("indexer:beat"), db.Get("indexer:pid"));
         string line = IndexStatus.Line(_config.IndexContent, db.Get("indexer:state") ?? "off", pending, indexed,
-                                       IndexStatus.Alive(db.Get("indexer:beat"), db.Get("indexer:pid")),
-                                       db.WasRebuilt || db.Get("index:rebuilt") == "1");
+                                       alive, db.WasRebuilt || db.Get("index:rebuilt") == "1");
+
+        // Kept before the early return below. The settings window's Content sentence and the
+        // capsule menu's "(not running)" both read these, and neither is asked at the moment the
+        // line happens to change.
+        _everIndexed = indexed > 0;
+        _indexerAlive = alive;
         // Zero rather than a full bar when there is nothing waiting: "up to date" is a sentence,
         // not a completed job, and a bar sitting at 100% invites the reader to wait for something.
         float fraction = pending == 0 ? 0f : (float)(indexed / (double)(indexed + pending));
@@ -824,6 +846,11 @@ internal sealed class Shell
         };
         capsule.Clicked += OpenFromCapsule;
         capsule.Moved += SaveCapsulePosition;
+        // Spec §7 surface 4: palette and content indexing live on the capsule so that most people
+        // never open settings. Built at the moment of the click, from the config as it is then.
+        capsule.MenuItems = () =>
+            CapsuleMenu.Items(_config, PaletteStore.LoadFromDisk(), Theme.WindowsIsLight(), _indexerAlive);
+        capsule.MenuCommand += OnCapsuleCommand;
         capsule.Show();
         capsule.Position = at;   // Show is entitled to place a window itself; this is the last word
         _capsule = capsule;
@@ -926,9 +953,9 @@ internal sealed class Shell
         _showCapsuleItem.Click += (_, _) => ToggleCapsule();
         menu.Items.Add(_showCapsuleItem);
 
-        // Present, so the shape of the menu is visible, and disabled, because the settings surface
-        // is a later plan. A menu that grows later is worse than one that shows what is coming.
-        menu.Items.Add(new NativeMenuItem("Settings") { IsEnabled = false });
+        var settings = new NativeMenuItem("Settings");
+        settings.Click += (_, _) => OpenSettings();
+        menu.Items.Add(settings);
         menu.Items.Add(new NativeMenuItemSeparator());
 
         var check = new NativeMenuItem("Check for updates");
@@ -962,6 +989,7 @@ internal sealed class Shell
         _config = _config with { ShowCapsule = show };
         _config.Save();
         if (_showCapsuleItem is not null) _showCapsuleItem.IsChecked = show;
+        SettingsWindow.Open?.UseConfig(_config);
 
         if (show)
         {
@@ -969,11 +997,16 @@ internal sealed class Shell
         }
         else
         {
-            CapsuleWindow? capsule = _capsule;
-            _capsule = null;
-            try { capsule?.Close(); } catch (Exception ex) { Log.Warn("app", "the capsule would not close: " + ex.Message); }
+            CloseCapsule();
             Log.Info("app", "the capsule is turned off; the hotkey and the tray open the card");
         }
+    }
+
+    private void CloseCapsule()
+    {
+        CapsuleWindow? capsule = _capsule;
+        _capsule = null;
+        try { capsule?.Close(); } catch (Exception ex) { Log.Warn("app", "the capsule would not close: " + ex.Message); }
     }
 
     private void Quit()
@@ -1005,6 +1038,274 @@ internal sealed class Shell
         Log.Flush();
         _desktop.Shutdown();
     }
+
+    // ---- settings ----------------------------------------------------------------------------
+
+    /// <summary>
+    /// Open the settings window, or bring the one that is already open to the front. One instance:
+    /// a second window is a second view of the same configuration and the two write over each
+    /// other on every click.
+    ///
+    /// <para>The state is built from the config, what is on disk, and what the machine has told us
+    /// so far - with one exception. The scheduled-task query shells out to <c>schtasks</c> and
+    /// waits up to five seconds, so it is asked for AFTER the window is up and posted back into
+    /// it; the row reads "Findra could not tell" for that moment, which is exactly what is true
+    /// while nobody has asked.</para>
+    /// </summary>
+    private void OpenSettings()
+    {
+        try
+        {
+            if (SettingsWindow.Open is { } already) { already.Activate(); return; }
+
+            var state = new SettingsState(_config)
+            {
+                Palettes = PaletteStore.LoadFromDisk(),
+                Installed = _installed,
+                HebrewOffered = Capabilities.HebrewIsOffered(Capabilities.SystemLanguages()),
+                StartsAtLogon = Autostart.IsSet(),
+                EverIndexed = _everIndexed,
+                IndexerAlive = _indexerAlive,
+                Drives = _drives,
+                Version = BuildInfo.Version,
+                Update = _update,
+                Latest = _latest,
+            };
+
+            var window = new SettingsWindow(state, this, chord => _hotkey?.Rebind(chord) ?? false);
+            window.Changed += OnSettingsChanged;
+            window.PaletteChanged += OnPaletteChanged;
+            window.Show();
+
+            _ = Task.Run(() =>
+            {
+                HelperTaskState helper = HelperTask.Query().State;
+                Dispatcher.UIThread.Post(() => SettingsWindow.Open?.UseHelperState(helper));
+            });
+        }
+        catch (Exception ex) { Log.Error("settings", "the settings window could not open", ex); }
+    }
+
+    /// <summary>
+    /// A setting moved. The window has already written config.json - this is the half of the
+    /// answer that is not on disk: the palette everything else is painted in, the tray's own tick,
+    /// and whether there is a capsule at all.
+    /// </summary>
+    private void OnSettingsChanged(Config c)
+    {
+        _config = c;
+        if (_showCapsuleItem is not null) _showCapsuleItem.IsChecked = c.ShowCapsule;
+
+        Palette resolved = Theme.Resolve(c, Theme.WindowsIsLight(), PaletteStore.LoadFromDisk());
+        if (!string.Equals(resolved.Name, _palette.Name, StringComparison.OrdinalIgnoreCase))
+        {
+            // Through the window when there is one: it repaints itself first and then hands the
+            // palette back through PaletteChanged, which is what redraws everything that is NOT
+            // it. The capsule's own menu can change the palette with no settings window open, and
+            // that route has to reach the same handler rather than change nothing on screen.
+            if (SettingsWindow.Open is { } window) window.UsePalette(resolved);
+            else OnPaletteChanged(resolved);
+        }
+
+        if (c.ShowCapsule && _capsule is null) Stage("capsule", CreateCapsule);
+        else if (!c.ShowCapsule && _capsule is not null) CloseCapsule();
+    }
+
+    /// <summary>Everything painted in the palette except the window that chose it: the tray icon,
+    /// and the capsule, which takes its palette in its constructor and so is made again.</summary>
+    private void OnPaletteChanged(Palette p)
+    {
+        _palette = p;
+        if (_tray is not null && TrayIconFactory.Draw(p) is { } drawn) _tray.Icon = drawn;
+        if (_capsule is not null) { CloseCapsule(); Stage("capsule", CreateCapsule); }
+        Log.Info("look", $"the palette is now '{p.Name}' ({(p.Light ? "light" : "dark")})");
+    }
+
+    /// <summary>A config change made from somewhere other than the settings window. Saved,
+    /// applied, and shown to the window when there is one - two views of one configuration must
+    /// not be allowed to disagree, because the stale one wins on its owner's next click.</summary>
+    private void ApplyConfig(Config next)
+    {
+        next.Save();
+        // The window learns it FIRST. OnSettingsChanged repaints that window in the new palette,
+        // and a window still holding the old configuration would draw the tick beside the palette
+        // that has just been replaced until the next pointer move.
+        SettingsWindow.Open?.UseConfig(next);
+        OnSettingsChanged(next);
+    }
+
+    /// <summary>The capsule's right-click menu, answered. It switches on
+    /// <see cref="MenuEntry.Command"/> and never on a display string.</summary>
+    private void OnCapsuleCommand(string command)
+    {
+        const string palettePrefix = "palette:";
+        if (command.StartsWith(palettePrefix, StringComparison.Ordinal))
+        {
+            string name = command[palettePrefix.Length..];
+            // The side actually in use, which is the side the menu offered. Writing the other one
+            // would save a palette and change nothing on screen.
+            bool light = _config.Mode switch
+            {
+                ThemeMode.AlwaysDark => false,
+                ThemeMode.AlwaysLight => true,
+                _ => Theme.WindowsIsLight(),
+            };
+            ApplyConfig(light ? _config with { LightPalette = name } : _config with { DarkPalette = name });
+            return;
+        }
+
+        switch (command)
+        {
+            case "content": ApplyConfig(_config with { IndexContent = !_config.IndexContent }); return;
+            case "settings": OpenSettings(); return;
+            case "quit": Quit(); return;
+            default:
+                Log.Warn("app", $"the capsule menu asked for '{command}', which the shell does not know");
+                return;
+        }
+    }
+
+    // ---- what a settings click asks the machine for ------------------------------------------
+    //
+    // The only place in Findra where a settings click reaches the operating system. Every one of
+    // these is a call into Avalonia, the registry, schtasks or the network, so none of them has a
+    // test - SettingsActionTests proves the click gets HERE, and the end-to-end checklist is what
+    // proves each of these does the right thing once it has.
+
+    void ISettingsHost.OpenPalettesFile(string path)
+    {
+        PaletteStore.EnsureOnDisk();           // it may never have been written
+        try { Process.Start(new ProcessStartInfo(path) { UseShellExecute = true }); }
+        catch (Exception ex) { Log.Warn("settings", "could not open palettes.json: " + ex.Message); }
+    }
+
+    void ISettingsHost.BeginChordCapture() { /* the window handles keys; nothing to do here */ }
+
+    void ISettingsHost.SetAutostart(bool on)
+    {
+        string exe = Environment.ProcessPath ?? "";
+        if (on) Autostart.Set(exe); else Autostart.Clear();
+    }
+
+    void ISettingsHost.RegisterHelper() => _ = Task.Run(() =>
+    {
+        // Register raises the one UAC prompt itself (runas), so this must not be on the UI thread.
+        // A refused prompt throws Win32Exception 1223 into Register's own catch and returns false.
+        bool ok = HelperTask.Register(Environment.ProcessPath ?? "");
+        if (ok) HelperTask.EnsureRunning();     // and start it now, not at the next logon
+        HelperTaskState state = HelperTask.Query().State;
+        Dispatcher.UIThread.Post(() => SettingsWindow.Open?.UseHelperState(state));
+    });
+
+    void ISettingsHost.PickFolder() => _ = PickFolderAsync();
+
+    void ISettingsHost.InstallCapability(Capability c) => _ = InstallAsync(c);
+
+    void ISettingsHost.CheckNow() => _ = RunUpdateCheck(force: true);
+
+    void ISettingsHost.RecentreCapsule()
+    {
+        // The config write has already happened in the model; this is the half the person sees.
+        // Close the capsule and create it again: CreateCapsule reads _config, whose CapsuleX and
+        // CapsuleY are now null, and CapsulePlacement puts a capsule with no saved position back
+        // on the primary monitor. Without this the window stays exactly where it was - which, for
+        // the one control whose entire purpose is recovering a capsule that cannot be seen, is
+        // the same defect as not handling the click at all.
+        CloseCapsule();
+        if (_config.ShowCapsule)
+        {
+            Stage("capsule", CreateCapsule);
+            Log.Info("app", "the capsule was brought back to the primary monitor");
+        }
+        else
+        {
+            Log.Info("app", "the capsule's saved position was cleared; it opens on the primary " +
+                            "monitor when it is turned back on");
+        }
+    }
+
+    /// <summary>The system folder dialog, deliberately: spec §12 accepts that these two surfaces
+    /// are hand-drawn and mitigates it by calling the operating system's own picker where one
+    /// exists.</summary>
+    private async Task PickFolderAsync()
+    {
+        try
+        {
+            if (SettingsWindow.Open is not { } window) return;
+            IReadOnlyList<IStorageFolder> picked = await window.StorageProvider.OpenFolderPickerAsync(
+                new FolderPickerOpenOptions { Title = "A folder Findra will not look inside", AllowMultiple = false });
+            if (picked.Count == 0) return;
+
+            string? path = picked[0].TryGetLocalPath();
+            if (string.IsNullOrWhiteSpace(path)) return;
+            window.AddExclusion(path);
+            Log.Info("settings", "a folder was added to the list Findra will not open");
+        }
+        catch (Exception ex) { Log.Warn("settings", "the folder picker failed: " + ex.Message); }
+    }
+
+    /// <summary>How often a download says where it has got to. It is a log line, not a progress
+    /// bar - the settings window has no room for one, and the row it came from turns into
+    /// "installed" when the files land.</summary>
+    private static readonly TimeSpan DownloadProgressEvery = TimeSpan.FromSeconds(10);
+
+    /// <summary>
+    /// Fetch what a capability needs, and tell the window when it is there.
+    ///
+    /// <para>What this does NOT do is re-queue the files the new capability covers. That gate has
+    /// to run on the flow that owns the writer connection - <c>ContentDb.Claim</c> is a thread-id
+    /// detector, so a second flow reaching the writer gets an exception rather than a wait - and
+    /// this runs on the pool while the content loop holds it. The shell runs the same gate at
+    /// every start, so the backlog is planned in full the next time Findra opens, and the log says
+    /// so rather than leaving somebody waiting for results that are not coming yet.</para>
+    /// </summary>
+    private async Task InstallAsync(Capability c)
+    {
+        string dir = ModelStore.Dir;
+        IReadOnlyList<Model> need = Capabilities.ModelsFor([c]);
+        IReadOnlyList<Model> missing = ModelStore.Missing(need, dir);
+        if (missing.Count == 0)
+        {
+            Log.Info("models", $"{Capabilities.Title(c)} is already on disk; nothing was fetched");
+            return;
+        }
+
+        Log.Info("models", $"{Capabilities.Title(c)}: fetching {missing.Count.ToString(CultureInfo.InvariantCulture)} " +
+                           $"file(s), {Sizes.Human(ModelStore.TotalBytes(missing))}, into {dir}");
+        try
+        {
+            using var http = new HttpClient(new SocketsHttpHandler { UseCookies = false })
+            {
+                Timeout = Timeout.InfiniteTimeSpan,   // a 1.5 GB file over a slow line is not a hung request
+            };
+            IReadOnlyList<DownloadOutcome> outcomes = await ModelDownloader
+                .GetAllAsync(need, dir, ModelDownloader.Http(http), NoteDownloadProgress, _shutdown.Token)
+                .ConfigureAwait(false);
+
+            foreach (DownloadOutcome o in outcomes)
+                if (!o.Complete)
+                {
+                    // What arrived is kept in the .part file, so pressing the row again resumes.
+                    Log.Warn("models", $"{o.Model.File} did not finish - {o.Problem}; what arrived is kept");
+                    return;
+                }
+
+            _installed = CapabilitySet.Installed(dir);
+            Log.Info("models", $"{Capabilities.Title(c)} is installed. Its files are read the next time " +
+                               "Findra starts - the queue survives, so nothing is lost by waiting.");
+        }
+        catch (OperationCanceledException) { Log.Info("models", "the download stopped when Findra quit; what arrived is kept"); }
+        catch (Exception ex) { Log.Error("models", $"{Capabilities.Title(c)} could not be fetched", ex); }
+        finally
+        {
+            CapabilitySet installed = _installed;
+            Dispatcher.UIThread.Post(() => SettingsWindow.Open?.UseInstalled(installed));
+        }
+    }
+
+    private static void NoteDownloadProgress(DownloadProgress p) =>
+        Log.Repeat("models|fetch|" + p.File, DownloadProgressEvery, "INFO ", "models",
+            $"{p.File}: {Sizes.Human(p.Got)} of {(p.Total > 0 ? Sizes.Human(p.Total) : "?")}");
 
     // ---- the update check ------------------------------------------------------------------------
 
@@ -1053,6 +1354,10 @@ internal sealed class Shell
                 // "Check for updates" on the next launch, where the item is built fresh.
                 if (force && _checkForUpdatesItem is not null)
                     _checkForUpdatesItem.Header = UpdateMemory.CheckedHeader(result.State, result.Latest);
+
+                // And the same answer in About, which is the other place a person can ask for one.
+                // Without this, "Check now" makes a request and changes nothing anybody can see.
+                SettingsWindow.Open?.NoteUpdate(result.State, result.Latest);
 
                 RefreshTooltip();
                 if (result.Advice is { } advice) Log.Info("startup", advice);

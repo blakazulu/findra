@@ -138,6 +138,39 @@ moment rather than an elevation prompt at every launch.
     If they still disagree, the row is not being written and `--searchindex` is describing an
     index nobody has told about a setting that changed.
 
+27a. **Every control in the settings window, clicked by a person.** Open it from the tray's
+    Settings item and work through all five sections. Seven of them reach the operating system
+    and no test at any level covers what happens after the click, because each is a call into
+    Avalonia, the registry, `schtasks` or the network:
+
+    - change the dark palette and watch the window, the capsule and the tray icon follow with
+      no restart;
+    - press "Open the file" and confirm `palettes.json` opens in an editor;
+    - click the hotkey row, press Escape, confirm it stops listening; click it again, press a
+      combination, confirm the row shows it and that the new combination opens the card;
+    - tick "Start Findra when I sign in", confirm the `Findra` value appears under
+      `HKCU\Software\Microsoft\Windows\CurrentVersion\Run`, then untick it and confirm it goes;
+    - press "Register it" on the name helper, answer the one prompt, and confirm the row turns
+      to "registered" **and that name search starts working in this session**;
+    - press "Add a folder", pick one, and confirm it appears in the list and can be removed;
+    - press a capability's size button and confirm a download starts and the row turns to
+      "installed" when it lands;
+    - press "Check now" and confirm the About line changes;
+    - drag the capsule to a far corner, press "Bring the capsule back", and confirm it moves
+      **in this session** rather than at the next launch.
+
+    Also right-click the capsule: the tick must be beside the palette actually on screen, and
+    the palettes offered must be the ones for the side in use.
+
+28. **A hotkey rebind that is refused puts the old one back.** Not reachable headlessly - it
+    needs a real window handle and a combination another application already owns. Open
+    settings, click the hotkey row, and press a combination something else has taken (a running
+    screen-capture or launcher tool is the usual source). The row must say the combination is
+    taken and that Findra kept the old one, and **the old combination must still open the
+    card**. If it does not, the rebind unregistered the old hotkey and failed to restore it,
+    which leaves somebody with no hotkey and the control that would fix it behind a card the
+    hotkey no longer opens.
+
 ## Notes
 
 Steps 1 to 4 and 9 to 13 are the ones that have never executed in any form. Steps 5 to 8

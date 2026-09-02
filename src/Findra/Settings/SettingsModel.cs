@@ -459,9 +459,6 @@ public static class SettingsModel
 
     // ---- the chord, captured and rebound ---------------------------------------------------------
 
-    /// <summary>Shift, Ctrl, Alt, and the two Windows keys.</summary>
-    private static readonly uint[] ModifierKeys = [0x10, 0x11, 0x12, 0x5B, 0x5C];
-
     /// <summary>
     /// The chord a key press names, or null when it does not name one.
     ///
@@ -478,7 +475,10 @@ public static class SettingsModel
     /// </summary>
     public static string? ChordFrom(bool ctrl, bool alt, bool shift, bool win, uint vk)
     {
-        if (Array.IndexOf(ModifierKeys, vk) >= 0) return null;
+        // Hotkey's list, not a second copy: Hotkey.VirtualKeyOf names a pressed modifier precisely
+        // so that this refusal is the only one, and two lists that can disagree would put the
+        // window and the model on different answers about what a chord is.
+        if (Hotkey.ModifierKeys.Contains(vk)) return null;
 
         uint mods = 0;
         if (ctrl) mods |= Hotkey.MOD_CONTROL;
