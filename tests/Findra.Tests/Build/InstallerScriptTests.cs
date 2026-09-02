@@ -226,9 +226,14 @@ public class InstallerScriptTests
         // An elevated installer's HKCU is the hive of whoever answered the UAC prompt. Writing a
         // Run value there puts Findra in an administrator's startup and not in the installing
         // user's. Findra writes it from its own session instead (Autostart).
-        Match registry = Regex.Match(Script, @"\[Registry\](.*?)(\[|\z)", RegexOptions.Singleline);
-        if (registry.Success)
-            Assert.DoesNotContain(@"CurrentVersion\Run", registry.Groups[1].Value, StringComparison.OrdinalIgnoreCase);
+        //
+        // Scanned over the WHOLE script rather than inside a [Registry] section, for two reasons.
+        // The first is that a section-scoped version asserts nothing until somebody adds the
+        // section, which makes it read as a live assertion while it is vacuous. The second is that
+        // this script's [Code] part is much the larger half, so RegWriteStringValue is the likelier
+        // route in - and a [Registry]-only search would not look there at all.
+        Assert.DoesNotContain(@"CurrentVersion\Run", Script, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("RegWriteStringValue", Script, StringComparison.Ordinal);
     }
 
     [Fact]
