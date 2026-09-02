@@ -123,7 +123,11 @@ public sealed class CardWindow : Window
 
     // ---- the canvas ------------------------------------------------------------------------------
 
-    private sealed class CardCanvas : Control
+    // Fully qualified, because the settings model's row type is `Findra.Control` and a type in
+    // this file's own namespace beats one arriving through a using directive - so a bare `Control`
+    // here binds to a sealed record. A using alias cannot fix it: inside the namespace it collides
+    // with the member, and outside it loses to the member.
+    private sealed class CardCanvas : Avalonia.Controls.Control
     {
         private readonly Derived _derived;
         private readonly SKTypeface _face;
