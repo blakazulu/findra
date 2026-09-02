@@ -1,3 +1,4 @@
+using System.IO;
 using Avalonia;
 
 namespace Findra;
@@ -7,6 +8,7 @@ public static class Program
     public static int Main(string[] args)
     {
         string mode = args.Length > 0 ? args[0] : "";
+        UseUtf8OnTheConsole();
         return mode switch
         {
             "--names"       => RunNames(),
@@ -35,6 +37,24 @@ public static class Program
 
             _               => RunUi(),
         };
+    }
+
+    /// <summary>
+    /// Several of the sentences the diagnostics print are the card's own, and the card's
+    /// separator is a middle dot. A console left on the machine's OEM code page renders that as
+    /// a replacement character, and so does every Hebrew string the probes carry. Asking for
+    /// UTF-8 once, here, is cheaper than forking a sentence per command, and it is exactly the
+    /// sentence being shared that makes the console and the card impossible to disagree.
+    ///
+    /// <para>It is done for every mode rather than for the console ones, because the failure is
+    /// silent and per-command: <c>--content</c> carried this line alone and <c>--searchmodels</c>
+    /// printed question marks for a year of nobody noticing. Some hosts refuse the change, and a
+    /// window with no console attached refuses it too - a mangled separator is not worth failing
+    /// a diagnostic over, and it is certainly not worth failing to start.</para>
+    /// </summary>
+    private static void UseUtf8OnTheConsole()
+    {
+        try { Console.OutputEncoding = System.Text.Encoding.UTF8; } catch (IOException) { }
     }
 
     private static int RunUi()

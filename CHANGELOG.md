@@ -37,7 +37,8 @@ into a numbered section on the first release.
 - **Six diagnostic modes** so the product can be verified without a screen:
   `--searchprobe`, `--searchtest`, `--searchshot`, `--searchindex`, `--searchmodels`,
   `--searchbench`, plus `--version`. All six run, and every one of them reports on
-  something that exists.
+  something that exists, and every one of them prints Hebrew and the separator the
+  card uses without mangling them, whatever code page the console was left on.
 - **The content store**: a SQLite full-text index with a recorded schema version, a
   resumable work queue, and a consumed journal position per volume, so an interrupted
   index continues rather than starting over.
