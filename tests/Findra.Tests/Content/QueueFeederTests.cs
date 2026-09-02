@@ -242,6 +242,40 @@ public sealed class QueueFeederTests : IDisposable
     }
 
     [Fact]
+    public void ASecondConnectionThatLostTheSameNumberOfEventsStillOwesAWalk()
+    {
+        // "The same total is not a new drop" is true WITHIN one connection and false across two.
+        // The counter belongs to a NameClient and starts again at zero on every reconnection,
+        // while this feeder lives for the whole process, so two sessions that each lose seventeen
+        // events report seventeen twice - and the second seventeen is seventeen real files the
+        // index will never hear about. A lower number gives the feeder a hint that the channel
+        // restarted; an equal one gives it nothing at all, which is why the baseline has to be
+        // told when the session changed rather than inferred from the number.
+        using ContentDb db = Open();
+        using var feeder = new QueueFeeder(db, () => Cfg);
+        feeder.Consume([Change(1, "a.pdf", @"C:\a.pdf", NtfsVolume.ReasonFileCreate, 10)]);
+
+        long dropped = 0;
+        feeder.NoteSessionStarted(() => dropped);
+        dropped = 17;
+        feeder.NoteClientDrops(dropped);
+        db.ClearWalkOwed('C');                    // a full pass discharged it
+
+        // The helper went away and came back. A new client, a new counter - which has already
+        // lost exactly as many events as the whole of the last session did.
+        dropped = 17;
+        feeder.NoteSessionStarted(() => dropped);
+        feeder.NoteClientDrops(dropped);
+
+        Assert.True(db.WalkOwed('C'));
+
+        // And the row --searchindex prints counts what this index has lost, not what the current
+        // connection has lost. A per-session baseline that also stored the session's own number
+        // would make the report shrink on every reconnection.
+        Assert.Equal("34", db.Get("journal:dropped"));
+    }
+
+    [Fact]
     public void ADropIsRecordedWhereTheIndexReportReadsIt()
     {
         // --searchindex prints this row, and it is the only count in that report a dropped event
@@ -272,6 +306,63 @@ public sealed class QueueFeederTests : IDisposable
         feeder.FillFrom('C', Journal, 4242, Disk);
 
         Assert.False(feeder.NeedsFreshWalk('C'));
+        Assert.False(db.WalkOwed('C'));
+    }
+
+    [Fact]
+    public void ADropIsRecordedInsideTheBatchThatMovesThePositionPastIt()
+    {
+        // This batch's transaction advances usn:D over a range the receive channel may have
+        // eaten. Writing the debt AFTER that transaction commits leaves a window in which a
+        // crash takes the debt and leaves the position - an index claiming coverage nothing ever
+        // read, owing nobody a walk, which is the single state the walk debt exists to make
+        // impossible. Writing it BEFORE loses any volume this batch is the FIRST to give a
+        // position to, because the charge is spread over the volumes the index knows about, and
+        // D: is not one of them until these rows land. Inside the transaction, after the
+        // positions, is the only order that is both complete and atomic.
+        using ContentDb db = Open();
+        using var feeder = new QueueFeeder(db, () => Cfg);
+
+        long dropped = 0;
+        feeder.NoteSessionStarted(() => dropped);
+
+        dropped = 3;
+        feeder.Consume([Change(1, "a.pdf", @"D:\a.pdf", NtfsVolume.ReasonFileCreate, 500, vol: 'D')]);
+
+        Assert.Equal(500, db.UsnPosition('D')!.Value.Usn);
+        Assert.True(db.WalkOwed('D'), "the position covers a range three events are missing from");
+    }
+
+    [Fact]
+    public void APassDoesNotDischargeAHoleThatOpenedWhileItWasRunning()
+    {
+        // A full pass over a real disk takes minutes, and the events it lost while it ran are
+        // PAST the position it is about to stamp - so a pass that cleared the debt on its way out
+        // would discharge a hole it never covered, and nothing would ever walk that range again.
+        //
+        // The pass has to read the counter itself, at the moment it commits. Reading a field that
+        // only the caller updates makes the check unfalsifiable: the interface's loop reports
+        // drops and awaits the walk on one thread, so between the walk starting and finishing the
+        // field cannot move, and the taint is always false.
+        using ContentDb db = Open();
+        using var feeder = new QueueFeeder(db, () => Cfg);
+        feeder.Consume([Change(1, "a.pdf", @"C:\a.pdf", NtfsVolume.ReasonFileCreate, 10)]);
+
+        long dropped = 0;
+        feeder.NoteSessionStarted(() => dropped);
+        db.ClearWalkOwed('C');
+
+        feeder.NoteWalkStarted('C');
+        dropped = 4;                        // the receive channel evicts while the walk is in flight
+        feeder.FillFrom('C', Journal, 4242, Disk);
+
+        Assert.True(db.WalkOwed('C'), "the pass covered a range four events are missing from");
+        Assert.True(feeder.NeedsFreshWalk('C'));
+
+        // And a pass with a quiet channel under it still discharges the debt, or the volume walks
+        // for ever.
+        feeder.NoteWalkStarted('C');
+        feeder.FillFrom('C', Journal, 5000, Disk);
         Assert.False(db.WalkOwed('C'));
     }
 

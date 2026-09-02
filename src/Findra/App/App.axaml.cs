@@ -394,6 +394,14 @@ internal sealed class Shell
         await using NameClient client = await NameClient.ConnectAsync(TimeSpan.FromSeconds(5), ct)
             .ConfigureAwait(false);
 
+        // Beside the construction, because the counter belongs to the client and not to the
+        // feeder: this one starts at zero, and a feeder still holding the last one's total would
+        // wait for this session to lose MORE events than the last session ever did before it
+        // recorded anything. It also hands the feeder the counter itself, so the decisions that
+        // depend on it read it at the moment they are made rather than at the moment this loop
+        // last thought to mention it.
+        feeder.NoteSessionStarted(() => client.JournalDropped);
+
         StatusReply status = await client.StatusAsync(ct).ConfigureAwait(false);
         IReadOnlyList<char> drives = ChosenDrives(_config, status);
         if (drives.Count == 0)
@@ -442,10 +450,12 @@ internal sealed class Shell
             while (arrived.TryDequeue(out JournalEvent? e)) batch.Add(e);
             if (batch.Count > 0) feeder.Consume(batch);
 
-            // After EVERY batch, not once at startup. A hole can open at any moment - a reset
-            // marker from the helper, or this process's own receive channel dropping under a
-            // stalled interface - and a debt that is only inspected at launch is a debt nobody
-            // collects. Both of these are one small read of the meta table, not one per event.
+            // A batch charges the counter itself, inside the transaction that moves the position
+            // those events cover, so this call is the turn with NO events - a receive channel
+            // that evicted everything it was handed leaves a hole and no batch to notice it.
+            // After EVERY turn, not once at startup: a hole can open at any moment, from a reset
+            // marker or from this process stalling under its own interface, and a debt inspected
+            // only at launch is a debt nobody collects. It is one small read of the meta table.
             feeder.NoteClientDrops(client.JournalDropped);
             await CatchUpAsync(client, feeder, drives, walkedAt, first: false, ct).ConfigureAwait(false);
 
@@ -521,6 +531,11 @@ internal sealed class Shell
 
         // Only a stream that reached its Done frame gets here - EnumerateAsync throws otherwise -
         // so a truncated walk can never stamp a position or clear the debt it did not discharge.
+        //
+        // The walk above takes minutes on a real disk, and events lost while it ran are past the
+        // position it is about to stamp. FillFrom re-reads this session's dropped-event counter
+        // itself before it decides whether to discharge anything, which is why nothing has to be
+        // reported here: a call on this line is a call the next refactor deletes without noticing.
         feeder.FillFrom(volume, at.JournalId, at.Usn, found);
     }
 

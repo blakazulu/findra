@@ -39,9 +39,16 @@ public sealed class QueueFeeder : IDisposable
 
     private IReadOnlyList<string> _repoRoots = [];
 
-    /// <summary>The last total this feeder was told about, so an unchanged count is not read as a
-    /// fresh drop. See <see cref="NoteClientDrops"/>.</summary>
+    /// <summary>The last total THIS SESSION'S channel was seen at, so an unchanged count is not
+    /// read as a fresh drop. Reset by <see cref="NoteSessionStarted"/>, because the counter it
+    /// tracks belongs to one connection and starts again at zero on the next one. See
+    /// <see cref="NoteClientDrops"/>.</summary>
     private long _drops;
+
+    /// <summary>This session's dropped-event counter, read at the moment a decision depends on it
+    /// rather than whenever the caller last thought to mention it. See
+    /// <see cref="NoteSessionStarted"/>.</summary>
+    private Func<long>? _dropSource;
 
     /// <summary>Volumes whose first full pass is in flight, and the drop total each of them
     /// started against. A pass cannot discharge a debt that opened while it was running - see
@@ -206,6 +213,16 @@ public sealed class QueueFeeder : IDisposable
 
         foreach ((char letter, Position at) in positions) WritePosition(letter, at, tx);
 
+        // In the SAME transaction as the positions those events just moved, and after them.
+        //
+        // After, because the charge is spread over the volumes the index has a position for, and
+        // a volume this batch is the first to give a position to is not one of them until the
+        // lines above run - it would take a position covering a range the channel ate and owe
+        // nobody a walk for it. In the same transaction, because a debt written afterwards is a
+        // debt a crash between the two commits can take while leaving the position behind, which
+        // is exactly the state the walk debt exists to make impossible.
+        if (_dropSource is { } current) NoteClientDrops(current(), tx);
+
         tx.Commit();
         return queued;
     }
@@ -249,6 +266,11 @@ public sealed class QueueFeeder : IDisposable
     /// covered, because the events it lost are past the position the pass is about to stamp.
     /// A pass whose drop total moved under it leaves the debt standing and the next turn of the
     /// loop walks again.
+    ///
+    /// The other end of this is in <see cref="FillFrom"/>, which reads the counter for itself
+    /// rather than trusting whatever the caller last reported. That is what makes the check
+    /// falsifiable: the total recorded here and the total read there have to be able to differ,
+    /// and if only the caller could move the number they never would.
     /// </summary>
     public void NoteWalkStarted(char volume) => _walking[char.ToUpperInvariant(volume)] = _drops;
 
@@ -264,10 +286,22 @@ public sealed class QueueFeeder : IDisposable
     /// Returns the number of DISTINCT files it queued, not the number of enqueue calls it made:
     /// the walk restarts from record zero when the journal moves under it, so one file can
     /// legitimately arrive twice in one stream, and a count of calls would not match the queue.
+    ///
+    /// It reads the session's dropped-event counter ITSELF, here, before it decides whether the
+    /// pass discharges anything. Comparing a field the caller happens to have updated cannot
+    /// work: the interface reports drops and awaits the walk on the same single thread, so
+    /// nothing can move that field between <see cref="NoteWalkStarted"/> and this line and the
+    /// check is true by construction. A pass that reads the counter at the moment it commits
+    /// closes the window without a second walk, and can be made to fail.
     /// </summary>
     public int FillFrom(char volume, ulong journalId, long throughUsn, IEnumerable<EnumeratedFile> files)
     {
         if (_disposed) return 0;
+
+        // Before the transaction below opens. A hole that opened during the walk is charged to
+        // every volume the index knows about - including any OTHER volume this pass is not
+        // about - and it has to be on the books whatever this transaction goes on to decide.
+        if (_dropSource is { } current) NoteClientDrops(current());
 
         char letter = char.ToUpperInvariant(volume);
         string vol = letter.ToString();
@@ -362,24 +396,65 @@ public sealed class QueueFeeder : IDisposable
     /// zero again. Reading it as "nothing new" would let every drop in the second session hide
     /// behind the first session's larger number, which is the one thing this path exists to stop.
     ///
-    /// The running total is written to <c>journal:dropped</c>, which is where
-    /// <c>--searchindex</c> reads it. Without that row the report says zero however many events
-    /// were lost, and a dropped event is invisible in every other count it prints.
+    /// Neither reading is enough on its own, which is why <see cref="NoteSessionStarted"/> tells
+    /// this feeder when the channel changed: two connections that each lose the same number report
+    /// the same number twice, and an equal total is indistinguishable from no news.
+    ///
+    /// What this index has lost, accumulated across every connection, is written to
+    /// <c>journal:dropped</c>, which is where <c>--searchindex</c> reads it. Without that row the
+    /// report says zero however many events were lost, and a dropped event is invisible in every
+    /// other count it prints.
     /// </summary>
-    public void NoteClientDrops(long journalDropped)
+    /// <summary>
+    /// A new connection to the helper, and the counter this session will be judged against.
+    ///
+    /// The dropped-event counter belongs to ONE client: the interface builds a new one every time
+    /// the helper is unreachable or the pipe drops, and the new one starts at zero while this
+    /// feeder lives for the whole process. Carrying the old session's total forward means the
+    /// second session must lose MORE events than the first one ever did before any of its losses
+    /// are recorded at all - and a drop in this process's own receive channel has nothing
+    /// upstream that knows it happened, so the events it hides are hidden from everything.
+    /// </summary>
+    public void NoteSessionStarted(Func<long> journalDropped)
+    {
+        _dropSource = journalDropped;
+        _drops = 0;
+
+        // A walk that was in flight when the connection died never reached FillFrom, so its entry
+        // would sit here forever, charged on every drop and compared against a total from a
+        // channel that no longer exists. The pass itself did not survive the session either: the
+        // debt it was going to discharge is still a row, and the next turn walks again.
+        _walking.Clear();
+    }
+
+    public void NoteClientDrops(long journalDropped) => NoteClientDrops(journalDropped, null);
+
+    /// <summary>The same charge, joined to a transaction that is already open, so the debt and
+    /// the position it covers commit together or not at all.</summary>
+    private void NoteClientDrops(long journalDropped, SqliteTransaction? tx)
     {
         if (_disposed || journalDropped == _drops) return;
-        // A restart of the counter means a fresh channel that has ALREADY dropped this many.
+
+        // Forwards WITHIN one session's channel; a LOWER total is a restart of the counter, and
+        // a channel that restarted has ALREADY lost this many. Neither reading is a correction.
+        long lost = journalDropped > _drops ? journalDropped - _drops : journalDropped;
         _drops = journalDropped;
-        if (journalDropped == 0) return;
+        if (lost == 0) return;
 
         var charged = new SortedSet<char>(_db.KnownVolumes());
         foreach (char v in _walking.Keys) charged.Add(v);
-        foreach (char v in charged) _db.SetWalkOwed(v);
-        _db.Set("journal:dropped", journalDropped.ToString(CultureInfo.InvariantCulture));
+        foreach (char v in charged) _db.SetWalkOwed(v, tx);
+
+        // ACCUMULATED, not overwritten. --searchindex prints what this index has lost, and the
+        // number this method is handed belongs to one connection: storing it raw would make the
+        // report shrink every time the helper was restarted, which is the moment the reader most
+        // needs it to grow.
+        long before = long.TryParse(_db.Get("journal:dropped"), NumberStyles.Integer,
+                                    CultureInfo.InvariantCulture, out long had) ? had : 0;
+        _db.Set("journal:dropped", (before + lost).ToString(CultureInfo.InvariantCulture), tx);
 
         Log.Warn("index", string.Create(CultureInfo.InvariantCulture,
-            $"{journalDropped} journal event(s) were dropped before they reached the queue; " +
+            $"{lost} journal event(s) were dropped before they reached the queue; " +
             $"{charged.Count} volume(s) owe a fresh walk"));
     }
 
