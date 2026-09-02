@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Globalization;
 using System.Security;
 using System.Security.Principal;
 
@@ -136,6 +137,51 @@ $"""
         }
         catch (Exception ex) { Log.Error("startup", "task registration failed", ex); return false; }
         finally { try { File.Delete(xml); } catch { } }
+    }
+
+    public static string EndArgs(string taskName) => $"/end /tn \"{taskName}\"";
+    public static string DeleteArgs(string taskName) => $"/delete /tn \"{taskName}\" /f";
+
+    /// <summary>
+    /// Stop the task and remove it. True when the task is gone afterwards, INCLUDING the case
+    /// where it was never there: "no such task" and "removed" are the same outcome from the
+    /// caller's point of view, and the only thing that matters is that nothing is left pointing at
+    /// a binary that is about to be deleted.
+    ///
+    /// <para><c>/end</c> first, because deleting a task whose instance is running leaves the
+    /// process behind - and that process is the elevated one holding a volume handle.</para>
+    /// </summary>
+    public static bool Unregister()
+    {
+        RunSchtasks(EndArgs(TaskName));               // may fail: it is not running. Not an error.
+        int code = RunSchtasks(DeleteArgs(TaskName));
+
+        // A non-zero exit is almost always "no such task", said in the user's own language - which
+        // is why it is not parsed. Confirm by asking instead: Query reads the XML form, which is
+        // the only answer that is not localized.
+        (HelperTaskState state, _) = Query();
+        bool gone = state != HelperTaskState.Registered;
+
+        Log.Info("uninstall", gone
+            ? "the names helper task is removed"
+            : $"the names helper task could NOT be removed (schtasks exited {code.ToString(CultureInfo.InvariantCulture)}); " +
+              "it would start an elevated process pointing at a binary that is being deleted");
+        return gone;
+    }
+
+    private static int RunSchtasks(string arguments)
+    {
+        try
+        {
+            var psi = new ProcessStartInfo("schtasks", arguments)
+            { UseShellExecute = false, CreateNoWindow = true, RedirectStandardOutput = true, RedirectStandardError = true };
+            using Process? p = Process.Start(psi);
+            if (p is null) return -1;
+            p.StandardOutput.ReadToEnd();
+            p.StandardError.ReadToEnd();
+            return p.WaitForExit(10_000) ? p.ExitCode : -1;
+        }
+        catch (Exception ex) { Log.Warn("uninstall", $"schtasks {arguments} failed: {ex.Message}"); return -1; }
     }
 
     /// <summary>

@@ -199,6 +199,18 @@ internal sealed class Shell
         Stage("settings", () =>
         {
             _config = Config.LoadFromDisk();
+
+            // Once, and then never again (spec §9b). The marker file can be lost - an antivirus
+            // quarantine, a repair - and the truth about how this copy arrived cannot change, so a
+            // recorded answer always wins over a fresh look.
+            if (string.IsNullOrWhiteSpace(_config.InstallSource))
+            {
+                string dir = Path.GetDirectoryName(Environment.ProcessPath ?? "") ?? "";
+                _config = _config with { InstallSource = InstallSource.Detect(dir) };
+                _config.Save();
+                Log.Info("startup", $"install source recorded as {_config.InstallSource}");
+            }
+
             IReadOnlyList<Palette> palettes = PaletteStore.LoadFromDisk();
             // Follow Windows is read once, here. Switching the palette live when Windows flips
             // between light and dark mid-session lands with the settings surface in a later plan.
