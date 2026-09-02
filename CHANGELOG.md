@@ -97,6 +97,20 @@ into a numbered section on the first release.
   formats Skia cannot read, and - for a video matched at a moment in it - that frame rather
   than the poster.
 
+- **The indexer reads each kind of file only if the capability for it is installed**, and one
+  missing capability never stops the rest. With photos installed and speech not, a picture is
+  read and a sound file waits - both in the same pass, neither reported as a failure. A file
+  waiting for a model says so, so the capability that arrives later picks up exactly those
+  files and nothing else. Video counts as worth opening for either its frames or its sound
+  track, so a machine that took only speech still gets its videos transcribed; a long video
+  whose frames were read is recorded as read, with a note about the sound track that was not.
+  Words in documents keep working with no model on the machine at all.
+
+- **A replaced, deleted or newly unreadable file gives its vectors back.** The rows an edited
+  document's old text was embedded at are retired when the new ones are written, so the old
+  version stops answering queries beside the new one, and a deleted photo stops answering them
+  at all.
+
 ### Changed
 
 - **Content indexing is off until you ask for it**, including the free full-text search of

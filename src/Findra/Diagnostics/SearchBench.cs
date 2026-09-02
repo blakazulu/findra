@@ -532,8 +532,15 @@ public static class SearchBench
                     tx.Commit();
                 }
 
+                // No capability, and a store in the benchmark's own directory. The number this
+                // measures is extraction and full-text indexing; loading a model would change it,
+                // and writing into the real vector store would leave rows behind that the
+                // database referencing them is about to be deleted.
+                using var benchVectors = new VectorStore(Path.Combine(dir, "vectors.bin"), writer: true);
+                using var benchDecoders = new Decoders(CapabilitySet.None, benchVectors,
+                                                       () => TranscribeLimit.Off);
                 var sw = Stopwatch.StartNew();
-                Indexer.DrainOnce(bench, _ => { });
+                Indexer.DrainOnce(bench, _ => { }, benchDecoders);
                 sw.Stop();
                 seconds = sw.Elapsed.TotalSeconds;
             }
@@ -542,7 +549,8 @@ public static class SearchBench
                 $"{txtCount.ToString("N0", CultureInfo.InvariantCulture)} generated .txt of " +
                 $"{Kb(txtBytes / Math.Max(1, txtCount))} and " +
                 $"{docxCount.ToString("N0", CultureInfo.InvariantCulture)} generated .docx of " +
-                $"{Kb(docxBytes / Math.Max(1, docxCount))}, indexed into a throwaway database and deleted";
+                $"{Kb(docxBytes / Math.Max(1, docxCount))}, indexed into a throwaway database with no " +
+                "model loaded, and deleted";
 
             return (new ThroughputRow(ResultKind.Document, files.Count, seconds, txtBytes + docxBytes), note);
         }

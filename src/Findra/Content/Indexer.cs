@@ -25,8 +25,9 @@ public static class IndexerArgs
 
 // `findra.exe --index <parentPid>`: the content indexer, in its own process.
 //
-// It drains the queue the interface fills (the `pending` table): decodes the file and writes its
-// text segments and the full-text rows in one transaction. Everything expensive, and everything
+// It drains the queue the interface fills (the `pending` table): asks its IDecoders whether this
+// kind can be read at all, and if it can, writes the segments, the full-text rows and the vector
+// rows those segments point at in one transaction. Everything expensive, and everything
 // that can be taken down by a malformed file, happens HERE - so a bad PDF costs this process and
 // not the card, and the interface starts a fresh one. It parses untrusted file content, which is
 // exactly why it runs at normal integrity and the volume-reading helper does not (spec §3).
@@ -40,38 +41,30 @@ public static class IndexerArgs
 // Status goes back through the `meta` table, namespaced under `indexer:`.
 public sealed class Indexer
 {
-    /// <summary>Past this a "document" is a corpus - a database dump, a concatenated log - and
-    /// reading it whole costs minutes and finds nothing anyone was looking for.</summary>
-    public const long MaxDocBytes = 200L << 20;
-
-    /// <summary>Recorded against a file whose kind Findra cannot yet read INSIDE. It is a normal,
-    /// re-queueable outcome and never a failure: the capability that arrives later picks up exactly
-    /// the rows that carry it (spec §6, and <see cref="ContentDb.RequeueKinds"/>).</summary>
-    private const string NoDecoder = "no decoder for this kind yet";
-
-    /// <summary>Recorded against a file whose FORMAT this build has no reader for, as distinct from
-    /// <see cref="NoDecoder"/>'s "no model for this kind". Reading those bytes as text would index
-    /// zip structure and mojibake and call the file indexed; skipped with a reason of its own, a
-    /// later plan that adds a real reader re-queues exactly these rows and nothing else.</summary>
-    private const string NoFormatDecoder = "no decoder for this format yet";
-
     /// <summary>The queue reason that means "the bytes did not change, what Findra can do with them
     /// did". It reopens a file the index already holds as indexed; a skipped file is reopened
     /// whatever the reason says, because it was never opened in the first place.</summary>
     public const string Recheck = "recheck";
 
+    /// <summary>The meta row the interface writes the transcription limit to. The child reads it
+    /// per file, the same way it reads <c>index:power</c>, so raising the limit takes effect on
+    /// the next recording rather than on the next restart.</summary>
+    public const string TranscribeMinutesKey = "index:transcribeminutes";
+
     private readonly ContentDb _db;
     private readonly int _parentPid;
+    private readonly IDecoders _decoders;
     private readonly Stopwatch _clock = Stopwatch.StartNew();
     private long _done, _failed;
     private double _rateWindowStart;
     private long _rateWindowDone;
     private string _rate = "";
 
-    private Indexer(ContentDb db, int parentPid)
+    private Indexer(ContentDb db, int parentPid, IDecoders decoders)
     {
         _db = db;
         _parentPid = parentPid;
+        _decoders = decoders;
     }
 
     public static int Run(string[] args)
@@ -92,7 +85,11 @@ public sealed class Indexer
         try
         {
             using ContentDb db = ContentDb.OpenOrRebuild(dbPath);
-            Loop(db, parent, () => true);
+            // The only place in the product that opens a writer on the real vector store. It is
+            // held for the life of the process and disposed last, and the limit is read through a
+            // delegate rather than captured, so a change to the setting reaches the next file.
+            using IDecoders decoders = Decoders.ForThisMachine(() => TranscribeMinutes(db));
+            Loop(db, parent, () => true, decoders);
             Log.Info("index", "indexer down (clean)");
             Log.Flush();
             return 0;
@@ -105,13 +102,30 @@ public sealed class Indexer
         }
     }
 
+    /// <summary>How long a recording is worth transcribing, off the same meta row the interface
+    /// writes. Missing or unreadable is the default rather than "no limit": a machine that has
+    /// never been asked must not spend hours on the first four-hour recording it meets.</summary>
+    public static int TranscribeMinutes(ContentDb db)
+    {
+        ArgumentNullException.ThrowIfNull(db);
+        return int.TryParse(db.Get(TranscribeMinutesKey), NumberStyles.Integer, CultureInfo.InvariantCulture, out int m)
+            ? m
+            : TranscribeLimit.Default;
+    }
+
     /// <summary>Run the queue to empty in THIS process and return - how a diagnostic exercises the
     /// same code the child runs, with the outcome of every file on a console. The database is the
     /// caller's: it opened it, it closes it, and taking it as a parameter is what lets a probe
-    /// drain its own files against an index it is already holding.</summary>
-    public static void DrainOnce(ContentDb db, Action<string> report)
+    /// drain its own files against an index it is already holding.
+    ///
+    /// <para><paramref name="decoders"/> is the caller's too, and there is deliberately no overload
+    /// that builds one: an overload that quietly called <see cref="Decoders.ForThisMachine"/>
+    /// would hand a benchmark a writer on the user's real vector store and append rows for a
+    /// synthetic corpus that the database referencing them is about to delete. Making that a
+    /// compile error is worth more than a test.</para></summary>
+    public static void DrainOnce(ContentDb db, Action<string> report, IDecoders decoders)
     {
-        var ix = new Indexer(db, 0);
+        var ix = new Indexer(db, 0, decoders);
         long stuck = -1;
         string stuckOn = "";
         while (true)
@@ -180,8 +194,8 @@ public sealed class Indexer
     /// <paramref name="running"/> is asked once per pass, which is what lets something other than
     /// the process entry point - a diagnostic, a test - put files through the loop the child
     /// actually runs rather than through a copy of it.</summary>
-    public static void Loop(ContentDb db, int parentPid, Func<bool> running)
-        => new Indexer(db, parentPid).Loop(running);
+    public static void Loop(ContentDb db, int parentPid, Func<bool> running, IDecoders decoders)
+        => new Indexer(db, parentPid, decoders).Loop(running);
 
     private void Loop(Func<bool> running)
     {
@@ -267,13 +281,18 @@ public sealed class Indexer
         {
             if (item.Reason == ContentDb.ReasonDelete)
             {
-                using var tx = _db.Begin();
-                // Delete hands back the vector rows its segments pointed at. Nothing in this build
-                // owns a vector store, and every segment it writes carries Vec -1, so there is
-                // nothing here to release; the store that fills that column tombstones them.
-                _ = _db.Delete(item.Vol, item.Frn, tx);
-                _db.Dequeue(item.Id, tx);
-                tx.Commit();
+                // Delete hands back the vector rows its segments pointed at, and they are released
+                // AFTER the transaction commits: a tombstone is destructive, and a rollback that
+                // has already zeroed them leaves the surviving segments pointing at nothing. A
+                // photo deleted a year ago still answering a query is what discarding this costs.
+                List<long> gone;
+                using (var tx = _db.Begin())
+                {
+                    gone = _db.Delete(item.Vol, item.Frn, tx);
+                    _db.Dequeue(item.Id, tx);
+                    tx.Commit();
+                }
+                _decoders.Release(gone);
                 return "removed";
             }
 
@@ -305,28 +324,52 @@ public sealed class Indexer
                 return "current";
             }
 
-            (List<ContentDb.Segment> segments, string? skip) = item.Kind switch
+            if (!_decoders.CanRead(item.Kind))
             {
-                ResultKind.Document => Document(item.Path, fi.Length),
-                // Words in documents is free and always on; every other kind needs a model this
-                // build does not carry. That is a normal state, recorded by name, and never an
-                // error - the file is left exactly where a later capability can find it.
-                ResultKind.Photo or ResultKind.Video or ResultKind.Audio => ([], NoDecoder),
-                _ => ([], "not a content kind"),
-            };
+                // Not an error and not a failure: a normal state this machine is in until the
+                // capability that reads this kind arrives. The row stays exactly where
+                // RequeueKinds can find it (spec §6).
+                //
+                // The return is captured here for the same reason as the other three, and the
+                // case is real if rare: a machine that HAD a capability, indexed with it, and no
+                // longer has the files - somebody cleared %LOCALAPPDATA%\Findra\models by hand.
+                // The item drops back to Skipped, its segments go, and its vector rows have to go
+                // with them or they answer queries for a file the index no longer describes.
+                List<long> stale;
+                using (var tx = _db.Begin())
+                {
+                    stale = _db.Upsert(item.Vol, item.Frn, item.Path, item.Kind, mtime, fi.Length,
+                                       ContentDb.StateSkipped, Decoders.NoModel, [], tx);
+                    _db.Dequeue(item.Id, tx);
+                    tx.Commit();
+                }
+                _decoders.Release(stale);
+                _done++;
+                return "skipped";
+            }
 
+            KindResult decoded = _decoders.Decode(item.Kind, item.Path, fi.Length);
+
+            _decoders.Flush();                     // before the commit that references the rows
+            List<long> released;
             using (var tx = _db.Begin())
             {
-                int state = skip is not null ? ContentDb.StateSkipped : ContentDb.StateIndexed;
-                _ = _db.Upsert(item.Vol, item.Frn, item.Path, item.Kind, mtime, fi.Length, state, skip, segments, tx);
+                // The state follows Skip alone. Note goes into the same column and leaves the
+                // row INDEXED: a long video whose frames were read is not a file Findra failed
+                // to read, it is one it read incompletely, and the difference is visible in
+                // every count --searchindex prints.
+                int state = decoded.Skip is not null ? ContentDb.StateSkipped : ContentDb.StateIndexed;
+                released = _db.Upsert(item.Vol, item.Frn, item.Path, item.Kind, mtime, fi.Length,
+                                      state, decoded.Skip ?? decoded.Note, decoded.Segments, tx);
                 _db.Dequeue(item.Id, tx);
                 tx.Commit();
             }
+            _decoders.Release(released);            // after it
             _done++;
-            if (skip is not null) return "skipped";
+            if (decoded.Skip is not null) return "skipped";
 
             Log.Once($"index|first|{item.Kind}", "INFO", "index",
-                $"first {item.Kind.ToString().ToLowerInvariant()} indexed: {Path.GetFileName(item.Path)} -> {segments.Count.ToString(CultureInfo.InvariantCulture)} segment(s) in {sw.ElapsedMilliseconds.ToString(CultureInfo.InvariantCulture)} ms");
+                $"first {item.Kind.ToString().ToLowerInvariant()} indexed: {Path.GetFileName(item.Path)} -> {decoded.Segments.Count.ToString(CultureInfo.InvariantCulture)} segment(s) in {sw.ElapsedMilliseconds.ToString(CultureInfo.InvariantCulture)} ms");
             if (sw.ElapsedMilliseconds > 120_000)
                 Log.Warn("index", $"slow: {Path.GetFileName(item.Path)} took {sw.Elapsed.TotalSeconds.ToString("0", CultureInfo.InvariantCulture)}s ({item.Kind}, {(fi.Length / 1048576).ToString(CultureInfo.InvariantCulture)} MB)");
             return "indexed";
@@ -339,30 +382,21 @@ public sealed class Indexer
             try
             {
                 long mtime = File.Exists(item.Path) ? new FileInfo(item.Path).LastWriteTimeUtc.Ticks : 0;
-                using var tx = _db.Begin();
-                _ = _db.Upsert(item.Vol, item.Frn, item.Path, item.Kind, mtime, 0, ContentDb.StateFailed,
-                               $"{ex.GetType().Name}: {ex.Message}", Array.Empty<ContentDb.Segment>(), tx);
-                _db.Dequeue(item.Id, tx);
-                tx.Commit();
+                // A file that indexed once and later throws - a PDF replaced by a broken one -
+                // would otherwise keep its old vector rows for ever, and nothing will ever
+                // tombstone them because the item now says Failed.
+                List<long> dead;
+                using (var tx = _db.Begin())
+                {
+                    dead = _db.Upsert(item.Vol, item.Frn, item.Path, item.Kind, mtime, 0, ContentDb.StateFailed,
+                                      $"{ex.GetType().Name}: {ex.Message}", Array.Empty<ContentDb.Segment>(), tx);
+                    _db.Dequeue(item.Id, tx);
+                    tx.Commit();
+                }
+                _decoders.Release(dead);
             }
             catch (Exception ex2) { Log.Once("index|fail|record", "ERROR", "index", $"could not record a failure :: {ex2.Message}"); }
             return "FAILED";
         }
-    }
-
-    // ---- kinds ----
-
-    // Text only. `Vec` is -1 on every segment: "no vector row", which is the whole of what a
-    // model-free build can say about one.
-    private static (List<ContentDb.Segment>, string?) Document(string path, long bytes)
-    {
-        if (bytes > MaxDocBytes) return ([], "too large");
-        if (!DocText.CanExtract(path)) return ([], NoFormatDecoder);
-        string text = DocText.Extract(path);
-        if (text.Length < 40) return ([], "no text");
-        var segs = new List<ContentDb.Segment>();
-        foreach (string chunk in DocText.Chunk(text))
-            segs.Add(new ContentDb.Segment(ContentDb.SegText, -1, -1, -1, chunk));
-        return (segs, null);
     }
 }

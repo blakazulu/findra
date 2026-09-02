@@ -19,7 +19,27 @@ public sealed class IndexerTests : IDisposable
 
     private ContentDb Open() => new(Under("search.db"));
 
-    public void Dispose() { try { Directory.Delete(_dir, true); } catch { } }
+    private VectorStore? _vectors;
+    private Decoders? _decoders;
+
+    /// <summary>The decoder set these tests drain with: no capability at all, an empty model
+    /// folder, and a vector store in this test's own temp directory. Deliberately
+    /// <see cref="CapabilitySet.None"/> rather than what the machine has, so that what these
+    /// tests assert about a photo does not change when somebody installs a model - and never
+    /// <see cref="Decoders.ForThisMachine"/>, which takes a writer on the real index.</summary>
+    private IDecoders Dec()
+    {
+        Directory.CreateDirectory(_dir);
+        _vectors ??= new VectorStore(Path.Combine(_dir, "vectors.bin"), writer: true);
+        return _decoders ??= new Decoders(CapabilitySet.None, _vectors, modelDir: _dir);
+    }
+
+    public void Dispose()
+    {
+        _decoders?.Dispose();
+        _vectors?.Dispose();
+        try { Directory.Delete(_dir, true); } catch { }
+    }
 
     [Theory]
     [InlineData(new[] { "--index", "4321" }, 4321)]
@@ -47,7 +67,7 @@ public sealed class IndexerTests : IDisposable
         db.Enqueue("C", 1, doc, ResultKind.Document, "probe");
 
         var lines = new List<string>();
-        Indexer.DrainOnce(db, lines.Add);
+        Indexer.DrainOnce(db, lines.Add, Dec());
 
         Assert.Equal(0, db.PendingCount());
         Assert.Equal(1, db.IndexedCount());
@@ -73,7 +93,7 @@ public sealed class IndexerTests : IDisposable
         db.Enqueue("C", 1, photo, ResultKind.Photo, "probe");
         db.Enqueue("C", 2, doc, ResultKind.Document, "probe");
 
-        Indexer.DrainOnce(db, _ => { });
+        Indexer.DrainOnce(db, _ => { }, Dec());
 
         (long queued, long indexed, long failed, long skipped) = db.Counts();
         Assert.Equal(0, queued);
@@ -92,7 +112,7 @@ public sealed class IndexerTests : IDisposable
         using ContentDb db = Open();
         db.Enqueue("C", 1, Under("never-existed.txt"), ResultKind.Document, "probe");
 
-        Indexer.DrainOnce(db, _ => { });
+        Indexer.DrainOnce(db, _ => { }, Dec());
 
         Assert.Equal(0, db.PendingCount());
         Assert.Equal((0L, 0L, 0L, 0L), db.Counts());   // nothing indexed, nothing failed
@@ -108,7 +128,7 @@ public sealed class IndexerTests : IDisposable
         using ContentDb db = Open();
         db.Enqueue("C", 1, pdf, ResultKind.Document, "probe");
 
-        Indexer.DrainOnce(db, _ => { });
+        Indexer.DrainOnce(db, _ => { }, Dec());
 
         Assert.Equal(0, db.PendingCount());
         Assert.Equal(1, db.Counts().Failed);
@@ -153,7 +173,7 @@ public sealed class IndexerTests : IDisposable
 
         using ContentDb db = Open();
         db.Enqueue("C", 1, doc, ResultKind.Document, "probe");
-        Indexer.DrainOnce(db, _ => { });
+        Indexer.DrainOnce(db, _ => { }, Dec());
 
         Assert.NotEmpty(db.Fts("zygomorphic", 10));   // first chunk
         Assert.NotEmpty(db.Fts("brachiate", 10));     // somewhere in the middle
@@ -175,7 +195,7 @@ public sealed class IndexerTests : IDisposable
         db.Enqueue("C", 1, photo, ResultKind.Photo, "probe");
 
         var pass1 = new List<string>();
-        Indexer.DrainOnce(db, pass1.Add);
+        Indexer.DrainOnce(db, pass1.Add, Dec());
         foreach (string l in pass1) _out.WriteLine("pass1: " + l);
         Assert.Equal(1, db.Counts().Skipped);
 
@@ -184,7 +204,7 @@ public sealed class IndexerTests : IDisposable
         Assert.Equal(1, requeued);
 
         var pass2 = new List<string>();
-        Indexer.DrainOnce(db, pass2.Add);
+        Indexer.DrainOnce(db, pass2.Add, Dec());
         foreach (string l in pass2) _out.WriteLine("pass2: " + l);
 
         // "current" means the row was dequeued without the decoder ever being asked.
@@ -204,17 +224,17 @@ public sealed class IndexerTests : IDisposable
 
         using ContentDb db = Open();
         db.Enqueue("C", 1, doc, ResultKind.Document, "probe");
-        Indexer.DrainOnce(db, _ => { });
+        Indexer.DrainOnce(db, _ => { }, Dec());
         Assert.Equal(1, db.IndexedCount());
 
         db.Enqueue("C", 1, doc, ResultKind.Document, "documents enabled");
         var lines = new List<string>();
-        Indexer.DrainOnce(db, lines.Add);
+        Indexer.DrainOnce(db, lines.Add, Dec());
         Assert.Contains(lines, l => l.Contains("current", StringComparison.Ordinal));
 
         db.Enqueue("C", 1, doc, ResultKind.Document, Indexer.Recheck);
         lines.Clear();
-        Indexer.DrainOnce(db, lines.Add);
+        Indexer.DrainOnce(db, lines.Add, Dec());
         Assert.Contains(lines, l => l.Contains("indexed", StringComparison.Ordinal));
     }
 
@@ -238,7 +258,7 @@ public sealed class IndexerTests : IDisposable
 
         using ContentDb db = Open();
         db.Enqueue("C", 1, f, ResultKind.Document, "probe");
-        Indexer.DrainOnce(db, _ => { });
+        Indexer.DrainOnce(db, _ => { }, Dec());
 
         Assert.Equal((0L, 0L, 0L, 1L), db.Counts());
         Assert.Contains(db.Describe(f), r => r.Contains("no decoder for this format yet", StringComparison.Ordinal));
@@ -261,7 +281,7 @@ public sealed class IndexerTests : IDisposable
 
         using ContentDb db = Open();
         db.Enqueue("C", 1, odt, ResultKind.Document, "probe");
-        Indexer.DrainOnce(db, _ => { });
+        Indexer.DrainOnce(db, _ => { }, Dec());
 
         Assert.Equal(0, db.IndexedCount());
         Assert.Equal(1, db.Counts().Skipped);
@@ -303,7 +323,7 @@ public sealed class IndexerTests : IDisposable
 
         int passes = 0;
         var sw = Stopwatch.StartNew();
-        Indexer.Loop(db, parentPid: 0, running: () => passes++ < 2);
+        Indexer.Loop(db, parentPid: 0, running: () => passes++ < 2, decoders: Dec());
         sw.Stop();
         _out.WriteLine($"two passes took {sw.ElapsedMilliseconds.ToString(System.Globalization.CultureInfo.InvariantCulture)} ms");
 
@@ -330,7 +350,7 @@ public sealed class IndexerTests : IDisposable
         Assert.Equal(ContentDb.ReasonDelete, first.Value.Reason);   // deletes are taken first
 
         var lines = new List<string>();
-        Indexer.DrainOnce(db, lines.Add);
+        Indexer.DrainOnce(db, lines.Add, Dec());
         Assert.Contains(lines, l => l.StartsWith("removed", StringComparison.Ordinal));
     }
 }

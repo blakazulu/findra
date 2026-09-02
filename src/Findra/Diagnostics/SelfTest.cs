@@ -137,7 +137,14 @@ public static class SelfTest
                 File.WriteAllText(doc, "Findra self-test: the quarterly lease agreement and its deposit.");
                 using var db = new ContentDb(Path.Combine(dir, "search.db"));
                 db.Enqueue("C", 1, doc, ResultKind.Document, "selftest");
-                Indexer.DrainOnce(db, _ => { });
+                // A vector store in the same throwaway folder, never the real one: a self-test
+                // that appended rows to somebody's index would be exactly the file-leaving this
+                // check was written to avoid. The capability set is whatever this machine has,
+                // because the check is worth more when it exercises that, and the limit is the
+                // default because what it drains is a .txt.
+                using var vectors = new VectorStore(Path.Combine(dir, "vectors.bin"), writer: true);
+                using var decoders = new Decoders(CapabilitySet.Installed(), vectors);
+                Indexer.DrainOnce(db, _ => { }, decoders);
                 if (db.PendingCount() != 0) return "the queue did not drain";
                 if (db.Fts("deposit", 5).Count != 1) return "the indexed word was not found again";
                 // Through the branch the card actually calls, not just the store: the grammar, the

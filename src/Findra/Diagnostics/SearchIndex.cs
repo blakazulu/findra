@@ -197,7 +197,21 @@ public static class SearchIndex
             Console.WriteLine($"queued {queuedCount.ToString(CultureInfo.InvariantCulture)}, pending now {db.PendingCount().ToString("N0", CultureInfo.InvariantCulture)}");
             Console.WriteLine();
             Console.WriteLine("draining...");
-            Indexer.DrainOnce(db, line => Console.WriteLine("  " + line));
+            // This one drains the REAL index, so it wants the real decoders - but the running
+            // child already holds vectors.bin open and a second writer is an IOException out of an
+            // unhandled path. Queueing without draining is the honest outcome: the rows are in
+            // `pending` and the child picks them up within a couple of seconds.
+            IDecoders? decoders = null;
+            try { decoders = Decoders.ForThisMachine(() => Indexer.TranscribeMinutes(db)); }
+            catch (IOException ex)
+            {
+                Console.WriteLine($"  not draining: the indexer already has the vector store open ({ex.Message}).");
+                Console.WriteLine("  the queued files stay queued; Findra's own indexer will take them.");
+            }
+            if (decoders is not null)
+            {
+                using (decoders) Indexer.DrainOnce(db, line => Console.WriteLine("  " + line), decoders);
+            }
             Console.WriteLine();
         }
 

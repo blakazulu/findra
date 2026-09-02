@@ -741,6 +741,37 @@ CREATE TABLE IF NOT EXISTS opened(path TEXT PRIMARY KEY, count INTEGER NOT NULL,
         return list;
     }
 
+    /// <summary>The files that were skipped rather than read, newest first. Skipping is a normal
+    /// state and not a failure, so these never appear in <see cref="RecentFailures"/> - and
+    /// without this the recorded reason a skip carries has no reader at all, which is how "waiting
+    /// for a model" becomes indistinguishable from "too big to read".</summary>
+    public List<(string Path, string Error)> RecentSkips(int limit)
+    {
+        var list = new List<(string, string)>();
+        using var cmd = _c.CreateCommand();
+        cmd.CommandText = "SELECT path, COALESCE(error,'') FROM items WHERE state=3 ORDER BY indexed_at DESC, id DESC LIMIT $n";
+        cmd.Parameters.AddWithValue("$n", limit);
+        using var r = cmd.ExecuteReader();
+        while (r.Read()) list.Add((r.GetString(0), r.GetString(1)));
+        return list;
+    }
+
+    /// <summary>How many items carry this recorded reason, whatever state they are in.
+    ///
+    /// <para>Deliberately no state clause. The reason column holds two different facts: why a file
+    /// was skipped, and what was left undone on a file that really was indexed - a long video
+    /// whose frames were read and whose sound track was not is INDEXED and carries
+    /// <see cref="Decoders.TooLong"/>. Counting only skipped rows would report a whole film
+    /// library as unread, and raising the transcription limit later would reach none of it.</para>
+    /// </summary>
+    public long CountRecorded(string reason)
+    {
+        using var cmd = _c.CreateCommand();
+        cmd.CommandText = "SELECT COUNT(*) FROM items WHERE error = $r";
+        cmd.Parameters.AddWithValue("$r", reason);
+        return (long)(cmd.ExecuteScalar() ?? 0L);
+    }
+
     /// <summary>Is this file already indexed at this mtime? The UI asks before queuing during the
     /// first pass, so a restart does not re-queue a whole drive.</summary>
     public bool IsCurrent(string vol, ulong frn, long mtime)
@@ -816,10 +847,10 @@ CREATE TABLE IF NOT EXISTS opened(path TEXT PRIMARY KEY, count INTEGER NOT NULL,
 
     /// <summary>Replace an item's segments with a fresh set.
     ///
-    /// <para>Returns the <c>vec</c> values the replaced segments carried. This build writes -1 on
-    /// every segment it creates, so that list is always empty and no caller has anything to do
-    /// with it; the column and this return exist so the row shape does not have to change when
-    /// something starts filling it.</para></summary>
+    /// <para>Returns the <c>vec</c> values the replaced segments carried, for the caller to
+    /// tombstone AFTER this transaction commits. Discarding them is a leak with no symptom
+    /// anybody can see: the old embedding of an edited document goes on matching queries for
+    /// ever, beside the new one.</para></summary>
     public List<long> Upsert(string vol, ulong frn, string path, ResultKind kind, long mtime, long size,
         int state, string? error, IReadOnlyList<Segment> segments, SqliteTransaction tx)
     {
@@ -872,8 +903,8 @@ CREATE TABLE IF NOT EXISTS opened(path TEXT PRIMARY KEY, count INTEGER NOT NULL,
     }
 
     /// <summary>Drop an item and every segment under it, and take its text back out of the
-    /// full-text index. Returns the <c>vec</c> values those segments carried - empty in this
-    /// build, for the reason <see cref="Upsert"/> gives.</summary>
+    /// full-text index. Returns the <c>vec</c> values those segments carried, for the reason
+    /// <see cref="Upsert"/> gives - a deleted photo answering a query is the visible form.</summary>
     public List<long> Delete(string vol, ulong frn, SqliteTransaction tx)
     {
         using var claim = Enter();
