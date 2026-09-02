@@ -63,6 +63,20 @@ public class ShotTests
     }
 
     [Fact]
+    public void EverySectionOfTheSettingsWindowHasAShotOfItsOwn()
+    {
+        // "--searchshot must learn every new palette and every new surface as it is written"
+        // (spec 9). A section added later with no shot is invisible to every automated check in
+        // the project, including the render sweep above and the legibility pass.
+        foreach (Section s in RailLayout.Sections)
+        {
+            string want = "settings" + s.ToString().ToLowerInvariant();
+            Assert.True(SearchShot.States.Contains(want) || (s == Section.Look && SearchShot.States.Contains("settings")),
+                $"no --searchshot state for the {s} section");
+        }
+    }
+
+    [Fact]
     public void AnUnknownStateOrPaletteFailsLoudlyRatherThanRenderingSomethingWrong()
     {
         string path = Path.Combine(Path.GetTempPath(), "findra-shot-bad.png");

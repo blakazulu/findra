@@ -1,4 +1,6 @@
 using System.Linq;
+
+using Findra.Startup;   // HelperTaskState, for the settings shot
 using SkiaSharp;
 
 namespace Findra.Diagnostics;
@@ -18,7 +20,10 @@ namespace Findra.Diagnostics;
 public static class SearchShot
 {
     public static readonly IReadOnlyList<string> States =
-        ["capsule", "empty", "typing", "results", "noresults", "many", "adv", "opening", "openingempty"];
+    [
+        "capsule", "empty", "typing", "results", "noresults", "many", "adv", "opening", "openingempty",
+        "settings", "settingsopening", "settingssearches", "settingscontent", "settingsabout",
+    ];
 
     public static int Render(string outPath, string state, string? paletteName = null)
     {
@@ -59,7 +64,10 @@ public static class SearchShot
         // mockup. Parts.Face falls back to the default on its own if the resource is missing.
         SKTypeface face = Parts.Face;
 
-        using SKBitmap content = state == "capsule" ? RenderCapsule(d, face) : RenderCard(state, d, face);
+        using SKBitmap content =
+            state == "capsule" ? RenderCapsule(d, face)
+            : state.StartsWith("settings", StringComparison.Ordinal) ? RenderSettings(state, d, face)
+            : RenderCard(state, d, face);
 
         int w = content.Width, h = content.Height;
         var info = new SKImageInfo(w, h, SKColorType.Bgra8888, SKAlphaType.Premul);
@@ -105,6 +113,54 @@ public static class SearchShot
                                    SKColorType.Bgra8888, SKAlphaType.Premul);
         using SKSurface surface = SKSurface.Create(info);
         CapsulePainter.Paint(surface.Canvas, "Search 1.5M files", "indexing 4,120 to go", 0.62f, d, face);
+        surface.Canvas.Flush();
+        var bmp = new SKBitmap(info);
+        surface.ReadPixels(info, bmp.GetPixels(), info.RowBytes, 0, 0);
+        return bmp;
+    }
+
+    private static SKBitmap RenderSettings(string state, Derived d, SKTypeface face)
+    {
+        Section section = state switch
+        {
+            "settingsopening" => Section.Opening,
+            "settingssearches" => Section.Searches,
+            "settingscontent" => Section.Content,
+            "settingsabout" => Section.About,
+            _ => Section.Look,
+        };
+
+        var config = Config.Default with
+        {
+            DarkPalette = "Brass", LightPalette = "Blueprint", Hotkey = "Alt+Space",
+            IndexContent = true, TranscribeMinutes = 30, InstallSource = "winget",
+            IndexDrives = ["C"], SearchExclusions = [.. FileKinds.DefaultExclusions],
+        };
+
+        var s = new SettingsState(config)
+        {
+            Section = section,
+            Palettes = PaletteStore.LoadFromDisk(),        // once, here, not per swatch per frame
+            Drives = ["C", "D", "E"],
+            HebrewOffered = true,
+            Helper = section == Section.Opening ? HelperTaskState.Unknown : HelperTaskState.Registered,
+            // The rebind message is a shot state for its own reason: spec 7 insists it must never
+            // be silent, and no unit test looks at pixels.
+            HotkeyMessage = section == Section.Opening
+                ? "Ctrl+Shift+P is taken by something else. Findra kept Alt+Space." : "",
+            EverIndexed = true, IndexerAlive = true,
+            // Scrolled, because the exclusions list is the only scroller in the product and an
+            // unscrolled list never shows what a partial page looks like.
+            ExclusionScroll = section == Section.Searches ? 6 : 0,
+            Installed = new CapabilitySet(new HashSet<Capability> { Capability.Meaning }),
+            Version = BuildInfo.Version, Update = UpdateState.Available, Latest = "1.4.0",
+            HoverTarget = PanelTarget.Section, HoverRow = 1,
+        };
+
+        int w = (int)Math.Ceiling(RailLayout.Width), h = (int)Math.Ceiling(RailLayout.Height);
+        var info = new SKImageInfo(w, h, SKColorType.Bgra8888, SKAlphaType.Premul);
+        using SKSurface surface = SKSurface.Create(info);
+        SettingsPainter.Paint(surface.Canvas, s, d, face);
         surface.Canvas.Flush();
         var bmp = new SKBitmap(info);
         surface.ReadPixels(info, bmp.GetPixels(), info.RowBytes, 0, 0);
