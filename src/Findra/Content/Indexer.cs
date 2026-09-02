@@ -140,10 +140,16 @@ public sealed class Indexer
         if (stuckOn.Length > 0) ix.Status("stuck", stuckOn); else ix.Status("idle");
     }
 
-    // The parent is polled rather than waited on: a handle would have to be inherited or opened by
-    // pid, and both add a failure mode to a check that is allowed to be approximate. Any exception
-    // here - the pid is gone, or was recycled into something this process cannot open - means the
-    // parent this child belongs to is not there any more.
+    // THE FALLBACK, not the mechanism. What actually stops this process when the interface goes is
+    // the kill-on-close job object the interface put it in (see JobObject and IndexerHost): the
+    // kernel terminates whatever is in the job when the last handle to it closes, which happens
+    // however the interface dies. This poll exists for the environment that refused the
+    // assignment, and IndexerHost logs which of the two is in force.
+    //
+    // It is deliberately kept, and it is deliberately not trusted on its own: Windows reuses
+    // process ids, so a parent id reissued to something else between two polls reads as a live
+    // parent forever. Any exception here - the pid is gone, or was recycled into something this
+    // process cannot open - means the parent this child belongs to is not there any more.
     private bool ParentGone()
     {
         if (_parentPid <= 0) return false;
