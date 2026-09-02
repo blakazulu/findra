@@ -1,0 +1,35 @@
+name: build
+
+# Every push, not just main. The settled decision was continuous integration on every push, and a
+# branch filter means a branch pushed without a pull request is never built - which is most of how
+# work actually arrives here.
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: build
+        run: dotnet build --configuration Release -warnaserror
+
+      - name: test
+        run: dotnet test --configuration Release --no-build --verbosity normal
+
+      # Published rather than run from bin/: the diagnostics are checked in the shape a stranger
+      # gets them, self-contained, with no SDK underneath.
+      - name: publish
+        run: pwsh -File build/Publish.ps1 -Rid win-x64
+
+      - name: the headless diagnostics
+        run: pwsh -File build/Check-Diagnostics.ps1 -Exe publish/win-x64/findra.exe

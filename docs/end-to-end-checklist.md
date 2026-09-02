@@ -240,7 +240,29 @@ moment rather than an elevation prompt at every launch.
     prompt - and the scheduled task must still point at a findra.exe that exists when the
     machine next signs in.
 
+35. **The first push, which is the first time GitHub Actions has ever run here.** The repository
+    has never been pushed, so `.github/workflows/ci.yml` has been asserted as text and nothing
+    more - `WorkflowTests` reads its triggers, its `-warnaserror`, and the PowerShell inside any
+    block it carries, but no runner has executed a line of it. On the first push to any branch:
+
+    - a run named **build** starts. If nothing starts, the trigger block is wrong, and that is
+      the one thing the text tests cannot see;
+    - `dotnet build --configuration Release -warnaserror` and `dotnet test` are both green on a
+      clean checkout. A restore that only works because of this machine's NuGet cache fails here
+      and nowhere else;
+    - `build/Publish.ps1 -Rid win-x64` succeeds on a runner, where `dotnet publish` has no
+      warmed-up obj/ to lean on;
+    - `build/Check-Diagnostics.ps1` prints thirteen `ok` lines and `diagnostics: all modes
+      answered`. It printed exactly that here, but on a machine with a content index, a
+      configured palette and a `%LOCALAPPDATA%\Findra`. A runner has none of those, and the
+      modes that read them - `--searchindex`, `--content`, `--models`, `--searchshot` - are
+      taking their empty path there for the first time.
+
+    A failure in the last of those is the interesting one: it means a diagnostic that works on a
+    developer's machine does not work on a stranger's, which is the whole reason the check runs
+    at all.
+
 ## Notes
 
-Steps 1 to 4, 9 to 13 and 29 to 34 are the ones that have never executed in any form. Steps 5 to 8
+Steps 1 to 4, 9 to 13 and 29 to 35 are the ones that have never executed in any form. Steps 5 to 8
 have been verified by log line and by inspection, but not by eye.

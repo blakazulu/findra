@@ -10,6 +10,12 @@
   <ItemGroup>
     <PackageReference Include="coverlet.collector" Version="6.0.4" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
+    <!--
+      Test-only, and it never reaches src/Findra. It is what lets WorkflowTests parse the
+      PowerShell inside a workflow's run: block without running it - no runner exists on this
+      machine, so a syntax error in a release script would otherwise be found by the release.
+    -->
+    <PackageReference Include="System.Management.Automation" Version="7.4.6" />
     <PackageReference Include="xunit" Version="2.9.3" />
     <PackageReference Include="xunit.runner.visualstudio" Version="3.1.4" />
   </ItemGroup>
