@@ -242,6 +242,14 @@ into a numbered section on the first release.
   already installed. About reports the version, what the last check found, and the action
   that matches how this copy was installed.
 
+- **The settings screen is drawn, and can be looked at without opening a window.** Every
+  section is painted from the same parts the rest of Findra is built from, inside the same
+  accent-lit outline the results card already has, so the two read as one object seen twice.
+  The section you are in is marked in the accent colour rather than by a fill a shade away
+  from the one under your pointer. `--searchshot` learned five new pictures - `settings`,
+  `settingsopening`, `settingssearches`, `settingscontent` and `settingsabout` - so every
+  section can be reviewed in any of the six palettes on a machine that has never run Findra.
+
 - **A copy installed from the downloaded installer is told to download the new one**, rather
   than to run a winget upgrade for a package winget has never heard of on that machine.
 
