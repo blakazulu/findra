@@ -47,18 +47,6 @@ public class UninstallTests : IDisposable
         Assert.Empty(plan.Deletes);
     }
 
-    [Theory]
-    [InlineData(HelperTaskState.Registered)]
-    [InlineData(HelperTaskState.NotRegistered)]
-    [InlineData(HelperTaskState.Unknown)]
-    public void TheTaskIsRemovedWhateverTheQuerySaidIncludingThatItCouldNotTell(HelperTaskState state)
-    {
-        // HelperTask.Query is three-valued precisely because a locked-down machine and a fresh one
-        // look identical otherwise. Treating Unknown as "nothing to do" is how the orphan survives
-        // on exactly the machines least able to clean it up by hand.
-        Assert.True(Uninstall.ShouldRemoveTask(state));
-    }
-
     [Fact]
     public void EverythingIsStoppedBeforeAnythingIsRemoved()
     {

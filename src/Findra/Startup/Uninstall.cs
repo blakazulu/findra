@@ -51,15 +51,6 @@ public static class Uninstall
         return purge ? new UninstallPlan(steps, measured, []) : new UninstallPlan(steps, [], measured);
     }
 
-    /// <summary>Unknown counts as "remove it". Query is three-valued so a locked-down machine is
-    /// distinguishable from a fresh one; both still need the task gone, and deleting a task that is
-    /// not there costs one non-zero exit code nobody acts on.
-    ///
-    /// <para>Its test covers this function and not its caller: nothing asserts that <c>Run</c>
-    /// consults it, so writing <c>if (state == Registered)</c> at the call site instead would pass.
-    /// End-to-end checklist step 33 is what proves the task is really gone.</para></summary>
-    public static bool ShouldRemoveTask(HelperTaskState state) => true;
-
     public static Route Decide(bool elevated, bool relaunched) =>
         elevated ? Route.Proceed : relaunched ? Route.Fail : Route.Elevate;
 
@@ -282,6 +273,12 @@ public static class Uninstall
 
         // 4..5 - the two that matter most, and the two that are done BEFORE any deletion, so a
         // failure in the delete loop still leaves a machine with no orphaned elevated task.
+        // Unconditionally, and never behind a check of what Query said. Query is three-valued so
+        // that a locked-down machine is distinguishable from a fresh one, but both still need the
+        // task gone: treating Unknown as "nothing to do" is how the orphan survives on exactly the
+        // machines least able to clear it by hand. Removing a task that was not there costs one
+        // non-zero exit code nobody acts on, which is the cheaper of the two mistakes by a wide
+        // margin. End-to-end checklist step 33 is what proves it is really gone.
         bool taskGone = HelperTask.Unregister();
         Autostart.Clear();
 
