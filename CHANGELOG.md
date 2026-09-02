@@ -42,6 +42,11 @@ into a numbered section on the first release.
   resumable work queue, and a consumed journal position per volume, so an interrupted
   index continues rather than starting over.
 
+- **A privacy policy** at `PRIVACY.md`, saying what Findra stores, where, and the single
+  request that leaves the machine. It states plainly that the index holds the text of the
+  documents it indexed and is not encrypted, which is one reason content indexing is off
+  until you ask for it.
+
 ### Changed
 
 - **Content indexing is off until you ask for it**, including the free full-text search of
@@ -55,12 +60,6 @@ into a numbered section on the first release.
   pictures, transcribing speech and pulling frames out of video all use decoders Windows only
   publishes from that build onwards, so the whole application is built against it.
 
-### Added
-
-- **A privacy policy** at `PRIVACY.md`, saying what Findra stores, where, and the single
-  request that leaves the machine. It states plainly that the index holds the text of the
-  documents it indexed and is not encrypted, which is one reason content indexing is off
-  until you ask for it.
 
 ### Security
 
