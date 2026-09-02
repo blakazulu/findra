@@ -28,6 +28,8 @@ public static class Program
                 args.Length > 2 ? args[2] : "results",
                 args.Length > 3 ? args[3] : null),
             "--version"     => Version(),
+            "--uninstall"   => Startup.Uninstall.Run(args),
+            "--stop"        => Startup.Uninstall.StopAll(),
 
             // A mistyped mode must not look like a success. `--searchprob` falling through to
             // the no-argument greeting exits 0, which is what a script checks, so the typo
@@ -87,6 +89,10 @@ public static class Program
         Console.Error.WriteLine("  --searchshot out.png <state> [palette]   render a surface, no screen required");
         Console.Error.WriteLine("                           palette defaults to the configured one, not a fixed built-in");
         Console.Error.WriteLine("  --version                print the version and log location, then exit");
+        Console.Error.WriteLine("  --uninstall [--purge]    remove the scheduled task, the autostart entry and Findra");
+        Console.Error.WriteLine("                           --purge also deletes the models, the index and the settings");
+        Console.Error.WriteLine("                           --dry-run prints what it would do and changes nothing");
+        Console.Error.WriteLine("  --stop                   stop the interface, the indexer and the name helper");
         return 1;
     }
 

@@ -215,6 +215,22 @@ into a numbered section on the first release.
   beside the application in every copy. If the font is ever missing, Findra falls back to the
   system face and says so in the log rather than refusing to start.
 
+- **`findra --uninstall` takes Findra off a machine properly, and keeps your work.** It stops
+  the interface, the indexer and the name helper, then removes the scheduled task that starts
+  the helper when you sign in and the start-with-Windows entry, so nothing elevated is left
+  pointing at a program that is no longer there. Your models, your index and your settings are
+  kept. Adding `--purge` deletes those as well, after saying in measured megabytes how much
+  that would free and naming any `palettes.json` you wrote yourself as something that goes with
+  them. `--dry-run` prints the whole plan and changes nothing. Nothing outside
+  `%LOCALAPPDATA%\Findra\` and `%APPDATA%\Findra\` is ever deleted, and one folder that will
+  not go is reported instead of stopping the rest. `findra --stop` closes the three processes
+  on their own.
+
+- **Findra records how it was installed, once.** Whether this copy came from winget, from the
+  installer or from a source build is read at first run and remembered, so when a newer version
+  exists the advice matches the way you actually got this one instead of being guessed afresh
+  at every launch.
+
 ### Changed
 
 - **Content indexing is off until you ask for it**, including the free full-text search of
