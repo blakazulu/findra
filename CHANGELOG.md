@@ -253,6 +253,22 @@ into a numbered section on the first release.
 - **A copy installed from the downloaded installer is told to download the new one**, rather
   than to run a winget upgrade for a package winget has never heard of on that machine.
 
+- **The settings window opens, and every control in it does something.** Settings is on the
+  tray menu. Changing a palette repaints the window, the capsule and the tray icon with no
+  restart; "Open the file" opens `palettes.json`, writing it first if it was never there;
+  clicking the hotkey row listens for the next combination you press and rebinds it there and
+  then, keeping the old one if the new one is already taken and saying so; the sign-in switch
+  writes and removes the registry entry; the name helper's row registers the scheduled task and
+  starts it in the same session; "Add a folder" opens the Windows folder picker; a capability's
+  size button downloads it, resuming anything half-fetched; "Check now" asks GitHub and the
+  About line changes to what it found; and "Bring the capsule back" moves the capsule now
+  rather than at the next launch.
+
+- **The capsule has a right-click menu**, so most people never open settings at all: the
+  palettes of the side actually on screen with a tick beside the one in use, a switch for
+  reading inside files that says plainly when it is on but nothing is running, a way into
+  settings and a way out.
+
 ### Changed
 
 - **Content indexing is off until you ask for it**, including the free full-text search of
