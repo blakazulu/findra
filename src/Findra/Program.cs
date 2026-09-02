@@ -10,6 +10,7 @@ public static class Program
         return mode switch
         {
             "--names"       => RunNames(),
+            "--index"       => Indexer.Run(args),
             "--searchprobe" => Diagnostics.SearchProbe.RunAsync(args).GetAwaiter().GetResult(),
             "--searchtest"  => Diagnostics.SelfTest.Run(),
             "--searchshot"  => Diagnostics.SearchShot.Render(
@@ -46,6 +47,7 @@ public static class Program
         Console.Error.WriteLine($"findra: unknown mode '{mode}'");
         Console.Error.WriteLine();
         Console.Error.WriteLine("  --names                  the elevated name-index helper");
+        Console.Error.WriteLine("  --index <parentPid>      the content indexer, started by the UI - not run by hand");
         Console.Error.WriteLine("  --searchprobe [query]    the whole query path, end to end");
         Console.Error.WriteLine("  --searchtest             engine self-check");
         Console.Error.WriteLine("  --searchshot out.png <state> [palette]   render a surface, no screen required");
