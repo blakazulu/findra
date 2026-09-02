@@ -3,10 +3,10 @@ using Xunit;
 
 /// <summary>
 /// The writer connection is owned by one flow at a time, and that has to be enforced rather than
-/// remembered. The failure it prevents was measured in the engine this code was ported from: two
-/// flows shared one connection, both opened a transaction, the provider refused the second, the
-/// catch swallowed it, and the batch of changes had already been taken out of its queue - so those
-/// files stayed stale for good, and the log said so once and then never again.
+/// remembered. The failure it prevents is a measured one, not a theory: two flows share one
+/// connection, both open a transaction, the provider refuses the second, the catch swallows it,
+/// and the batch of changes has already been taken out of its queue - so those files stay stale
+/// for good, and the log says so once and then never again.
 /// </summary>
 public sealed class WriterOwnershipTests : IDisposable
 {

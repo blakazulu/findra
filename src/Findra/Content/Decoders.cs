@@ -79,11 +79,11 @@ public sealed class Decoders : IDecoders
     /// long archive would be gigabytes of List&lt;float&gt;. A recording longer than this is
     /// transcribed up to here and the log line says so.
     ///
-    /// <para>An hour for audio and three minutes for a video's sound track are the ancestors of
-    /// <see cref="TranscribeLimit.Default"/> and are deliberately NOT carried over as behaviour.
-    /// They are two constants making a decision that costs hours of somebody else's machine, and
-    /// one of them applied to audio while the other applied to video - an asymmetry that would be
-    /// invisible in the interface.</para>
+    /// <para>An hour for audio and three minutes for a video's sound track is the shape this
+    /// deliberately does NOT have. That is two constants taking a decision that costs hours of
+    /// somebody else's machine, and taking it differently for a sound file and for a video of the
+    /// same length - an asymmetry nothing in the interface could show. The decision belongs to
+    /// <see cref="TranscribeLimit"/>, as one number, and to the person using it.</para>
     /// </summary>
     public const double MaxDecodeSeconds = 4 * 3600;
 

@@ -2,6 +2,9 @@ using Findra;
 using Findra.Pipe;
 using Xunit;
 
+// It assigns CurrentCulture, and CultureCollection exists to stop a parallel test observing
+// de-DE and failing for a reason that has nothing to do with it.
+[Collection("culture")]
 public class IndexLineFormatterTests
 {
     [Fact]
@@ -47,5 +50,20 @@ public class IndexLineFormatterTests
 
         Assert.Contains("C:, D:", line);
         Assert.EndsWith(" (still reading the drive)", line);
+    }
+
+    [Fact]
+    public void TheNameCountReadsTheSameOnEveryMachine()
+    {
+        // 1.5M renders as "1,5M" under de-DE, in the same footer line as IndexStatus.Line,
+        // which is careful to be invariant. One half of one sentence.
+        var was = System.Threading.Thread.CurrentThread.CurrentCulture;
+        try
+        {
+            System.Threading.Thread.CurrentThread.CurrentCulture = new System.Globalization.CultureInfo("de-DE");
+            var reply = new StatusReply(4321, [new VolumeStatus('C', 1_500_000, 0, Live: true)]);
+            Assert.Contains("1.5M", IndexLineFormatter.IndexLineFor(reply), StringComparison.Ordinal);
+        }
+        finally { System.Threading.Thread.CurrentThread.CurrentCulture = was; }
     }
 }

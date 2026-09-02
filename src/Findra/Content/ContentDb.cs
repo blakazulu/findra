@@ -30,12 +30,12 @@ namespace Findra;
 // broke it. Everything that only reads - the card, --searchprobe, --searchtest, --searchbench -
 // opens a read-only connection of its own, which is not guarded and does not need to be.
 //
-// The failure that buys is not hypothetical. In the engine this code came from, an index thread
-// and a debounce timer on the thread pool shared one connection. Both opened a transaction, the
-// provider refused the second with an InvalidOperationException, a catch swallowed it as noise -
-// and the batch of journal changes had already been drained out of its queue into a local list, so
-// those changes were gone and those files stayed stale for good. The log said so once per process
-// and was silent afterwards. Findra survives the same shape because the consumed USN position is
+// The failure that buys is not hypothetical, and it is cheap to arrive at. An index thread and a
+// debounce timer on the thread pool share one connection; both open a transaction; the provider
+// refuses the second with an InvalidOperationException; a catch swallows it as noise - and the
+// batch of journal changes has already been drained out of its queue into a local list, so those
+// changes are gone and those files stay stale for good, while the log says so once per process and
+// is silent afterwards. Findra survives that shape because the consumed USN position is
 // written inside the same transaction as the enqueues it came from, so a throw rolls the position
 // back and the next subscription replays the gap - do not change that either - but the swallowed
 // exception is a bug that takes months to find, and the point of the guard is that it says which
@@ -328,11 +328,11 @@ CREATE TABLE IF NOT EXISTS opened(path TEXT PRIMARY KEY, count INTEGER NOT NULL,
     /// Say that this flow is now inside the writer, and refuse if another one already is.
     ///
     /// <para>THE RULE IS ONE FLOW AT A TIME, and it is enforced here rather than remembered across
-    /// three files. The failure it prevents is not hypothetical: in the engine this code was ported
-    /// from, an index thread and a debounce timer shared one connection, both opened a transaction,
-    /// the provider refused the second, the catch swallowed it - and the batch of changes had
-    /// already been drained out of its queue into a local list, so those files stayed stale
-    /// permanently. The log said so once per process and was then silent.</para>
+    /// three files. The failure it prevents is not hypothetical: an index thread and a debounce
+    /// timer share one connection, both open a transaction, the provider refuses the second, the
+    /// catch swallows it - and the batch of changes has already been drained out of its queue into
+    /// a local list, so those files stay stale permanently, while the log says so once per process
+    /// and is then silent.</para>
     ///
     /// <para>It refuses rather than waits, on purpose. A lock would let a second writer in by
     /// serialising it, which hides the design violation instead of reporting it; and the claim has
@@ -768,6 +768,34 @@ CREATE TABLE IF NOT EXISTS opened(path TEXT PRIMARY KEY, count INTEGER NOT NULL,
     {
         using var cmd = _c.CreateCommand();
         cmd.CommandText = "SELECT COUNT(*) FROM items WHERE error = $r";
+        cmd.Parameters.AddWithValue("$r", reason);
+        return (long)(cmd.ExecuteScalar() ?? 0L);
+    }
+
+    /// <summary>
+    /// How many SKIPPED items of these kinds carry this reason - "I turned photos on, what is it
+    /// going to do".
+    ///
+    /// <para>Narrower than <see cref="CountRecorded"/> in both directions, and both matter. The
+    /// state clause is there because the reason column also holds notes on rows that really were
+    /// indexed, and a video read for its frames is not waiting on anything. The kind clause is
+    /// there because one total across every kind does not tell anybody which download would clear
+    /// it, which is the only reason the number is printed.</para>
+    ///
+    /// <para>An empty <paramref name="kinds"/> is zero without touching the database, for the
+    /// reason <see cref="RequeueKinds"/> gives: the clause below is built by concatenation, and
+    /// while the bundled SQLite does accept <c>IN ()</c> as an empty list, running the statement
+    /// at all is work with a known answer.</para>
+    /// </summary>
+    public long CountSkippedFor(int[] kinds, string reason)
+    {
+        ArgumentNullException.ThrowIfNull(kinds);
+        if (kinds.Length == 0) return 0;
+        using var cmd = _c.CreateCommand();
+        // The kinds stay concatenated - they are ints from an enum this code owns - and the
+        // reason is a parameter, because a skip reason is free text out of an exception message.
+        cmd.CommandText = $"SELECT COUNT(*) FROM items WHERE state={StateSkipped.ToString(CultureInfo.InvariantCulture)} " +
+                          $"AND kind IN ({string.Join(",", kinds)}) AND error = $r";
         cmd.Parameters.AddWithValue("$r", reason);
         return (long)(cmd.ExecuteScalar() ?? 0L);
     }

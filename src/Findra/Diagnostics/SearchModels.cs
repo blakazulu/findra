@@ -65,9 +65,13 @@ public static class ModelsReport
         {
             if (!m.Present)
                 Line($"    --  {m.File,-24} not on disk, {Mb(m.Declared)} declared             {m.Purpose}");
-            else if (m.Actual != m.Declared)
+            else if (!ModelStore.SizeMatchesDeclared(m.Declared, m.Actual))
                 // A present file at the wrong size reads as installed unless the two numbers are
                 // compared and printed together - a truncated download must never look finished.
+                // Compared to within ModelStore.SizeSlack and never for equality: the declared
+                // figure is the table's rounded megabytes, so a correctly downloaded file misses
+                // it by tens of kilobytes, and an exact test flags the healthy state as broken in
+                // the one mode the README's real sizes are supposed to come from.
                 Line($"    ??  {m.File,-24} WRONG SIZE: {N(m.Actual)} bytes on disk, expected {Mb(m.Declared)} ({N(m.Declared)} bytes)   {m.Purpose}");
             else
                 Line($"    ok  {m.File,-24} {Mb(m.Actual)} on disk (matches the {Mb(m.Declared)} declared)   {m.Purpose}");
@@ -174,8 +178,8 @@ public static class SearchModels
                 if (e5Ready) { e5 = new E5Encoder(wantAccelerator: false, dir); if (onnxTried.Count == 0) onnxTried = e5.Tried; }
 
                 // Splits "the models are missing" from "DirectML is not being used" from "the
-                // tokenizer is producing garbage" from "the scores are simply low", the way
-                // SearchModelsProbe did, before any of the pipeline is suspected.
+                // tokenizer is producing garbage" from "the scores are simply low", before any
+                // of the rest of the pipeline is suspected.
                 if (clipText is not null || e5 is not null) Probe(clipText, e5, vision);
             }
             catch (Exception ex)

@@ -80,9 +80,9 @@ public class ModelDownloadTests : IDisposable
     [Fact]
     public async Task ADownloadThatEndsShortIsNotPromoted()
     {
-        // The source moves whatever arrived into place. A short file above its floor then reads
-        // as installed for ever: every load fails, the capability is dead, and nothing
-        // re-downloads it because it is "there".
+        // Moving whatever arrived into place is the obvious thing to write and the wrong one. A
+        // short file above its floor reads as installed for ever: every load fails, the
+        // capability is dead, and nothing re-downloads it because it is "there".
         Fetch truncating = (url, from, ct) =>
             Task.FromResult(new Fetched(new MemoryStream(Content[..5]), Content.Length, from > 0));
 
@@ -127,6 +127,57 @@ public class ModelDownloadTests : IDisposable
         Assert.False(File.Exists(Part));
     }
 
+    /// <summary>The siglip2 vocabulary's real numbers: the floor and the declared size straight
+    /// out of ModelStore, so the band this test measures is the product's own and not one
+    /// invented here.</summary>
+    private static readonly Model Vocab = new("vocab.spm", "https://example.invalid/vocab.spm",
+                                              3_000_000, 4_194_304, "a vocabulary");
+
+    /// <summary>What that file actually measures once it has been downloaded - 46,699 bytes MORE
+    /// than the table declares, because the table is the specification's figure in megabytes to
+    /// one decimal place.</summary>
+    private const int RealVocabBytes = 4_241_003;
+
+    [Theory]
+    [InlineData(RealVocabBytes, new long[] { RealVocabBytes })]
+    [InlineData(6_000_000, new long[] { 6_000_000, 0 })]
+    public async Task APartIsPromotedWhenItCouldBeTheWholeFileAndThrownAwayWhenItCannotBe(
+        int partLength, long[] expectedAsked)
+    {
+        // One rule, and both ways of getting it wrong cost the user a full re-download or a
+        // broken install.
+        //
+        // With no upper bound at all, the six-million-byte stale part is promoted under the
+        // finished file's name: nothing ever fetches it again, because it is "there".
+        //
+        // With the declared size as an exact ceiling, the first row - which is the real file,
+        // arrived whole, on a run that was killed between the last write and the rename - is
+        // refused and fetched again from byte zero. Four of the five files on a real install are
+        // larger than their declared size, so that is not a corner case; on the Hebrew model it
+        // is 1.5 GB.
+        string part = Path.Combine(_dir, Vocab.File + ".part");
+        string final = Path.Combine(_dir, Vocab.File);
+        File.WriteAllBytes(part, new byte[partLength]);
+        var asked = new List<long>();
+        byte[] body = new byte[RealVocabBytes];
+
+        // A server that refuses any range at all, which is what a host answers for a range at or
+        // past the end of the file - the situation this whole branch exists to tell apart.
+        Fetch refusing = (url, from, ct) =>
+        {
+            asked.Add(from);
+            if (from > 0) throw new RangeRefusedException(url, from);
+            return Task.FromResult(new Fetched(new MemoryStream(body), body.Length, false));
+        };
+
+        DownloadOutcome r = await ModelDownloader.GetAsync(Vocab, _dir, refusing, null, default);
+
+        Assert.Equal(expectedAsked, asked);
+        Assert.True(r.Complete);
+        Assert.False(File.Exists(part));
+        Assert.Equal(expectedAsked.Length == 1 ? partLength : RealVocabBytes, new FileInfo(final).Length);
+    }
+
     [Fact]
     public async Task CancellingLeavesThePartSoTheNextRunResumes()
     {
@@ -159,9 +210,10 @@ public class ModelDownloadTests : IDisposable
     [Fact]
     public void TheIndexerChildNeverDownloadsAnything()
     {
-        // Spec §6 moves consent and progress onto the first-run screen, and the source engine
-        // did the opposite: its indexer blocked the entire queue until all seven files existed
-        // and fetched them itself. This is the guard that stops that coming back with a port.
+        // Spec §6 puts consent and progress on the first-run screen. An indexer that fetched its
+        // own models would block the entire queue until all seven files existed, and it is an
+        // easy thing to add by accident, because the child is where the need is felt. This is
+        // the guard that says no.
         string content = Path.Combine(RepoRoot(), "src", "Findra", "Content");
         foreach (string file in Directory.EnumerateFiles(content, "*.cs"))
         {

@@ -14,6 +14,9 @@ namespace Findra;
 /// re-exports a model a few kilobytes smaller must not cost every user a 1.5 GB re-download, and
 /// a truncated file must never read as installed. They are different numbers with different jobs
 /// and neither may be used for the other's.</para>
+///
+/// <para><see cref="ModelStore.SizeSlack"/> is the third, and it is the one that says how far a
+/// real file may sit from <see cref="Bytes"/> and still be that file. See its own note.</para>
 /// </summary>
 public sealed record Model(string File, string Url, long MinBytes, long Bytes, string Purpose);
 
@@ -62,6 +65,45 @@ public static class ModelStore
     public static readonly IReadOnlyList<Model> All =
         [Siglip2Vision, Siglip2Text, Siglip2Spm, E5Base, E5Spm, WhisperTurbo, WhisperHebrew];
 
+    /// <summary>
+    /// How far a real file may sit from its <see cref="Model.Bytes"/> and still be that file.
+    ///
+    /// <para>The declared size is the specification's table, quoted in megabytes to one decimal
+    /// place, so it was never going to equal a byte count and it is not wrong that it does not:
+    /// on a real install five of the seven files differ from it, four of them upward, by up to
+    /// forty-seven kilobytes. Code that compares the two exactly calls a correct download the
+    /// wrong size; code with no upper bound at all promotes a stale part under a finished file's
+    /// name. This is the width between those two mistakes - one part in fifty, which is wider
+    /// than the rounding of every file in the table and far narrower than any truncation.</para>
+    ///
+    /// <para>Proportional rather than a flat number of bytes on purpose: it has to be a sensible
+    /// answer for a four-megabyte vocabulary and for a 1.5 GB fine-tune, and a constant that
+    /// suits one of them is nonsense for the other.</para>
+    /// </summary>
+    public static long SizeSlack(long declared) => declared / 50;
+
+    /// <summary>Is a file this long the size the table declares, to within the rounding of the
+    /// table itself? What <c>--searchmodels</c> asks before it says "matches the declared", and
+    /// the only comparison anywhere that may call a file the wrong size.</summary>
+    public static bool SizeMatchesDeclared(long declared, long actual)
+        => Math.Abs(actual - declared) <= SizeSlack(declared);
+
+    /// <summary>
+    /// Could a file this long be a complete copy of this model?
+    ///
+    /// <para>Asked by the downloader of a leftover <c>.part</c> the server has refused to serve a
+    /// range from, where the two answers are "this is the finished file, promote it" and "this is
+    /// stale, throw it away and start again" - and the second costs up to 1.5 GB. The floor is
+    /// <see cref="Model.MinBytes"/>, generous by design; the ceiling is the declared size plus
+    /// <see cref="SizeSlack"/>, because a part longer than the file can possibly be is not a
+    /// prefix of it.</para>
+    /// </summary>
+    public static bool CouldBeComplete(Model m, long bytes)
+    {
+        ArgumentNullException.ThrowIfNull(m);
+        return bytes >= m.MinBytes && bytes <= m.Bytes + SizeSlack(m.Bytes);
+    }
+
     public static string PathOf(Model m, string? dir = null)
     {
         ArgumentNullException.ThrowIfNull(m);
@@ -70,7 +112,15 @@ public static class ModelStore
 
     /// <summary>Is this model on disk and long enough to be itself? Never throws: an absent
     /// directory, an unreadable one and a locked file are all "not present", which is a normal
-    /// state on a machine that has taken nothing.</summary>
+    /// state on a machine that has taken nothing.
+    ///
+    /// <para>The floor and nothing above it, deliberately. This is the question "can this be
+    /// opened", and a file being longer than the table says answers nothing about that: a
+    /// republished model a megabyte larger loads perfectly, and an upper bound here would report
+    /// it absent, silently switch off a capability somebody has already paid the download for,
+    /// and offer them the same file again. Whether a file is the size the table declares is a
+    /// different question, asked by <see cref="SizeMatchesDeclared"/> and answered in a
+    /// report.</para></summary>
     public static bool Present(Model m, string? dir = null)
     {
         try

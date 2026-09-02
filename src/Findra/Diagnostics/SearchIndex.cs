@@ -18,7 +18,20 @@ public sealed record IndexSnapshot(
     IReadOnlyDictionary<ResultKind, long> ByKind,
     string IndexerState, string IndexerCurrent, string IndexerRate, string IndexerPid, bool IndexerAlive,
     long JournalDropped, long SessionFailures, string SessionFailure,
-    IReadOnlyList<(string Path, string Error)> Failures);
+    IReadOnlyList<(string Path, string Error)> Failures,
+    // Whether anybody has asked for the contents of their files to be read at all. Taken from
+    // the index's own `index:paused` row and never from config.json: this mode describes the
+    // index it is looking at, and the settings of an interface that may not be running are a
+    // different fact about a different machine state.
+    bool ContentEnabled,
+    // Every capability, whether its models are here, and how many files are sitting skipped
+    // waiting for exactly it. Per capability and never one total: "8,000 files skipped" does not
+    // tell anybody which download would clear them.
+    IReadOnlyList<(Capability Capability, bool Installed, long WaitingFiles)> Capabilities,
+    int TranscribeMinutes,
+    // Recordings passed over for their length rather than for want of a model. A different lever
+    // clears these - a setting, not a download - so a single "skipped" total hides which one.
+    long TooLongRecordings);
 
 /// <summary>
 /// `--searchindex`'s formatter: what is in the content index, and what is still queued (spec §9).
@@ -44,6 +57,15 @@ public static class SearchIndexReport
             Line("  NOTE: this index was rebuilt - the previous file could not be opened and was moved aside");
             Line();
         }
+
+        // Above everything, including the counts, and for the same reason the card's status line
+        // leads with it: zero queued, zero indexed and no indexer running is byte for byte what a
+        // FINISHED index looks like. Without this line the report somebody runs to find out why
+        // nothing is happening reads as though everything is done.
+        Line("  reading  : " + (s.ContentEnabled
+            ? "inside files is on"
+            : "inside files is off - nothing here has been asked for; findra --content on"));
+        Line();
 
         // Every file the index is actually made of, not just the database. The write-ahead log
         // and the shared-memory sidecar are real bytes on the user's disk and the WAL is routinely
@@ -87,6 +109,25 @@ public static class SearchIndexReport
             long n = s.ByKind.TryGetValue(k, out long v) ? v : 0;
             Line($"    {FileKinds.Label(k),-8} {N(n)}");
         }
+        Line();
+
+        // Every capability, including the ones with nothing waiting - the same rule the kind
+        // counts follow. A zero row is an answer, and filtering it out makes "why is nothing
+        // happening" unanswerable again one line further down the page.
+        Line("  models   :");
+        foreach ((Capability c, bool installed, long waiting) in s.Capabilities)
+            Line($"    {Findra.Capabilities.Title(c),-22} {(installed ? "installed" : "not installed"),-15} " +
+                 (waiting > 0 ? $"{N(waiting)} file(s) waiting on it" : "nothing waiting"));
+        Line();
+
+        // In words, never as the bare number. -1 printed raw reads as an error, and it is the
+        // most permissive setting in the product.
+        Line($"  transcribe: {TranscribeLimit.Describe(s.TranscribeMinutes)}");
+        // Only when there are some, like the journal and session lines below. Counted apart from
+        // the files waiting on a model because a different lever clears it: this one is a setting
+        // somebody can raise, and one merged "skipped" total says nothing about which to pull.
+        if (s.TooLongRecordings > 0)
+            Line($"              {N(s.TooLongRecordings)} recording(s) passed over for being longer than the limit");
         Line();
 
         // A heartbeat this report was told is stale must not be read back as live work - the
@@ -273,6 +314,13 @@ public static class SearchIndex
         // "0, never shown", which is the right answer on a machine that has not lost any.
         long dropped = long.TryParse(db.Get("journal:dropped"), NumberStyles.Integer, CultureInfo.InvariantCulture, out long jd) ? jd : 0;
 
+        // What is on disk, asked once - CapabilitySet.Installed stats seven files, and asking it
+        // per row would stat them four times over for the same answer.
+        CapabilitySet have = CapabilitySet.Installed();
+        var caps = new List<(Capability, bool, long)>(Findra.Capabilities.All.Count);
+        foreach (Capability c in Findra.Capabilities.All)
+            caps.Add((c, have.Has(c), db.CountSkippedFor(Findra.Capabilities.KindsCovered(c), Decoders.NoModel)));
+
         return new IndexSnapshot(
             Schema: ContentDb.SchemaVersion,
             WasRebuilt: db.WasRebuilt || db.Get("index:rebuilt") == "1",
@@ -289,7 +337,13 @@ public static class SearchIndex
             SessionFailures: long.TryParse(db.Get("index:sessionfailures"), NumberStyles.Integer,
                                            CultureInfo.InvariantCulture, out long sf) ? sf : 0,
             SessionFailure: db.Get("index:sessionfailure") ?? "",
-            Failures: db.RecentFailures(10));
+            Failures: db.RecentFailures(10),
+            // Read exactly as the card reads it: an absent row is off, because an index nobody
+            // has written that row for is an index nobody has asked anything of.
+            ContentEnabled: db.Get("index:paused") == "0",
+            Capabilities: caps,
+            TranscribeMinutes: Indexer.TranscribeMinutes(db),
+            TooLongRecordings: db.CountRecorded(Decoders.TooLong));
     }
 
     /// <summary>Every file the index is made of that exists right now - the database and its

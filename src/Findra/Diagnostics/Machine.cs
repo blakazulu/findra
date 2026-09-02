@@ -32,14 +32,25 @@ public static class Machine
     /// empty cell in a published table reads as a machine with no disk.</summary>
     public const string Unknown = "unknown";
 
-    /// <summary>
-    /// This build loads no model, so there is no provider to name. The line states that as a fact
-    /// about Findra rather than as a note to ourselves - the fragment is pasted onto a product
-    /// page, where a forward reference to unwritten work means nothing to the reader and is wrong
-    /// the day the work lands.
-    /// </summary>
-    public const string NoAccelerator = "CPU only - this build runs no models";
+    /// <summary>What a runtime's half of the accelerator line says when there is no model on this
+    /// machine for it to open. Never "CPU": that would be a measurement of something that never
+    /// ran, and the two are different answers to the question the line is asked.</summary>
+    public const string NotLoaded = "not loaded";
 
+    /// <summary>
+    /// Which silicon answered - and it is two answers, because the two runtimes choose separately.
+    /// A machine can run the vision tower on DirectML and fall back to the processor for speech,
+    /// and a single word would have to be wrong about one of them.
+    ///
+    /// <para>Null means there is no model on disk for that runtime, which is the ordinary state of
+    /// a machine that has taken the names-only install and is not the same fact as a fallback.</para>
+    /// </summary>
+    public static string AcceleratorLine(string? onnx, string? whisper)
+        => $"ONNX: {onnx ?? NotLoaded} · Whisper: {whisper ?? NotLoaded}";
+
+    // The speech runtime is reached through Media, which is annotated for the build this project
+    // targets; the rest of this type asks for nothing newer than "windows".
+    [SupportedOSPlatform("windows10.0.19041.0")]
     public static MachineInfo Read() => new(
         Cpu: Try(Cpu),
         // Never assumed - printed. An arm64 run has to be self-identifying in its own numbers.
@@ -49,7 +60,56 @@ public static class Machine
         // number on this page was actually paid to.
         Disk: Try(() => DiskOf(Paths.Index)),
         Windows: Try(WindowsBuild),
-        Accelerator: NoAccelerator);
+        Accelerator: AcceleratorLine(OnnxProvider(), WhisperProvider()));
+
+    /// <summary>
+    /// Which provider the ONNX runtime gets on this machine, by opening a session and asking -
+    /// never by inspecting the hardware, which is the rule the whole provider chain is built on.
+    ///
+    /// <para>The vision tower is the one opened. It is the only ONNX session Findra ever asks to
+    /// be accelerated - the text and document encoders take the processor by choice, because a
+    /// query embeds one short string - so it is the only one whose answer says anything about the
+    /// machine. Reporting "CPU" off a session that never asked for anything else would read on a
+    /// product page as a machine with no accelerator in it.</para>
+    ///
+    /// <para>The session is opened and closed here rather than kept: the numbers below it are
+    /// measured with no model loaded, and a live session would be sitting on the memory they are
+    /// measured in.</para>
+    /// </summary>
+    private static string? OnnxProvider()
+    {
+        if (!ModelStore.Present(ModelStore.Siglip2Vision)) return null;
+        try
+        {
+            using var vision = new ClipImageEncoder(wantAccelerator: true);
+            return vision.Provider;
+        }
+        catch (Exception ex)
+        {
+            Log.Warn("bench", "the onnx provider could not be determined: " + ex.Message);
+            return null;
+        }
+    }
+
+    /// <summary>The same question of the speech runtime, which has its own chain and its own
+    /// answer. The general model is the one opened: the Hebrew fine-tune is a second pass over
+    /// the same runtime and cannot choose differently.</summary>
+    [SupportedOSPlatform("windows10.0.19041.0")]
+    private static string? WhisperProvider()
+    {
+        if (!ModelStore.Present(ModelStore.WhisperTurbo)) return null;
+        try
+        {
+            Chosen<Whisper.net.WhisperFactory> w = Media.OpenWhisper(ModelStore.PathOf(ModelStore.WhisperTurbo));
+            w.Value.Dispose();
+            return w.Provider;
+        }
+        catch (Exception ex)
+        {
+            Log.Warn("bench", "the speech provider could not be determined: " + ex.Message);
+            return null;
+        }
+    }
 
     private static string Try(Func<string> f)
     {

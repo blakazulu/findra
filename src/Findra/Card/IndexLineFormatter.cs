@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Globalization;
 using Findra.Pipe;
 
 namespace Findra;
@@ -30,6 +31,15 @@ public static class IndexLineFormatter
         return stillReading ? line + " (still reading the drive)" : line;
     }
 
+    /// <summary>Invariant, all three arms. "1.5M" renders as "1,5M" under de-DE, in the same
+    /// footer sentence as <see cref="IndexStatus.Line"/>, which is careful to read the same on
+    /// every machine - one half of one line disagreeing with the other half is the kind of thing
+    /// nobody sees until it is in a screenshot.</summary>
     private static string Count(long n)
-        => n >= 1_000_000 ? $"{n / 1_000_000.0:0.0}M" : n >= 1000 ? $"{n / 1000.0:0}k" : n.ToString();
+    {
+        CultureInfo c = CultureInfo.InvariantCulture;
+        return n >= 1_000_000 ? (n / 1_000_000.0).ToString("0.0", c) + "M"
+             : n >= 1000 ? (n / 1000.0).ToString("0", c) + "k"
+             : n.ToString(c);
+    }
 }

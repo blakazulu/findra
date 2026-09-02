@@ -48,8 +48,8 @@ public class ProviderTests
     public void EveryProviderItRejectedIsNamedWithTheReasonItWasRejectedFor()
     {
         // Spec §6, in as many words: "it's slow on my laptop" is unanswerable, "DirectML failed
-        // to initialise, fell back to CPU" is a bug report. Recording only the winner - which is
-        // what the source does - loses exactly the half that answers the question.
+        // to initialise, fell back to CPU" is a bug report. Recording only the winner loses
+        // exactly the half that answers the question.
         Chosen<Session> c = Providers.First<Session>(
         [
             ("DirectML", () => throw new InvalidOperationException("no DirectX 12 device")),

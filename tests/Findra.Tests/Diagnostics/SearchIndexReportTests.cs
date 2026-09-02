@@ -34,7 +34,16 @@ public sealed class SearchIndexReportTests : IDisposable
         IndexerState: "indexing", IndexerCurrent: "lease.pdf", IndexerRate: "180/min",
         IndexerPid: "10052", IndexerAlive: true, JournalDropped: 0,
         SessionFailures: 0, SessionFailure: "",
-        Failures: failures ?? []);
+        Failures: failures ?? [],
+        ContentEnabled: true,
+        Capabilities:
+        [
+            (Capability.Photos, false, 900),
+            (Capability.Meaning, true, 0),
+            (Capability.Speech, false, 0),
+            (Capability.Hebrew, false, 0),
+        ],
+        TranscribeMinutes: TranscribeLimit.Default, TooLongRecordings: 0);
 
     [Fact]
     public void ItReportsTheSchemaVersionAndWhereTheIndexLives()
@@ -287,5 +296,78 @@ public sealed class SearchIndexReportTests : IDisposable
             Assert.DoesNotContain("3.400", s);
         }
         finally { CultureInfo.CurrentCulture = was; }
+    }
+
+    [Fact]
+    public void AnIndexNobodyHasAskedForSaysSoAboveTheCounts()
+    {
+        // Zero queued, zero indexed and no indexer is byte-for-byte what a FINISHED index looks
+        // like. Without this line, the report a person runs to find out why nothing is happening
+        // reads as though everything is done.
+        string text = SearchIndexReport.Render(Sample() with
+        {
+            ContentEnabled = false, Queued = 0, Indexed = 0,
+        });
+
+        Assert.Contains("off", text, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("up to date", text, StringComparison.OrdinalIgnoreCase);
+        // Above the counts, not buried under them: the sentence that changes how every number
+        // below it reads has to arrive before they do.
+        Assert.True(text.IndexOf("off", StringComparison.OrdinalIgnoreCase)
+                  < text.IndexOf("counts", StringComparison.Ordinal),
+                    "the reading line must come before the counts it qualifies");
+    }
+
+    [Fact]
+    public void TheTranscriptionLimitIsReportedInWordsAndNotAsABareNumber()
+    {
+        // -1 printed raw reads as an error. It is the most permissive setting in the product.
+        Assert.Contains("No limit", SearchIndexReport.Render(Sample() with { TranscribeMinutes = -1 }),
+                        StringComparison.Ordinal);
+        Assert.Contains("5 minutes", SearchIndexReport.Render(Sample() with { TranscribeMinutes = 5 }),
+                        StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void RecordingsPassedOverForTheirLengthAreCountedSeparately()
+    {
+        // Distinct from "waiting for a model": one is cleared by a download and the other by a
+        // setting, and a single "skipped" total tells nobody which lever to pull.
+        string text = SearchIndexReport.Render(Sample() with { TooLongRecordings = 231 });
+
+        Assert.Contains("231", text, StringComparison.Ordinal);
+        Assert.Contains("limit", text, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void EveryCapabilityIsListedWithWhatIsWaitingOnIt()
+    {
+        // Per capability, not one total: "8,000 files skipped" does not tell anybody which
+        // download would clear them.
+        IndexSnapshot s = Sample() with
+        {
+            Capabilities =
+            [
+                (Capability.Photos, false, 8_312),
+                (Capability.Meaning, true, 0),
+                (Capability.Speech, false, 44),
+                (Capability.Hebrew, false, 0),
+            ],
+        };
+
+        string text = SearchIndexReport.Render(s);
+
+        Assert.Contains("8,312", text, StringComparison.Ordinal);
+        Assert.Contains("44", text, StringComparison.Ordinal);
+        Assert.Contains("Speech", text, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void AnInstalledCapabilityWithNothingWaitingStillAppears()
+    {
+        // The same rule the kind counts already follow: a zero row is an answer, and filtering
+        // it out makes "why is nothing happening" unanswerable.
+        IndexSnapshot s = Sample() with { Capabilities = [(Capability.Meaning, true, 0)] };
+        Assert.Contains("Meaning in documents", SearchIndexReport.Render(s), StringComparison.Ordinal);
     }
 }

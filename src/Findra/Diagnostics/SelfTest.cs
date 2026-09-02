@@ -199,6 +199,32 @@ public static class SelfTest
             return null;
         });
 
+        // Both of these run on a machine that has downloaded nothing, which is the point: the
+        // capability graph is the one thing here that can be wrong everywhere at once.
+        failed += Check("the capability graph is consistent", () =>
+        {
+            foreach (Capability c in Capabilities.All)
+            {
+                IReadOnlySet<Capability> once = Capabilities.Close([c]);
+                if (!Capabilities.Close(once).SetEquals(once)) return $"closing {c} twice changes it";
+                foreach (int k in Capabilities.KindsCovered(c))
+                    if (!FileKinds.HasContent((ResultKind)k)) return $"{c} claims {(ResultKind)k}, which has no content";
+            }
+            // The measured total is what the README and the winget manifest quote.
+            long all = Capabilities.TotalBytes(Capabilities.All);
+            return Sizes.Human(all) == "2.93 GB" ? null : $"the whole model set measures {Sizes.Human(all)}";
+        });
+
+        failed += Check("every installed capability loads", () =>
+        {
+            CapabilitySet have = CapabilitySet.Installed();
+            if (have.Have.Count == 0) { Console.WriteLine("        no capability is installed - nothing to load"); return null; }
+            foreach (Capability c in have.Have)
+                foreach (Model m in Capabilities.OwnModels(c))
+                    if (!ModelStore.Present(m)) return $"{c} is installed but {m.File} is not there";
+            return null;
+        });
+
         Console.WriteLine();
         Console.WriteLine(failed == 0 ? "all checks passed" : $"{failed} check(s) FAILED");
         return failed == 0 ? 0 : 1;

@@ -4,7 +4,6 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Status
 
-There is no source yet. The repo holds a design spec and nothing else.
 **`docs/superpowers/specs/2026-09-01-findra-design.md` is the contract** - read it before
 writing anything. Everything below is a summary of the parts that are easy to get wrong, not
 a replacement for it.
@@ -14,10 +13,8 @@ into a results card, plus a global hotkey. .NET 10, Avalonia, SkiaSharp, SQLite.
 
 ## Commands
 
-No `.csproj` exists yet. The spec fixes these as the intended shape:
-
 ```bash
-dotnet build
+dotnet build -warnaserror                      # zero warnings, always
 dotnet test                                    # TDD applies to new code (see below)
 dotnet publish -c Release --self-contained     # self-contained is required, not optional
 ```
@@ -29,8 +26,8 @@ verified without a screen, and `--searchshot` in particular is how UI gets itera
 findra.exe --searchprobe [query]      # whole path end to end; must report which process
                                       # answered, the current generation counter, and what
                                       # the content indexer is doing
-findra.exe --searchmodels             # are models present, do they load, do they agree
-                                      # (says it is not built yet until Plan 5 lands)
+findra.exe --searchmodels             # are models present, do they load, do they agree, and
+                                      # which execution provider answered for each runtime
 findra.exe --searchindex [file|folder|q:query]...   # what is indexed, what is queued; given
                                       # paths it queues and drains them, given q: it queries
 findra.exe --searchshot out.png <capsule|empty|typing|results|noresults|many|adv|opening|openingempty> [palette]
@@ -38,6 +35,18 @@ findra.exe --searchtest               # engine self-check
 findra.exe --searchbench [out.md] [corpus]   # measured numbers, as a pasteable Markdown
                                       # fragment; `corpus` is how many files it generates
 findra.exe --version                  # print the version and log location, then exit
+```
+
+Two more modes are settings a person changes rather than diagnostics, and they are the only way
+to change them until the first-run screen exists:
+
+```bash
+findra.exe --models                   # what is installed, and what each capability would add
+                                      # given what is already there
+findra.exe --models install <preset|cap[,cap]>   # justnames | recommended | everything, or
+                                      # photos, meaning, speech, hebrew
+findra.exe --content [on|off]         # is Findra reading inside files at all
+findra.exe --content limit <length>   # off | 5 | 30 | 2 hours | no limit | any number of minutes
 ```
 
 The `--searchbench` fragment opens at heading level two and every section below it at level
@@ -104,7 +113,7 @@ Model-backed capabilities are **independently installable**, and they are **not 
 there is a dependency graph:
 
 ```
-words in documents  ─  free, always on (FTS5, no model)
+words in documents  ─  free, opt-in (FTS5, no model)
 photos & video      ─  siglip2 vision + text + spm            629 MB
 meaning in docs     ─  e5-base + e5-spm                       270 MB
 speech              ─  whisper-turbo + [e5 pair]              550 MB (+270 if e5 not taken)
@@ -122,6 +131,20 @@ speech              ─  whisper-turbo + [e5 pair]              550 MB (+270 if 
   silently when its model is absent: the indexer skips that kind, content search contributes
   no candidates, and the card offers the download.
 - Enabling a capability later re-queues **only the files it covers**.
+- **Reading inside files is off until somebody asks**, models or no models. Names are
+  searchable the second Findra starts, because a name index costs seconds; looking inside
+  files walks every drive and can run for hours, so it never begins on its own. `--content on`
+  starts it, `--content off` stops it without discarding anything already read, and the setting
+  survives a restart. An index nobody has asked for and a finished index have identical counts,
+  so every surface says which one it is looking at rather than printing "up to date".
+- **One number, in minutes, decides how long a recording is worth transcribing**, covering
+  sound files and video together. Zero is off, negative is no limit, positive is minutes, five
+  by default. A recording over the limit is passed over with a reason of its own, and raising
+  the limit goes back for exactly those and nothing else.
+- **A file's size on disk never equals the declared size in the table.** That table is the
+  spec's figure in megabytes to one decimal place; real files miss it by tens of kilobytes,
+  mostly upward. `ModelStore.SizeSlack` is the only place that width is decided, and nothing
+  may compare a file's length to `Model.Bytes` for equality.
 
 ## Hardware portability
 
