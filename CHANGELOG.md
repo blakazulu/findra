@@ -304,6 +304,13 @@ into a numbered section on the first release.
   that says otherwise - a box that starts unticked, above the measured megabytes it would free
   on that machine rather than a warning that it might be a lot.
 
+- **Every change is built, tested and put through every diagnostic mode before it can become a
+  release.** A push builds the whole tree as a warning-free release, runs the test suite, and
+  then publishes the self-contained application and runs each of its headless modes against
+  that published copy - the shape a stranger actually gets, with no development tools
+  underneath it. A mode that quietly stopped working used to be found by the next person who
+  needed it to explain something else.
+
 ### Changed
 
 - **A capability you install is read in the same session you installed it.** Downloading one
