@@ -25,6 +25,13 @@
     <PackageReference Include="Avalonia" Version="12.1.1" />
     <PackageReference Include="Avalonia.Desktop" Version="12.1.1" />
     <PackageReference Include="Avalonia.Themes.Fluent" Version="12.1.1" />
+    <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.11" />
+    <PackageReference Include="PdfPig" Version="0.1.16" />
+    <!-- Microsoft.Data.Sqlite pulls this transitively, and it carries the native SQLite build -
+         the one that decides whether FTS5 exists at all. Pinned for the same reason SkiaSharp
+         is: a transitive NATIVE dependency that drifts on a restore is a binary swap nobody
+         reviewed. It ships win-x64, win-x86 and win-arm64, so nothing here assumes x64. -->
+    <PackageReference Include="SQLitePCLRaw.bundle_e_sqlite3" Version="2.1.12" />
     <PackageReference Include="System.IO.Pipes.AccessControl" Version="5.0.0" />
     <!-- Avalonia.Skia pins a specific SkiaSharp version, and two SkiaSharp majors in one
          process means two native libSkiaSharp binaries. Pinned here ahead of Avalonia
