@@ -207,7 +207,40 @@ moment rather than an elevation prompt at every launch.
     file(s)" line in the same session. If it appears on one path and not the other, the two
     have drifted apart again.
 
+32. **The installer script compiles at all.** `installer/findra.iss` has never been through a
+    compiler: Inno Setup is not on the development machine and was deliberately not installed,
+    because the release workflow is where it will be compiled for every release. Everything
+    checked so far is the script's text. On a machine with Inno Setup 6.3 or newer:
+
+        pwsh -File build/Publish.ps1 -Rid win-x64
+        iscc /DAppVersion=0.1.0 /DPublishDir=..\publish\win-x64 installer\findra.iss
+
+    It must produce `installer/Output/findra-0.1.0-x64.exe`. A failure here is a syntax error or
+    an Inno version older than 6.3, where `ArchitecturesAllowed=x64compatible` is not yet a word.
+
+33. **A real install, then a real removal.** Run that installer on a machine Findra has never
+    been on. The wizard shows the licence, offers "Start Findra", and installs into
+    `C:\Program Files\Findra` with no version anywhere in the path. Then, from Apps & features:
+
+    - the removal prompt lists the four measured sizes and the total it would free, and the
+      numbers match what `findra --uninstall --dry-run` prints on that machine. A prompt that
+      says "this may free a large amount of space" is the vague warning the specification
+      rejects;
+    - the checkbox is **unticked** when the prompt appears. Click straight through it and
+      `%LOCALAPPDATA%\Findra\models`, `index` and `%APPDATA%\Findra` must all still be there
+      afterwards;
+    - `schtasks /query /xml ONE /tn Findra*` finds nothing afterwards, whichever way the box was
+      answered. This is the one the specification calls a defect rather than an inconvenience;
+    - install again, tick the box this time, and confirm both folders are gone and that nothing
+      outside them was touched.
+
+34. **An upgrade over a running copy.** With Findra running, the capsule on screen and the name
+    helper answering, install a build with a higher version over it. `PrepareToInstall` must
+    stop all three processes before a file is replaced - no "file in use" dialog, no reboot
+    prompt - and the scheduled task must still point at a findra.exe that exists when the
+    machine next signs in.
+
 ## Notes
 
-Steps 1 to 4, 9 to 13 and 29 to 31 are the ones that have never executed in any form. Steps 5 to 8
+Steps 1 to 4, 9 to 13 and 29 to 34 are the ones that have never executed in any form. Steps 5 to 8
 have been verified by log line and by inspection, but not by eye.

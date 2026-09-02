@@ -293,6 +293,17 @@ into a numbered section on the first release.
   again carries on from there. One bad file no longer stops the ones after it, and you can
   close the window and let it run in the tray.
 
+- **An installer, for people who would rather not use a command line.** It carries the
+  application and nothing else - the models are still downloaded from inside Findra, when and
+  if you ask for them - and it installs into a folder with no version number in it, so an
+  upgrade never leaves the name helper pointing at a program that has been replaced. Installing
+  over a running copy closes the interface, the indexer and the name helper first, including
+  the two that have no window to close. Removing Findra from Apps & features does exactly what
+  `findra --uninstall` does: it always takes the scheduled task and the start-with-Windows
+  entry with it, and it keeps your models, your index and your settings unless you tick the box
+  that says otherwise - a box that starts unticked, above the measured megabytes it would free
+  on that machine rather than a warning that it might be a lot.
+
 ### Changed
 
 - **A capability you install is read in the same session you installed it.** Downloading one
