@@ -141,6 +141,13 @@ into a numbered section on the first release.
   reading something says how much it already holds; and a backlog left behind by a closed
   Findra still says that instead.
 
+- **`--searchmodels` reports which model files are on disk against what the table declares**,
+  what each capability would cost to turn on and how many of its files you already have, and -
+  the point of the mode - which execution provider each runtime chose and every one it rejected,
+  with the reason, so "it's slow on my laptop" becomes "DirectML failed to initialise, fell back
+  to the processor". A machine with nothing installed still gets a complete report and exits
+  cleanly, because a missing model is a normal state and not a failure.
+
 ### Changed
 
 - **Content indexing is off until you ask for it**, including the free full-text search of
