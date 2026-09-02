@@ -9,9 +9,8 @@ using Xunit;
 /// </summary>
 public class PartsTests
 {
-    // Through Parts.Face, not SKTypeface.Default: it resolves to the platform default in this
-    // task and to the shipped Quicksand once Task 3 fills it in, so these measurements follow the
-    // product rather than diverging from it the moment the font lands.
+    // Through Parts.Face, which is the shipped Quicksand: these measurements follow the product
+    // rather than the host's default face, so a wrap measured here is the wrap that is drawn.
     private static readonly SKTypeface Face = Parts.Face;
     private const float Size = 12f;
 

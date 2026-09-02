@@ -206,6 +206,15 @@ into a numbered section on the first release.
   from as well, so a hand-written `palettes.json` that would be illegible there is caught
   before it reaches the screen.
 
+- **Findra ships its own typeface.** Every surface - the capsule, the card, the settings and
+  first-run screens, and the images `--searchshot` writes - is now drawn in Quicksand, which
+  travels inside the application rather than being borrowed from whatever the machine happens
+  to have. The screenshots in the documentation are therefore the product on any machine that
+  regenerates them, instead of the product as one particular computer renders it. Quicksand is
+  bundled whole and unmodified under the SIL Open Font License 1.1, and that licence sits
+  beside the application in every copy. If the font is ever missing, Findra falls back to the
+  system face and says so in the log rather than refusing to start.
+
 ### Changed
 
 - **Content indexing is off until you ask for it**, including the free full-text search of

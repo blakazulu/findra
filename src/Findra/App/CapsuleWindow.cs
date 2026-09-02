@@ -259,9 +259,9 @@ public sealed class CapsuleWindow : Window
         {
             _derived = derived;
             _scale = Math.Clamp(scale, 0.85, 1.7);
-            // The real face is not embedded yet; this is the platform default until it ships
-            // (SearchShot renders with the same fallback for the same reason).
-            _face = SKTypeface.Default;
+            // The shipped face, not the platform's - the same resolver the card and the shot
+            // command use, so the capsule on screen is the capsule in the README.
+            _face = Parts.Face;
             Focusable = false;
         }
 
