@@ -58,6 +58,13 @@ into a numbered section on the first release.
   documents it indexed and is not encrypted, which is one reason content indexing is off
   until you ask for it.
 
+- **Resumable model downloads, fetched by the interface and never by the indexer.** A model
+  file already on disk at its full size is never re-requested; a partial one resumes from
+  the byte already fetched rather than starting over; a connection that closes early leaves
+  a short file on disk to resume from instead of promoting it under the final name; and a
+  `.part` from a file that has since been republished smaller is discarded and re-fetched
+  from the start rather than mistaken for a finished download.
+
 ### Changed
 
 - **Content indexing is off until you ask for it**, including the free full-text search of
