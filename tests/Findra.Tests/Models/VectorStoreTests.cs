@@ -152,9 +152,10 @@ public class VectorStoreTests : IDisposable
     [Fact]
     public void TheFileFormatCarriesFindrasOwnMagicAndNobodyElses()
     {
-        // A lineage leak that no grep of the source text can find: four bytes in the header of
-        // every vector file this build writes, spelling out another product. It is also a
-        // compatibility statement - a file with this magic is Findra's.
+        // Four bytes in the header of every vector file this build writes, and no grep of the
+        // source text can reach them, because in the source they are an integer. They are a
+        // compatibility statement - a file that starts with these is Findra's - so they are
+        // asserted on the bytes that land on disk and never on the literal.
         using (var w = new VectorStore(Store, writer: true)) { w.Append(Axis(0), 0); w.Flush(); }
 
         byte[] head = File.ReadAllBytes(Store)[..4];

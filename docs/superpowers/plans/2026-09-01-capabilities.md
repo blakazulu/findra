@@ -3318,7 +3318,7 @@ public class DecoderGateTests : IDisposable
 
     // needs `using System.Reflection;` at the top of the file
     [Fact]
-    public void TheSourcesTwoRecordingConstantsAreGone()
+    public void NoPerKindRecordingConstantSurvivesBesideTheSetting()
     {
         // An hour for audio and three minutes for video are the ancestors of the default, not
         // the rule (spec §6). Porting them as behaviour re-introduces an asymmetry the setting
@@ -4464,7 +4464,7 @@ The limit is a setting a user can change, so a change to it owes the index work 
 
 Lowering the limit is deliberately not symmetrical: it applies to files not yet read, and transcripts already written stay until the file changes. Deleting work somebody has already paid for, because they moved a slider down, is worse than keeping it.
 
-**Two smaller things this task also fixes.** `RequeueKinds([], reason)` builds `IN ()` by string concatenation and throws out of a background loop; it is guarded. And `StateSkipped` means five different things, so `RequeueKinds([Document], ...)` would pick up every under-forty-character and every over-two-hundred-megabyte document alongside the formats a new reader can actually help; the two reason filters are how each caller says which set it means.
+**Two smaller things this task also fixes.** `RequeueKinds([], reason)` builds `IN ()` by string concatenation. MEASURED: the bundled SQLite accepts that as an empty list and matches nothing, so the danger is not the syntax - it is the transaction the method opens, which is a nested-transaction `InvalidOperationException` in a caller already holding a scope. It is guarded, and the guard returns before the database is touched at all. And `StateSkipped` means five different things, so `RequeueKinds([Document], ...)` would pick up every under-forty-character and every over-two-hundred-megabyte document alongside the formats a new reader can actually help; the two reason filters are how each caller says which set it means.
 
 ### What replaces the source's re-embed pass, and what it costs
 
@@ -4751,8 +4751,11 @@ public class CapabilityGateTests : IDisposable
     [Fact]
     public void ARequeueForNoKindsIsNothingRatherThanACrash()
     {
-        // The IN () clause is built by string concatenation, so an empty array is a
-        // SqliteException out of a background loop. Unreachable until this plan called it.
+        // The IN () clause is built by string concatenation, so an empty array emits `IN ()`.
+        // MEASURED, not assumed: the bundled SQLite accepts that as an empty list and matches
+        // nothing, so it is NOT the SqliteException it looks like. The danger is the transaction
+        // below it - a nested-transaction InvalidOperationException in a caller that already
+        // holds a scope - which is why the guard has to return before Begin.
         using ContentDb db = Open();
         Item(db, 1, ResultKind.Photo, ContentDb.StateSkipped, Decoders.NoModel, File_("a.jpg"));
 
@@ -4923,7 +4926,7 @@ public class CapabilityGateTests : IDisposable
 - [ ] **Step 2: Run it to watch it fail**
 
 Run: `dotnet test --filter CapabilityGateTests`
-Expected: FAIL - `CapabilityGate` and `Requeue` do not exist; `RequeueKinds` has no three-argument overload; `ARequeueForNoKindsIsNothingRatherThanACrash` fails with a `SqliteException` rather than an assertion, which is the defect it names.
+Expected: FAIL - `CapabilityGate` and `Requeue` do not exist; `RequeueKinds` has no three-argument overload; `ARequeueForNoKindsIsNothingRatherThanACrash` fails on its third assertion, which is the defect it names: the empty `IN ()` matches nothing, so the guard has to be proved by the transaction it does not open rather than by an exception it does not throw.
 
 - [ ] **Step 3: Guard and extend `RequeueKinds`**
 
@@ -6225,7 +6228,7 @@ git commit -m "Close-out: the accelerator line, the models section, the graph se
 - **`findra --models` lists every capability with what it would add given what is already installed**, names the two free things - words in documents and words inside pictures - shows Hebrew only where the machine's languages include it, and gives 2.93 GB as the total for everything. **`findra --models install recommended` fetches roughly 900 MB, resumes if it is interrupted, and queues exactly the files the two new capabilities cover.**
 - **Reading inside files is off until somebody asks.** On a fresh install `findra --content` says so and gives the command that starts it - it does not say "up to date", which is what a finished index says and is what an empty one looks like. `--content on` starts it, `--content off` stops it and says how much is already read, and the setting survives a restart. `AnIndexNobodyHasAskedForSaysSoRatherThanLookingIdle`, `OffIsNotTheSameSentenceAsPausedWhileFindraIsClosed` and `AnIndexNobodyHasAskedForSaysSoAboveTheCounts` are the three tests that say so.
 - **One number decides how long a recording is worth transcribing, covering audio and video together.** Zero is off, negative is no limit, positive is minutes, five by default; a preset and a typed value are the same setting. A recording over the limit is **skipped with a reason of its own**, and `findra --content limit "2 hours"` re-queues exactly those recordings - including a long video that was indexed for its frames alone - and nothing else. Lowering the limit queues nothing. `RaisingTheLimitQueuesOnlyTheRecordingsItNewlyCovers`, `ALongVideoIndexedForItsFramesAloneIsQueuedAgainWhenTheLimitRises` and `LoweringTheLimitQueuesNothing` are the three that say so.
-- **The source's one-hour and three-minute constants are gone**, and `TheSourcesTwoRecordingConstantsAreGone` is the test.
+- **No per-kind recording constant survives beside the setting** - the one-hour and three-minute pair are gone, and `NoPerKindRecordingConstantSurvivesBesideTheSetting` is the test.
 - **A download that is interrupted resumes from the byte already fetched**, a file already present at the right size is not fetched again, and a download that ends short is not promoted - the `.part` is kept so the next run resumes. `APartialDownloadResumesFromTheByteAlreadyFetched`, `AFinishedFileIsNotFetchedAgain` and `ADownloadThatEndsShortIsNotPromoted` are the three tests that say so.
 - **Every capability degrades silently when its model is absent.** The indexer records Skipped with a reason and never Failed, content search contributes no candidates and never throws, `--searchmodels` exits 0, and the card offers the download with its marginal size. `APhotoIsOfferedToTheDecoderOnlyWhenTheModelsForItAreThere`, `AMissingCapabilityIsNeverAFailure` and `WithNoMeaningModelTheSameQueryFindsNothingAndOffersTheDownload` are the three that say so.
 - **Words in documents still work with nothing installed at all**, which is what makes "Not now" a safe answer on the first screen.
@@ -6427,7 +6430,7 @@ gated and one that did not, and four tests that could not pass.
 | `TheGeneralModelIsAlwaysTheFirstPassAndTheFineTuneIsOnlyEverTheSecond` | `SpeechModels` returns the fine-tune as `General` when Hebrew is installed → every English file is transcribed by a Hebrew model, and nothing about the output looks wrong enough to notice; or it returns the fine-tune when Hebrew is *not* installed → the second assertion |
 | `ASizeGateIsAppliedAndNotMerelyDeclared` (7 rows) | any gate is dropped from `SizeGate` → that row returns null. One row per rule, and it asks the function the decode arms call rather than comparing four constants to each other |
 | `ARecordingLongerThanTheLimitIsSkippedForAReasonOfItsOwn` | `TooLong` is made an alias of `TooLarge`, or of `NoModel` → the equality assertion for that constant fails. This is the fifth meaning of the recorded reason and the only one a user can change from a settings control: sharing a string with "too large" makes raising the limit sweep up every enormous document, and sharing one with "no model" makes a download re-queue every long recording |
-| `TheSourcesTwoRecordingConstantsAreGone` | `MaxAudioSeconds` or `MaxVideoSpeechSeconds` is ported as behaviour → the reflection assertion names it. Two constants deciding this re-introduce an asymmetry between audio and video that is invisible in the interface: a sound file and a video of the same length would behave differently for no reason anybody could see |
+| `NoPerKindRecordingConstantSurvivesBesideTheSetting` | `MaxAudioSeconds` or `MaxVideoSpeechSeconds` is ported as behaviour → the reflection assertion names it. Two constants deciding this re-introduce an asymmetry between audio and video that is invisible in the interface: a sound file and a video of the same length would behave differently for no reason anybody could see |
 | `TranscribeLimitTests.TheRuleIsZeroIsOffNegativeIsNoLimitAndPositiveIsMinutes` (8 rows) | 0 read as "no limit" → row 1 transcribes everything on a machine that asked for nothing; negative read as 0 → row 3 transcribes nothing for somebody who asked for everything; `-1` special-cased instead of "any negative" → row 4; `<` instead of `<=` → row 6, which is a recording exactly five minutes long, which is what a voice-memo app produces |
 | `TranscribeLimitTests.ThePresetsAreTheOnesTheSpecNames` | a preset is added, dropped or renumbered away from the spec's table |
 | `TranscribeLimitTests.APresetAndATypedValueAreTheSameSetting` | the preset name is stored in a second field rather than derived → `Named` and `Describe` can disagree with the number, which is exactly what spec §6 forbids; or `Describe` returns null for a typed value → the settings screen shows a blank |
@@ -6469,7 +6472,7 @@ gated and one that did not, and four tests that could not pass.
 | `NothingInstalledPlansNothing` | the plan is derived from the stamps alone → work is planned for capabilities that are not there |
 | `ApplyingThePlanQueuesTheSkippedFilesAndRecordsThatItDid` | the stamp is not written → the last assertion plans the same work again on the next launch |
 | `ApplyingThePlanTouchesNoOtherProcessesMetaRows` | `index:` or `indexer:` is reused as the prefix, or the stamp write clobbers a bare key → one assertion per prefix |
-| `ARequeueForNoKindsIsNothingRatherThanACrash` | **the `IN ()` concatenation**, which is the state today → a `SqliteException` out of a background loop where nobody catches it |
+| `ARequeueForNoKindsIsNothingRatherThanACrash` | **the unguarded call reaching `Begin`**, which is the state today. Not the SQL: the bundled SQLite accepts `IN ()` as an empty list and matches nothing. It is the transaction, which is a nested-transaction `InvalidOperationException` in a caller already inside a scope |
 | `TheDocumentRequeueLeavesAloneWhatNoModelCouldHelp` | the reason filter is dropped → 3 rows, and every 200 MB dump and every empty file is re-opened on every install |
 | `TheExclusionOnlyAppliesToSkippedRowsAndNeverToIndexedOnes` | the filter is written as a bare `error NOT IN (...)` → an indexed row's NULL error excludes it, a new model never re-embeds anything already read, and the symptom is indistinguishable from the C-1 bug |
 | `AFileThatGenuinelyFailedIsStillNeverRetried` | the state clause becomes `IN (1,2,3)` → a broken PDF is retried on every install, for ever |
@@ -6550,7 +6553,7 @@ gated and one that did not, and four tests that could not pass.
 
 | # | Trap | Where it lands |
 |---|---|---|
-| 1 | `RequeueKinds([], reason)` throws on `IN ()` | **Task 11.** Guard plus `ARequeueForNoKindsIsNothingRatherThanACrash`, which fails today with a `SqliteException`. Still unguarded in the tree at `ContentDb.cs:1054`. |
+| 1 | `RequeueKinds([], reason)` runs a statement and opens a transaction for nothing | **Task 11.** Guard plus `ARequeueForNoKindsIsNothingRatherThanACrash`. **The trap as inherited was stated wrongly**: the empty `IN ()` is not a SQL error - the bundled SQLite accepts it as an empty list and matches nothing. The real danger is the transaction, which is a nested-transaction `InvalidOperationException` in a caller that already holds a scope, so the guard has to return before `Begin`. |
 | 2 | A re-queued **Skipped** file is reopened only because of one clause | **Task 11, and it is the reason that task was rewritten.** The clause protects *skipped* rows only, and this plan re-queues *indexed* ones - so the answer is not "do not simplify the clause" but "use the reason the clause honours". `Indexer.Recheck`, `EveryRequeueCarriesTheReasonTheIndexerReopensAnIndexedFileFor`, and `ADocumentAlreadyIndexedIsOpenedAgainWhenMeaningArrives` end to end. |
 | 3 | `StateSkipped` is overloaded four ways | **Task 11, and the spec has since added a fifth meaning.** `Decoders.TooLong` - a recording longer than the transcription limit - is the only one a user can change from a settings control, so it gets its own constant and the re-queue that reads it runs the *opposite* way round: `onlyBecause`, exactly those rows, rather than `notBecause`, everything except some. Both filters read the `error` column, which is what lets the narrow one reach an indexed video carrying `TooLong` as a note. Tests: `TheDocumentRequeueLeavesAloneWhatNoModelCouldHelp`, its control `TheExclusionOnlyAppliesToSkippedRowsAndNeverToIndexedOnes`, `RaisingTheLimitQueuesOnlyTheRecordingsItNewlyCovers`, and `ARecordingLongerThanTheLimitIsSkippedForAReasonOfItsOwn`. |
 | 4 | `--searchbench` must not write to the real index | **Fixed in the tree** by Plan 4's fix wave (`SearchBench.cs:336` is `readOnly: true`) and **re-opened by this plan through a second store**: `DrainOnce` now needs decoders, and a convenience overload would hand the benchmark a writer on the real `vectors.bin`. **Task 9** deletes the overload, fixes all three call sites, and checks the file does not exist afterwards. |

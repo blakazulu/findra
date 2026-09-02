@@ -65,6 +65,52 @@ public class SearchModelsReportTests
     }
 
     [Fact]
+    public void AFileTheRightSizeForTheTableIsNotCalledWrong()
+    {
+        // The five sizes below are the real files a real install fetched, against the real
+        // figures in ModelStore. Every one of them differs from its declared size, four of them
+        // upward, because the declared size is the specification's table in megabytes to one
+        // decimal place and was never going to equal a byte count. A report that compares the
+        // two for equality calls all five WRONG SIZE - in the one mode the README's measured
+        // sizes are supposed to come from.
+        ModelsSnapshot s = Sample() with
+        {
+            Models =
+            [
+                new ModelRow("siglip2-vision.onnx", "photos", true, 372_036_403, 371_992_072),   // 44,331 smaller
+                new ModelRow("siglip2-text-q.onnx", "what you type", true, 283_430_092, 283_438_275),
+                new ModelRow("siglip2.spm", "its vocabulary", true, 4_194_304, 4_241_003),       // 46,699 larger
+                new ModelRow("e5-base-q.onnx", "meaning", true, 278_601_728, 278_647_662),
+                new ModelRow("e5-small.spm", "their vocabulary", true, 5_033_164, 5_069_051),
+            ],
+        };
+
+        string text = ModelsReport.Render(s);
+
+        Assert.DoesNotContain("WRONG SIZE", text, StringComparison.Ordinal);
+        Assert.Equal(5, text.Split('\n').Count(l => l.Contains("matches the", StringComparison.Ordinal)));
+    }
+
+    [Fact]
+    public void AFileThatArrivedShortIsStillCalledWrongHoweverTheComparisonIsLoosened()
+    {
+        // The other side of the same fence, and the reason the comparison exists at all. A
+        // connection that closed at four fifths of the way through leaves a file that is present,
+        // is above ModelStore's completeness floor - 250,000,000 for this one - and will not
+        // load. A tolerance wide enough to swallow that reports nothing and is worse than no
+        // comparison, because it looks like one.
+        ModelsSnapshot s = Sample() with
+        {
+            Models = [new ModelRow("e5-base-q.onnx", "meaning", true, 278_601_728, 260_000_000)],
+        };
+
+        string text = ModelsReport.Render(s);
+
+        Assert.Contains("WRONG SIZE", text, StringComparison.Ordinal);
+        Assert.Contains("260,000,000", text, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void ACapabilityWithSomeOfItsFilesIsNotReportedAsReady()
     {
         // One of three is not "photos work". An Any() where an All() belongs lights the

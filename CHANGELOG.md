@@ -36,8 +36,8 @@ into a numbered section on the first release.
   starting however badly they are edited.
 - **Six diagnostic modes** so the product can be verified without a screen:
   `--searchprobe`, `--searchtest`, `--searchshot`, `--searchindex`, `--searchmodels`,
-  `--searchbench`, plus `--version`. The first three run today; the rest arrive with
-  the work they report on.
+  `--searchbench`, plus `--version`. All six run, and every one of them reports on
+  something that exists.
 - **The content store**: a SQLite full-text index with a recorded schema version, a
   resumable work queue, and a consumed journal position per volume, so an interrupted
   index continues rather than starting over.
@@ -70,7 +70,9 @@ into a numbered section on the first release.
   the byte already fetched rather than starting over; a connection that closes early leaves
   a short file on disk to resume from instead of promoting it under the final name; and a
   `.part` from a file that has since been republished smaller is discarded and re-fetched
-  from the start rather than mistaken for a finished download.
+  from the start rather than mistaken for a finished download. A download that was killed
+  between its last byte and being renamed into place is recognised as the finished file it
+  is and kept, which on the Hebrew model is 1.5 GB nobody has to fetch twice.
 
 - **Capabilities you install one at a time, priced by what they actually add.** Searching
   photos and video, reading meaning out of documents, and transcribing speech are separate
@@ -146,7 +148,10 @@ into a numbered section on the first release.
   the point of the mode - which execution provider each runtime chose and every one it rejected,
   with the reason, so "it's slow on my laptop" becomes "DirectML failed to initialise, fell back
   to the processor". A machine with nothing installed still gets a complete report and exits
-  cleanly, because a missing model is a normal state and not a failure.
+  cleanly, because a missing model is a normal state and not a failure. The size on disk is
+  printed beside the size the table declares and read against it to within the table's own
+  rounding, so a file that arrived whole reads as whole and only a file that really is short
+  is called out.
 
 - **`--models` and `--content`: take a capability, and ask Findra to start reading, without a
   screen.** `findra --models` lists what is on this machine, what each capability would add to
@@ -161,6 +166,26 @@ into a numbered section on the first release.
   rather than letting an index nobody asked for look finished. `findra --content limit` sets
   how long a recording is worth transcribing, in the same words the settings screen will use,
   and refuses anything it cannot read instead of quietly turning transcription off.
+
+- **`--searchindex` says whether anybody has asked for any of this**, above the counts, because
+  an index nobody has turned on and a finished index have identical numbers. Below them it
+  lists every capability with how many files are sitting waiting for exactly it, so "eight
+  thousand skipped" becomes "eight thousand photos waiting for the photo models" and it is
+  clear which download would clear them. It also says how long a recording is worth
+  transcribing, in words rather than as a bare number, and counts the recordings passed over
+  for their length apart from the ones waiting for a model - one is cleared by a download and
+  the other by a setting, and a single total says nothing about which.
+
+- **The benchmark names the silicon that answered, and it is two answers.** Documents and
+  pictures go through DirectX 12 where there is a device for it, speech goes through Vulkan,
+  and either falls back to the processor on its own - so a machine can run one accelerated and
+  the other not, and the published numbers now say which. A runtime with no model on the
+  machine says so rather than claiming a processor fallback for work that never ran.
+
+- **`--searchtest` checks the capability graph itself**: that closing a selection twice changes
+  nothing, that no capability claims a kind of file with nothing to read inside it, and that
+  the whole model set still measures the 2.93 GB quoted everywhere else. It runs on a machine
+  that has downloaded nothing, which is the point.
 
 ### Changed
 
@@ -183,6 +208,10 @@ into a numbered section on the first release.
   and never a byte of a file. Every decoder runs in the unelevated indexer, because
   decoders read arbitrary files found on disk and are the most likely thing a
   malformed file could exploit.
+- Every decoder added for photos, speech and meaning runs in the unelevated indexer child:
+  the two neural-network runtimes, the speech model, the media pipeline that decodes sound
+  and video, the picture codecs, and the text recognisers. All five read files somebody else
+  put on the disk, which is precisely why none of them is reachable from the elevated helper.
 - The named pipe is restricted to the current user, and the interface verifies the
   owner before trusting a connection.
 

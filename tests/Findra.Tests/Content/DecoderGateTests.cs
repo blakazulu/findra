@@ -434,12 +434,12 @@ public class DecoderGateTests : IDisposable
     }
 
     [Fact]
-    public void TheSourcesTwoRecordingConstantsAreGone()
+    public void NoPerKindRecordingConstantSurvivesBesideTheSetting()
     {
-        // An hour for audio and three minutes for video are the ancestors of the default, not
-        // the rule (spec §6). Porting them as behaviour re-introduces an asymmetry the setting
-        // exists to remove, and it would be invisible: a video and a sound file of the same
-        // length would behave differently for no reason anybody could see in the interface.
+        // An hour for audio and three minutes for video is a rule hidden in two constants, and
+        // the setting exists to replace it (spec §6). Keeping either alongside the setting
+        // re-introduces an asymmetry nobody can see: a video and a sound file of the same length
+        // would behave differently for no reason the interface could show.
         string[] fields = [.. typeof(Decoders)
             .GetFields(BindingFlags.Public | BindingFlags.Static | BindingFlags.FlattenHierarchy)
             .Select(f => f.Name)];

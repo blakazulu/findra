@@ -8,7 +8,7 @@ public class BenchTests
 {
     private static readonly MachineInfo Box = new(
         "AMD Ryzen 9 9900X3D 12-Core Processor", "X64", 51_539_607_552L,
-        "NVMe SSD", "Windows 11 Pro 10.0.26200.1234", "CPU only - this build runs no models");
+        "NVMe SSD", "Windows 11 Pro 10.0.26200.1234", "ONNX: DirectML · Whisper: CPU");
 
     private static IReadOnlyList<VolumeRow> Vols() =>
     [
@@ -96,8 +96,43 @@ public class BenchTests
         Assert.Contains("NVMe SSD", md);
         Assert.Contains("10.0.26200.1234", md);
         Assert.Contains("Accelerator", md);
-        Assert.Contains("CPU only - this build runs no models", md);
+        Assert.Contains("ONNX: DirectML · Whisper: CPU", md);
         Assert.Contains("0.4.0", md);
+    }
+
+    [Fact]
+    public void TheAcceleratorLineNamesBothRuntimesAndWhatEachOneGot()
+    {
+        // A throughput number without the silicon beside it is meaningless (spec §6), and
+        // "which silicon" is now two answers, because the two runtimes choose separately: a
+        // machine can run DirectML for the vision tower and fall back to the CPU for whisper.
+        string line = Machine.AcceleratorLine(onnx: "DirectML", whisper: "CPU");
+
+        Assert.Contains("ONNX", line, StringComparison.Ordinal);
+        Assert.Contains("DirectML", line, StringComparison.Ordinal);
+        Assert.Contains("Whisper", line, StringComparison.Ordinal);
+        Assert.Contains("CPU", line, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void AMachineWithNoModelsSaysSoRatherThanClaimingACpuFallback()
+    {
+        // "CPU" would be a measurement of something that never ran. Not loaded is the truth.
+        string line = Machine.AcceleratorLine(onnx: null, whisper: null);
+        Assert.Contains("not loaded", line, StringComparison.Ordinal);
+        Assert.DoesNotContain("DirectML", line, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void OneRuntimeWithAModelAndOneWithoutAreTwoDifferentAnswersOnOneLine()
+    {
+        // The state of this machine while Plan 5 was written: the picture models fetched, the
+        // speech models not. A line that collapsed to one word would have to be wrong about one
+        // of them, and the wrong one is the one somebody reads off a product page.
+        string line = Machine.AcceleratorLine(onnx: "DirectML", whisper: null);
+
+        Assert.Contains("DirectML", line, StringComparison.Ordinal);
+        Assert.Contains("not loaded", line, StringComparison.Ordinal);
     }
 
     [Fact]

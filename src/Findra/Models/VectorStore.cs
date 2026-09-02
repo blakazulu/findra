@@ -24,9 +24,9 @@ public sealed class VectorStore : IDisposable
     ///
     /// <para>The constant looks reversed because it is not a string, it is an int32 written
     /// little-endian - the low byte lands first. Writing the "obvious" 0x46565331 puts `1SVF` on
-    /// disk, which is the mistake the format this was ported from made and then documented as
-    /// though it had not: those files begin `1SVP`. Assert on the BYTES, never on the literal.
-    /// </para>
+    /// disk instead, and nothing ever notices: a header only this file reads back is happy either
+    /// way round, and by the time anybody looks there are gigabytes of vectors behind it. So the
+    /// test asserts on the BYTES on disk, never on the literal here.</para>
     /// </summary>
     private const int Magic = 0x31535646;
     private static readonly int RowBytes = Dim * 2;

@@ -33,10 +33,10 @@ public readonly record struct DownloadOutcome(Model Model, bool Complete, long G
 /// <summary>
 /// Fetching model files, one at a time, resumably - and IN THE INTERFACE.
 ///
-/// <para>The engine this comes from downloaded inside the indexer child, and blocked its whole
-/// queue until all seven files existed. That is exactly what the spec forbids: consent lives on
-/// the first-run screen, progress is shown there, and the child only ever asks whether a file is
-/// on disk. Nothing under <c>src/Findra/Content/</c> may reference this type.</para>
+/// <para>Downloading from the indexer child would block its whole queue until all seven files
+/// existed, and that is exactly what the spec forbids: consent lives on the first-run screen,
+/// progress is shown there, and the child only ever asks whether a file is on disk. Nothing under
+/// <c>src/Findra/Content/</c> may reference this type, and a test says so.</para>
 ///
 /// <para>Progress is not written to the database. The <c>.part</c> file IS the durable progress -
 /// it survives a reboot and a dropped connection by being on disk - and the index's single
@@ -75,11 +75,15 @@ public static class ModelDownloader
             // killed between the last write and the rename below. A range at or past the end is
             // refused, and discarding it throws away a complete file sitting on the disk, which
             // spec §2a calls the single most annoying thing this product could do to someone. So
-            // try promoting it and asking whether it is the file. A part LONGER than the
+            // try promoting it and asking whether it is the file. A part far LONGER than the
             // declared size can never be a prefix of the current file - the file behind the
             // URL was republished smaller - and treating that the same as "already complete"
-            // would promote fifteen stale bytes under a nine-byte model's name.
-            if (have >= m.MinBytes && have <= m.Bytes)
+            // would promote fifteen stale bytes under a nine-byte model's name. "Far" is the
+            // whole difference: the declared size is the table's rounded megabytes and four of
+            // the five files on a real install are larger than it, so an exact ceiling refuses
+            // a part that IS the finished file and fetches 1.5 GB again. ModelStore owns the
+            // width of that band, so neither mistake can come back on its own.
+            if (ModelStore.CouldBeComplete(m, have))
             {
                 try
                 {
@@ -128,9 +132,10 @@ public static class ModelDownloader
         }
         progress?.Invoke(new DownloadProgress(m.File, done, total));
 
-        // The completeness check the source has not got. A connection that closes early leaves a
-        // short file, and promoting it puts something above its floor under the final name for
-        // ever: every load fails and nothing re-fetches it, because it is "there".
+        // The completeness check, and it is the one that is easiest to leave out. A connection
+        // that closes early leaves a short file, and promoting it puts something above its floor
+        // under the final name for ever: every load fails and nothing re-fetches it, because it
+        // is "there".
         if (total > 0 && done < total)
         {
             string problem = $"the download ended at {done.ToString(CultureInfo.InvariantCulture)} of " +

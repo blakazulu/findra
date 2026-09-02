@@ -141,8 +141,8 @@ public class SemanticBranchTests : IDisposable
     public void APictureThatMerelyResemblesTheQueryALittleIsNotAMatch()
     {
         // Below the floor, and it must not appear at all. Without the floor every photo in the
-        // library is a weak match for every query, which is the state the source's comment
-        // describes measuring its way out of.
+        // library is a weak match for every query, and a result list that always has something in
+        // it is a result list nobody can trust.
         using ContentDb db = Open();
         using (var w = new VectorStore(VecPath, writer: true))
         {
