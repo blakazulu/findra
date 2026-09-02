@@ -53,6 +53,13 @@ into a numbered section on the first release.
   tries the graphics card first and falls back to the processor while recording every provider
   it rejected and why, and the vector store the embeddings live in.
 
+- **The encoders that turn a picture or a passage into a vector**: SigLIP-2's image and text
+  towers, which put a photo and the words you would use to look for it in the same space, and
+  multilingual e5 for documents and transcripts. Each one opens on whichever execution provider
+  will have it, so there is a single answer to what this machine chose and why. Indexing asks
+  for the graphics card, where the work is measured in hours; typing a query runs on the
+  processor, where it is measured in milliseconds.
+
 - **A privacy policy** at `PRIVACY.md`, saying what Findra stores, where, and the single
   request that leaves the machine. It states plainly that the index holds the text of the
   documents it indexed and is not encrypted, which is one reason content indexing is off
