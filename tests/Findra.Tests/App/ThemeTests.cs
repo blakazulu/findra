@@ -55,4 +55,19 @@ public class ThemeTests
         Config c = Config.Default with { Mode = ThemeMode.AlwaysDark, DarkPalette = "Paper" };
         Assert.Equal("Paper", Theme.Resolve(c, false, All).Name);
     }
+
+    [Fact]
+    public void ASecondMissingPaletteFallsBackJustLikeTheFirst()
+    {
+        // The fallback used to be latched by a single process-wide flag, so only the first missing
+        // palette was ever reported. Resolving two different missing names must give each its own
+        // answer on its own side, however many have gone before.
+        Config dark = Config.Default with { Mode = ThemeMode.AlwaysDark, DarkPalette = "GoneOne" };
+        Config light = Config.Default with { Mode = ThemeMode.AlwaysLight, LightPalette = "GoneTwo" };
+
+        Assert.Equal(Palette.DefaultDark.Name, Theme.Resolve(dark, false, All).Name);
+        Assert.Equal(Palette.DefaultLight.Name, Theme.Resolve(light, true, All).Name);
+        Assert.False(Theme.Resolve(dark, false, All).Light);
+        Assert.True(Theme.Resolve(light, true, All).Light);
+    }
 }

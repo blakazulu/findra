@@ -141,6 +141,10 @@ internal sealed class Shell
     // through it (spec 9b).
     private static readonly HttpClient Http = UpdateCheck.CreateClient();
 
+    /// <summary>Cancelled when Findra quits. An update check in flight at that moment is abandoned
+    /// without stamping the day as checked, so the next launch still asks.</summary>
+    private readonly CancellationTokenSource _shutdown = new();
+
     private readonly Application _app;
     private readonly IClassicDesktopStyleApplicationLifetime _desktop;
 
@@ -421,6 +425,7 @@ internal sealed class Shell
     private void Quit()
     {
         Log.Info("app", "quitting");
+        try { _shutdown.Cancel(); } catch { }
         UiStatus.Clear();
         try { _hotkey?.Dispose(); } catch { }
         _hotkey = null;
@@ -448,7 +453,7 @@ internal sealed class Shell
             UpdateResult result = await UpdateCheck.CheckAsync(
                 _config,
                 ct => UpdateCheck.FetchLatestTagAsync(Http, Log.Version, ct),
-                DateTime.UtcNow, CancellationToken.None, force).ConfigureAwait(false);
+                DateTime.UtcNow, _shutdown.Token, force).ConfigureAwait(false);
 
             await Dispatcher.UIThread.InvokeAsync(() =>
             {

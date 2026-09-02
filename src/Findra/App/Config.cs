@@ -104,6 +104,10 @@ public sealed record Config
     {
         public override ThemeMode Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
         {
+            // GetString throws on any token that is not a string, and that throw escapes the whole
+            // deserialisation - so a single mistyped field would discard every other setting in the
+            // file. A wrong TYPE gets the same forgiving treatment as a wrong VALUE.
+            if (reader.TokenType != JsonTokenType.String) return ThemeMode.FollowWindows;
             string? s = reader.GetString();
             return Enum.TryParse<ThemeMode>(s, ignoreCase: true, out var mode) ? mode : ThemeMode.FollowWindows;
         }

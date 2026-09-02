@@ -78,4 +78,17 @@ public class ConfigTests
     {
         Assert.Equal(ThemeMode.FollowWindows, Config.Load("""{ "mode": "Purple" }""").Mode);
     }
+
+    [Fact]
+    public void AFieldOfTheWrongTypeCostsOnlyThatField()
+    {
+        // A hand-edited file that says mode:1 instead of mode:"AlwaysDark" must not throw away
+        // every OTHER setting on its way past. Losing one field to a typo is forgivable; losing
+        // the palette, the hotkey and the capsule position along with it is not.
+        Config c = Config.Load("""{ "darkPalette": "Brass", "mode": 1, "hotkey": "Ctrl+Alt+F" }""");
+
+        Assert.Equal(ThemeMode.FollowWindows, c.Mode);
+        Assert.Equal("Brass", c.DarkPalette);
+        Assert.Equal("Ctrl+Alt+F", c.Hotkey);
+    }
 }
