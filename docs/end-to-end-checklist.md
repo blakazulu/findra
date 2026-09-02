@@ -90,6 +90,25 @@ as much a test of the download path as of the models.
     built, and confirm from `--searchindex` that the files it covers are re-queued and
     actually re-read, and that nothing else is disturbed.
 
+## The one that hid behind an unelevated agent
+
+Every automated run of Findra in this project logged "the names helper is not answering",
+and it was read as a consequence of agents having no administrator rights. It was not.
+`HelperTask.Register` had no callers: the application asked the scheduler to start a task
+that nothing had ever created. On a clean machine, name search would never have worked at
+all.
+
+Registration is wired up in Plan 6, from the first-run screen, because it needs a consent
+moment rather than an elevation prompt at every launch.
+
+24. **The scheduled task is created by Findra itself.** On a machine that has never run it,
+    complete first run and then check `schtasks /query /tn "Findra names helper"` finds the
+    task, and that `findra --searchprobe` reports it registered. Do NOT start the helper by
+    hand first, because that is exactly what masked this.
+25. **Uninstalling removes it again.** After `findra --uninstall`, the same query must find
+    nothing. The specification calls leaving it behind a defect rather than an
+    inconvenience, because it orphans an elevated logon task pointing at a deleted binary.
+
 ## Notes
 
 Steps 1 to 4 and 9 to 13 are the ones that have never executed in any form. Steps 5 to 8
