@@ -235,6 +235,20 @@ file names follow. No lineage is described or implied anywhere in the shipped pr
 UI, commit messages or code comments. Referring to the source path when porting is fine;
 describing Findra as derived from another project is not.
 
+## The changelog
+
+`CHANGELOG.md` is updated on **every commit**, in the same commit, in its pathspec. Never
+leave it for a sweep at release time.
+
+It is load-bearing rather than decorative. The release workflow reads the section matching a
+tag and uses it as the release notes, and a tag with no matching section fails the release.
+It is also where Findra's own update check sends someone who built from source.
+
+The format is [Keep a Changelog 1.1.0](https://keepachangelog.com/en/1.1.0/): entries go under
+`## [Unreleased]` in one of Added, Changed, Deprecated, Removed, Fixed or Security, and move
+into a numbered section on release. Write each line for a person reading release notes, not
+for a reviewer reading a diff.
+
 ## Testing
 
 TDD for all new code: the pipe protocol and its generation counter, the palette layer and light
