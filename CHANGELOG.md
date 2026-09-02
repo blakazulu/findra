@@ -52,6 +52,13 @@ into a numbered section on the first release.
   and no limit at all, and accepts a number of minutes typed in. A recording over the limit
   is skipped rather than failed, so raising the limit later picks up exactly those files.
 
+### Added
+
+- **A privacy policy** at `PRIVACY.md`, saying what Findra stores, where, and the single
+  request that leaves the machine. It states plainly that the index holds the text of the
+  documents it indexed and is not encrypted, which is one reason content indexing is off
+  until you ask for it.
+
 ### Security
 
 - The elevated helper parses no file content. It reads names, paths, sizes and

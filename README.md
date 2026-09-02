@@ -61,6 +61,9 @@ machine or install identifier, and nothing about your files or searches. It neve
 anything, and a failure is a line in the log rather than a dialog. It can be switched off,
 and off means the request is not made. Findra never installs anything by itself.
 
+Full detail, including what the index contains and what the logs record, is in
+[PRIVACY.md](PRIVACY.md).
+
 ## Licence
 
 Apache-2.0. Free to use, clone and modify. See `NOTICE` for the attribution you must keep.

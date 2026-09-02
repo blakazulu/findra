@@ -17,6 +17,8 @@ Multi-factor authentication is required on the source repository and on the sign
 
 ## Privacy
 
+Full policy: [PRIVACY.md](../PRIVACY.md).
+
 This program will not transfer any information to other networked systems unless specifically
 requested.
 
