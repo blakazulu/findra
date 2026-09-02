@@ -70,6 +70,7 @@ public static class SelfTest
                 {
                     ("the ground", d.Ground), ("a result row", d.Row), ("a hovered row", d.RowHover),
                     ("the selected row", d.RowSelected), ("a chip", d.Chip), ("a stage badge", d.Stage),
+                    ("a settings tile", d.Tile),
                 })
                 {
                     double ratio = Derived.Contrast(d.Ink, c);
