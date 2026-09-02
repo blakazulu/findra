@@ -17,7 +17,8 @@ public sealed record IndexSnapshot(
     long Queued, long Indexed, long Failed, long Skipped,
     IReadOnlyDictionary<ResultKind, long> ByKind,
     string IndexerState, string IndexerCurrent, string IndexerRate, string IndexerPid, bool IndexerAlive,
-    long JournalDropped, IReadOnlyList<(string Path, string Error)> Failures);
+    long JournalDropped, long SessionFailures, string SessionFailure,
+    IReadOnlyList<(string Path, string Error)> Failures);
 
 /// <summary>
 /// `--searchindex`'s formatter: what is in the content index, and what is still queued (spec §9).
@@ -105,6 +106,16 @@ public static class SearchIndexReport
         {
             Line();
             Line($"  journal  : {N(s.JournalDropped)} event(s) dropped - a subscriber fell behind and a full pass is owed");
+        }
+
+        // Also only when non-zero. "Why is nothing being indexed" is very often "this install has
+        // not been able to reach the helper four hundred times", and until this line existed that
+        // fact lived in one log line that said itself once per process and then went quiet.
+        if (s.SessionFailures != 0)
+        {
+            Line();
+            Line($"  sessions : {N(s.SessionFailures)} failed session(s) - the queue could not be fed from the journal");
+            if (s.SessionFailure.Length > 0) Line($"             last: {s.SessionFailure}");
         }
 
         if (s.Failed > 0)
@@ -256,7 +267,15 @@ public static class SearchIndex
             ByKind: db.CountsByKind(),
             IndexerState: db.Get("indexer:state") ?? "", IndexerCurrent: db.Get("indexer:current") ?? "",
             IndexerRate: db.Get("indexer:rate") ?? "", IndexerPid: pid, IndexerAlive: alive,
-            JournalDropped: dropped, Failures: db.RecentFailures(10));
+            JournalDropped: dropped,
+            // Written by the interface's content loop every time a session fails to reach the
+            // helper, accumulated exactly as journal:dropped is - so it survives the process that
+            // could not connect, which is the whole point: this diagnostic is run afterwards, from
+            // a different terminal, by somebody asking why nothing has been indexed.
+            SessionFailures: long.TryParse(db.Get("index:sessionfailures"), NumberStyles.Integer,
+                                           CultureInfo.InvariantCulture, out long sf) ? sf : 0,
+            SessionFailure: db.Get("index:sessionfailure") ?? "",
+            Failures: db.RecentFailures(10));
     }
 
     /// <summary>Every file the index is made of that exists right now - the database and its

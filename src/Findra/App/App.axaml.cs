@@ -274,6 +274,35 @@ internal sealed class Shell
     /// thirty seconds looks stuck for twenty-nine of them.</summary>
     private static readonly TimeSpan PumpEvery = TimeSpan.FromSeconds(1);
 
+    /// <summary>How often a session that keeps failing is allowed to say so again. Every retry is
+    /// a line every thirty seconds; once per process is the silence that hides a fault for a whole
+    /// session. Five minutes is roughly ten attempts per line, which reads as "still broken"
+    /// without burying anything else in the log.</summary>
+    private static readonly TimeSpan SessionFailureEvery = TimeSpan.FromMinutes(5);
+
+    /// <summary>
+    /// Record that one attempt to feed the queue from the journal failed, and return the running
+    /// total. Accumulated in the index, like <c>journal:dropped</c>, so it survives the process
+    /// that could not reach the helper - <c>--searchindex</c> is usually run from a different
+    /// terminal, after the fact, by somebody asking why nothing is being indexed.
+    ///
+    /// <para>Never fatal. This is the failure path; a store that cannot record it must not turn a
+    /// retry into a crash.</para>
+    /// </summary>
+    private static long NoteSessionFailed(ContentDb db, Exception ex)
+    {
+        try
+        {
+            long before = long.TryParse(db.Get("index:sessionfailures"), NumberStyles.Integer,
+                                        CultureInfo.InvariantCulture, out long had) ? had : 0;
+            long now = before + 1;
+            db.Set("index:sessionfailures", now.ToString(CultureInfo.InvariantCulture));
+            db.Set("index:sessionfailure", ex.GetType().Name + ": " + ex.Message);
+            return now;
+        }
+        catch { return 0; }
+    }
+
     /// <summary>
     /// A repository is found by the one file every git checkout has in the same place. The
     /// enumerate call never returns directories - a folder whose name ends in a suffix is exactly
@@ -356,8 +385,19 @@ internal sealed class Shell
                 catch (OperationCanceledException) { break; }
                 catch (Exception ex)
                 {
-                    Log.Once("index|session|" + ex.GetType().Name, "WARN ", "index",
-                        "the queue is not being fed from the journal :: " + ex.Message);
+                    // Recorded before it is logged, because a number in the index is the half a
+                    // person can see without opening a log file: --searchindex prints it.
+                    long failures = NoteSessionFailed(db, ex);
+
+                    // NOT Log.Once. Keyed on the exception type, a session failing every thirty
+                    // seconds for four hours reported itself in the first minute of the log and
+                    // was silent for the rest of the process - which is exactly why this class of
+                    // fault is hard to find. It says so again every few minutes, carrying what it
+                    // held back, so "still broken" and "broken once" stop reading the same.
+                    Log.Repeat("index|session", SessionFailureEvery, "WARN ", "index",
+                        "the queue is not being fed from the journal (" +
+                        failures.ToString("N0", CultureInfo.InvariantCulture) +
+                        " failed session(s) so far) :: " + ex.GetType().Name + ": " + ex.Message);
                 }
                 // Pumped rather than slept through. With no helper registered there is no session
                 // to run, so this is the whole of the loop - and the indexer child is still

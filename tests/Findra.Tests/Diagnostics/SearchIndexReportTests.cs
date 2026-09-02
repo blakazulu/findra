@@ -33,6 +33,7 @@ public sealed class SearchIndexReportTests : IDisposable
         },
         IndexerState: "indexing", IndexerCurrent: "lease.pdf", IndexerRate: "180/min",
         IndexerPid: "10052", IndexerAlive: true, JournalDropped: 0,
+        SessionFailures: 0, SessionFailure: "",
         Failures: failures ?? []);
 
     [Fact]
@@ -244,6 +245,33 @@ public sealed class SearchIndexReportTests : IDisposable
 
         Assert.Contains("118", s);
         Assert.Contains("dropped", s, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void SessionsThatCouldNotFeedTheQueueAreCountedWhereSomebodyWillSeeThem()
+    {
+        // The question this answers is "why is nothing being indexed", and the honest answer is
+        // often "this install has not been able to reach the helper four hundred times". That
+        // number lived only in a log line that said itself once per process and then went quiet,
+        // so the person asking had neither the count nor, after the first minute, the line.
+        string s = SearchIndexReport.Render(Sample() with
+        {
+            SessionFailures = 412,
+            SessionFailure = "TimeoutException: The operation has timed out.",
+        });
+
+        Assert.Contains("412", s);
+        Assert.Contains("TimeoutException", s);
+    }
+
+    [Fact]
+    public void AnInstallThatHasNeverFailedToReachTheHelperSaysNothingAboutIt()
+    {
+        // Printed only when non-zero, like the dropped-events line. A report that always says
+        // "0 failed sessions" trains people to stop reading it, and this line has to be noticed
+        // on the one machine where it is not zero.
+        Assert.DoesNotContain("failed session", SearchIndexReport.Render(Sample()),
+                              StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]

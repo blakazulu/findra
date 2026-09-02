@@ -67,12 +67,62 @@ public static class Log
         => Write("ERROR", cat, $"{msg} :: {ex.GetType().Name}: {ex.Message}");
 
     // Log a repeating condition only the first time it happens (per unique key).
+    //
+    // Right for a condition that is true once and is then either fixed or permanent. WRONG for a
+    // retry loop: a session that fails every thirty seconds for four hours would report itself in
+    // the first minute of the log and be silent for the rest of the process. Use Repeat for that.
     public static void Once(string key, string level, string cat, string msg)
     {
         lock (OnceLock)
         {
             if (!Onced.Add(key)) return;
         }
+        Write(level is "WARN" or "WARN " ? "WARN " : level is "ERROR" ? "ERROR" : "INFO ", cat, msg);
+    }
+
+    /// <summary>When this key last spoke, and how many times it has been asked since.</summary>
+    private static readonly Dictionary<string, (DateTime Last, int Held)> Repeats = [];
+
+    /// <summary>
+    /// May this key say something now, and how many occurrences were held back since it last did?
+    ///
+    /// <para>Separated from <see cref="Repeat"/> and given the time rather than reading a clock, so
+    /// the policy - first one always, then at most one per interval, carrying the count it swallowed
+    /// - is checkable without a log file and without waiting five minutes.</para>
+    ///
+    /// <para>A clock that moved BACKWARDS lets it speak. A resync under a long-running process
+    /// moves the wall clock, and "now - last >= interval" would go silent for as far as the clock
+    /// jumped, which is the same silence this method exists to prevent.</para>
+    /// </summary>
+    public static bool DueToRepeat(string key, TimeSpan every, DateTime now, out int held)
+    {
+        lock (OnceLock)
+        {
+            if (Repeats.TryGetValue(key, out (DateTime Last, int Held) at)
+                && now >= at.Last && now - at.Last < every)
+            {
+                Repeats[key] = (at.Last, at.Held + 1);
+                held = 0;
+                return false;
+            }
+            held = Repeats.TryGetValue(key, out at) ? at.Held : 0;
+            Repeats[key] = (now, 0);
+            return true;
+        }
+    }
+
+    /// <summary>
+    /// Say it now, then at most once per <paramref name="every"/> for as long as it keeps
+    /// happening - with the number of occurrences held back since the last line.
+    ///
+    /// <para>A failure that recurs is a different fact from one that happened once, and a log that
+    /// cannot tell them apart is why a persistent fault reads as a one-off. This is
+    /// <see cref="Once"/>'s counterpart for anything inside a retry loop.</para>
+    /// </summary>
+    public static void Repeat(string key, TimeSpan every, string level, string cat, string msg)
+    {
+        if (!DueToRepeat(key, every, DateTime.UtcNow, out int held)) return;
+        if (held > 0) msg += $" ({held.ToString(CultureInfo.InvariantCulture)} more since the last line)";
         Write(level is "WARN" or "WARN " ? "WARN " : level is "ERROR" ? "ERROR" : "INFO ", cat, msg);
     }
 
