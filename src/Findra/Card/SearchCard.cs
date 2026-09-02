@@ -91,6 +91,48 @@ public static class SearchCardLayout
         return new SKRect(x, st.Bottom - h - 8, x + w, st.Bottom - 8);
     }
 
+    // ---- the footer's one row, shared by two strings -------------------------------------------
+
+    /// <summary>The size both halves of the footer are drawn at.</summary>
+    public const float FooterTextSize = 11.5f;
+
+    /// <summary>The keys the footer teaches. A constant rather than a literal at the draw site,
+    /// because the layout below has to measure exactly what is painted.</summary>
+    public const string FooterHint =
+        "Enter opens · right-click reveals · drag a row into any app · Ctrl+1/2/3 best / newest / largest";
+
+    /// <summary>Clear air between the two halves, so they read as two things and not one run-on.</summary>
+    private const float FooterGap = 18f;
+
+    /// <summary>
+    /// The footer's two halves, cut so they cannot overlap.
+    ///
+    /// <para>The hint is drawn from the left edge and the index line right-aligned to the right
+    /// edge, and neither used to be truncated or clipped. Measured on the shipping card: 465.9 px
+    /// of hint against 325.7 px of index line in 784 px of footer - a 7.6 px overlap on a
+    /// single-drive machine in the ordinary state, and 328 px on a three-drive machine with a
+    /// backlog, where the live half is drawn straight across the boilerplate one.</para>
+    ///
+    /// <para>The index line wins the argument. It carries what is happening right now; the hint is
+    /// boilerplate a user learns once and then stops reading. So the hint yields first, and only
+    /// when the index line alone would fill the row does the index line get cut too - keeping its
+    /// head, where the counts are, rather than its tail.</para>
+    /// </summary>
+    public static (string Hint, string Index) FooterHalves(string index, SKTypeface face, float size)
+    {
+        float room = Width - 2 * (Pad + 4);
+        string shown = index ?? "";
+
+        // Never more than this much of the row, however long the sentence gets: a footer that is
+        // all index line and no hint has thrown away the other half rather than balanced it.
+        float cap = room * 0.62f;
+        if (CardText.Measure(shown, face, size) > cap) shown = CardText.Ellipsize(shown, face, size, cap);
+
+        float used = CardText.Measure(shown, face, size);
+        float left = used > 0 ? room - used - FooterGap : room;
+        return (CardText.Ellipsize(FooterHint, face, size, Math.Max(0, left)), shown);
+    }
+
     public static SearchHit HitTest(float x, float y, int count, int scroll, bool hasQuery, bool advOpen = false)
     {
         if (x < 0 || x > Width || y < 0 || y > Height(count, hasQuery, advOpen)) return SearchHit.None;
@@ -364,9 +406,15 @@ public static class SearchCardPainter
         // ---- footer ----
         var footer = SearchCardLayout.FooterRect(count, hasQuery);
         DrawRule(canvas, footer.Top, w, d);
-        CardText.Draw(canvas, "Enter opens · right-click reveals · drag a row into any app · Ctrl+1/2/3 best / newest / largest",
-            SearchCardLayout.Pad + 4, footer.MidY + 4.5f, 11.5f, face, faint);
-        CardText.DrawRight(canvas, s.IndexLine, w - SearchCardLayout.Pad - 4, footer.MidY + 4.5f, 11.5f, face, faint);
+        // Both halves are cut to fit before either is drawn. Drawing one from the left edge and
+        // the other right-aligned to the right edge, each unaware of the other, put the live index
+        // line straight across the hint on an ordinary single-drive machine.
+        (string footerHint, string indexLine) =
+            SearchCardLayout.FooterHalves(s.IndexLine, face, SearchCardLayout.FooterTextSize);
+        CardText.Draw(canvas, footerHint, SearchCardLayout.Pad + 4, footer.MidY + 4.5f,
+            SearchCardLayout.FooterTextSize, face, faint);
+        CardText.DrawRight(canvas, indexLine, w - SearchCardLayout.Pad - 4, footer.MidY + 4.5f,
+            SearchCardLayout.FooterTextSize, face, faint);
         if (s.AdvOpen) SearchAdvancedPainter.Paint(canvas, s, d, face);
         if (unfolding) canvas.Restore();
     }
