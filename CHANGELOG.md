@@ -83,6 +83,20 @@ into a numbered section on the first release.
   of the rows. What is installed is read from the files on disk rather than from a setting, and
   a capability missing half its files counts as absent.
 
+- **Sound, video frames, and the words inside pictures.** A recording's sound track is decoded
+  with the codecs Windows already has and transcribed, and the lines are gathered into windows
+  a whole sentence fits inside, so a phrase is still findable when the speaker paused in the
+  middle of it; a recording in Hebrew is transcribed a second time by a model that reads it
+  properly. A video is sampled across its whole length rather than by a fixed step, so a
+  ten-hour film costs the same handful of frames as a ten-minute one. And the words inside a
+  screenshot are read by the recognisers Windows already ships - no download, nothing to
+  install, and nothing said when a language is not on the machine.
+
+- **A picture on the card.** Selecting a result now shows the real thing: a photo decoded at
+  preview size with its orientation honoured, the thumbnail Explorer would show for the
+  formats Skia cannot read, and - for a video matched at a moment in it - that frame rather
+  than the poster.
+
 ### Changed
 
 - **Content indexing is off until you ask for it**, including the free full-text search of

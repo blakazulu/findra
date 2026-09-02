@@ -946,10 +946,16 @@ public sealed class CardWindow : Window
             });
         }
 
-        // No decoder yet: previews (photo frames, shell thumbnails, video frames at a moment)
-        // arrive with content indexing. Until then the stage falls back to its no-art tile, which
-        // already handles a null image.
-        private static SKImage? DecodePreview(string path, ResultKind kind, int maxDim, double moment) => null;
+        // A photo decoded at preview size, the shell's thumbnail for everything Skia cannot read,
+        // and for a video matched at a moment, that frame rather than the file's poster. Null is
+        // an ordinary answer - the stage falls back to its no-art tile, which already handles it.
+        // The caller runs this off the UI thread and keeps the result in PreviewCache.
+        // The version test is what the decoder's own platform annotation asks for: this window is
+        // declared for Windows generally, and the thumbnail and frame projections start at 19041.
+        private static SKImage? DecodePreview(string path, ResultKind kind, int maxDim, double moment)
+            => OperatingSystem.IsWindowsVersionAtLeast(10, 0, 19041)
+                   ? PreviewDecoder.Decode(path, kind, maxDim, moment)
+                   : null;
 
         private static string Human(long bytes)
         {
