@@ -94,14 +94,18 @@ public class IndexStatusTests
         finally { CultureInfo.CurrentCulture = was; }
     }
 
+    /// <summary>A pid belonging to somebody else, so the tests below exercise the heartbeat rule
+    /// and not the process rule beside it.</summary>
+    private const string Elsewhere = "4242";
+
     [Fact]
     public void AFreshHeartbeatIsALiveIndexerAndAStaleOneIsNot()
     {
         // The line above turns `alive` into two opposite sentences, so the rule that decides it
         // has to be checkable on its own rather than buried in a window no test can construct.
-        Assert.True(IndexStatus.Alive("1000", nowUnixSeconds: 1000));
-        Assert.True(IndexStatus.Alive("1000", nowUnixSeconds: 1000 + IndexStatus.BeatStaleSeconds));
-        Assert.False(IndexStatus.Alive("1000", nowUnixSeconds: 1000 + IndexStatus.BeatStaleSeconds + 1));
+        Assert.True(IndexStatus.Alive("1000", Elsewhere, thisProcess: 7, nowUnixSeconds: 1000));
+        Assert.True(IndexStatus.Alive("1000", Elsewhere, 7, 1000 + IndexStatus.BeatStaleSeconds));
+        Assert.False(IndexStatus.Alive("1000", Elsewhere, 7, 1000 + IndexStatus.BeatStaleSeconds + 1));
     }
 
     [Fact]
@@ -109,9 +113,9 @@ public class IndexStatusTests
     {
         // An indexer that has never run has never written the row. Reading an absent row as
         // "running" is what makes a queue that will never move look like ordinary progress.
-        Assert.False(IndexStatus.Alive(null, 1000));
-        Assert.False(IndexStatus.Alive("", 1000));
-        Assert.False(IndexStatus.Alive("not a number", 1000));
+        Assert.False(IndexStatus.Alive(null, Elsewhere, 7, 1000));
+        Assert.False(IndexStatus.Alive("", Elsewhere, 7, 1000));
+        Assert.False(IndexStatus.Alive("not a number", Elsewhere, 7, 1000));
     }
 
     [Fact]
@@ -120,6 +124,48 @@ public class IndexStatusTests
         // A clock that resynced under a running child dates its last beat ahead of now. That is
         // a clock, not a dead process, and calling it dead would tell someone indexing is paused
         // while the queue is visibly draining.
-        Assert.True(IndexStatus.Alive("2000", nowUnixSeconds: 1000));
+        Assert.True(IndexStatus.Alive("2000", Elsewhere, thisProcess: 7, nowUnixSeconds: 1000));
+    }
+
+    [Fact]
+    public void ALiveIndexerWithNothingInHandStillReadsAsASentence()
+    {
+        // An idle child on a finished machine is the ORDINARY state, and it has no current file
+        // and no rate. Interpolating both regardless printed "idle -  ()" on a real machine - a
+        // dash, two spaces and an empty pair of brackets. Both --searchindex and --searchprobe
+        // describe this same pair of rows, so they share the sentence rather than each inventing
+        // one and drifting.
+        Assert.Equal("running (pid 10052) - idle", IndexStatus.Running("10052", "idle", "", ""));
+        Assert.Equal("running (pid 10052) - indexing lease.pdf, 180/min",
+                     IndexStatus.Running("10052", "indexing", "lease.pdf", "180/min"));
+        Assert.Equal("running (pid 10052) - indexing lease.pdf", IndexStatus.Running("10052", "indexing", "lease.pdf", ""));
+        Assert.Equal("running (pid 10052) - indexing, 180/min", IndexStatus.Running("10052", "indexing", "", "180/min"));
+
+        // No pid row - an index written by an older build - says nothing rather than "(pid ?)",
+        // and a child that has written no state yet is working, not nameless.
+        Assert.Equal("running - working", IndexStatus.Running(null, "", "", ""));
+    }
+
+    [Fact]
+    public void AHeartbeatThisProcessWroteItselfIsNotALiveIndexerChild()
+    {
+        // Indexer.DrainOnce writes indexer:beat and indexer:pid exactly as a running --index
+        // child does, so any process that queues and drains in place leaves a fresh heartbeat
+        // behind and would read its own one-shot work back as a live child, with a state and a
+        // rate. The recorded pid is the only thing that tells the two apart.
+        //
+        // It lives here, beside the timestamp rule, because four surfaces read the same two rows
+        // - the card's footer, the capsule's progress line, --searchprobe and --searchindex - and
+        // three of them used to answer this question a weaker way. One rule, one answer.
+        Assert.False(IndexStatus.Alive("1000", pid: "4242", thisProcess: 4242, nowUnixSeconds: 1000));
+        Assert.True(IndexStatus.Alive("1000", pid: "4242", thisProcess: 99, nowUnixSeconds: 1000));
+
+        // An index written before the pid row existed answers off the heartbeat alone. Reading a
+        // missing pid as "it must have been me" would call every such index idle for ever.
+        Assert.True(IndexStatus.Alive("1000", pid: null, thisProcess: 4242, nowUnixSeconds: 1000));
+        Assert.True(IndexStatus.Alive("1000", pid: "", thisProcess: 4242, nowUnixSeconds: 1000));
+
+        // And a stale beat is a dead indexer whoever wrote it.
+        Assert.False(IndexStatus.Alive("1000", "99", 4242, 1000 + IndexStatus.BeatStaleSeconds + 1));
     }
 }

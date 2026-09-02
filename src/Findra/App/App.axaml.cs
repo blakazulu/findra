@@ -634,8 +634,11 @@ internal sealed class Shell
     private void ShowOnCapsule(ContentDb db)
     {
         long pending = db.PendingCount(), indexed = db.IndexedCount();
+        // The pid is read with the heartbeat because IndexStatus.Alive needs both: the same rows
+        // are written by a one-shot drain in some other process, and by this one, and only the
+        // recorded pid tells a live child from the last thing a finished drain left behind.
         string line = IndexStatus.Line(db.Get("indexer:state") ?? "off", pending, indexed,
-                                       IndexStatus.Alive(db.Get("indexer:beat")),
+                                       IndexStatus.Alive(db.Get("indexer:beat"), db.Get("indexer:pid")),
                                        db.WasRebuilt || db.Get("index:rebuilt") == "1");
         // Zero rather than a full bar when there is nothing waiting: "up to date" is a sentence,
         // not a completed job, and a bar sitting at 100% invites the reader to wait for something.

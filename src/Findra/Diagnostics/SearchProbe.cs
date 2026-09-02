@@ -102,16 +102,16 @@ public static class SearchProbe
             using var db = new ContentDb(ContentDb.DefaultPath, readOnly: true);
             string N(long v) => v.ToString("N0", CultureInfo.InvariantCulture);
 
-            if (!IndexStatus.Alive(db.Get("indexer:beat")))
+            // Alive takes the pid as well as the heartbeat: a one-shot drain writes both rows, so
+            // the recorded pid is what separates a live child from the last thing a finished
+            // drain left behind. The rule is IndexStatus's, and so is the sentence below - this
+            // probe and --searchindex describe the same rows and must not word them differently.
+            string pid = db.Get("indexer:pid") ?? "";
+            if (!IndexStatus.Alive(db.Get("indexer:beat"), pid))
                 return Label + $"not running - {N(db.PendingCount())} file(s) waiting";
 
-            string pid = db.Get("indexer:pid") ?? "?";
-            string state = db.Get("indexer:state") is { Length: > 0 } s ? s : "working";
-            string current = db.Get("indexer:current") ?? "";
-            string rate = db.Get("indexer:rate") ?? "";
-            return Label + $"running (pid {pid}) - {state}" +
-                   (current.Length > 0 ? " " + current : "") +
-                   (rate.Length > 0 ? ", " + rate : "");
+            return Label + IndexStatus.Running(pid, db.Get("indexer:state"),
+                                               db.Get("indexer:current"), db.Get("indexer:rate"));
         }
         catch (Exception ex)
         {

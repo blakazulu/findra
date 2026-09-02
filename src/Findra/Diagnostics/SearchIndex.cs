@@ -11,11 +11,12 @@ namespace Findra.Diagnostics;
 /// its report testable with no index on disk (spec §9).
 /// </summary>
 public sealed record IndexSnapshot(
-    int Schema, bool WasRebuilt, string DbPath, long DbBytes,
+    int Schema, bool WasRebuilt, string DbPath,
+    IReadOnlyList<(string Name, long Bytes)> Stores,
     IReadOnlyList<(char Volume, ulong JournalId, long Usn)> Cursors,
     long Queued, long Indexed, long Failed, long Skipped,
     IReadOnlyDictionary<ResultKind, long> ByKind,
-    string IndexerState, string IndexerCurrent, string IndexerRate, bool IndexerAlive,
+    string IndexerState, string IndexerCurrent, string IndexerRate, string IndexerPid, bool IndexerAlive,
     long JournalDropped, IReadOnlyList<(string Path, string Error)> Failures);
 
 /// <summary>
@@ -43,7 +44,18 @@ public static class SearchIndexReport
             Line();
         }
 
-        Line($"  index    : schema {s.Schema.ToString(CultureInfo.InvariantCulture)}, {s.DbPath} ({Bytes(s.DbBytes)})");
+        // Every file the index is actually made of, not just the database. The write-ahead log
+        // and the shared-memory sidecar are real bytes on the user's disk and the WAL is routinely
+        // the larger of the two while indexing is in flight - measured, 988 KB of -wal against a
+        // 68 KB search.db - so sizing search.db alone answers "how big is my index" with a number
+        // that can be twenty times short. --searchbench has sized all three since it was written.
+        long total = 0;
+        foreach ((string _, long bytes) in s.Stores) total += bytes;
+        Line($"  index    : schema {s.Schema.ToString(CultureInfo.InvariantCulture)}, {s.DbPath} ({Bytes(total)})");
+        // Only when there is something to break down: a checkpointed index is one file, and
+        // printing "search.db 12.0 MB" under "12.0 MB" is the noise that stops people reading.
+        if (s.Stores.Count > 1)
+            Line("             " + string.Join(" · ", s.Stores.Select(f => $"{f.Name} {Bytes(f.Bytes)}")));
         Line();
 
         Line("  volumes  :");
@@ -75,9 +87,14 @@ public static class SearchIndexReport
 
         // A heartbeat this report was told is stale must not be read back as live work - the
         // state, current file and rate are all dropped together, not just the rate.
-        Line(s.IndexerAlive
-            ? $"  indexer  : {s.IndexerState} - {s.IndexerCurrent} ({s.IndexerRate})"
-            : "  indexer  : not running");
+        //
+        // The live sentence is IndexStatus's, shared with --searchprobe, which reads the same
+        // rows. Building it here meant an idle child - no current file, no rate, the ORDINARY
+        // state on a finished machine - printed "idle -  ()", and that the pid was missing from
+        // the one report whose whole job is to say which process is doing what.
+        Line("  indexer  : " + (s.IndexerAlive
+            ? IndexStatus.Running(s.IndexerPid, s.IndexerState, s.IndexerCurrent, s.IndexerRate)
+            : "not running"));
 
         // Printed only when non-zero - a report that always says "dropped: 0" trains people to
         // stop reading it, and a dropped journal event is invisible in every other count here.
@@ -201,12 +218,18 @@ public static class SearchIndex
     /// <para><see cref="Indexer.DrainOnce"/> - used above when this mode is given files to queue -
     /// writes a fresh <c>indexer:beat</c> and <c>indexer:pid</c> when it finishes, the same status
     /// rows a real <c>--index</c> child writes while it runs. Read naively right after a drain,
-    /// that heartbeat is fresh and <see cref="IndexStatus.Alive"/> would call this diagnostic's own
-    /// one-shot drain a live indexer. The recorded pid tells the two apart: when it equals THIS
-    /// process's pid, the last write was this diagnostic's own drain, not a running child, so the
-    /// heartbeat is not trusted regardless of how fresh it looks.</para>
+    /// that heartbeat is fresh and this diagnostic's own one-shot drain reads back as a live
+    /// indexer. The recorded pid tells the two apart, and the rule that reads the two rows
+    /// together now lives in <see cref="IndexStatus.Alive(string?, string?, int, long)"/>, where
+    /// the card, the capsule and <c>--searchprobe</c> read it as well.</para>
+    ///
+    /// <para>The rebuild notice comes from the index and not only from this connection.
+    /// <c>ContentDb.WasRebuilt</c> is a fact about the OPEN that rebuilt the file, and this one
+    /// never rebuilt anything - so an index the running interface threw away and rebuilt looked
+    /// perfectly ordinary here while the card and the capsule were both saying so, off the
+    /// <c>index:rebuilt</c> row the rebuilding session leaves behind.</para>
     /// </summary>
-    private static IndexSnapshot Snapshot(ContentDb db)
+    public static IndexSnapshot Snapshot(ContentDb db)
     {
         (long queued, long indexed, long failed, long skipped) = db.Counts();
 
@@ -214,13 +237,8 @@ public static class SearchIndex
         foreach (char v in db.KnownVolumes())
             if (db.UsnPosition(v) is { } pos) cursors.Add((v, pos.JournalId, pos.Usn));
 
-        long dbBytes = 0;
-        try { dbBytes = new FileInfo(db.Path).Length; } catch (IOException) { }
-
-        string? pidText = db.Get("indexer:pid");
-        bool sameProcess = int.TryParse(pidText, NumberStyles.Integer, CultureInfo.InvariantCulture, out int pid)
-                            && pid == Environment.ProcessId;
-        bool alive = !sameProcess && IndexStatus.Alive(db.Get("indexer:beat"));
+        string pid = db.Get("indexer:pid") ?? "";
+        bool alive = IndexStatus.Alive(db.Get("indexer:beat"), pid);
 
         // Written by QueueFeeder.NoteClientDrops - the running total of journal events this
         // install's own receive channel evicted before the queue ever saw them. An absent row is
@@ -228,12 +246,33 @@ public static class SearchIndex
         long dropped = long.TryParse(db.Get("journal:dropped"), NumberStyles.Integer, CultureInfo.InvariantCulture, out long jd) ? jd : 0;
 
         return new IndexSnapshot(
-            Schema: ContentDb.SchemaVersion, WasRebuilt: db.WasRebuilt, DbPath: db.Path, DbBytes: dbBytes,
+            Schema: ContentDb.SchemaVersion,
+            WasRebuilt: db.WasRebuilt || db.Get("index:rebuilt") == "1",
+            DbPath: db.Path, Stores: Stores(db.Path),
             Cursors: cursors, Queued: queued, Indexed: indexed, Failed: failed, Skipped: skipped,
             ByKind: db.CountsByKind(),
             IndexerState: db.Get("indexer:state") ?? "", IndexerCurrent: db.Get("indexer:current") ?? "",
-            IndexerRate: db.Get("indexer:rate") ?? "", IndexerAlive: alive,
+            IndexerRate: db.Get("indexer:rate") ?? "", IndexerPid: pid, IndexerAlive: alive,
             JournalDropped: dropped, Failures: db.RecentFailures(10));
+    }
+
+    /// <summary>Every file the index is made of that exists right now - the database and its
+    /// write-ahead log and shared-memory sidecars. The names are the file names, not the paths:
+    /// the path is already on the line above, and this report is pasted into bug reports.</summary>
+    private static IReadOnlyList<(string Name, long Bytes)> Stores(string dbPath)
+    {
+        var rows = new List<(string, long)>();
+        foreach (string suffix in new[] { "", "-wal", "-shm" })
+        {
+            string p = dbPath + suffix;
+            try
+            {
+                var fi = new FileInfo(p);
+                if (fi.Exists) rows.Add((Path.GetFileName(p), fi.Length));
+            }
+            catch (IOException) { }
+        }
+        return rows;
     }
 
     [StructLayout(LayoutKind.Sequential)]

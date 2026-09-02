@@ -264,13 +264,17 @@ public sealed class CardWindow : Window
         /// SQLite read in an async signature would only promise a yield it does not make.</summary>
         private string ContentStatusLine(ContentDb db)
         {
-            string state, beat;
+            string state, beat, pid;
             long pending, indexed;
             bool rebuilt;
             lock (_dbGate)
             {
                 state = db.Get("indexer:state") ?? "off";
                 beat = db.Get("indexer:beat") ?? "";
+                // The pid goes with the heartbeat, always. IndexStatus.Alive owns the rule that
+                // reads the two together, so this card, the capsule, --searchprobe and
+                // --searchindex give one answer about one pair of rows rather than four.
+                pid = db.Get("indexer:pid") ?? "";
                 pending = db.PendingCount();
                 indexed = db.IndexedCount();
                 // WasRebuilt is a fact about the OPEN that rebuilt the file, and this card reads
@@ -279,7 +283,7 @@ public sealed class CardWindow : Window
                 // and the property still counts for a card handed the writer directly.
                 rebuilt = db.WasRebuilt || db.Get("index:rebuilt") == "1";
             }
-            return IndexStatus.Line(state, pending, indexed, IndexStatus.Alive(beat), rebuilt);
+            return IndexStatus.Line(state, pending, indexed, IndexStatus.Alive(beat, pid), rebuilt);
         }
 
         // ---- typing ----
