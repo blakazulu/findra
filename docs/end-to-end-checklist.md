@@ -109,6 +109,13 @@ moment rather than an elevation prompt at every launch.
     nothing. The specification calls leaving it behind a defect rather than an
     inconvenience, because it orphans an elevated logon task pointing at a deleted binary.
 
+26. **The preview actually appears.** Open the card, search, and select a result that is a
+    photo, a PDF or a video. A picture must appear on the stage rather than the fallback
+    tile. This one cannot be checked headlessly at all: the shot command composes the card
+    with no image and never runs the asynchronous preview loader, so the renderer is not on
+    that path on any machine. It was stubbed to return nothing from Plan 3 until the
+    framework moved, and this is the first time it can draw.
+
 ## Notes
 
 Steps 1 to 4 and 9 to 13 are the ones that have never executed in any form. Steps 5 to 8
