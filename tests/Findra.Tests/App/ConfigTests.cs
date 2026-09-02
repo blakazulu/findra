@@ -23,7 +23,7 @@ public class ConfigTests
             DarkPalette = "Verdigris", LightPalette = "Blueprint", Mode = ThemeMode.AlwaysDark,
             Hotkey = "Ctrl+Alt+F", CapsuleX = 120, CapsuleY = 900, ShowCapsule = false,
             CheckForUpdates = false, LastUpdateCheck = new DateTime(2026, 3, 4, 5, 6, 7, DateTimeKind.Utc),
-            LatestKnownVersion = "1.9.0", InstallSource = "winget",
+            LatestKnownVersion = "1.9.0", InstallSource = "winget", FirstRunDone = true,
         };
 
         Config back = Config.Load(c.ToJson());

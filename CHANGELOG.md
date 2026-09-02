@@ -269,7 +269,37 @@ into a numbered section on the first release.
   reading inside files that says plainly when it is on but nothing is running, a way into
   settings and a way out.
 
+- **A first screen that asks once, and means it.** The first time Findra runs it shows what it
+  can do and what each part would cost, as three presets over a list you can tick yourself.
+  Every size is what that row would add to what you have already chosen, so the total adds up.
+  Hebrew speech appears only on a machine with Hebrew on it, and only underneath ordinary
+  speech, because it is a second pass rather than an alternative. Taking nothing is a complete
+  answer - searching by name is always on and costs nothing - and the screen does not come back.
+
+- **Findra registers the name helper's scheduled task itself, and starts it in the same
+  session.** Until now nothing created it: the application asked the scheduler to run a task
+  that had never existed, and searching by name was empty with one line in the log to say so.
+  The first screen asks for the one administrator prompt Findra needs, whatever else you chose
+  on it, and name search works immediately rather than after the next sign-in.
+
+- **The update check is disclosed where you decide about it.** The first screen says in full
+  what the request is, how often it is made, that it carries nothing about your files or your
+  searches, and that Findra never installs anything by itself - beside the switch that turns it
+  off, where off means the request is not made.
+
+- **Downloads survive a dropped connection and say so.** Each capability gets its own progress
+  bar, a file already on disk counts as done rather than as nothing, and a fetch that fails
+  puts what went wrong on the screen and keeps every byte that arrived, so pressing the row
+  again carries on from there. One bad file no longer stops the ones after it, and you can
+  close the window and let it run in the tray.
+
 ### Changed
+
+- **A capability you install is read in the same session you installed it.** Downloading one
+  from settings used to fetch the files and then wait for the next launch before anything they
+  cover was looked at again, which reads as a download that did not work. Both the first screen
+  and the settings row now queue exactly the files the new capability covers as soon as they
+  land.
 
 - **Content indexing is off until you ask for it**, including the free full-text search of
   documents. Searching by name is always on and costs nothing. Reading inside files walks
