@@ -106,6 +106,17 @@ into a numbered section on the first release.
   whose frames were read is recorded as read, with a note about the sound track that was not.
   Words in documents keep working with no model on the machine at all.
 
+- **Content search now answers by meaning, not only by exact words.** A document that never
+  says "lease" but sets out what a tenant pays is found by a search for "lease", and a photo is
+  found by what is in it. Each half runs only if its models are installed, and one that is not
+  simply contributes nothing: a machine that took no model searches the words in its files
+  exactly as before, and a search that would have been answered by a capability you have not
+  got says so and offers it, rather than reporting a failure. An index with nothing in it yet
+  is still explained by the index and never by a missing model. A file found both by its words
+  and by its meaning outranks one found by meaning alone, a transcript answer carries the
+  moment it was said so the file opens there, and `ext:`, `size:` and the rest of the query
+  language apply to everything found, whichever half found it.
+
 - **A replaced, deleted or newly unreadable file gives its vectors back.** The rows an edited
   document's old text was embedded at are retired when the new ones are written, so the old
   version stops answering queries beside the new one, and a deleted photo stops answering them

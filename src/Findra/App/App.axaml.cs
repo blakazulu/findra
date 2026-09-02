@@ -175,6 +175,15 @@ internal sealed class Shell
     // is the one moment the card most needs to answer.
     private ContentDb? _content;        // the writer. Opened FIRST: it creates the schema.
     private ContentDb? _cardStore;      // read-only, lent to every card, disposed by this shell
+
+    // The query encoders, opened once for the process and lent to every card exactly as the
+    // read-only store is - an encoder is a hundred milliseconds and a hundred megabytes, and a
+    // card is opened dozens of times a day. Null is the ordinary state of a machine that took no
+    // model, and it is what makes "just names" a working product rather than a broken one.
+    private Semantic? _semantic;
+    // What is installed, read from the disk ONCE. It is a fact about files, not a setting, and
+    // re-reading it per keystroke would stat seven paths for every letter typed.
+    private CapabilitySet _installed;
     private QueueFeeder? _feeder;
     private IndexerHost? _indexer;
     private Task? _contentLoop;
@@ -349,6 +358,18 @@ internal sealed class Shell
             }
         }
 
+        // The model-backed half of a content query. Read once, opened once, and both are cheap on
+        // a machine that took nothing: Installed() stats seven paths and finds none, and Open()
+        // returns null before it constructs a session. Only somebody who actually downloaded a
+        // capability pays for the load, and they pay for it once for the whole session rather
+        // than on the first query - which is where a lazy load would put it, in front of a person
+        // who has already typed.
+        _installed = CapabilitySet.Installed();
+        _semantic = Semantic.Open(_installed);
+        Log.Info("models", _semantic is null
+            ? "no query encoder this session - content search answers with the words in your files"
+            : "query encoders ready: " + (_semantic.Text is null ? "" : "meaning ") + (_semantic.Image is null ? "" : "pictures"));
+
         _feeder = new QueueFeeder(writer, () => _config);
         _indexer = new IndexerHost();
         _contentLoop = Task.Run(() => RunContentAsync(_shutdown.Token));
@@ -423,6 +444,7 @@ internal sealed class Shell
             try { _indexer?.Dispose(); } catch { }
             try { feeder.Dispose(); } catch { }
             try { _cardStore?.Dispose(); } catch { }
+            try { _semantic?.Dispose(); } catch { }
             try { db.Dispose(); } catch { }
             Log.Info("index", "the content index is closed");
         }
@@ -765,7 +787,7 @@ internal sealed class Shell
     {
         // The card BORROWS the read-only store and never disposes it: the store outlives every
         // card, and null is a supported state the card already answers with a sentence.
-        var card = new CardWindow(_palette, Zoom, _cardStore);
+        var card = new CardWindow(_palette, Zoom, _cardStore, _semantic, _installed);
         card.Closed += (_, _) => { if (ReferenceEquals(_card, card)) _card = null; };
         _card = card;
         return card;
@@ -920,6 +942,7 @@ internal sealed class Shell
             try { _indexer?.Dispose(); } catch { }
             try { _feeder?.Dispose(); } catch { }
             try { _cardStore?.Dispose(); } catch { }
+            try { _semantic?.Dispose(); } catch { }
             try { _content?.Dispose(); } catch { }
         }
 

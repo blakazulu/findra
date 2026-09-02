@@ -36,11 +36,18 @@ public sealed class CardWindow : Window
     /// <summary><paramref name="content"/> is the process's ONE open content index, or null when
     /// this session has none. The window borrows it and never disposes it: the store outlives
     /// every card, and a second connection would mean a second schema check and a second place a
-    /// migration could run.</summary>
-    public CardWindow(Palette palette, double scale, ContentDb? content = null)
+    /// migration could run.
+    ///
+    /// <para><paramref name="semantic"/> is borrowed on the same terms and for a sharper reason:
+    /// a query encoder is a hundred milliseconds and a hundred megabytes, so it is opened once
+    /// for the process and never per card. Null is ordinary - it is what a machine that took no
+    /// model has. <paramref name="installed"/> is read once when the shell starts, never per
+    /// keystroke, and only decides what an empty answer may offer.</para></summary>
+    public CardWindow(Palette palette, double scale, ContentDb? content = null,
+                      Semantic? semantic = null, CapabilitySet installed = default)
     {
         Derived derived = Derived.From(palette);
-        _canvas = new CardCanvas(derived, scale, this, content);
+        _canvas = new CardCanvas(derived, scale, this, content, semantic, installed);
         Content = _canvas;
 
         Title = "Findra";
@@ -144,6 +151,13 @@ public sealed class CardWindow : Window
         // normal state: a session with no content store answers the Content pill with a sentence
         // rather than an empty card.
         private readonly ContentDb? _db;
+        // The model-backed half of a content query, and what this machine has installed. Both are
+        // borrowed from the process for the same reason the store is: an encoder is opened once,
+        // and the installed set is a fact about the disk read once when the shell starts rather
+        // than restated on every keystroke. Null and default are ordinary - a machine that took
+        // no model searches the words in its documents through exactly the same call.
+        private readonly Semantic? _semantic;
+        private readonly CapabilitySet _installed;
         // ContentDb wraps one SQLite connection, which is not re-entrant. These are the card's own
         // two readers - a query and the once-a-second status line - and this keeps them off each
         // other. It says nothing about other holders of the same instance; see the note on the
@@ -169,10 +183,13 @@ public sealed class CardWindow : Window
         public double CardWidth => SearchCardLayout.Width * _scale;
         public double CardHeight => SearchCardLayout.Height(_state.Rows.Count, _state.HasQuery, _state.AdvOpen) * _scale;
 
-        public CardCanvas(Derived derived, double scale, Window owner, ContentDb? db)
+        public CardCanvas(Derived derived, double scale, Window owner, ContentDb? db,
+                          Semantic? semantic = null, CapabilitySet installed = default)
         {
             _owner = owner;
             _db = db;
+            _semantic = semantic;
+            _installed = installed;
             _scale = Math.Clamp(scale, 0.85, 1.7);
             // The real face is not embedded yet; this is the platform default until it ships
             // (SearchShot.cs renders with the same fallback for the same reason).
@@ -724,7 +741,9 @@ public sealed class CardWindow : Window
                 else
                 {
                     // MaxRows * 8: the card shows eight rows and scrolls through the rest.
-                    lock (_dbGate) r = ContentBranch.Search(db, raw, SearchCardLayout.MaxRows * 8, sort);
+                    lock (_dbGate)
+                        r = ContentBranch.Search(db, raw, SearchCardLayout.MaxRows * 8, sort,
+                                                 semantic: _semantic, installed: _installed);
                 }
             }
             catch (Exception ex)
