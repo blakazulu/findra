@@ -50,7 +50,25 @@ public sealed record Config
     /// almost everyone wants and what a fresh install does.</summary>
     public string[] IndexDrives { get; init; } = [];
 
-    public bool IndexPaused { get; init; }
+    /// <summary>Whether Findra reads the CONTENTS of files at all. Off by default, and that is
+    /// the whole point (spec §6): a name index costs seconds and no disk reading, while looking
+    /// inside files walks every drive, opens every document, and on a large disk runs for hours.
+    /// Findra does not start that on its own - not even for the free, model-free document text.
+    ///
+    /// <para>One bit, not two. An "enabled" flag beside a "paused" flag is two settings that can
+    /// disagree, and there is no honest sentence for the disagreement. What the interface says is
+    /// derived from this and from how much has already been read.</para></summary>
+    public bool IndexContent { get; init; }
+
+    /// <summary>How long a recording is worth transcribing, in minutes: zero is off, a negative
+    /// value is no limit, and any positive number is the limit itself (spec §6). It covers audio
+    /// and video together, deliberately - an asymmetry between them would be invisible in the
+    /// interface and surprising in use. The named choices in the settings screen are PRESETS OVER
+    /// THIS NUMBER, so there is nothing here for a preset name to disagree with.
+    ///
+    /// <para>Not clamped. A negative value is meaningful and a very large one is simply a limit
+    /// nothing reaches, so there is nothing to protect the user from.</para></summary>
+    public int TranscribeMinutes { get; init; } = TranscribeLimit.Default;
 
     /// <summary>A duty cycle, 10..100. At 50 the indexer rests as long as it worked.</summary>
     public int IndexPower { get; init; } = 50;
@@ -71,7 +89,8 @@ public sealed record Config
         && LastUpdateCheck == other.LastUpdateCheck
         && LatestKnownVersion == other.LatestKnownVersion
         && InstallSource == other.InstallSource
-        && IndexPaused == other.IndexPaused && IndexPower == other.IndexPower
+        && IndexContent == other.IndexContent && IndexPower == other.IndexPower
+        && TranscribeMinutes == other.TranscribeMinutes
         && SearchExclusions.AsSpan().SequenceEqual(other.SearchExclusions)
         && IndexDrives.AsSpan().SequenceEqual(other.IndexDrives);
 
@@ -81,7 +100,7 @@ public sealed record Config
         h.Add(DarkPalette); h.Add(LightPalette); h.Add(Mode); h.Add(Hotkey);
         h.Add(CapsuleX); h.Add(CapsuleY); h.Add(ShowCapsule); h.Add(CheckForUpdates);
         h.Add(LastUpdateCheck); h.Add(LatestKnownVersion); h.Add(InstallSource);
-        h.Add(IndexPaused); h.Add(IndexPower);
+        h.Add(IndexContent); h.Add(IndexPower); h.Add(TranscribeMinutes);
         foreach (string s in SearchExclusions) h.Add(s);
         foreach (string s in IndexDrives) h.Add(s);
         return h.ToHashCode();

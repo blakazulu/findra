@@ -100,7 +100,9 @@ public class ConfigTests
 
         Assert.Equal(FileKinds.DefaultExclusions, c.SearchExclusions);
         Assert.Empty(c.IndexDrives);          // empty means every fixed NTFS volume
-        Assert.False(c.IndexPaused);
+        // Reads the same as the IndexPaused assertion it replaces and means the OPPOSITE:
+        // false now means "do not read inside files", not "do not pause".
+        Assert.False(c.IndexContent);
         Assert.Equal(50, c.IndexPower);
     }
 
@@ -182,7 +184,8 @@ public class ConfigTests
         {
             SearchExclusions = [@"\Windows\", @"\my stuff\"],
             IndexDrives = ["C", "E"],
-            IndexPaused = true,
+            IndexContent = true,
+            TranscribeMinutes = TranscribeLimit.NoLimit,
             IndexPower = 25,
         };
 
@@ -208,5 +211,36 @@ public class ConfigTests
         Assert.Equal(10, Config.Load("""{ "indexPower": 0 }""").IndexPower);
         Assert.Equal(10, Config.Load("""{ "indexPower": -5 }""").IndexPower);
         Assert.Equal(100, Config.Load("""{ "indexPower": 4000 }""").IndexPower);
+    }
+
+    [Fact]
+    public void ReadingInsideFilesIsOffUntilSomebodyAsksForIt()
+    {
+        // Spec §6, and it is the one place the product deliberately does less until asked. The
+        // assertion reads the same as the IndexPaused one it replaces and means the opposite:
+        // false now means "do not read inside files", not "do not pause".
+        Assert.False(Config.Default.IndexContent);
+        Assert.False(Config.Load(null).IndexContent);
+        Assert.False(Config.Load("{}").IndexContent);
+    }
+
+    [Fact]
+    public void TheTranscriptionLimitDefaultsToTheCheapPreset()
+    {
+        Assert.Equal(5, Config.Default.TranscribeMinutes);
+        Assert.Equal("5 minutes", TranscribeLimit.Describe(Config.Default.TranscribeMinutes));
+    }
+
+    /// <summary>`{ "transcribeMinutes": 0 }` - off, spelled out, because zero is a real setting.</summary>
+    private const string JsonZero = "{ \"transcribeMinutes\": 0 }";
+
+    [Fact]
+    public void ANegativeTranscriptionLimitSurvivesTheRoundTrip()
+    {
+        // "No limit" is a negative number, and a clamp added "for safety" would silently turn
+        // the most expensive setting in the product into the cheapest.
+        Config c = Config.Default with { TranscribeMinutes = TranscribeLimit.NoLimit };
+        Assert.Equal(TranscribeLimit.NoLimit, Config.Load(c.ToJson()).TranscribeMinutes);
+        Assert.Equal(0, Config.Load(JsonZero).TranscribeMinutes);
     }
 }

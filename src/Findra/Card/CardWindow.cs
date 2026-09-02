@@ -283,9 +283,15 @@ public sealed class CardWindow : Window
         {
             string state, beat, pid;
             long pending, indexed;
-            bool rebuilt;
+            bool rebuilt, contentOn;
             lock (_dbGate)
             {
+                // The card has no Config - it reads through its own read-only connection - so it
+                // asks the one row the interface writes the switch to. Absent means off, which is
+                // the setting's own default: an index nobody has asked for must not be described
+                // by the counts alone, because zero queued and zero indexed is byte-for-byte what
+                // a finished index looks like.
+                contentOn = db.Get("index:paused") == "0";
                 state = db.Get("indexer:state") ?? "off";
                 beat = db.Get("indexer:beat") ?? "";
                 // The pid goes with the heartbeat, always. IndexStatus.Alive owns the rule that
@@ -300,7 +306,7 @@ public sealed class CardWindow : Window
                 // and the property still counts for a card handed the writer directly.
                 rebuilt = db.WasRebuilt || db.Get("index:rebuilt") == "1";
             }
-            return IndexStatus.Line(state, pending, indexed, IndexStatus.Alive(beat, pid), rebuilt);
+            return IndexStatus.Line(contentOn, state, pending, indexed, IndexStatus.Alive(beat, pid), rebuilt);
         }
 
         // ---- typing ----

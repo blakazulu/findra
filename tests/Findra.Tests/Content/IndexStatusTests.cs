@@ -11,7 +11,7 @@ public class IndexStatusTests
         // Spec §3: indexing runs only while Findra runs, and "the UI must say so plainly
         // rather than looking idle". A silent progress bar at 60% is the failure this
         // sentence exists to prevent.
-        string s = IndexStatus.Line(state: "off", pending: 42, indexed: 1000, alive: false, rebuilt: false);
+        string s = IndexStatus.Line(contentEnabled: true, state: "off", pending: 42, indexed: 1000, alive: false, rebuilt: false);
 
         Assert.Contains("42", s);
         Assert.Contains("indexing is paused while Findra is closed", s, StringComparison.Ordinal);
@@ -20,7 +20,7 @@ public class IndexStatusTests
     [Fact]
     public void WorkInProgressCountsBothWays()
     {
-        string s = IndexStatus.Line("indexing", pending: 42, indexed: 1000, alive: true, rebuilt: false);
+        string s = IndexStatus.Line(contentEnabled: true, state: "indexing", pending: 42, indexed: 1000, alive: true, rebuilt: false);
 
         Assert.Contains("42", s);
         Assert.Contains("1,000", s);
@@ -30,7 +30,7 @@ public class IndexStatusTests
     [Fact]
     public void AFinishedIndexSaysItIsFinished()
     {
-        string s = IndexStatus.Line("idle", pending: 0, indexed: 1000, alive: true, rebuilt: false);
+        string s = IndexStatus.Line(contentEnabled: true, state: "idle", pending: 0, indexed: 1000, alive: true, rebuilt: false);
 
         Assert.Contains("1,000", s);
         Assert.Contains("up to date", s, StringComparison.OrdinalIgnoreCase);
@@ -41,7 +41,7 @@ public class IndexStatusTests
     {
         // A permanently visible empty progress line is what makes an idle widget feel busy;
         // the capsule painter draws this only when it is non-empty.
-        Assert.Equal("", IndexStatus.Line("off", pending: 0, indexed: 0, alive: false, rebuilt: false));
+        Assert.Equal("", IndexStatus.Line(contentEnabled: true, state: "off", pending: 0, indexed: 0, alive: false, rebuilt: false));
     }
 
     [Fact]
@@ -49,7 +49,7 @@ public class IndexStatusTests
     {
         // Two different pauses reach the same line and mean opposite things: one is the
         // user's switch, one is Findra not running. Telling them apart is the whole job.
-        string s = IndexStatus.Line("paused", pending: 42, indexed: 1000, alive: true, rebuilt: false);
+        string s = IndexStatus.Line(contentEnabled: true, state: "paused", pending: 42, indexed: 1000, alive: true, rebuilt: false);
 
         Assert.Contains("paused", s, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("while Findra is closed", s, StringComparison.Ordinal);
@@ -61,7 +61,7 @@ public class IndexStatusTests
         // Spec §2a: "Index missing or unreadable - rebuilt, and the UI says so rather than
         // looking idle." Without this, someone whose index was corrupted sees a full queue
         // and a machine that indexes for an hour, with no idea why.
-        string s = IndexStatus.Line("indexing", pending: 9000, indexed: 0, alive: true, rebuilt: true);
+        string s = IndexStatus.Line(contentEnabled: true, state: "indexing", pending: 9000, indexed: 0, alive: true, rebuilt: true);
 
         Assert.Contains("rebuilding", s, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("9,000", s);
@@ -70,7 +70,7 @@ public class IndexStatusTests
     [Fact]
     public void TheRebuiltNoticeOutlivesTheQueueSoItIsStillThereWhenItFinishes()
     {
-        string s = IndexStatus.Line("idle", pending: 0, indexed: 9000, alive: true, rebuilt: true);
+        string s = IndexStatus.Line(contentEnabled: true, state: "idle", pending: 0, indexed: 9000, alive: true, rebuilt: true);
 
         Assert.Contains("rebuilt", s, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("9,000", s);
@@ -85,7 +85,7 @@ public class IndexStatusTests
         try
         {
             CultureInfo.CurrentCulture = new CultureInfo("de-DE");
-            string s = IndexStatus.Line("indexing", pending: 9000, indexed: 1234567, alive: true, rebuilt: false);
+            string s = IndexStatus.Line(contentEnabled: true, state: "indexing", pending: 9000, indexed: 1234567, alive: true, rebuilt: false);
 
             Assert.Contains("9,000", s);
             Assert.Contains("1,234,567", s);
@@ -167,5 +167,44 @@ public class IndexStatusTests
 
         // And a stale beat is a dead indexer whoever wrote it.
         Assert.False(IndexStatus.Alive("1000", "99", 4242, 1000 + IndexStatus.BeatStaleSeconds + 1));
+    }
+
+    [Fact]
+    public void AnIndexNobodyHasAskedForSaysSoRatherThanLookingIdle()
+    {
+        // Spec §6: "the interface says which state it is in rather than looking idle". On a
+        // fresh install the queue is empty and nothing is running, which is byte-for-byte what
+        // a FINISHED index looks like - so without this the card says "up to date · 0 files"
+        // about a machine that has never read anything.
+        string line = IndexStatus.Line(contentEnabled: false, state: "", pending: 0, indexed: 0,
+                                       alive: false, rebuilt: false);
+
+        Assert.NotEqual("", line);
+        Assert.Contains("off", line, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void TurningItOffAfterReadingSomethingSaysHowMuchItAlreadyHas()
+    {
+        // The other half: this is not a fresh install, it is somebody who turned it off, and
+        // telling them their 9,000 indexed files are gone would be a lie.
+        string line = IndexStatus.Line(contentEnabled: false, state: "", pending: 0, indexed: 9_000,
+                                       alive: false, rebuilt: false);
+
+        Assert.Contains("off", line, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("9,000", line, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void OffIsNotTheSameSentenceAsPausedWhileFindraIsClosed()
+    {
+        // Two states that both mean "nothing is happening" and have opposite answers: one is
+        // "turn it on", the other is "leave Findra open".
+        string off = IndexStatus.Line(false, "", 1_200, 40, alive: false, rebuilt: false);
+        string closed = IndexStatus.Line(true, "", 1_200, 40, alive: false, rebuilt: false);
+
+        Assert.NotEqual(off, closed);
+        Assert.Contains("Findra is closed", closed, StringComparison.Ordinal);
+        Assert.DoesNotContain("Findra is closed", off, StringComparison.Ordinal);
     }
 }

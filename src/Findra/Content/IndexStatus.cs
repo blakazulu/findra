@@ -16,13 +16,25 @@ public static class IndexStatus
     private static readonly CultureInfo Fixed = CultureInfo.InvariantCulture;
 
     /// <summary>
-    /// <paramref name="state"/> is what the indexer last wrote about itself, <paramref name="alive"/>
-    /// whether it is running at all, and <paramref name="rebuilt"/> whether this index was thrown
-    /// away and started again because it could not be read.
+    /// <paramref name="contentEnabled"/> is whether anybody has asked for the inside of files to
+    /// be read at all, <paramref name="state"/> is what the indexer last wrote about itself,
+    /// <paramref name="alive"/> whether it is running at all, and <paramref name="rebuilt"/>
+    /// whether this index was thrown away and started again because it could not be read.
+    ///
+    /// <para>Off is the FIRST question, because an index nobody asked for is byte-for-byte what a
+    /// finished one looks like - an empty queue and a still child - and the counts alone would
+    /// say "up to date · 0 files" about a machine that has never read anything (spec §6). It is
+    /// also a different sentence from the closed-app pause below it, because the two have
+    /// opposite answers: one is "turn it on", the other is "leave Findra open".</para>
     /// </summary>
-    public static string Line(string state, long pending, long indexed, bool alive, bool rebuilt)
+    public static string Line(bool contentEnabled, string state, long pending, long indexed, bool alive, bool rebuilt)
     {
         string N(long v) => v.ToString("N0", Fixed);
+
+        if (!contentEnabled)
+            return indexed > 0
+                ? $"searching inside files is off · {N(indexed)} files already read"
+                : "searching inside files is off - turn it on to read what is in them";
 
         // Checked first, and it survives the queue draining: "why did this take an hour" is a
         // question someone asks after it finishes, and an index that was unreadable is rebuilt

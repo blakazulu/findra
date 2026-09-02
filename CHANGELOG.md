@@ -122,6 +122,25 @@ into a numbered section on the first release.
   version stops answering queries beside the new one, and a deleted photo stops answering them
   at all.
 
+- **A capability installed later reads exactly the files it covers, and nothing else.** Adding
+  meaning in documents opens the documents again and leaves the photos alone; adding photos
+  opens the pictures and the video. Files nothing could help are left where they are - a
+  document too large to read whole, or one with no text in it. Findra records which
+  capabilities it has already caught up on, so the catch-up happens once instead of on every
+  launch, and a capability taken after another that shares the same models still clears its own
+  backlog rather than inheriting the other's. A file that genuinely could not be read is never
+  retried on a loop.
+
+- **Raising the transcription limit picks up exactly the recordings it newly covers**, including
+  a long video that was indexed for its frames while its sound track went unheard. Nothing
+  already transcribed is transcribed again, and lowering the limit deletes nothing - it applies
+  to what has not been read yet.
+
+- **The card and the capsule say which state indexing is in** rather than looking idle. An index
+  nobody has asked for reads as off, with an invitation to turn it on; one turned off after
+  reading something says how much it already holds; and a backlog left behind by a closed
+  Findra still says that instead.
+
 ### Changed
 
 - **Content indexing is off until you ask for it**, including the free full-text search of

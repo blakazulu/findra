@@ -1081,15 +1081,76 @@ CREATE TABLE IF NOT EXISTS opened(path TEXT PRIMARY KEY, count INTEGER NOT NULL,
     /// <summary>Queue every item of the given kinds again, because something that can now read
     /// them arrived. Nothing is deleted here: the indexer replaces an item's segments when it
     /// gets to the row, so removing them up front would only blank the index for the length of
-    /// the re-run. Returns how many rows were queued.</summary>
-    public int RequeueKinds(int[] kinds, string reason)
+    /// the re-run. Returns how many rows were queued.
+    ///
+    /// <para><paramref name="reason"/> is not decoration. <see cref="Indexer"/> dequeues a row
+    /// untouched unless the reason is <see cref="Indexer.Recheck"/>, the row is Skipped, or the
+    /// file's bytes have moved - so a caller that invents a friendly sentence here queues
+    /// thousands of files and re-reads none of them.</para>
+    ///
+    /// <para><paramref name="notBecause"/> filters the SKIPPED rows by the reason they were
+    /// skipped for, and only those - an indexed row has no reason at all and must never be
+    /// excluded by this. The recorded reason carries five different meanings ("no decoder for
+    /// this kind", "no decoder for this format", "no text", "too large", "longer than the
+    /// transcription limit") and a new model can do nothing about the middle three, so re-opening
+    /// a 200 MB database dump on every install is work with a guaranteed outcome.</para>
+    ///
+    /// <para><paramref name="onlyBecause"/> is the mirror, and the narrow one: exactly the rows
+    /// carrying one of these reasons, whatever their state. Raising the transcription limit uses
+    /// it, and it has to reach an INDEXED video that was read for its frames and carries
+    /// "longer than the transcription limit" as a note about the sound track nobody heard.</para>
+    ///
+    /// <para>The two filters are mutually exclusive and <paramref name="onlyBecause"/> wins,
+    /// because a caller that passes both has not decided which set it means.</para>
+    ///
+    /// <para>An empty <paramref name="kinds"/> queues nothing and DOES NOT TOUCH THE DATABASE,
+    /// which is the part that matters. The clause below is built by concatenation, so an empty
+    /// array emits <c>IN ()</c> - and the bundled SQLite accepts that as an empty list rather
+    /// than refusing it, so the danger is not the syntax. It is the transaction: without this
+    /// return a caller already inside one gets a nested-transaction
+    /// <see cref="InvalidOperationException"/> out of a flow that has no catch for it.</para>
+    /// </summary>
+    public int RequeueKinds(int[] kinds, string reason,
+                            IReadOnlyList<string>? notBecause = null,
+                            IReadOnlyList<string>? onlyBecause = null)
     {
+        ArgumentNullException.ThrowIfNull(kinds);
+        if (kinds.Length == 0) return 0;
+
         using var claim = Enter();
         int n = 0;
         using var tx = Begin();
         using (var cmd = _c.CreateCommand())
         {
             cmd.Transaction = tx;
+
+            // The kinds themselves stay concatenated - they are ints from an enum this code owns
+            // - but every reason string is a parameter, because a skip reason is free text that
+            // has come from an exception message.
+            string filter = "";
+            if (onlyBecause is { Count: > 0 })
+            {
+                // The narrow direction: exactly the rows carrying one of these reasons. Raising
+                // the transcription limit uses it, because re-queueing everything Speech covers
+                // would re-transcribe every recording already done.
+                var named = onlyBecause.Select((_, i) => $"$o{i.ToString(CultureInfo.InvariantCulture)}");
+                filter = $" AND error IN ({string.Join(",", named)})";
+                for (int i = 0; i < onlyBecause.Count; i++)
+                    cmd.Parameters.AddWithValue($"$o{i.ToString(CultureInfo.InvariantCulture)}", onlyBecause[i]);
+            }
+            else if (notBecause is { Count: > 0 })
+            {
+                // The `state <> StateSkipped OR error IS NULL` guard is load-bearing: written as
+                // a bare `error NOT IN (...)`, every INDEXED row's NULL error would exclude it,
+                // SQL three-valued logic being what it is - and a new model would then never
+                // re-embed anything already read.
+                var named = notBecause.Select((_, i) => $"$e{i.ToString(CultureInfo.InvariantCulture)}");
+                filter = $" AND (state <> {StateSkipped.ToString(CultureInfo.InvariantCulture)} " +
+                         $"OR error IS NULL OR error NOT IN ({string.Join(",", named)}))";
+                for (int i = 0; i < notBecause.Count; i++)
+                    cmd.Parameters.AddWithValue($"$e{i.ToString(CultureInfo.InvariantCulture)}", notBecause[i]);
+            }
+
             // state IN (1, 3): indexed AND skipped. Every photo, video and audio file this build
             // meets ends at StateSkipped, because there is no decoder for it yet - so a clause
             // that saw only state=1 would find nothing to re-queue, and "a kind is skipped now,
@@ -1098,7 +1159,8 @@ CREATE TABLE IF NOT EXISTS opened(path TEXT PRIMARY KEY, count INTEGER NOT NULL,
             // not read has not changed because a capability arrived, and retrying it on every
             // install is a loop with no exit. Skipped means "not attempted yet"; failed means
             // "attempted, and it did not work".
-            cmd.CommandText = $"SELECT vol, frn, path, kind FROM items WHERE state IN (1, 3) AND kind IN ({string.Join(",", kinds)})";
+            cmd.CommandText = $"SELECT vol, frn, path, kind FROM items WHERE state IN (1, 3) " +
+                              $"AND kind IN ({string.Join(",", kinds)}){filter}";
             using var r = cmd.ExecuteReader();
             var rows = new List<(string, ulong, string, int)>();
             while (r.Read()) rows.Add((r.GetString(0), unchecked((ulong)r.GetInt64(1)), r.GetString(2), r.GetInt32(3)));

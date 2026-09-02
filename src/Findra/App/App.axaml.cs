@@ -370,6 +370,41 @@ internal sealed class Shell
             ? "no query encoder this session - content search answers with the words in your files"
             : "query encoders ready: " + (_semantic.Text is null ? "" : "meaning ") + (_semantic.Image is null ? "" : "pictures"));
 
+        // Before the content loop, and this is not a stylistic choice. QueueFeeder holds the
+        // writer across a whole ContentDb.Scope, and ContentDb.Claim is a thread-id detector
+        // rather than a lock: whichever flow arrives second gets an InvalidOperationException.
+        // Running the gates here means there is no second flow yet.
+        //
+        // Once, and only here. A capability installed by `--models install` is applied by that
+        // process on its own connection; one that arrives while Findra is open is picked up at
+        // the next start, because the child reads what is installed once when it starts and the
+        // interface runs this once when it does.
+        try
+        {
+            int requeued = CapabilityGate.Apply(writer, CapabilityGate.Plan(
+                _installed, CapabilityGate.StampsIn(writer)));
+            requeued += CapabilityGate.ApplyLimit(writer, _config.TranscribeMinutes);
+            if (requeued > 0)
+                Log.Info("models", $"a change to what Findra can read queued {requeued.ToString("N0", CultureInfo.InvariantCulture)} file(s)");
+        }
+        catch (Exception ex)
+        {
+            // A backlog that could not be cleared is a capability that finds nothing until the
+            // next launch, which is a bad session and not a broken install. The queue, the index
+            // and every stamp survive, so the next start plans exactly the same work.
+            Log.Error("models", "the re-queue for what Findra can now read did not run this session", ex);
+        }
+
+        // One bit, one row, written before anything reads it: the child, IndexStatus and
+        // --searchindex all learn the switch from `index:paused`, and the card reads that row
+        // rather than the config it has no access to.
+        try
+        {
+            writer.Set("index:paused", _config.IndexContent ? "0" : "1");
+            writer.Set(Indexer.TranscribeMinutesKey, _config.TranscribeMinutes.ToString(CultureInfo.InvariantCulture));
+        }
+        catch (Exception ex) { Log.Warn("index", "the indexer's control rows could not be written :: " + ex.Message); }
+
         _feeder = new QueueFeeder(writer, () => _config);
         _indexer = new IndexerHost();
         _contentLoop = Task.Run(() => RunContentAsync(_shutdown.Token));
@@ -643,6 +678,7 @@ internal sealed class Shell
     // turn of a loop that comes round every 400 ms.
     private string _indexerPaused = "";
     private string _indexerPower = "";
+    private string _indexerMinutes = "";
 
     /// <summary>Keep the indexer child running while there is work and nobody has paused it, and
     /// keep its two control rows matching the settings.</summary>
@@ -652,17 +688,24 @@ internal sealed class Shell
         if (host is null) return;
 
         Config cfg = _config;
-        string paused = cfg.IndexPaused ? "1" : "0";
+        // One bit, one row. IndexContent false means the queue does not move, which is the same
+        // mechanism the pause switch already used - so the child, IndexStatus and --searchindex
+        // need no new concept.
+        string paused = cfg.IndexContent ? "0" : "1";
         string power = cfg.IndexPower.ToString(CultureInfo.InvariantCulture);
+        string minutes = cfg.TranscribeMinutes.ToString(CultureInfo.InvariantCulture);
         try
         {
             if (paused != _indexerPaused) { db.Set("index:paused", paused); _indexerPaused = paused; }
             if (power != _indexerPower) { db.Set("index:power", power); _indexerPower = power; }
+            // Read by the child per file rather than captured, so a change to the limit reaches
+            // the next recording instead of waiting for a restart.
+            if (minutes != _indexerMinutes) { db.Set(Indexer.TranscribeMinutesKey, minutes); _indexerMinutes = minutes; }
 
             // The child is started, never stopped, by this: it watches this process's id and dies
             // with it. That is the whole of the "indexing stops when the app quits" rule, and
             // there is no other lifetime code anywhere.
-            if (!cfg.IndexPaused && db.PendingCount() > 0) host.EnsureRunning();
+            if (cfg.IndexContent && db.PendingCount() > 0) host.EnsureRunning();
 
             ShowOnCapsule(db);
         }
@@ -699,7 +742,7 @@ internal sealed class Shell
         // The pid is read with the heartbeat because IndexStatus.Alive needs both: the same rows
         // are written by a one-shot drain in some other process, and by this one, and only the
         // recorded pid tells a live child from the last thing a finished drain left behind.
-        string line = IndexStatus.Line(db.Get("indexer:state") ?? "off", pending, indexed,
+        string line = IndexStatus.Line(_config.IndexContent, db.Get("indexer:state") ?? "off", pending, indexed,
                                        IndexStatus.Alive(db.Get("indexer:beat"), db.Get("indexer:pid")),
                                        db.WasRebuilt || db.Get("index:rebuilt") == "1");
         // Zero rather than a full bar when there is nothing waiting: "up to date" is a sentence,
