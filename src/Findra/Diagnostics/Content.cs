@@ -87,14 +87,6 @@ public static class ContentCommand
     public static int Run(string[] args)
     {
         ArgumentNullException.ThrowIfNull(args);
-        // The state sentence is the card's, and the card's separator is a middle dot. A console
-        // left on the machine's OEM code page renders that as a replacement character, which is
-        // what this command printed the first time it was run for real. Asking for UTF-8 is
-        // cheaper than forking the sentence, and it is exactly the sentence being shared that
-        // makes the console and the card impossible to disagree. Some hosts refuse the change;
-        // a mangled separator is not worth failing a diagnostic over.
-        try { Console.OutputEncoding = System.Text.Encoding.UTF8; } catch (IOException) { }
-
         string verb = args.Length > 1 ? args[1].Trim().ToLowerInvariant() : "status";
 
         switch (verb)
