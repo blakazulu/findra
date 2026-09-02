@@ -249,7 +249,7 @@ Two dependencies fall out of the engine and shape the UI:
   alternative, and cannot be selected on its own.
 
 ```
-  words in documents  ──────────────────────────────  free, always on
+  words in documents  ──────────────────────────────  free, opt-in
   photos & video      ──  siglip2 vision + text + spm     629 MB
   meaning in docs     ──  e5-base + e5-spm                270 MB
   speech              ──  whisper-turbo + [e5 pair]       550 MB (+270 if e5 not taken)
@@ -276,6 +276,49 @@ nicety: a missing model is a normal state, not an error state.
 
 **Enabling a capability later re-queues only the files it covers.** Nothing already indexed
 is redone. The existing vector-schema migration is the pattern to follow.
+
+### Content indexing is off until asked for
+
+**Reading the contents of files is off by default, including the free, model-free document
+text.** Names are always on, because a name index costs seconds and no disk reading. Looking
+*inside* files is different: it walks every drive, opens every document, and on a large disk
+runs for hours. Findra does not start that on its own.
+
+The user turns it on, and can turn it off again; a queue that is paused stays paused across
+restarts, and the interface says which state it is in rather than looking idle. This is the
+one place where the product deliberately does less until asked.
+
+Two consequences follow. A first run with nothing chosen is instant and useful, because
+names alone are the fastest part of the product. And the first-run screen's "Not now" is a
+complete answer rather than a deferral.
+
+### How much of a recording is worth transcribing
+
+Transcription cost scales with the *length* of a recording, not the size of its file, and it
+is the most expensive thing Findra does. On a machine with no usable accelerator, an hour of
+audio is a long stretch of real time. So the length that is worth transcribing is the user's
+decision, not a constant in the code.
+
+**One control covers both audio and video**, deliberately. An asymmetry between them would
+be invisible in the interface and surprising in use; one number is predictable and easy to
+explain.
+
+| Setting | Meaning |
+|---|---|
+| Off | Nothing is transcribed. Video is still searchable by what it looks like, if photos are enabled. |
+| 5 minutes (default) | Voice memos, messages, clips, screen recordings. Cheap on any machine. |
+| 30 minutes | Adds meetings, calls and tutorials. |
+| 2 hours | Adds lectures, interviews and podcast episodes. |
+| No limit | Includes films and long archives. The most expensive setting in the product. |
+| A number the user types | Any limit in minutes, for anyone whose collection does not match the presets. |
+
+The stored value is a count of minutes: zero means off, a negative value means no limit, and
+any positive number is the limit itself. The named choices are presets over that one number,
+so a typed value and a preset are the same setting and cannot disagree.
+
+A recording longer than the limit is **skipped, not failed**, and for the recorded reason
+that it is longer than the limit, so raising the limit later re-queues exactly those files
+and nothing else.
 
 ### First run
 

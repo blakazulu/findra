@@ -42,6 +42,16 @@ into a numbered section on the first release.
   resumable work queue, and a consumed journal position per volume, so an interrupted
   index continues rather than starting over.
 
+### Changed
+
+- **Content indexing is off until you ask for it**, including the free full-text search of
+  documents. Searching by name is always on and costs nothing. Reading inside files walks
+  every drive and opens every document, so Findra no longer starts that uninvited.
+- **One setting decides how long a recording is worth transcribing**, covering audio and
+  video together. It defaults to short clips of about five minutes, offers longer presets
+  and no limit at all, and accepts a number of minutes typed in. A recording over the limit
+  is skipped rather than failed, so raising the limit later picks up exactly those files.
+
 ### Security
 
 - The elevated helper parses no file content. It reads names, paths, sizes and
