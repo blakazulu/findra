@@ -126,6 +126,13 @@ public static class SearchShot
     // A fixed, fake result set per state - no query engine, no admin rights, no index. This is
     // what lets every state in every palette be reviewed on a machine that has never indexed
     // anything.
+    /// <summary>The worst case the footer has to survive: both halves of the index line at their
+    /// longest reachable state. <c>CardFooterTests</c> measures this same pair of sentences.
+    /// </summary>
+    private const string LongIndexLine =
+        "1.5M names on C:, D:, E: (helper pid 12345) (still reading the drive) · " +
+        "1,234,567 waiting - indexing is paused while Findra is closed";
+
     private static SearchCardState Build(string state)
     {
         if (state == "empty")
@@ -197,7 +204,14 @@ public static class SearchShot
         int scroll = state == "many" ? 3 : 0;
         int highlight = scroll + (state == "many" ? 1 : 0);
         return new SearchCardState(query, results, rows, 0, highlight, scroll, state == "typing",
-            Caret: query.Length, IndexLine: "index: 1.5M names · idle",
+            Caret: query.Length,
+            // `many` carries the LONGEST index line the card can be handed: three drives, the
+            // helper still reading, and a backlog left by a previous session, with the content
+            // half joined on the way CardWindow joins it. The footer's two halves share one row,
+            // and until this line existed no shot showed them under any pressure at all - which
+            // is how a 7.6 px overlap in the ORDINARY single-drive state went unseen. Every
+            // clause here is a sentence IndexStatus.Line or IndexLineFormatter really produces.
+            IndexLine: state == "many" ? LongIndexLine : "index: 1.5M names · idle",
             StageDetail: "3.1 MB · 12 Aug 2026 19:42", Clock: 0.2,
             // `results` hovers a row that is not the selected one: without it the list's hover
             // fill is painted by no shot and no test, which is what let RowHover sit within

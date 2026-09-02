@@ -55,7 +55,10 @@ public static class SearchIndexReport
         // Only when there is something to break down: a checkpointed index is one file, and
         // printing "search.db 12.0 MB" under "12.0 MB" is the noise that stops people reading.
         if (s.Stores.Count > 1)
-            Line("             " + string.Join(" · ", s.Stores.Select(f => $"{f.Name} {Bytes(f.Bytes)}")));
+            // " + " and not a nicer separator: this report is printed to a Windows console whose
+            // code page is whatever the machine was set up with, and it is pasted into bug
+            // reports from those machines. It also happens to read as the sum it is.
+            Line("             " + string.Join(" + ", s.Stores.Select(f => $"{f.Name} {Bytes(f.Bytes)}")));
         Line();
 
         Line("  volumes  :");
