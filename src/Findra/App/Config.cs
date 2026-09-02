@@ -42,7 +42,50 @@ public sealed record Config
 
     public string? InstallSource { get; init; }
 
+    /// <summary>Path fragments the indexer will not open. Names stay searchable regardless -
+    /// this decides only what is read from inside a file.</summary>
+    public string[] SearchExclusions { get; init; } = [.. FileKinds.DefaultExclusions];
+
+    /// <summary>Drive letters to index. Empty means every fixed NTFS volume, which is what
+    /// almost everyone wants and what a fresh install does.</summary>
+    public string[] IndexDrives { get; init; } = [];
+
+    public bool IndexPaused { get; init; }
+
+    /// <summary>A duty cycle, 10..100. At 50 the indexer rests as long as it worked.</summary>
+    public int IndexPower { get; init; } = 50;
+
     public static Config Default { get; } = new();
+
+    // The compiler-generated record equality compares SearchExclusions and IndexDrives by
+    // reference, which fails RoundTripsEveryField the moment those arrays exist - a config
+    // loaded back from JSON is never the same array instance as the one that was saved. Every
+    // property on the class appears in both methods below; ConfigTests.EveryPropertyIsPartOfEquality
+    // is the guard that catches the next property someone adds and forgets here.
+    public bool Equals(Config? other) =>
+        other is not null
+        && DarkPalette == other.DarkPalette && LightPalette == other.LightPalette
+        && Mode == other.Mode && Hotkey == other.Hotkey
+        && CapsuleX == other.CapsuleX && CapsuleY == other.CapsuleY
+        && ShowCapsule == other.ShowCapsule && CheckForUpdates == other.CheckForUpdates
+        && LastUpdateCheck == other.LastUpdateCheck
+        && LatestKnownVersion == other.LatestKnownVersion
+        && InstallSource == other.InstallSource
+        && IndexPaused == other.IndexPaused && IndexPower == other.IndexPower
+        && SearchExclusions.AsSpan().SequenceEqual(other.SearchExclusions)
+        && IndexDrives.AsSpan().SequenceEqual(other.IndexDrives);
+
+    public override int GetHashCode()
+    {
+        var h = new HashCode();
+        h.Add(DarkPalette); h.Add(LightPalette); h.Add(Mode); h.Add(Hotkey);
+        h.Add(CapsuleX); h.Add(CapsuleY); h.Add(ShowCapsule); h.Add(CheckForUpdates);
+        h.Add(LastUpdateCheck); h.Add(LatestKnownVersion); h.Add(InstallSource);
+        h.Add(IndexPaused); h.Add(IndexPower);
+        foreach (string s in SearchExclusions) h.Add(s);
+        foreach (string s in IndexDrives) h.Add(s);
+        return h.ToHashCode();
+    }
 
     private static readonly JsonSerializerOptions Opts = new()
     {
@@ -56,17 +99,23 @@ public sealed record Config
 
     public string ToJson() => JsonSerializer.Serialize(this, Opts);
 
-    /// <summary>Never throws for any input - a missing, empty, or corrupt string all give
-    /// <see cref="Default"/> back.</summary>
+    /// <summary>Never throws for any input - a missing, empty, or corrupt string all give a
+    /// value equal to <see cref="Default"/> back. A fresh instance rather than the shared
+    /// singleton, so <see cref="SearchExclusions"/> and <see cref="IndexDrives"/> are never
+    /// the same array a caller elsewhere is holding on <see cref="Default"/> itself.</summary>
     public static Config Load(string? json)
     {
-        if (string.IsNullOrWhiteSpace(json)) return Default;
+        if (string.IsNullOrWhiteSpace(json)) return new Config();
 
-        try { return JsonSerializer.Deserialize<Config>(json, Opts) ?? Default; }
+        try
+        {
+            Config c = JsonSerializer.Deserialize<Config>(json, Opts) ?? new Config();
+            return c with { IndexPower = Math.Clamp(c.IndexPower, 10, 100) };
+        }
         catch (Exception ex)
         {
             Log.Warn("config", "config.json is not readable: " + ex.Message);
-            return Default;
+            return new Config();
         }
     }
 

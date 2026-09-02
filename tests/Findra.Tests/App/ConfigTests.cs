@@ -1,3 +1,4 @@
+using System.Reflection;
 using Findra;
 using Xunit;
 
@@ -90,5 +91,122 @@ public class ConfigTests
         Assert.Equal(ThemeMode.FollowWindows, c.Mode);
         Assert.Equal("Brass", c.DarkPalette);
         Assert.Equal("Ctrl+Alt+F", c.Hotkey);
+    }
+
+    [Fact]
+    public void TheContentIndexDefaultsAreTheOnesTheSpecPromises()
+    {
+        Config c = Config.Default;
+
+        Assert.Equal(FileKinds.DefaultExclusions, c.SearchExclusions);
+        Assert.Empty(c.IndexDrives);          // empty means every fixed NTFS volume
+        Assert.False(c.IndexPaused);
+        Assert.Equal(50, c.IndexPower);
+    }
+
+    [Fact]
+    public void TheDefaultExclusionsAreACopyNotTheSharedTable()
+    {
+        // FileKinds.DefaultExclusions is one static array and Config.Default is one static
+        // record, so handing the reference out means any caller that writes to a Config's
+        // exclusions rewrites the table for the whole process - including the copy every
+        // future Config starts from.
+        Assert.NotSame(FileKinds.DefaultExclusions, Config.Default.SearchExclusions);
+        Assert.NotSame(Config.Default.SearchExclusions, Config.Load(null).SearchExclusions);
+    }
+
+    [Fact]
+    public void TwoConfigsWithEqualExclusionListsAreEqual()
+    {
+        // A record compares an array member by REFERENCE. Without an explicit Equals, a
+        // config that round-trips through JSON is never equal to the one that was saved,
+        // and every equality assertion in this file becomes a test of object identity.
+        var a = Config.Default with { SearchExclusions = [@"\a\", @"\b\"], IndexDrives = ["C"] };
+        var b = Config.Default with { SearchExclusions = [@"\a\", @"\b\"], IndexDrives = ["C"] };
+
+        Assert.Equal(a, b);
+        Assert.Equal(a.GetHashCode(), b.GetHashCode());
+        Assert.NotEqual(a, Config.Default with { SearchExclusions = [@"\a\"], IndexDrives = ["C"] });
+        Assert.NotEqual(a, Config.Default with { SearchExclusions = [@"\a\", @"\b\"], IndexDrives = ["D"] });
+    }
+
+    [Fact]
+    public void EveryPropertyIsPartOfEquality()
+    {
+        // The guard. A hand-written Equals is a list somebody must keep in step with the
+        // class, and the first draft of this change left LatestKnownVersion out - which made
+        // RoundTripsEveryField pass while no longer covering it. This closes the CLASS of
+        // bug: add a property, forget to add it to Equals, and this fails naming the property.
+        foreach (PropertyInfo p in typeof(Config).GetProperties(BindingFlags.Public | BindingFlags.Instance))
+        {
+            if (p.SetMethod is null) continue;                       // computed, not state
+            object? changed = Mutate(p.PropertyType, p.GetValue(Config.Default));
+            Config other = Clone(Config.Default, p, changed);
+
+            Assert.False(Config.Default.Equals(other),
+                $"Config.Equals ignores '{p.Name}' - a change to it is invisible to equality, " +
+                "so a value that fails to round-trip will not be caught by any test in this file.");
+        }
+    }
+
+    /// <summary>A value of this type that differs from <paramref name="current"/>.</summary>
+    private static object? Mutate(Type t, object? current) => t switch
+    {
+        _ when t == typeof(string)     => (string?)current == "x" ? "y" : "x",
+        _ when t == typeof(string[])   => new[] { "\\findra-guard\\" },
+        _ when t == typeof(bool)       => !(bool)current!,
+        _ when t == typeof(int)        => (int)current! + 7,
+        _ when t == typeof(int?)       => ((int?)current ?? 0) + 7,
+        _ when t == typeof(DateTime?)  => ((DateTime?)current ?? DateTime.UnixEpoch).AddDays(1),
+        _ when t == typeof(ThemeMode)  => (ThemeMode)current! == ThemeMode.AlwaysDark
+                                            ? ThemeMode.AlwaysLight : ThemeMode.AlwaysDark,
+        _ => throw new Xunit.Sdk.XunitException(
+                 $"ConfigTests.Mutate has no case for {t.Name}. A new property type was added; " +
+                 "teach this helper about it rather than deleting the guard."),
+    };
+
+    /// <summary>Config.Default with exactly one property replaced.</summary>
+    private static Config Clone(Config from, PropertyInfo swap, object? value)
+    {
+        var clone = (Config)from.GetType()
+            .GetMethod("<Clone>$", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)!
+            .Invoke(from, null)!;
+        swap.SetValue(clone, value);        // init-only setters are ordinary setters to reflection
+        return clone;
+    }
+
+    [Fact]
+    public void TheContentFieldsRoundTrip()
+    {
+        var c = Config.Default with
+        {
+            SearchExclusions = [@"\Windows\", @"\my stuff\"],
+            IndexDrives = ["C", "E"],
+            IndexPaused = true,
+            IndexPower = 25,
+        };
+
+        Config back = Config.Load(c.ToJson());
+
+        Assert.Equal(c, back);
+        Assert.Equal([@"\Windows\", @"\my stuff\"], back.SearchExclusions);
+        Assert.Equal(25, back.IndexPower);
+    }
+
+    [Fact]
+    public void AnEmptyExclusionListIsHonouredAndIsNotTheDefaults()
+    {
+        // Someone who empties the list means it. Treating empty as "unset" and substituting
+        // the defaults would make the setting impossible to turn off.
+        Config c = Config.Load("""{ "searchExclusions": [] }""");
+        Assert.Empty(c.SearchExclusions);
+    }
+
+    [Fact]
+    public void AnAbsurdPowerSettingIsClampedRatherThanObeyed()
+    {
+        Assert.Equal(10, Config.Load("""{ "indexPower": 0 }""").IndexPower);
+        Assert.Equal(10, Config.Load("""{ "indexPower": -5 }""").IndexPower);
+        Assert.Equal(100, Config.Load("""{ "indexPower": 4000 }""").IndexPower);
     }
 }
