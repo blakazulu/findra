@@ -148,6 +148,20 @@ into a numbered section on the first release.
   to the processor". A machine with nothing installed still gets a complete report and exits
   cleanly, because a missing model is a normal state and not a failure.
 
+- **`--models` and `--content`: take a capability, and ask Findra to start reading, without a
+  screen.** `findra --models` lists what is on this machine, what each capability would add to
+  it, and what the whole set costs, with the two things that need no model at all - the words in
+  your documents and the words inside your pictures - named first and marked free, so taking
+  nothing still reads as a working search. `findra --models install recommended` says what it
+  will fetch and what that comes to before fetching a byte, skips anything already on disk,
+  shows one line of progress, resumes from an interrupted download rather than starting over,
+  and then queues exactly the files the new capability can now read. `findra --content on` is
+  the switch that starts reading inside files at all, `--content off` stops it and throws
+  nothing already read away, and `findra --content` says which of those states you are in
+  rather than letting an index nobody asked for look finished. `findra --content limit` sets
+  how long a recording is worth transcribing, in the same words the settings screen will use,
+  and refuses anything it cannot read instead of quietly turning transcription off.
+
 ### Changed
 
 - **Content indexing is off until you ask for it**, including the free full-text search of

@@ -16,6 +16,11 @@ public static class Program
             "--searchindex" => Diagnostics.SearchIndex.Run(args),
             "--searchbench" => Diagnostics.SearchBench.RunAsync(args).GetAwaiter().GetResult(),
             "--searchmodels" => Diagnostics.SearchModels.Run(args),
+            // The plan's second GetAwaiter().GetResult(), and like the first it is at a switch
+            // arm where there is no async context to await into. There is no third: --content
+            // downloads nothing and is synchronous throughout.
+            "--models"      => Diagnostics.ModelsCommand.RunAsync(args).GetAwaiter().GetResult(),
+            "--content"     => Diagnostics.ContentCommand.Run(args),
             "--searchshot"  => Diagnostics.SearchShot.Render(
                 args.Length > 1 ? args[1] : "searchshot.png",
                 args.Length > 2 ? args[2] : "results",
@@ -51,6 +56,9 @@ public static class Program
         Console.Error.WriteLine();
         Console.Error.WriteLine("  --names                  the elevated name-index helper");
         Console.Error.WriteLine("  --index <parentPid>      the content indexer, started by the UI - not run by hand");
+        Console.Error.WriteLine("  --models [list|install <preset|cap,cap>]   what a capability costs, and how to take it");
+        Console.Error.WriteLine("  --content [status|on|off|limit <what>]     whether Findra reads inside files at all -");
+        Console.Error.WriteLine("                           a setting you change, unlike --index above");
         Console.Error.WriteLine("  --searchprobe [query]    the whole query path, end to end");
         Console.Error.WriteLine("  --searchtest             engine self-check");
         Console.Error.WriteLine("  --searchmodels           are the models present, do they load, and on which provider");

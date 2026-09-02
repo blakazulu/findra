@@ -16,7 +16,7 @@ public sealed class SearchIndexReportTests : IDisposable
 
     public void Dispose() { try { Directory.Delete(_dir, true); } catch { } }
 
-    private static IndexSnapshot Sample(
+    internal static IndexSnapshot Sample(
         IReadOnlyList<(string, string)>? failures = null,
         long failed = 2,
         IReadOnlyDictionary<ResultKind, long>? byKind = null) => new(
