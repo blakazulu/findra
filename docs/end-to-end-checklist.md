@@ -61,6 +61,35 @@ Before starting, tail the log in a spare window so every step's proof appears as
 15. **Hebrew reads correctly.** Index a Hebrew document and search a word in it. The
     excerpt must read in logical order rather than reversed.
 
+## From Plan 5, capabilities
+
+The models are downloaded by Findra itself rather than placed by hand, so this section is
+as much a test of the download path as of the models.
+
+16. **The first download works, and can be interrupted.** Choose a preset and let it
+    download. Watch the progress reach the end. Then, on a later capability, kill Findra
+    part way through and restart: it must resume from the byte already fetched rather than
+    starting the file again. A partial file left behind must never be treated as a
+    complete model.
+17. **A download that fails says so and recovers.** Disconnect the network mid-download.
+    Findra must report it plainly, keep what it has, and continue when the network returns.
+18. **Nothing is re-downloaded that is already there.** Restart after a complete download.
+    No file is fetched twice, and the sizes on disk match what the interface claimed.
+19. **The accelerator is real.** `findra --searchmodels` must name the provider it chose
+    and every one it rejected with a reason. On this machine it should choose the discrete
+    graphics card rather than the processor. If it falls back to the processor, the reason
+    must say why.
+20. **Photos become searchable by description.** Index a folder of photos, then search for
+    what is in one rather than its filename.
+21. **Speech becomes searchable.** Index a recording and search a phrase spoken in it.
+    Then a Hebrew recording, which runs the general model first for detection and only
+    then the Hebrew one.
+22. **Text inside images is found.** Index a screenshot containing words and search one.
+23. **Enabling a capability re-indexes exactly what it covers.** This is the promise the
+    plan review rejected a draft over. Turn on a capability after the index is already
+    built, and confirm from `--searchindex` that the files it covers are re-queued and
+    actually re-read, and that nothing else is disturbed.
+
 ## Notes
 
 Steps 1 to 4 and 9 to 13 are the ones that have never executed in any form. Steps 5 to 8
