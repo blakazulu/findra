@@ -21,20 +21,28 @@ public sealed class QueueFeederTests : IDisposable
     /// <summary>The tail's reset marker: Reason 0, no name, no path, real journal id.</summary>
     private static JournalEvent Marker(char vol = 'C') => new(vol, Journal, 0, 0, 0, "", "", 0, 0);
 
+    /// <summary>The modification time every file in <see cref="Disk"/> carries, and the one
+    /// <see cref="DrainAsIndexed"/> records against it. A real tick count, not zero: zero is the
+    /// helper's word for "I could not read a timestamp", and a fixture that used it would be
+    /// testing the unknown-mtime path while claiming to test the ordinary one.</summary>
+    private const long DiskMtime = 638_000_000_000_000_000;
+
     private static EnumeratedFile[] Disk =>
     [
-        new(101, @"C:\Papers\lease.pdf"),
-        new(102, @"C:\Papers\notes.txt"),
-        new(103, @"C:\Papers\deck.pptx"),
+        new(101, @"C:\Papers\lease.pdf", DiskMtime),
+        new(102, @"C:\Papers\notes.txt", DiskMtime),
+        new(103, @"C:\Papers\deck.pptx", DiskMtime),
     ];
 
-    /// <summary>Mark everything queued as finished, the way the indexer child would.</summary>
-    private static void DrainAsIndexed(ContentDb db)
+    /// <summary>Mark everything queued as finished, the way the indexer child would - stamping
+    /// the modification time it read off the file, which is what a later pass compares against.
+    /// </summary>
+    private static void DrainAsIndexed(ContentDb db, long mtime = DiskMtime)
     {
         while (db.TakeNext() is { } p)
         {
             using var tx = db.Begin();
-            db.Upsert("C", p.Frn, p.Path, p.Kind, mtime: 0, size: 0, ContentDb.StateIndexed, null, [], tx);
+            db.Upsert("C", p.Frn, p.Path, p.Kind, mtime, size: 0, ContentDb.StateIndexed, null, [], tx);
             db.Dequeue(p.Id, tx);
             tx.Commit();
         }
@@ -387,6 +395,61 @@ public sealed class QueueFeederTests : IDisposable
     }
 
     [Fact]
+    public void AFileModifiedWhileNothingWasWatchingIsQueuedByAFullPass()
+    {
+        // The pass is the ONLY fallback once the journal has wrapped past the stored position -
+        // which is precisely the case the walk debt exists for - and on its way out it stamps a
+        // position, stamps the suffix set and clears that debt whatever it found. A pass that can
+        // see a file that is NEW and not one that was MODIFIED therefore records the index as
+        // complete over a range it did not reconcile, and the edited document keeps answering
+        // searches with its old words until something happens to touch it while Findra is running.
+        using ContentDb db = Open();
+        using var feeder = new QueueFeeder(db, () => Cfg);
+
+        Assert.Equal(3, feeder.FillFrom('C', Journal, 4242, Disk));
+        DrainAsIndexed(db);
+        Assert.Equal(0, db.PendingCount());
+
+        // Findra was closed; one of the three was edited. Same drive, same FRN, later mtime.
+        EnumeratedFile[] afterAnEdit =
+        [
+            new(101, @"C:\Papers\lease.pdf", DiskMtime + TimeSpan.TicksPerMinute),
+            new(102, @"C:\Papers\notes.txt", DiskMtime),
+            new(103, @"C:\Papers\deck.pptx", DiskMtime),
+        ];
+
+        Assert.Equal(1, feeder.FillFrom('C', Journal, 5000, afterAnEdit));
+
+        ContentDb.Pending only = Assert.Single(db.PendingRows());
+        Assert.Equal(@"C:\Papers\lease.pdf", only.Path);
+        Assert.Equal("change", only.Reason);   // it is not new, and it is not a delete
+    }
+
+    [Fact]
+    public void AFileWhoseTimestampTheHelperCouldNotReadIsQueuedRatherThanAssumedCurrent()
+    {
+        // Zero is "not known", and an unknown timestamp cannot prove a file is unchanged. It
+        // reaches here from a helper that could not stat the file and from an older helper that
+        // sends no timestamp at all, and both must fail towards queuing: the indexer's own
+        // freshness check dequeues the row untouched if the bytes really did not move, so the
+        // safe direction costs one no-op and the unsafe one costs a permanently stale document.
+        using ContentDb db = Open();
+        using var feeder = new QueueFeeder(db, () => Cfg);
+
+        Assert.Equal(3, feeder.FillFrom('C', Journal, 4242, Disk));
+        DrainAsIndexed(db);
+
+        EnumeratedFile[] noTimestamps =
+        [
+            new(101, @"C:\Papers\lease.pdf"),
+            new(102, @"C:\Papers\notes.txt"),
+            new(103, @"C:\Papers\deck.pptx"),
+        ];
+
+        Assert.Equal(3, feeder.FillFrom('C', Journal, 5000, noTimestamps));
+    }
+
+    [Fact]
     public void AWalkThatRestartedAndSentAFileTwiceCountsItOnce()
     {
         // The enumerate walk restarts from record zero when the journal moves under it, so one
@@ -447,12 +510,12 @@ public sealed class QueueFeederTests : IDisposable
         using var feeder = new QueueFeeder(db, () => Cfg);
         using (var tx = db.Begin())
         {
-            db.Upsert("C", 201, @"C:\Papers\sunset.jpg", ResultKind.Photo, 0, 0,
+            db.Upsert("C", 201, @"C:\Papers\sunset.jpg", ResultKind.Photo, DiskMtime, 0,
                       ContentDb.StateSkipped, "no decoder for this kind yet", [], tx);
             tx.Commit();
         }
 
-        Assert.Equal(0, feeder.FillFrom('C', Journal, 1, [new EnumeratedFile(201, @"C:\Papers\sunset.jpg")]));
+        Assert.Equal(0, feeder.FillFrom('C', Journal, 1, [new EnumeratedFile(201, @"C:\Papers\sunset.jpg", DiskMtime)]));
     }
 
     [Fact]

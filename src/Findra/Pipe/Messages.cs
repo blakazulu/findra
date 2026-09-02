@@ -70,8 +70,25 @@ public sealed record VolumeResume(char Volume, ulong JournalId, long Usn, bool N
 
 public sealed record SubscribeReply(IReadOnlyList<VolumeResume> Volumes);
 
-/// <summary>One live file on a volume, as the first pass sees it.</summary>
-public sealed record EnumeratedFile(ulong Frn, string Path);
+/// <summary>
+/// One live file on a volume, as the first pass sees it.
+///
+/// <c>Mtime</c> is the file's last-write time in UTC ticks - the same clock the indexer stamps
+/// into <c>items.mtime</c>, so the two are directly comparable. It is here because without it the
+/// pass can only ask "have I seen this FRN before", which sees a file that is NEW and is blind to
+/// one that was MODIFIED while Findra was closed - and the pass is the ONLY fallback once the
+/// journal has wrapped past the stored position. A pass that cannot tell those apart stamps a
+/// position, stamps the suffix set and clears the walk debt over a range it did not reconcile.
+///
+/// Reading it is a METADATA call, not content parsing, which is what keeps it inside the elevated
+/// helper's remit (spec §3). See <c>NameServer.LastWriteTicks</c>.
+///
+/// Zero means "not known" - never "1601". A helper that could not read the timestamp, and an older
+/// helper that does not send one at all, both arrive here as 0, and the pass treats 0 as "cannot
+/// prove this file is unchanged" and queues it. The indexer's own freshness check then dequeues it
+/// untouched if the bytes really did not move, so the safe direction is also the cheap one.
+/// </summary>
+public sealed record EnumeratedFile(ulong Frn, string Path, long Mtime = 0);
 
 /// <summary>
 /// Ask the helper for every live file on one volume whose name ends in one of these suffixes.

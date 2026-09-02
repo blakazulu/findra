@@ -312,7 +312,8 @@ public sealed class QueueFeeder : IDisposable
         // One read of the item table rather than a lookup per file. A finished disk is a million
         // rows and a million single-row queries; this is one scan and a dictionary. Indexed,
         // Failed and Skipped all count as finished, which is what stops a photo with no decoder
-        // being queued again on every launch.
+        // being queued again on every launch. The value is the modification time recorded when
+        // that file was last dealt with, which is what the enumerated record is compared against.
         Dictionary<(string, ulong), long> known = _db.KnownItems();
         var queued = new HashSet<ulong>();
 
@@ -320,11 +321,23 @@ public sealed class QueueFeeder : IDisposable
 
         foreach (EnumeratedFile f in files)
         {
-            if (known.ContainsKey((vol, f.Frn))) continue;
+            // Seen before is not the same as unchanged. Skipping on presence alone made this pass
+            // able to see a file that was CREATED while Findra was closed and blind to one that
+            // was MODIFIED - and this pass is the only fallback once the journal has wrapped, so
+            // that file's stale words stayed searchable indefinitely while the stamps below
+            // recorded the range as reconciled. The journal path has always compared an mtime
+            // (ContentDb.IsCurrent); this is the same comparison on the other path.
+            //
+            // Mtime 0 is "the helper could not read one", not a timestamp - so it cannot prove the
+            // file is unchanged and the file is queued. The indexer re-reads the mtime itself and
+            // dequeues the row untouched when the bytes really did not move, which makes the safe
+            // direction cost one no-op rather than one re-extraction.
+            bool held = known.TryGetValue((vol, f.Frn), out long had);
+            if (held && f.Mtime != 0 && had == f.Mtime) continue;
             ResultKind kind = FileKinds.Classify(System.IO.Path.GetFileName(f.Path), false);
             if (!Eligible(f.Path, kind, exclusions, roots)) continue;
             if (!queued.Add(f.Frn)) continue;
-            _db.Enqueue(vol, f.Frn, f.Path, kind, ReasonNew, tx);
+            _db.Enqueue(vol, f.Frn, f.Path, kind, held ? ReasonChange : ReasonNew, tx);
         }
 
         // All three stamps go in the SAME transaction as the enqueues. A pass that does not

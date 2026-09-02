@@ -367,7 +367,7 @@ public static class NameServer
                                 if (!EndsWithAny(name, suffixes)) continue;
                                 string? path = ix.PathOf(r);
                                 if (path is null) continue;
-                                buf.Add(new EnumeratedFile(ix.Frn(r), path));
+                                buf.Add(new EnumeratedFile(ix.Frn(r), path, LastWriteTicks(path)));
                             }
                         }
 
@@ -466,6 +466,40 @@ public static class NameServer
         foreach (string s in suffixes)
             if (name.EndsWith(s, StringComparison.OrdinalIgnoreCase)) return true;
         return false;
+    }
+
+    /// <summary>Windows answers a missing or unreadable file with the FILETIME epoch rather than
+    /// an error, and that is not a modification time - it is a large, constant, plausible-looking
+    /// number that would compare equal on every walk forever.</summary>
+    private static readonly long FiletimeEpochTicks = DateTime.FromFileTimeUtc(0).Ticks;
+
+    /// <summary>
+    /// The file's last-write time in UTC ticks, or 0 when it cannot be read.
+    ///
+    /// THIS IS A METADATA CALL AND IT MUST STAY ONE. <c>File.GetLastWriteTimeUtc</c> is
+    /// <c>GetFileAttributesEx</c>: no file is opened, no byte of one is read, and no decoder of any
+    /// kind sees this path. That is the whole reason it is allowed here. The rule this process
+    /// lives under is that the elevated half never parses untrusted file CONTENT (spec §3, and
+    /// CLAUDE.md), because decoders over arbitrary files are the most likely thing on this machine
+    /// to be exploitable by a malformed input - and a timestamp is not content. Nothing in this
+    /// method may grow into opening the file.
+    ///
+    /// It is the same clock the indexer stamps into <c>items.mtime</c>
+    /// (<c>FileInfo.LastWriteTimeUtc.Ticks</c>), so the first pass can compare the two directly.
+    /// Without it the pass sees only whether an FRN is new, is blind to a file that was modified
+    /// while Findra was closed, and clears the walk debt anyway - see <see cref="EnumeratedFile"/>.
+    /// </summary>
+    private static long LastWriteTicks(string path)
+    {
+        try
+        {
+            long ticks = File.GetLastWriteTimeUtc(path).Ticks;
+            return ticks == FiletimeEpochTicks ? 0 : ticks;
+        }
+        catch (ArgumentException) { return 0; }
+        catch (IOException) { return 0; }
+        catch (UnauthorizedAccessException) { return 0; }
+        catch (NotSupportedException) { return 0; }
     }
 
     private static QueryReply AnswerQuery(QueryRequest req, IReadOnlyDictionary<char, VolumeView> views,

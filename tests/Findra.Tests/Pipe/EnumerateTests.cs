@@ -109,6 +109,80 @@ public class EnumerateTests
         await cts.CancelAsync();
     }
 
+    /// <summary>A NameIndex whose parent chain resolves to a REAL path on this machine, so the
+    /// record the helper answers with names a file that actually exists and has a timestamp.
+    /// Returns the FRN of the leaf.</summary>
+    private static (NameIndex Index, ulong Frn) IndexOver(string filePath)
+    {
+        string root = Path.GetPathRoot(filePath)!.TrimEnd('\\');       // "C:"
+        var ix = new NameIndex(root[0]);
+        ulong frn = 5;
+        ix.Upsert(frn, 0, NtfsVolume.FileAttributeDirectory, root);
+        ulong parent = frn;
+        string[] parts = filePath[(root.Length + 1)..].Split('\\');
+        for (int i = 0; i < parts.Length; i++)
+        {
+            frn++;
+            ix.Upsert(frn, parent, i < parts.Length - 1 ? NtfsVolume.FileAttributeDirectory : 0u, parts[i]);
+            parent = frn;
+        }
+        return (ix, frn);
+    }
+
+    [Fact]
+    public async Task AnEnumeratedFileCarriesItsModificationTimeSoAPassCanSeeAnEdit()
+    {
+        // Without this the first pass can only ask "have I seen this FRN before". It then sees a
+        // file that is NEW and is blind to one that was MODIFIED while Findra was closed - and it
+        // is the ONLY fallback once the journal has wrapped, so the edited file keeps answering
+        // searches with its old words indefinitely. Reading the timestamp is a metadata call and
+        // not content parsing, which is what lets the elevated helper do it at all (spec §3).
+        string dir = Path.Combine(Path.GetTempPath(), "findra-enum-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        string file = Path.Combine(dir, "lease.pdf");
+        try
+        {
+            await File.WriteAllTextAsync(file, "a lease");
+            var when = new DateTime(2026, 3, 4, 5, 6, 7, DateTimeKind.Utc);
+            File.SetLastWriteTimeUtc(file, when);
+
+            (NameIndex ix, ulong frn) = IndexOver(file);
+            var (server, client) = NameServerTests.PairForTests();
+            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+            _ = NameServer.Serve(server,
+                new Dictionary<char, VolumeView> { [ix.Letter] = new(ix, JournalId: 0, NextUsn: 0, EnumerateMs: 0) },
+                new IndexLock(), new JournalBroadcast(), null, cts.Token);
+
+            List<EnumerateReply> replies = await Ask(client, new EnumerateRequest(3, ix.Letter, [".pdf"], 100), cts.Token);
+
+            EnumeratedFile only = Assert.Single(replies.SelectMany(r => r.Files));
+            Assert.Equal(frn, only.Frn);
+            Assert.Equal(when.Ticks, only.Mtime);
+            await cts.CancelAsync();
+        }
+        finally { try { Directory.Delete(dir, true); } catch { } }
+    }
+
+    [Fact]
+    public async Task AFileTheHelperCannotStatCarriesZeroRatherThanTheFiletimeEpoch()
+    {
+        // Windows answers a missing or unreadable file with the FILETIME epoch - 1601, a large
+        // non-zero tick count - rather than an error. Passed through, that is a modification time
+        // the pass would happily compare and find equal on every walk, which is the original hole
+        // wearing a number. Zero is the only honest answer, and the pass reads it as "cannot prove
+        // this file is unchanged".
+        var (server, client) = NameServerTests.PairForTests();
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        _ = NameServer.Serve(server, One(), new IndexLock(), new JournalBroadcast(), null, cts.Token);
+
+        List<EnumerateReply> replies = await Ask(client, new EnumerateRequest(4, 'C', [".pdf"], 100), cts.Token);
+
+        EnumeratedFile only = Assert.Single(replies.SelectMany(r => r.Files));
+        Assert.Equal(@"C:\Papers\lease.pdf", only.Path);      // a fixture path; no such file exists
+        Assert.Equal(0, only.Mtime);
+        await cts.CancelAsync();
+    }
+
     /// <summary>One file per suffix, all of the same shape so no suffix is a suffix of another
     /// and the count is the only thing under test.</summary>
     private static NameIndex Many(int count)
