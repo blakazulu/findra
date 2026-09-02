@@ -62,12 +62,18 @@ public static class UpdateCheck
         (config.LastUpdateCheck is null || utcNow - config.LastUpdateCheck.Value >= CheckInterval);
 
     /// <summary>The action matching how this copy was installed. winget gets the upgrade
-    /// command; a source build gets a link to the release notes; an unrecognised source gets
-    /// both, since it might be either. Matched case-insensitively - nothing writes
-    /// <see cref="Config.InstallSource"/> yet, so its casing convention is not fixed.</summary>
+    /// command; a downloaded installer and a source build get a link to the releases page; an
+    /// unrecognised source gets both, since it might be any of them. Matched case-insensitively -
+    /// nothing writes <see cref="Config.InstallSource"/> yet, so its casing convention is not
+    /// fixed.</summary>
     public static string Advice(string installSource, string version) => installSource.ToLowerInvariant() switch
     {
         "winget" => $"Findra {version} is available. Run winget upgrade blakazulu.Findra to update.",
+        // An installed copy and a source build get the same place to go and different reasons for
+        // going there: one downloads the new installer, the other pulls and rebuilds. Neither can
+        // act on a winget command, which is why they are not in the default arm.
+        "installer" => $"Findra {version} is available. Download it from " +
+                       "https://github.com/blakazulu/findra/releases.",
         "source" => $"Findra {version} is available. See https://github.com/blakazulu/findra/releases for the release notes.",
         _ => $"Findra {version} is available. Run winget upgrade blakazulu.Findra, or see " +
              "https://github.com/blakazulu/findra/releases for the release notes.",

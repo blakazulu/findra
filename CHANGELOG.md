@@ -231,6 +231,20 @@ into a numbered section on the first release.
   exists the advice matches the way you actually got this one instead of being guessed afresh
   at every launch.
 
+- **Every setting Findra has, in five sections.** Look holds the light and dark palettes, the
+  mode that switches between them, and a way to open the file where you write your own.
+  Opening it holds the hotkey, which you rebind by clicking the row and pressing the
+  combination you want, whether the capsule shows on the desktop, a way to bring it back when
+  it was left on a monitor that is gone, whether Findra starts when you sign in, and a way to
+  register the name helper if that never happened. What it searches holds the drives and the
+  folders Findra will not open. Content holds the one switch for reading inside files, how
+  long a recording is worth transcribing, and what each capability would add to what is
+  already installed. About reports the version, what the last check found, and the action
+  that matches how this copy was installed.
+
+- **A copy installed from the downloaded installer is told to download the new one**, rather
+  than to run a winget upgrade for a package winget has never heard of on that machine.
+
 ### Changed
 
 - **Content indexing is off until you ask for it**, including the free full-text search of

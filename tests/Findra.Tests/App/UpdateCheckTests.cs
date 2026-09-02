@@ -70,6 +70,18 @@ public class UpdateCheckTests
     }
 
     [Fact]
+    public void ACopyPutHereByTheInstallerIsSentToTheInstallerAndNotToWinget()
+    {
+        // Three sources existed and the installer route is a fourth. Falling into the default arm
+        // tells somebody who ran a downloaded .exe to run `winget upgrade` for a package winget
+        // has never heard of on their machine, which fails with a message about no packages found.
+        string advice = UpdateCheck.Advice("installer", "1.3.0");
+
+        Assert.Contains("releases", advice, StringComparison.Ordinal);
+        Assert.DoesNotContain("winget upgrade", advice, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void TheAdviceMatchIsCaseInsensitiveOnInstallSource()
     {
         // Nothing writes Config.InstallSource yet, so the casing convention is still up for

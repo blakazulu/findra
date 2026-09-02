@@ -238,7 +238,10 @@ public sealed class CapsuleWindow : Window
 
     // ---- the canvas ------------------------------------------------------------------------------
 
-    private sealed class CapsuleCanvas : Control
+    // Fully qualified, because the settings model's row type is `Findra.Control` and a type in
+    // this file's own namespace beats one arriving through a using directive - so a bare `Control`
+    // here binds to a sealed record.
+    private sealed class CapsuleCanvas : Avalonia.Controls.Control
     {
         private readonly Derived _derived;
         private readonly SKTypeface _face;
