@@ -128,6 +128,16 @@ moment rather than an elevation prompt at every launch.
     that path on any machine. It was stubbed to return nothing from Plan 3 until the
     framework moved, and this is the first time it can draw.
 
+## From Plan 6, settings and shipping
+
+27. **`--content` and `--searchindex` agree once the interface has run.** On this machine they
+    do not: `--content` reads `config.json` and says "index up to date", while `--searchindex`
+    reads the index's own `index:paused` row and says "off". Both are behaving exactly as
+    specified, and they diverge only because the interface has never been launched here to
+    write that row. After the first real launch, run both and confirm they say the same thing.
+    If they still disagree, the row is not being written and `--searchindex` is describing an
+    index nobody has told about a setting that changed.
+
 ## Notes
 
 Steps 1 to 4 and 9 to 13 are the ones that have never executed in any form. Steps 5 to 8
