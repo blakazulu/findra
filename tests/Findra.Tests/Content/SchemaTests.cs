@@ -206,14 +206,45 @@ public sealed class SchemaTests : IDisposable
         // suffix list forever, and those files would never be enumerated at all.
         using var db = new ContentDb(Db());
 
-        Assert.Null(db.Get("suffixes"));                      // never walked yet
-        db.SetSuffixVersion([".pdf", ".txt"]);
-        string stamped = db.Get("suffixes")!;
+        Assert.Null(db.Get("suffixes:C"));                    // never walked yet
+        db.SetSuffixVersion('C', [".pdf", ".txt"]);
+        string stamped = db.Get("suffixes:C")!;
 
-        Assert.False(db.SuffixesChanged([".pdf", ".txt"]));
-        Assert.False(db.SuffixesChanged([".txt", ".pdf"]));   // a set, not a sequence
-        Assert.True(db.SuffixesChanged([".pdf"]));            // one fewer extension is a change
-        Assert.True(db.SuffixesChanged([".pdf", ".txt", ".pages"]));   // one more is too
-        Assert.Equal(stamped, db.Get("suffixes"));            // asking did not rewrite it
+        Assert.False(db.SuffixesChanged('C', [".pdf", ".txt"]));
+        Assert.False(db.SuffixesChanged('C', [".txt", ".pdf"]));   // a set, not a sequence
+        Assert.True(db.SuffixesChanged('C', [".pdf"]));            // one fewer extension is a change
+        Assert.True(db.SuffixesChanged('C', [".pdf", ".txt", ".pages"]));   // one more is too
+        Assert.Equal(stamped, db.Get("suffixes:C"));          // asking did not rewrite it
+    }
+
+    [Fact]
+    public void TheSuffixStampIsPerVolumeAndFallsBackToWhatAnEarlierBuildWrote()
+    {
+        // The stamp answers "does THIS drive owe a walk", so it is a row per drive. Stamping C:
+        // must say nothing about D:, or the first drive walked after an upgrade discharges the
+        // question for every other drive on the machine, permanently.
+        using var db = new ContentDb(Db());
+
+        db.SetSuffixVersion('C', [".pdf", ".txt"]);
+
+        Assert.False(db.SuffixSetOutOfDate('C', [".pdf", ".txt"]));
+        Assert.True(db.SuffixSetOutOfDate('C', [".pdf", ".txt", ".pages"]));
+        Assert.False(db.SuffixSetOutOfDate('D', [".pdf", ".txt", ".pages"]),
+                     "D: has never been walked, so it owes nothing by this route");
+
+        // An index written before the per-volume rows carries one stamp for the whole database.
+        // Reading that as "never walked" on every drive would skip the re-walk the extension
+        // list actually changed under, silently, on exactly the installs that have been running
+        // longest.
+        using var older = new ContentDb(Db("older.db"));
+        older.SetSuffixVersion([".pdf"]);
+
+        Assert.True(older.SuffixSetOutOfDate('C', [".pdf", ".txt"]));
+        Assert.True(older.SuffixSetOutOfDate('D', [".pdf", ".txt"]));
+
+        // And a drive that has since been walked by this build answers off its own row.
+        older.SetSuffixVersion('C', [".pdf", ".txt"]);
+        Assert.False(older.SuffixSetOutOfDate('C', [".pdf", ".txt"]));
+        Assert.True(older.SuffixSetOutOfDate('D', [".pdf", ".txt"]));
     }
 }

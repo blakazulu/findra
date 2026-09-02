@@ -376,28 +376,54 @@ CREATE TABLE IF NOT EXISTS opened(path TEXT PRIMARY KEY, count INTEGER NOT NULL,
         return list;
     }
 
-    // ---- the suffix stamp: which extension set this index was walked with ----
+    // ---- the suffix stamp: which extension set each volume was walked with ----
 
-    /// <summary>Record the extension set the disk was walked with. FileKinds' tables are code: a
-    /// later version that adds an extension would otherwise keep asking for the OLD suffix list
+    /// <summary>
+    /// Record the extension set THIS VOLUME was walked with. FileKinds' tables are code: a later
+    /// version that adds an extension would otherwise keep asking for the OLD suffix list
     /// forever, and files with the new extension would never be enumerated on any existing
-    /// install.</summary>
+    /// install.
+    ///
+    /// <para>One row per volume, like <c>usn:</c>, because the walk this stamp demands is per
+    /// volume. A single row for the whole index is answered by whichever drive is walked first,
+    /// and every other drive then finds the list already current and is skipped - permanently,
+    /// since the stamp can never differ again. It is also what lets a drive that was plugged in
+    /// after the last extension change be walked when it arrives.</para>
+    /// </summary>
+    public void SetSuffixVersion(char volume, IReadOnlyList<string> suffixes, SqliteTransaction? tx = null)
+        => Set(SuffixKey(volume), SuffixHash(suffixes), tx);
+
+    /// <summary>
+    /// The stamp an index written before the per-volume rows carries: one row for the whole
+    /// database. Nothing in this build writes it during normal operation - it is here so an index
+    /// migrated from such a build still answers the question below for volumes that have no row
+    /// of their own yet, rather than reading as never walked and quietly skipping the re-walk
+    /// their extension list actually needs.
+    /// </summary>
     public void SetSuffixVersion(IReadOnlyList<string> suffixes, SqliteTransaction? tx = null)
         => Set("suffixes", SuffixHash(suffixes), tx);
 
-    /// <summary>Compare the stamp against a suffix set without writing anything.</summary>
-    public bool SuffixesChanged(IReadOnlyList<string> suffixes) => Get("suffixes") != SuffixHash(suffixes);
+    /// <summary>Compare this volume's stamp against a suffix set without writing anything.</summary>
+    public bool SuffixesChanged(char volume, IReadOnlyList<string> suffixes)
+        => StampFor(volume) != SuffixHash(suffixes);
 
     /// <summary>
-    /// True only when a PREVIOUS walk was stamped and it used a different suffix set from this
-    /// one. An index that has never been walked answers false, which is not the same question
-    /// <see cref="SuffixesChanged"/> answers: an absent stamp differs from every hash, and reading
-    /// that as "the extension list changed" would say a fresh install owes a re-walk of a disk it
-    /// has never walked - which is true, but said by the wrong mechanism, and it makes the debt
-    /// that a lost journal event leaves indistinguishable from an empty database.
+    /// True only when a PREVIOUS walk of THIS VOLUME was stamped and it used a different suffix
+    /// set from this one. A volume that has never been walked answers false, which is not the
+    /// same question <see cref="SuffixesChanged(char, IReadOnlyList{string})"/> answers: an absent
+    /// stamp differs from every hash, and reading that as "the extension list changed" would say
+    /// a fresh install owes a re-walk of a disk it has never walked - which is true, but said by
+    /// the wrong mechanism, and it makes the debt that a lost journal event leaves
+    /// indistinguishable from an empty database.
     /// </summary>
-    public bool SuffixSetOutOfDate(IReadOnlyList<string> suffixes)
-        => Get("suffixes") is { } stamped && stamped != SuffixHash(suffixes);
+    public bool SuffixSetOutOfDate(char volume, IReadOnlyList<string> suffixes)
+        => StampFor(volume) is { } stamped && stamped != SuffixHash(suffixes);
+
+    private static string SuffixKey(char volume) => "suffixes:" + char.ToUpperInvariant(volume);
+
+    // A volume with no stamp of its own falls back to the whole-index row an earlier build wrote,
+    // so an upgrade in the middle of an index's life does not read every drive as never walked.
+    private string? StampFor(char volume) => Get(SuffixKey(volume)) ?? Get("suffixes");
 
     // A hash of the SET, not of the sequence: the caller builds its list from HashSet enumeration,
     // whose order is not contractual, and a stamp that moved with it would re-walk every disk on

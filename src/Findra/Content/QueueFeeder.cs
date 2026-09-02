@@ -331,7 +331,7 @@ public sealed class QueueFeeder : IDisposable
         // record where it finished is a pass that happens again; a pass that does not clear the
         // debt is a pass that happens forever.
         _db.SetUsnPosition(letter, journalId, throughUsn, tx);
-        _db.SetSuffixVersion(ContentSuffixes(), tx);
+        _db.SetSuffixVersion(letter, ContentSuffixes(), tx);
 
         bool tainted = _walking.TryGetValue(letter, out long since) && since != _drops;
         if (!tainted) _db.ClearWalkOwed(letter, tx);
@@ -376,9 +376,14 @@ public sealed class QueueFeeder : IDisposable
     ///
     /// Asked every time round the interface's loop, not once at startup. A hole opened at 11am is
     /// no less a hole for the app having launched at 9.
+    ///
+    /// Both halves are per volume, including the suffix one. A single stamp for the whole index
+    /// is discharged by whichever drive happens to be walked first, and every other drive is then
+    /// told the extension list is current - which it is, and which it will stay, so on a machine
+    /// with two indexed drives only one of them ever sees a new extension.
     /// </summary>
     public bool NeedsFreshWalk(char volume)
-        => _db.SuffixSetOutOfDate(ContentSuffixes()) || _db.WalkOwed(volume);
+        => _db.SuffixSetOutOfDate(volume, ContentSuffixes()) || _db.WalkOwed(volume);
 
     /// <summary>
     /// Report the client's own dropped-event total. Any increase owes a fresh walk.

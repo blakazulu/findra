@@ -488,9 +488,39 @@ public sealed class QueueFeederTests : IDisposable
         DrainAsIndexed(db);
         Assert.False(feeder.NeedsFreshWalk('C'));
 
-        db.SetSuffixVersion([".pdf"]);          // pretend an older build walked with a smaller set
+        db.SetSuffixVersion('C', [".pdf"]);     // pretend an older build walked with a smaller set
 
         Assert.True(feeder.NeedsFreshWalk('C'));
+    }
+
+    [Fact]
+    public void AChangedSuffixSetWalksEveryFinishedDiskAndNotOnlyTheFirstOne()
+    {
+        // One stamp for the whole index answers a question that is asked per volume, and the
+        // first volume to be walked writes it for all of them. On a machine with two indexed
+        // drives, an upgrade that adds an extension walked C:, stamped the new list, and then
+        // asked D: - whose cursor is perfectly valid and needs no pass of its own - whether the
+        // extension list had changed. It had not, any more. D: was skipped, and since the stamp
+        // can never differ again it is skipped for ever: files with the new extension on that
+        // drive are invisible to content search on that machine permanently.
+        //
+        // The single-volume version of this test is true and cannot see it.
+        using ContentDb db = Open();
+        using var feeder = new QueueFeeder(db, () => Cfg);
+
+        // Two drives, both finished by an earlier build that walked with a smaller list.
+        db.SetUsnPosition('C', Journal, 4242);
+        db.SetUsnPosition('D', Journal, 4242);
+        db.SetSuffixVersion([".pdf"]);
+
+        Assert.True(feeder.NeedsFreshWalk('C'));
+        Assert.True(feeder.NeedsFreshWalk('D'));
+
+        // The interface walks the drives in order, and asks each one on its way past.
+        feeder.FillFrom('C', Journal, 5000, Disk);
+
+        Assert.False(feeder.NeedsFreshWalk('C'));
+        Assert.True(feeder.NeedsFreshWalk('D'), "walking C: is not walking D:");
     }
 
     [Fact]
