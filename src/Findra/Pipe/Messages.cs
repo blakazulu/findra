@@ -70,6 +70,35 @@ public sealed record VolumeResume(char Volume, ulong JournalId, long Usn, bool N
 
 public sealed record SubscribeReply(IReadOnlyList<VolumeResume> Volumes);
 
+/// <summary>One live file on a volume, as the first pass sees it.</summary>
+public sealed record EnumeratedFile(ulong Frn, string Path);
+
+/// <summary>
+/// Ask the helper for every live file on one volume whose name ends in one of these suffixes.
+///
+/// THE SUFFIX LIST IS THE CALLER'S. The helper holds no table of what a document is and consults
+/// none: it compares each name against the strings that arrived in this frame and sends back what
+/// matched. Every actual policy - which kinds have content, the exclusions, the repository roots,
+/// the size caps, the diff against what is already indexed - is decided at normal integrity by
+/// whoever sent this, because the elevated process is the one place that must never grow an
+/// opinion about the files it can read.
+///
+/// <c>BatchSize</c> is how many files one reply frame carries. It is a request, not a promise: the
+/// helper clamps it, because nothing that arrives on a pipe is trusted.
+/// </summary>
+public sealed record EnumerateRequest(long Id, char Volume, IReadOnlyList<string> Suffixes, int BatchSize);
+
+/// <summary>
+/// One frame of a first pass. <c>Id</c> echoes the request's, because one request produces many
+/// replies and a positional queue cannot express that - status and subscribe get away with
+/// matching positionally precisely because they answer once.
+///
+/// Exactly one frame per request carries <c>Done</c>, and it is the last. A volume the helper does
+/// not hold still gets that frame, with nothing in it: a session that quietly stops replying is
+/// indistinguishable from a slow disk, and the caller would wait for a walk that never ends.
+/// </summary>
+public sealed record EnumerateReply(long Id, char Volume, IReadOnlyList<EnumeratedFile> Files, bool Done);
+
 /// <summary>
 /// Kind outside, body inside. An envelope whose kind is unknown can still be read and
 /// skipped, so one side can learn a message the other has not.
@@ -88,6 +117,10 @@ public sealed record Envelope(string Kind, string Json)
     // invalidating a query reply still in flight.
     public const string KindSubscribe      = "subscribe";
     public const string KindSubscribeReply = "subscribe-reply";
+
+    // The first pass. Many reply frames per request, matched by id rather than by position.
+    public const string KindEnumerate      = "enumerate";
+    public const string KindEnumerateReply = "enumerate-reply";
 
     private static readonly JsonSerializerOptions Opts = new()
     {

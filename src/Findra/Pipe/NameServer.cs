@@ -56,6 +56,31 @@ public static class NameServer
     /// <summary>Consecutive failed pipe creations before the helper gives up for good.</summary>
     private const int MaxCreateFailures = 5;
 
+    /// <summary>Largest enumerate batch the helper will honour, whatever the frame asked for.</summary>
+    private const int MaxEnumerateBatch = 2000;
+
+    /// <summary>
+    /// How many suffixes one enumerate request may name, and how long each may be. Never trust
+    /// the frame: the suffix list is a per-record inner loop the CALLER controls inside the
+    /// elevated process, so an unbounded list turns one small frame into hours of comparisons on
+    /// a 1.5M-record volume.
+    /// </summary>
+    private const int MaxSuffixes = 64;
+    private const int MaxSuffixLength = 16;
+
+    /// <summary>
+    /// How many times a walk restarts because the journal moved under it before it gives up on
+    /// batching and takes the volume's read lock for the whole pass.
+    ///
+    /// A restart is the cost of not stalling every query behind a multi-second walk, and it is
+    /// normally paid at most once. On a volume under constant churn - a build server, a sync
+    /// client mid-download - the epoch could in principle move during every batch, and a walk
+    /// that restarts forever never terminates. After this many attempts the walk takes the whole
+    /// hold: queries on that one volume wait for it, which is bad, and an enumeration that never
+    /// finishes is worse, because the first pass never completes and the debt is never cleared.
+    /// </summary>
+    private const int MaxEnumerateRestarts = 3;
+
     /// <summary>
     /// The shape Plan 1 shipped, kept so its tests and any caller with nothing but indexes
     /// still compile and still mean what they meant. Each index is wrapped in a zeroed view: no
@@ -256,6 +281,99 @@ public static class NameServer
             finally { writeLock.Release(); }
         }
 
+        // The first pass. The caller names the suffixes and the helper applies them mechanically:
+        // it holds no table of what a document is, and every rule that decides whether a file is
+        // worth opening runs at normal integrity on the rows this sends back.
+        async Task AnswerEnumerateAsync(EnumerateRequest req, CancellationToken ect)
+        {
+            char letter = char.ToUpperInvariant(req.Volume);
+            int batch = Math.Clamp(req.BatchSize, 1, MaxEnumerateBatch);
+
+            var suffixes = new List<string>(MaxSuffixes);
+            foreach (string s in req.Suffixes ?? [])
+            {
+                if (suffixes.Count == MaxSuffixes) break;
+                if (string.IsNullOrEmpty(s) || s.Length > MaxSuffixLength) continue;
+                suffixes.Add(s);
+            }
+
+            NameIndex? ix = null;
+            foreach ((char l, VolumeView v) in views)
+                if (char.ToUpperInvariant(l) == letter) { ix = v.Index; break; }
+
+            // A drive the helper does not hold, or a request that named nothing usable, still gets
+            // an answer. A session that just stops replying looks exactly like a slow disk.
+            if (ix is null || suffixes.Count == 0)
+            {
+                await SendAsync(Envelope.KindEnumerateReply,
+                    new EnumerateReply(req.Id, letter, [], true), ect).ConfigureAwait(false);
+                return;
+            }
+
+            for (int attempt = 0; ; attempt++)
+            {
+                // The last attempt gives up on batching and holds the read lock for the whole
+                // walk, so the enumeration always terminates. See MaxEnumerateRestarts.
+                bool holdThroughout = attempt >= MaxEnumerateRestarts;
+                long epoch = gate?.Epoch(letter) ?? 0;
+                bool moved = false;
+                int record = 0;
+                var buf = new List<EnumeratedFile>(batch);
+
+                using (IDisposable? whole = holdThroughout ? gate?.Read(letter) : null)
+                {
+                    int capacity = int.MaxValue;
+                    while (record < capacity)
+                    {
+                        buf.Clear();
+
+                        // ONE BATCH PER HOLD. Walking 1.5M records under a single read lock is
+                        // seconds of PathOf calls, and ReaderWriterLockSlim gives a waiting writer
+                        // priority over new readers - so one journal batch queued behind the walk
+                        // blocks every AnswerQuery after it and the card is dead for the length of
+                        // the enumeration. That is the first pass, on every fresh install, which
+                        // is exactly when somebody is watching.
+                        using (holdThroughout ? null : gate?.Read(letter))
+                        {
+                            capacity = ix.Capacity;
+                            while (record < capacity && buf.Count < batch)
+                            {
+                                int r = record++;
+                                if (!ix.IsAlive(r) || ix.IsDirectory(r)) continue;
+                                string name = ix.Name(r);
+                                if (!EndsWithAny(name, suffixes)) continue;
+                                string? path = ix.PathOf(r);
+                                if (path is null) continue;
+                                buf.Add(new EnumeratedFile(ix.Frn(r), path));
+                            }
+                        }
+
+                        // Checked BEFORE the frame goes out, so nothing read across a rehash is
+                        // ever sent. A restarted walk costs a second; a skipped or duplicated
+                        // record costs a wrong index, and FillFrom's diff makes the duplicates a
+                        // restart produces free.
+                        if (!holdThroughout && gate is not null && gate.Epoch(letter) != epoch) { moved = true; break; }
+
+                        if (buf.Count > 0)
+                            await SendAsync(Envelope.KindEnumerateReply,
+                                new EnumerateReply(req.Id, letter, buf.ToArray(), false), ect).ConfigureAwait(false);
+                    }
+                }
+
+                if (moved)
+                {
+                    Log.Info("pipe", string.Create(CultureInfo.InvariantCulture,
+                        $"{letter}: the journal moved during an enumeration; restarting it " +
+                        $"(attempt {attempt + 2} of {MaxEnumerateRestarts + 1})"));
+                    continue;
+                }
+
+                await SendAsync(Envelope.KindEnumerateReply,
+                    new EnumerateReply(req.Id, letter, [], true), ect).ConfigureAwait(false);
+                return;
+            }
+        }
+
         try
         {
             while (!ct.IsCancellationRequested)
@@ -281,6 +399,9 @@ public static class NameServer
                             break;
                         case Envelope.KindSubscribe:
                             await AnswerSubscribeAsync(e.Body<SubscribeRequest>(), ct).ConfigureAwait(false);
+                            break;
+                        case Envelope.KindEnumerate:
+                            await AnswerEnumerateAsync(e.Body<EnumerateRequest>(), ct).ConfigureAwait(false);
                             break;
                         default:
                             Log.Info("pipe", $"ignoring unknown kind '{e.Kind}'");
@@ -313,6 +434,15 @@ public static class NameServer
             // is not: SemaphoreSlim.Dispose neither resumes nor faults a queued async waiter, so
             // disposing it under one hangs that caller silently and throws out of its finally.
         }
+    }
+
+    /// <summary>The whole of the helper's opinion about which files matter: none. It compares a
+    /// name against strings that arrived in a frame.</summary>
+    private static bool EndsWithAny(string name, List<string> suffixes)
+    {
+        foreach (string s in suffixes)
+            if (name.EndsWith(s, StringComparison.OrdinalIgnoreCase)) return true;
+        return false;
     }
 
     private static QueryReply AnswerQuery(QueryRequest req, IReadOnlyDictionary<char, VolumeView> views,

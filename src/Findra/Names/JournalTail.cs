@@ -30,19 +30,43 @@ public sealed record VolumeView(NameIndex Index, ulong JournalId, long NextUsn, 
 public sealed class IndexLock : IDisposable
 {
     private readonly System.Collections.Concurrent.ConcurrentDictionary<char, ReaderWriterLockSlim> _byVolume = new();
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<char, Counter> _epochs = new();
 
     public IDisposable Read(char volume) => new Scope(For(volume), write: false);
     public IDisposable Write(char volume) => new Scope(For(volume), write: true);
 
+    /// <summary>
+    /// How many times this volume's index has been written since the helper started.
+    ///
+    /// A long walk cannot hold the read lock throughout - see the enumerate handler - so it reads
+    /// the index in batches and releases in between. That leaves a window in which the tail can
+    /// insert, remove and rehash records, which moves every record index after the change: the
+    /// walk would then skip files or return them twice with no way to tell. Comparing this number
+    /// across two batches is how the walk finds out, and restarting is cheap next to a wrong index.
+    /// </summary>
+    public long Epoch(char volume) => Interlocked.Read(ref CounterFor(volume).Value);
+
+    /// <summary>Called by the journal tail once per applied slice, under that volume's write
+    /// lock.</summary>
+    public void Bump(char volume) => Interlocked.Increment(ref CounterFor(volume).Value);
+
     private ReaderWriterLockSlim For(char v)
         => _byVolume.GetOrAdd(char.ToUpperInvariant(v),
                               static _ => new ReaderWriterLockSlim(LockRecursionPolicy.NoRecursion));
+
+    private Counter CounterFor(char v)
+        => _epochs.GetOrAdd(char.ToUpperInvariant(v), static _ => new Counter());
 
     public void Dispose()
     {
         foreach (ReaderWriterLockSlim l in _byVolume.Values) l.Dispose();
         _byVolume.Clear();
     }
+
+    // A class, not a `long` value in the dictionary: Interlocked needs a ref to a field, and a
+    // dictionary's value slot cannot supply one. A plain read of a long is not atomic on every
+    // architecture this may one day be built for, and nothing here may assume x64.
+    private sealed class Counter { public long Value; }
 
     private sealed class Scope : IDisposable
     {
@@ -222,6 +246,13 @@ public static class JournalTail
                                 slice.Add(new JournalEvent(vol.Letter, view.JournalId, c.Frn,
                                     c.ParentFrn, c.Attributes, c.Name, path, c.Reason, c.Usn));
                             }
+
+                            // Bumped inside the write lock, so a walk that sees the old value has
+                            // provably read a batch from before this slice was applied. Bumped
+                            // unconditionally rather than only when `applied` moved: an Upsert that
+                            // changed nothing can still have rehashed, and record indexes are what
+                            // the walk holds between batches.
+                            gate.Bump(vol.Letter);
                         }
 
                         // The write lock is RELEASED before the publish, and that ordering is

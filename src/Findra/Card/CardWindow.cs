@@ -266,13 +266,18 @@ public sealed class CardWindow : Window
         {
             string state, beat;
             long pending, indexed;
-            bool rebuilt = db.WasRebuilt;
+            bool rebuilt;
             lock (_dbGate)
             {
                 state = db.Get("indexer:state") ?? "off";
                 beat = db.Get("indexer:beat") ?? "";
                 pending = db.PendingCount();
                 indexed = db.IndexedCount();
+                // WasRebuilt is a fact about the OPEN that rebuilt the file, and this card reads
+                // through its own read-only connection, which did no such thing. The session that
+                // owns the writer records the answer in the index itself for exactly that reason,
+                // and the property still counts for a card handed the writer directly.
+                rebuilt = db.WasRebuilt || db.Get("index:rebuilt") == "1";
             }
             return IndexStatus.Line(state, pending, indexed, IndexStatus.Alive(beat), rebuilt);
         }

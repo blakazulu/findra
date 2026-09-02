@@ -39,6 +39,23 @@ public static class FileKinds
     /// <summary>Has content worth sending to the indexer.</summary>
     public static bool HasContent(ResultKind k) => k is ResultKind.Photo or ResultKind.Video or ResultKind.Audio or ResultKind.Document;
 
+    /// <summary>
+    /// Every extension that classifies to a kind with content, without the dot.
+    ///
+    /// Read from the same four sets <see cref="Classify"/> reads, and for one reason: the first
+    /// pass asks the helper for a suffix list, and a second table written out by hand would drift
+    /// from this one the first time somebody adds an extension. The drift is silent - files with
+    /// the new extension are simply never enumerated - and it only shows up on machines that had
+    /// already finished indexing, which is nobody's test machine.
+    /// </summary>
+    public static IEnumerable<string> ContentExtensions()
+    {
+        foreach (string e in Photo) yield return e;
+        foreach (string e in Video) yield return e;
+        foreach (string e in Audio) yield return e;
+        foreach (string e in Document) yield return e;
+    }
+
     public static string Label(ResultKind k) => k switch
     {
         ResultKind.Photo => "Photo", ResultKind.Video => "Video", ResultKind.Audio => "Audio",

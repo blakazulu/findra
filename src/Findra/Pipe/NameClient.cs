@@ -17,6 +17,13 @@ public sealed class NameClient : IAsyncDisposable
     private readonly ConcurrentDictionary<long, TaskCompletionSource<QueryReply>> _pending = new();
     private readonly ConcurrentQueue<TaskCompletionSource<StatusReply>> _statusWaiters = new();
     private readonly ConcurrentQueue<TaskCompletionSource<SubscribeReply>> _subscribeWaiters = new();
+
+    // Enumerations are matched BY ID, not positionally like status and subscribe. One request
+    // produces many frames, and a positional queue cannot express that: the head waiter would take
+    // the first frame and everything after it would land on whoever asked next.
+    private readonly ConcurrentDictionary<long, Channel<EnumerateReply>> _enumerations = new();
+    private long _enumerateId;
+
     private readonly Channel<JournalEvent> _journal;
     private readonly CancellationTokenSource _reader = new();
     private readonly Task _pump;
@@ -201,6 +208,62 @@ public sealed class NameClient : IAsyncDisposable
     }
 
     /// <summary>
+    /// Every live file on one volume whose name ends in one of these suffixes.
+    ///
+    /// The suffix list is the CALLER'S and travels on the wire: the helper compares names against
+    /// it and decides nothing else. Everything about whether a file is worth opening is settled
+    /// here, at normal integrity, on the rows that come back.
+    ///
+    /// The id is a plain counter and deliberately NOT the generation. A first pass is not an
+    /// answer to a query, so stamping it would discard the next real search reply as stale and
+    /// blank the card in the middle of the walk.
+    ///
+    /// Throws if the helper goes away mid-walk rather than ending quietly. A caller that took a
+    /// truncated stream for a finished one would stamp a consumed position and clear the walk
+    /// debt over a disk it never finished reading, and nothing afterwards would ever notice.
+    /// </summary>
+    public async IAsyncEnumerable<EnumeratedFile> EnumerateAsync(
+        char volume, IReadOnlyList<string> suffixes, int batchSize,
+        [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken ct)
+    {
+        ThrowIfPumpGone();
+
+        long id = Interlocked.Increment(ref _enumerateId);
+        var frames = Channel.CreateUnbounded<EnumerateReply>(
+            new UnboundedChannelOptions { SingleWriter = true, SingleReader = true });
+
+        // Registered BEFORE the write, or a helper that answers faster than this thread resumes
+        // has its first frame routed to nobody.
+        _enumerations[id] = frames;
+        try
+        {
+            await _writeLock.WaitAsync(ct).ConfigureAwait(false);
+            try
+            {
+                await Frame.WriteAsync(_transport, Envelope.Pack(Envelope.KindEnumerate,
+                    new EnumerateRequest(id, volume, suffixes, batchSize)), ct).ConfigureAwait(false);
+            }
+            finally { _writeLock.Release(); }
+
+            // Same race as every other call: the pump may have died between the entry check and
+            // the registration. The pump's drain completes this channel, so either it finds this
+            // entry or this sees the flag.
+            ThrowIfPumpGone();
+
+            await foreach (EnumerateReply r in frames.Reader.ReadAllAsync(ct).ConfigureAwait(false))
+            {
+                foreach (EnumeratedFile f in r.Files) yield return f;
+                if (r.Done) yield break;
+            }
+
+            throw new IOException(
+                "the name helper stopped answering before the enumeration of " +
+                char.ToUpperInvariant(volume) + ": finished");
+        }
+        finally { _enumerations.TryRemove(id, out _); }
+    }
+
+    /// <summary>
     /// Every journal event the helper pushes, in the order it pushed them, until the helper goes
     /// away. Ends rather than hanging when the pump stops, because the channel is completed in
     /// the pump's finally.
@@ -260,6 +323,16 @@ public sealed class NameClient : IAsyncDisposable
                                 if (waiting.TrySetResult(s)) break;
                             break;
                         }
+                        case Envelope.KindEnumerateReply:
+                        {
+                            // By id: many frames answer one request. An unbounded channel because
+                            // the frames are already bounded by the helper's batch size and the
+                            // consumer is the walk itself - dropping one here would silently
+                            // shorten a first pass.
+                            EnumerateReply r = e.Body<EnumerateReply>();
+                            if (_enumerations.TryGetValue(r.Id, out var into)) into.Writer.TryWrite(r);
+                            break;
+                        }
                         case Envelope.KindJournal:
                             // Never blocks the pump. A bounded DropOldest channel takes this
                             // synchronously whether or not anyone is reading; what it evicts is
@@ -292,6 +365,10 @@ public sealed class NameClient : IAsyncDisposable
             foreach (var kv in _pending) kv.Value.TrySetCanceled();
             while (_statusWaiters.TryDequeue(out var s)) s.TrySetCanceled();
             while (_subscribeWaiters.TryDequeue(out var sub)) sub.TrySetCanceled();
+
+            // Completed, never faulted: a walk in flight sees its channel end without a Done
+            // frame and throws its own IOException, which says what was actually lost.
+            foreach (var kv in _enumerations) kv.Value.Writer.TryComplete();
 
             // Completed here beside the other drains, so a consumer awaiting JournalAsync ends
             // rather than hanging when the helper goes away.

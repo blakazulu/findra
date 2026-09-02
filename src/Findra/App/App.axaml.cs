@@ -1,10 +1,13 @@
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using System.Net.Http;
 using System.Runtime.Versioning;
 using System.Threading;
 using System.Threading.Tasks;
+using Findra.Pipe;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
@@ -161,6 +164,21 @@ internal sealed class Shell
     private UpdateState _update = UpdateState.NotDue;
     private string? _latest;
 
+    // ---- the content index ----
+    //
+    // TWO CONNECTIONS, ONE FILE. ContentDb wraps a single SQLite connection, which is not safe for
+    // concurrent use, and in this process the card reads the index on its own thread while the
+    // feeder writes it from the background loop. Write-ahead logging gives one writer and many
+    // readers ACROSS connections, so the split is the design's own answer: the feeder owns the
+    // writer, the card gets a read-only connection of its own. A shared lock would have been the
+    // other answer and the wrong one - it would stall the card behind a long indexing write, which
+    // is the one moment the card most needs to answer.
+    private ContentDb? _content;        // the writer. Opened FIRST: it creates the schema.
+    private ContentDb? _cardStore;      // read-only, lent to every card, disposed by this shell
+    private QueueFeeder? _feeder;
+    private IndexerHost? _indexer;
+    private Task? _contentLoop;
+
     public Shell(Application app, IClassicDesktopStyleApplicationLifetime desktop)
     {
         _app = app;
@@ -215,6 +233,8 @@ internal sealed class Shell
             else Log.Info("app", "the capsule is turned off; the hotkey and the tray open the card");
         });
 
+        Stage("content index", OpenContentIndex);
+
         Stage("tray", CreateTray);
 
         Stage("update check", () => _ = Task.Run(async () =>
@@ -228,6 +248,333 @@ internal sealed class Shell
     {
         try { body(); }
         catch (Exception ex) { Log.Error("startup", $"the {what} stage failed", ex); }
+    }
+
+    // ---- the content index ------------------------------------------------------------------------
+
+    /// <summary>How long one journal batch is allowed to gather before it is written.</summary>
+    private static readonly TimeSpan FlushEvery = TimeSpan.FromMilliseconds(400);
+
+    /// <summary>Or this many events, whichever comes first.</summary>
+    private const int MaxEventsPerBatch = 500;
+
+    /// <summary>How many files one enumerate frame carries. Large enough that a real disk is a few
+    /// hundred frames rather than tens of thousands, small enough that no single frame is a
+    /// megabyte of JSON.</summary>
+    private const int EnumerateBatch = 1000;
+
+    /// <summary>Between attempts to reach the helper, and the floor between two walks of the same
+    /// volume. A walk that keeps failing must cost one attempt a minute, not a busy loop.</summary>
+    private static readonly TimeSpan RetryEvery = TimeSpan.FromSeconds(30);
+    private static readonly TimeSpan WalkNoOftenThan = TimeSpan.FromSeconds(60);
+
+    /// <summary>
+    /// A repository is found by the one file every git checkout has in the same place. The
+    /// enumerate call never returns directories - a folder whose name ends in a suffix is exactly
+    /// what its own test forbids - so asking for ".git" would come back empty every time; asking
+    /// for the marker file inside it and taking the grandparent finds the same roots and costs the
+    /// same single pass.
+    /// </summary>
+    private static readonly string[] RepoMarkerSuffix = ["HEAD"];
+    private const string RepoMarkerTail = @"\.git\HEAD";
+
+    /// <summary>
+    /// Open the process's stores and start the loop that decides what is indexed.
+    ///
+    /// ORDER MATTERS. The writer is opened first because it is what creates the file, the schema
+    /// and any migration; a read-only open against a database that does not exist yet fails, and
+    /// the card would then spend the session saying the index is not open.
+    /// </summary>
+    private void OpenContentIndex()
+    {
+        ContentDb writer = ContentDb.OpenOrRebuild();
+        _content = writer;
+
+        // Recorded in the index itself, not just on this instance. The card reads through its OWN
+        // connection, and WasRebuilt is a fact about the open that rebuilt the file - it cannot
+        // cross a connection boundary. Written on every launch, so the notice is about THIS
+        // session and does not haunt every later one.
+        try { writer.Set("index:rebuilt", writer.WasRebuilt ? "1" : "0"); } catch { }
+
+        if (writer.WasRebuilt)
+            Log.Error("index", $"the content index could not be read and was rebuilt from nothing at {writer.Path}; " +
+                               "what was indexed before is gone and the disk is walked again");
+
+        // The card's own read-only connection. Write-ahead logging is what makes a second
+        // connection safe while the feeder writes; an in-memory store has no file to open twice,
+        // and a read-only ":memory:" would be a different, empty database.
+        if (!string.Equals(writer.Path, ":memory:", StringComparison.Ordinal))
+        {
+            try { _cardStore = new ContentDb(writer.Path, readOnly: true); }
+            catch (Exception ex)
+            {
+                // A null store is a supported state: the card says the index is not open in this
+                // session rather than showing an empty one.
+                Log.Warn("index", "the card gets no read-only view of the index this session :: " + ex.Message);
+            }
+        }
+
+        _feeder = new QueueFeeder(writer, () => _config);
+        _indexer = new IndexerHost();
+        _contentLoop = Task.Run(() => RunContentAsync(_shutdown.Token));
+
+        Log.Info("index", $"the content index is open at {writer.Path}" +
+                          (_cardStore is null ? " (writer only)" : " (one writer, one reader)"));
+    }
+
+    /// <summary>
+    /// The loop that owns the queue. It reconciles what the rules now cover, keeps a subscription
+    /// to the helper's journal, runs a first pass over any volume that owes one, and keeps the
+    /// indexer child alive while there is work for it.
+    ///
+    /// Every failure here is a retry, never a throw: a machine with no helper registered still has
+    /// a working queue, a running indexer and a card that can search what is already indexed.
+    /// </summary>
+    private async Task RunContentAsync(CancellationToken ct)
+    {
+        QueueFeeder? feeder = _feeder;
+        ContentDb? db = _content;
+        if (feeder is null || db is null) return;
+
+        try
+        {
+            Log.Info("index", "the queue feeder is running; this process decides what is indexed");
+
+            try { feeder.Reconcile(); }
+            catch (Exception ex) { Log.Error("index", "the queue could not be reconciled at startup", ex); }
+
+            while (!ct.IsCancellationRequested)
+            {
+                PumpIndexer(db);
+                try { await OneSessionAsync(db, feeder, ct).ConfigureAwait(false); }
+                catch (OperationCanceledException) { break; }
+                catch (Exception ex)
+                {
+                    Log.Once("index|session|" + ex.GetType().Name, "WARN ", "index",
+                        "the queue is not being fed from the journal :: " + ex.Message);
+                }
+                try { await Task.Delay(RetryEvery, ct).ConfigureAwait(false); }
+                catch (OperationCanceledException) { break; }
+            }
+        }
+        finally
+        {
+            // This loop owns the disposal of both stores. Quit only cancels: it runs on the user
+            // interface thread and cannot block there waiting for a walk to unwind, and a store
+            // disposed under a write in flight is worse than one the process exit closes for us.
+            // Every write here is a committed transaction, so nothing is lost either way.
+            try { _indexer?.Dispose(); } catch { }
+            try { feeder.Dispose(); } catch { }
+            try { _cardStore?.Dispose(); } catch { }
+            try { db.Dispose(); } catch { }
+            Log.Info("index", "the content index is closed");
+        }
+    }
+
+    /// <summary>One connection to the helper, from subscribe to the stream ending.</summary>
+    private async Task OneSessionAsync(ContentDb db, QueueFeeder feeder, CancellationToken ct)
+    {
+        await using NameClient client = await NameClient.ConnectAsync(TimeSpan.FromSeconds(5), ct)
+            .ConfigureAwait(false);
+
+        StatusReply status = await client.StatusAsync(ct).ConfigureAwait(false);
+        IReadOnlyList<char> drives = ChosenDrives(_config, status);
+        if (drives.Count == 0)
+        {
+            Log.Warn("index", "the helper reports no volumes to index");
+            return;
+        }
+
+        // Learned before anything is judged, because a repository root changes what is eligible.
+        // Reconciled again afterwards: the pass at startup ran before the helper was reachable and
+        // therefore before any root was known.
+        await LearnRepoRootsAsync(client, feeder, drives, ct).ConfigureAwait(false);
+        feeder.Reconcile();
+
+        // The pushed events go into this queue as they arrive, so nothing about the writing side
+        // can stall the pipe. A stalled reader costs dropped events, which NoteClientDrops turns
+        // into an owed walk; a stalled PUMP would cost every name query as well.
+        //
+        // Started BEFORE the first pass, not after it. A pass over a real disk takes long enough
+        // that the client's bounded receive channel would otherwise fill and start evicting during
+        // it - which owes a fresh walk, which is another pass, on a machine that is merely busy.
+        // Nothing is subscribed yet, so this reads nothing until the pass below asks for it, and
+        // the events it collects are consumed after the pass has stamped its position, which keeps
+        // the position moving only forwards.
+        var arrived = new ConcurrentQueue<JournalEvent>();
+        var full = new SemaphoreSlim(0, 1);
+        Task reader = Task.Run(async () =>
+        {
+            await foreach (JournalEvent e in client.JournalAsync(ct).ConfigureAwait(false))
+            {
+                arrived.Enqueue(e);
+                if (arrived.Count >= MaxEventsPerBatch && full.CurrentCount == 0)
+                    try { full.Release(); } catch (SemaphoreFullException) { }
+            }
+        }, CancellationToken.None);
+
+        var walkedAt = new Dictionary<char, long>();
+        await CatchUpAsync(client, feeder, drives, walkedAt, first: true, ct).ConfigureAwait(false);
+
+        while (!ct.IsCancellationRequested && !reader.IsCompleted)
+        {
+            try { await full.WaitAsync(FlushEvery, ct).ConfigureAwait(false); }
+            catch (OperationCanceledException) { break; }
+
+            var batch = new List<JournalEvent>();
+            while (arrived.TryDequeue(out JournalEvent? e)) batch.Add(e);
+            if (batch.Count > 0) feeder.Consume(batch);
+
+            // After EVERY batch, not once at startup. A hole can open at any moment - a reset
+            // marker from the helper, or this process's own receive channel dropping under a
+            // stalled interface - and a debt that is only inspected at launch is a debt nobody
+            // collects. Both of these are one small read of the meta table, not one per event.
+            feeder.NoteClientDrops(client.JournalDropped);
+            await CatchUpAsync(client, feeder, drives, walkedAt, first: false, ct).ConfigureAwait(false);
+
+            PumpIndexer(db);
+        }
+
+        await reader.ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Walk every volume that owes a full pass. On the first turn that is whatever the subscribe
+    /// reply says needs one; afterwards it is whatever has since come to owe one, which is checked
+    /// cheaply and acted on rarely.
+    /// </summary>
+    private static async Task CatchUpAsync(NameClient client, QueueFeeder feeder, IReadOnlyList<char> drives,
+                                           Dictionary<char, long> walkedAt, bool first, CancellationToken ct)
+    {
+        var owed = new List<char>();
+        foreach (char v in drives)
+        {
+            if (!first && !feeder.NeedsFreshWalk(v)) continue;
+            // A walk that keeps failing leaves the debt standing, and this loop comes round every
+            // 400 ms. One attempt a minute per volume, not two and a half a second.
+            if (walkedAt.TryGetValue(v, out long last) &&
+                System.Diagnostics.Stopwatch.GetElapsedTime(last) < WalkNoOftenThan) continue;
+            owed.Add(v);
+        }
+        if (owed.Count == 0) return;
+
+        // Re-subscribing gives the CURRENT journal id and position for every volume, which is what
+        // a pass has to stamp. It also replaces this session's registration rather than doubling
+        // it, and replays whatever gap the stored cursors left.
+        SubscribeReply sub = await client.SubscribeJournalAsync(feeder.StoredCursors(), ct).ConfigureAwait(false);
+        var resume = new Dictionary<char, VolumeResume>();
+        foreach (VolumeResume r in sub.Volumes) resume[char.ToUpperInvariant(r.Volume)] = r;
+
+        foreach (char v in owed)
+        {
+            if (!resume.TryGetValue(v, out VolumeResume? at)) continue;
+            // On the first turn, a volume the helper can simply resume needs no pass: the session
+            // has already replayed its gap, and those events arrive through the journal like any
+            // other. On later turns the caller has already established that a walk is owed.
+            if (first && !at.NeedsFullPass && !feeder.NeedsFreshWalk(v)) continue;
+
+            walkedAt[v] = System.Diagnostics.Stopwatch.GetTimestamp();
+            await WalkAsync(client, feeder, v, at, ct).ConfigureAwait(false);
+        }
+    }
+
+    /// <summary>
+    /// One first pass: ask the helper for every file whose suffix this build cares about, and hand
+    /// the whole answer to the feeder.
+    ///
+    /// The stream is collected before it is written, and that is a deliberate bound rather than an
+    /// oversight: the suffix filter runs in the helper, so what comes back is the machine's
+    /// documents, photos, audio and video, not its every file - a tenth to a twentieth of the
+    /// rows, which is the whole reason enumerate takes a suffix list instead of streaming a
+    /// snapshot. One transaction for the pass is also what makes the consumed position, the suffix
+    /// stamp and the discharged debt land together or not at all.
+    /// </summary>
+    private static async Task WalkAsync(NameClient client, QueueFeeder feeder, char volume,
+                                        VolumeResume at, CancellationToken ct)
+    {
+        Log.Info("index", string.Create(CultureInfo.InvariantCulture,
+            $"{volume}: walking the disk for the first time this index has seen it ({at.Note})"));
+
+        feeder.NoteWalkStarted(volume);
+        var found = new List<EnumeratedFile>();
+        await foreach (EnumeratedFile f in client
+                           .EnumerateAsync(volume, QueueFeeder.ContentSuffixes(), EnumerateBatch, ct)
+                           .ConfigureAwait(false))
+            found.Add(f);
+
+        // Only a stream that reached its Done frame gets here - EnumerateAsync throws otherwise -
+        // so a truncated walk can never stamp a position or clear the debt it did not discharge.
+        feeder.FillFrom(volume, at.JournalId, at.Usn, found);
+    }
+
+    private static async Task LearnRepoRootsAsync(NameClient client, QueueFeeder feeder,
+                                                  IReadOnlyList<char> drives, CancellationToken ct)
+    {
+        var roots = new List<string>();
+        foreach (char v in drives)
+        {
+            await foreach (EnumeratedFile f in client
+                               .EnumerateAsync(v, RepoMarkerSuffix, EnumerateBatch, ct)
+                               .ConfigureAwait(false))
+            {
+                if (!f.Path.EndsWith(RepoMarkerTail, StringComparison.OrdinalIgnoreCase)) continue;
+                roots.Add(f.Path[..^RepoMarkerTail.Length]);
+            }
+        }
+        feeder.SetRepoRoots(roots);
+        Log.Info("index", string.Create(CultureInfo.InvariantCulture,
+            $"{roots.Count} repository root(s) found; their names stay searchable and their contents are not read"));
+    }
+
+    /// <summary>Which drives are fed. An empty setting means every volume the helper reports,
+    /// which is what a fresh install does and what almost everyone wants.</summary>
+    private static IReadOnlyList<char> ChosenDrives(Config config, StatusReply status)
+    {
+        var live = new List<char>();
+        foreach (VolumeStatus v in status.Volumes) live.Add(char.ToUpperInvariant(v.Letter));
+        if (config.IndexDrives.Length == 0) return live;
+
+        var wanted = new List<char>();
+        foreach (string d in config.IndexDrives)
+        {
+            string t = d.Trim();
+            if (t.Length == 0) continue;
+            char letter = char.ToUpperInvariant(t[0]);
+            if (live.Contains(letter) && !wanted.Contains(letter)) wanted.Add(letter);
+        }
+        return wanted;
+    }
+
+    // What the indexer child was last told, so a setting that has not moved is not a write per
+    // turn of a loop that comes round every 400 ms.
+    private string _indexerPaused = "";
+    private string _indexerPower = "";
+
+    /// <summary>Keep the indexer child running while there is work and nobody has paused it, and
+    /// keep its two control rows matching the settings.</summary>
+    private void PumpIndexer(ContentDb db)
+    {
+        IndexerHost? host = _indexer;
+        if (host is null) return;
+
+        Config cfg = _config;
+        string paused = cfg.IndexPaused ? "1" : "0";
+        string power = cfg.IndexPower.ToString(CultureInfo.InvariantCulture);
+        try
+        {
+            if (paused != _indexerPaused) { db.Set("index:paused", paused); _indexerPaused = paused; }
+            if (power != _indexerPower) { db.Set("index:power", power); _indexerPower = power; }
+
+            // The child is started, never stopped, by this: it watches this process's id and dies
+            // with it. That is the whole of the "indexing stops when the app quits" rule, and
+            // there is no other lifetime code anywhere.
+            if (!cfg.IndexPaused && db.PendingCount() > 0) host.EnsureRunning();
+        }
+        catch (Exception ex)
+        {
+            Log.Once("index|pump|" + ex.GetType().Name, "WARN ", "index",
+                "the indexer could not be kept up to date :: " + ex.Message);
+        }
     }
 
     // ---- screens ---------------------------------------------------------------------------------
@@ -288,7 +635,9 @@ internal sealed class Shell
 
     private CardWindow NewCard()
     {
-        var card = new CardWindow(_palette, Zoom);
+        // The card BORROWS the read-only store and never disposes it: the store outlives every
+        // card, and null is a supported state the card already answers with a sentence.
+        var card = new CardWindow(_palette, Zoom, _cardStore);
         card.Closed += (_, _) => { if (ReferenceEquals(_card, card)) _card = null; };
         _card = card;
         return card;
@@ -435,6 +784,16 @@ internal sealed class Shell
         _capsule = null;
         try { _tray?.Dispose(); } catch { }
         _tray = null;
+
+        // The content loop owns both stores and the indexer child, and unwinds on the cancellation
+        // above. If it never started, nothing else will close them.
+        if (_contentLoop is null)
+        {
+            try { _indexer?.Dispose(); } catch { }
+            try { _feeder?.Dispose(); } catch { }
+            try { _cardStore?.Dispose(); } catch { }
+            try { _content?.Dispose(); } catch { }
+        }
 
         Log.Info("app", Log.SessionSummary());
         Log.Flush();

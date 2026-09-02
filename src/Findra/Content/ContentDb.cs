@@ -74,9 +74,13 @@ public sealed class ContentDb : IDisposable
             Pooling = false,
             DefaultTimeout = 15,
         }.ToString());
-        _c.Open();
         try
         {
+            // Open is INSIDE the try. It throws for a path that is a directory, a file another
+            // process holds exclusively, or a database in a mode this connection cannot have -
+            // and outside the try that throw leaves this connection undisposed, which on Windows
+            // keeps a handle on the very file OpenOrRebuild then has to move aside.
+            _c.Open();
             Exec("PRAGMA journal_mode=WAL");
             Exec("PRAGMA synchronous=NORMAL");
             Exec("PRAGMA busy_timeout=15000");
@@ -90,8 +94,7 @@ public sealed class ContentDb : IDisposable
         {
             // Opening the connection succeeds even over a file that is not a database - the first
             // PRAGMA is where that is discovered. Throwing from here leaves nobody holding this
-            // connection, and an undisposed handle keeps the file locked on Windows, which is
-            // exactly the file OpenOrRebuild then has to move aside.
+            // connection, and an undisposed handle keeps the file locked on Windows.
             _c.Dispose();
             throw;
         }
@@ -321,6 +324,38 @@ CREATE TABLE IF NOT EXISTS opened(path TEXT PRIMARY KEY, count INTEGER NOT NULL,
                journalId.ToString(CultureInfo.InvariantCulture) + " " + usn.ToString(CultureInfo.InvariantCulture),
                tx);
 
+    /// <summary>Forget where this volume got to. The row is DELETED rather than zeroed: usn 0 is
+    /// a real position at the head of a journal, and a volume that has no position must also stop
+    /// appearing in <see cref="KnownVolumes"/> and in the cursors handed to the helper, or the
+    /// next subscribe resumes from a place the journal threw away.</summary>
+    public void ClearUsnPosition(char volume, SqliteTransaction? tx = null)
+    {
+        using var cmd = _c.CreateCommand();
+        cmd.Transaction = tx;
+        cmd.CommandText = "DELETE FROM meta WHERE key=$k";
+        cmd.Parameters.AddWithValue("$k", "usn:" + char.ToUpperInvariant(volume));
+        cmd.ExecuteNonQuery();
+    }
+
+    // ---- the walk debt: a hole in the journal stream that only a full pass can close ----
+
+    /// <summary>
+    /// True when something lost journal events for this volume and nothing has walked it since.
+    ///
+    /// A ROW, not a field on whatever object noticed. A drop is discovered in one process and
+    /// discharged in another launch, and an in-memory latch is discharged for free by the very
+    /// restart that makes the hole permanent - the one moment nothing in the system would ever
+    /// notice again.
+    /// </summary>
+    public bool WalkOwed(char volume) => Get("walk:" + char.ToUpperInvariant(volume)) == "1";
+
+    public void SetWalkOwed(char volume, SqliteTransaction? tx = null)
+        => Set("walk:" + char.ToUpperInvariant(volume), "1", tx);
+
+    /// <summary>Discharged only by a completed full pass. Nothing else may call this.</summary>
+    public void ClearWalkOwed(char volume, SqliteTransaction? tx = null)
+        => Set("walk:" + char.ToUpperInvariant(volume), "0", tx);
+
     /// <summary>Every volume this index has ever recorded a position for.</summary>
     public IReadOnlyList<char> KnownVolumes()
     {
@@ -345,10 +380,22 @@ CREATE TABLE IF NOT EXISTS opened(path TEXT PRIMARY KEY, count INTEGER NOT NULL,
     /// later version that adds an extension would otherwise keep asking for the OLD suffix list
     /// forever, and files with the new extension would never be enumerated on any existing
     /// install.</summary>
-    public void SetSuffixVersion(IReadOnlyList<string> suffixes) => Set("suffixes", SuffixHash(suffixes));
+    public void SetSuffixVersion(IReadOnlyList<string> suffixes, SqliteTransaction? tx = null)
+        => Set("suffixes", SuffixHash(suffixes), tx);
 
     /// <summary>Compare the stamp against a suffix set without writing anything.</summary>
     public bool SuffixesChanged(IReadOnlyList<string> suffixes) => Get("suffixes") != SuffixHash(suffixes);
+
+    /// <summary>
+    /// True only when a PREVIOUS walk was stamped and it used a different suffix set from this
+    /// one. An index that has never been walked answers false, which is not the same question
+    /// <see cref="SuffixesChanged"/> answers: an absent stamp differs from every hash, and reading
+    /// that as "the extension list changed" would say a fresh install owes a re-walk of a disk it
+    /// has never walked - which is true, but said by the wrong mechanism, and it makes the debt
+    /// that a lost journal event leaves indistinguishable from an empty database.
+    /// </summary>
+    public bool SuffixSetOutOfDate(IReadOnlyList<string> suffixes)
+        => Get("suffixes") is { } stamped && stamped != SuffixHash(suffixes);
 
     // A hash of the SET, not of the sequence: the caller builds its list from HashSet enumeration,
     // whose order is not contractual, and a stamp that moved with it would re-walk every disk on
@@ -427,6 +474,22 @@ CREATE TABLE IF NOT EXISTS opened(path TEXT PRIMARY KEY, count INTEGER NOT NULL,
         cmd.CommandText = "SELECT id, path FROM pending";
         using var r = cmd.ExecuteReader();
         while (r.Read()) list.Add((r.GetInt64(0), r.GetString(1)));
+        return list;
+    }
+
+    /// <summary>Every queued row, whole. <see cref="PendingPaths"/> is not enough for the
+    /// reconcile pass: a queued DELETE has to survive a rule change that now excludes its path,
+    /// or the indexed row it was going to remove stays in the index forever, and the reason is
+    /// the only thing that distinguishes the two.</summary>
+    public List<Pending> PendingRows()
+    {
+        var list = new List<Pending>();
+        using var cmd = _c.CreateCommand();
+        cmd.CommandText = "SELECT id, vol, frn, path, kind, reason FROM pending ORDER BY id";
+        using var r = cmd.ExecuteReader();
+        while (r.Read())
+            list.Add(new Pending(r.GetInt64(0), r.GetString(1), unchecked((ulong)r.GetInt64(2)),
+                                 r.GetString(3), (ResultKind)r.GetInt32(4), r.GetString(5)));
         return list;
     }
 
