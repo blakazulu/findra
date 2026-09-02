@@ -72,6 +72,17 @@ into a numbered section on the first release.
   `.part` from a file that has since been republished smaller is discarded and re-fetched
   from the start rather than mistaken for a finished download.
 
+- **Capabilities you install one at a time, priced by what they actually add.** Searching
+  photos and video, reading meaning out of documents, and transcribing speech are separate
+  downloads, and speech in Hebrew is a refinement of speech rather than a substitute for it.
+  They are not independent of each other: a transcript is searched exactly like a document, so
+  taking speech takes the document models with it, and Hebrew needs the general speech model
+  that decides which recordings are Hebrew in the first place. Every size Findra shows you is
+  what that row would add to what you have already chosen, so speech costs 818 MB on its own
+  and 547 MB once documents are in, and the total is the files themselves rather than the sum
+  of the rows. What is installed is read from the files on disk rather than from a setting, and
+  a capability missing half its files counts as absent.
+
 ### Changed
 
 - **Content indexing is off until you ask for it**, including the free full-text search of
