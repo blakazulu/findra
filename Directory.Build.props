@@ -1,0 +1,18 @@
+<Project>
+  <PropertyGroup>
+    <!-- The only place Findra's version is written. Every project in the tree inherits it,
+         build/Check-Release.ps1 reads it to decide whether a tag may be released, and
+         tests/Findra.Tests/Build/VersionTests.cs asserts that nothing overrides it.
+
+         Bump this in the same commit as the CHANGELOG section for the same number: the release
+         workflow refuses a tag that disagrees with either. -->
+    <Version>0.1.0</Version>
+
+    <!-- .NET appends "+<commit sha>" to InformationalVersion by default. System.Version cannot
+         parse that, UpdateCheck.Compare returns 0 for anything it cannot parse, and 0 is routed
+         to "you are up to date" - so the default setting would make the update check report
+         every user as current for ever. BuildInfo.Normalise strips the suffix regardless; this
+         property means there is usually nothing to strip. -->
+    <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
+  </PropertyGroup>
+</Project>
