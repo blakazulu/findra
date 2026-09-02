@@ -197,6 +197,15 @@ into a numbered section on the first release.
   release are this file's section for that version - so a tag nobody wrote anything about does
   not become a release.
 
+- **One shape behind the settings and first-run screens.** Both are laid out by the same
+  geometry and drawn from the same set of parts, so they read as one object seen twice rather
+  than two screens that drifted apart. An explanatory sentence under a setting pushes the
+  settings below it down by exactly the room it needs instead of being drawn over them, the
+  pane never scrolls, and a click lands on the control under the pointer or on nothing at all.
+  `--searchtest` now measures readable contrast on the raised surface those screens are built
+  from as well, so a hand-written `palettes.json` that would be illegible there is caught
+  before it reaches the screen.
+
 ### Changed
 
 - **Content indexing is off until you ask for it**, including the free full-text search of

@@ -42,6 +42,22 @@ public class DerivedTests
         Assert.True(Derived.Contrast(d.OnAccent, d.Accent) >= 4.5, $"{name}: text on an accent fill");
     }
 
+    [Fact]
+    public void InkIsReadableOnTheTileNowThatTheSettingsWindowPaintsIt()
+    {
+        // Derived's own comment calls Tile "not yet painted; reserved for the settings window".
+        // The settings surfaces paint it, so it joins the six surfaces the check already covers.
+        // A tile is a step further off the ground than a row, and on a LIGHT palette a lift that
+        // skipped the LightLift correction puts ink at around 3.5 on it - readable on Mond, not
+        // on Paper.
+        foreach (Palette p in Palette.BuiltIn)
+        {
+            Derived d = Derived.From(p);
+            double ratio = Derived.Contrast(d.Ink, d.Tile);
+            Assert.True(ratio >= 4.5, $"{p.Name}: ink on a settings tile is {ratio:F2}:1, needs 4.5");
+        }
+    }
+
     [Theory, MemberData(nameof(AllPalettes))]
     public void SurfacesStackAwayFromTheGroundInOrder(string name)
     {
