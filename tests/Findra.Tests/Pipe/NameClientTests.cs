@@ -90,13 +90,36 @@ public class NameClientTests
                 try { await c.SearchAsync("anything", 50, default); }
                 catch (IOException) { return; }             // the contract: the pump is gone
                 catch (ObjectDisposedException) { return; } // the write faulted first - also fail-fast
+                catch (OperationCanceledException) { return; }
+                // The third shape, and it is not a hang dressed up as a pass. The token above is
+                // `default`, so nothing here can be cancelled by a caller: the ONLY way this
+                // arrives is the pump's own drain, which completes every pending waiter with
+                // TrySetCanceled when the connection ends. Which of the three shapes turns up is
+                // a race - if the write buffers before the operating system notices the peer is
+                // gone, the query is registered and then cancelled by the drain instead of
+                // failing on the wire - and it showed up as an intermittent failure of this test
+                // under a full parallel run.
+                //
+                // CardWindow already treats this as a legitimate third shape and says so
+                // (`Card/CardWindow.cs`, the query catch): it swallows a cancellation as an
+                // abandoned query ONLY under a `when` filter checking a token really was
+                // cancelled, and otherwise routes it to the same arm as IOException. This test
+                // asserted a narrower contract than the product documents, which is why it was
+                // the test that was wrong.
+                //
+                // The guard below is still the guard: WaitAsync throws TimeoutException, which is
+                // a different type from every one of these, so a client that genuinely hung still
+                // fails here rather than being caught above.
                 await Task.Delay(20);
             }
         }
 
-        // The timeout is the TEST's guard, never the client's. If it trips, the client hung
-        // and this must FAIL - do not catch OperationCanceledException here and call that a
-        // pass, which would turn a hang into a green test.
+        // The timeout is the TEST's guard, never the client's. If it trips, the client hung and
+        // this must FAIL - do not wrap this line in a catch of any kind and call that a pass,
+        // which would turn a hang into a green test. This is a different rule from the catch
+        // inside the loop above: that one names shapes the client raises PROMPTLY, which is the
+        // behaviour under test, while anything reaching this line means nothing was raised at
+        // all within five seconds.
         await Attempt().WaitAsync(TimeSpan.FromSeconds(5));
     }
 
