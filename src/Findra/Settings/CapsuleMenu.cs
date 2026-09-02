@@ -1,10 +1,17 @@
 namespace Findra;
 
 /// <summary>One line of the capsule's right-click menu. <see cref="Command"/> is what the shell
-/// switches on; a separator carries an empty one.</summary>
-public readonly record struct MenuEntry(string Header, string Command, bool Checked, bool Enabled)
+/// switches on; a separator carries an empty one.
+///
+/// <para>There is deliberately no Enabled flag. Every line of this menu is always clickable -
+/// the palettes, the content toggle, Settings and Quit are all available in every state the
+/// capsule can be in - so a flag would have been written true at every construction site and
+/// bound to a property that could never change. A field that cannot vary reads as live wiring
+/// and is not; if a line ever does need disabling, add it then, with the state that disables
+/// it.</para></summary>
+public readonly record struct MenuEntry(string Header, string Command, bool Checked)
 {
-    public static readonly MenuEntry Separator = new("-", "", false, true);
+    public static readonly MenuEntry Separator = new("-", "", false);
 }
 
 /// <summary>
@@ -34,7 +41,7 @@ public static class CapsuleMenu
         var items = new List<MenuEntry>();
         foreach (Palette p in palettes.Where(p => p.Light == light))
             items.Add(new MenuEntry(p.Name, "palette:" + p.Name,
-                                    string.Equals(p.Name, chosen, StringComparison.OrdinalIgnoreCase), true));
+                                    string.Equals(p.Name, chosen, StringComparison.OrdinalIgnoreCase)));
 
         items.Add(MenuEntry.Separator);
         // Spec §3 wants the interface to say plainly that indexing only happens while Findra runs,
@@ -43,10 +50,10 @@ public static class CapsuleMenu
             config.IndexContent && !indexerAlive
                 ? "Look inside my files (not running)"
                 : "Look inside my files",
-            "content", config.IndexContent, true));
+            "content", config.IndexContent));
         items.Add(MenuEntry.Separator);
-        items.Add(new MenuEntry("Settings", "settings", false, true));
-        items.Add(new MenuEntry("Quit", "quit", false, true));
+        items.Add(new MenuEntry("Settings", "settings", false));
+        items.Add(new MenuEntry("Quit", "quit", false));
         return items;
     }
 }
