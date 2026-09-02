@@ -1,5 +1,10 @@
 # Code signing policy
 
+> **Not yet in force.** Findra has not been released, and the application to the SignPath
+> Foundation cannot be made until a release exists. This page is written in advance so that
+> the requirements are met on the day it is submitted, and the line below becomes true when
+> the application is accepted. Until then Findra ships unsigned and says so.
+
 Free code signing provided by [SignPath.io](https://about.signpath.io), certificate by
 [SignPath Foundation](https://signpath.org/).
 
@@ -41,11 +46,12 @@ it.
 - It writes settings to `%APPDATA%\Findra\` and its index, models and logs to
   `%LOCALAPPDATA%\Findra\`.
 
-Both are removed by the uninstaller, which also stops the helper and the indexer first. The
-index and any downloaded models are kept by default, because re-downloading them is expensive;
-deleting them is a checkbox in the uninstaller and a flag on the command line. `findra.exe
---uninstall` does the same thing for anyone who built from source, and `--purge` also deletes
-the data.
+The uninstaller stops the helper and the indexer first, then **always** removes the scheduled
+task and any autostart entry. Your settings, your index and any downloaded models are **kept**
+by default, because re-downloading gigabytes and re-indexing a disk is expensive and most
+people who uninstall are reinstalling. Deleting those is opt-in, through a choice in the
+uninstaller and a flag on the command line. `findra.exe --uninstall` does the same for anyone
+who built from source, and `--purge` also deletes the data.
 
 ## Why Findra reads the disk directly
 
