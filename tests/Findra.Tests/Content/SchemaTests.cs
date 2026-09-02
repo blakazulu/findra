@@ -143,6 +143,62 @@ public sealed class SchemaTests : IDisposable
     }
 
     [Fact]
+    public void ADirectorySittingAtTheDatabasePathIsMovedAsideAndRebuiltRatherThanThrowing()
+    {
+        // MoveAside used to check File.Exists per tail, which is false for a directory - so it
+        // silently did nothing and the second construction attempt threw, uncaught, straight
+        // out of OpenOrRebuild. A stray directory at the target path is not exotic: a wrong
+        // recursive mkdir, a half-finished install, anything.
+        string path = Db();
+        Directory.CreateDirectory(path);
+
+        using ContentDb db = ContentDb.OpenOrRebuild(path);
+
+        Assert.True(db.WasRebuilt);
+        Assert.Equal(ContentDb.SchemaVersion.ToString(), db.Get("schema"));
+        Assert.True(Directory.Exists(path + ".corrupt"), "the directory is kept, not deleted");
+    }
+
+    [Fact]
+    public void AFileLockedByAnotherProcessFallsBackToAnInMemoryStoreRatherThanThrowing()
+    {
+        // Both the move and the delete fallback in MoveAside fail against a file another
+        // process holds open with FileShare.None (an AV scan, a leftover handle from a crashed
+        // prior instance) - and the fixed-name AND timestamped rungs both retry the SAME locked
+        // path, so both fail too. The only way OpenOrRebuild can keep its promise here is the
+        // third rung: an in-memory store, still clearly marked as rebuilt so the caller does not
+        // mistake it for a healthy, populated index.
+        string path = Db();
+        File.WriteAllText(path, "this is not a database, it is a text file");
+        using FileStream locked = new(path, FileMode.Open, FileAccess.ReadWrite, FileShare.None);
+
+        using ContentDb db = ContentDb.OpenOrRebuild(path);
+
+        Assert.True(db.WasRebuilt);
+        Assert.Equal(ContentDb.SchemaVersion.ToString(), db.Get("schema"));
+        db.Enqueue("C", 1, @"C:\a.pdf", ResultKind.Document, "new");   // a usable store, not a shell
+        Assert.Equal(1, db.PendingCount());
+    }
+
+    [Fact]
+    public void AZeroByteFileIsOpenedAsAFreshDatabaseRatherThanRebuilt()
+    {
+        // An empty file is not corrupt to SQLite - it is a valid, freshly-initialisable
+        // database. Confirms the benign path stays benign: no rebuild, no ".corrupt" left
+        // behind, still a usable store.
+        string path = Db();
+        File.WriteAllBytes(path, []);
+
+        using ContentDb db = ContentDb.OpenOrRebuild(path);
+
+        Assert.False(db.WasRebuilt);
+        Assert.Equal(ContentDb.SchemaVersion.ToString(), db.Get("schema"));
+        Assert.False(File.Exists(path + ".corrupt"));
+        db.Enqueue("C", 1, @"C:\a.pdf", ResultKind.Document, "new");
+        Assert.Equal(1, db.PendingCount());
+    }
+
+    [Fact]
     public void TheSuffixSetIsVersionedSoAChangeToItForcesAFreshWalk()
     {
         // FileKinds' extension tables are code. If a later version adds ".pages" to the

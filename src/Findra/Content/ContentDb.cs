@@ -55,7 +55,12 @@ public sealed class ContentDb : IDisposable
     public ContentDb(string? path = null, bool readOnly = false, IReadOnlyList<Migration>? migrations = null)
     {
         Path = path ?? DefaultPath;
-        Paths.Ensure(System.IO.Path.GetDirectoryName(Path)!);
+        // Skip for a bare DataSource with no directory component - ":memory:" (OpenOrRebuild's
+        // last rung) and a bare relative filename both hit this. Directory.CreateDirectory("")
+        // throws ArgumentException, which would defeat the very "this cannot throw" promise the
+        // in-memory fallback exists to keep.
+        string? dir = System.IO.Path.GetDirectoryName(Path);
+        if (!string.IsNullOrEmpty(dir)) Paths.Ensure(dir);
         _c = new SqliteConnection(new SqliteConnectionStringBuilder
         {
             DataSource = Path,
@@ -156,6 +161,8 @@ CREATE TABLE IF NOT EXISTS opened(path TEXT PRIMARY KEY, count INTEGER NOT NULL,
     /// reach nobody and content search would be dead for that install with no message anywhere.
     /// The unreadable file is MOVED ASIDE rather than deleted: it is evidence, it costs a few
     /// megabytes, and its owner may want it. Spec §2a: rebuilt, and the UI says so.
+    /// This method genuinely cannot throw - see <see cref="Rebuild"/> for the three rungs that
+    /// make that true even when the path is a directory or is locked by another process.
     /// </summary>
     public static ContentDb OpenOrRebuild(string? path = null)
     {
@@ -167,20 +174,69 @@ CREATE TABLE IF NOT EXISTS opened(path TEXT PRIMARY KEY, count INTEGER NOT NULL,
         catch (Exception ex) when (ex is SqliteException or IOException)
         {
             Log.Error("index", $"the index at {p} could not be opened, rebuilding it", ex);
-            MoveAside(p);
-            return new ContentDb(p) { WasRebuilt = true };
+            return Rebuild(p);
         }
     }
 
+    // Three rungs, each strictly safer than the last, because a background loop has nobody to
+    // catch whatever this throws:
+    //  1. Move the broken path aside under the fixed ".corrupt" name and reopen at the real
+    //     path - the common case (truncated file, wrong file type, a stray directory).
+    //  2. If that did not clear the path - the fixed name is itself locked, or MoveAside could
+    //     not touch what is there - try a timestamped name instead, in case the fixed name is
+    //     specifically what is unavailable.
+    //  3. If NOTHING at that path can be moved or deleted - typically an exclusive lock held by
+    //     another process, which both rungs above retry against the SAME source and so both
+    //     fail against - fall back to an in-memory store. ":memory:" touches no path and no
+    //     lock, so this rung cannot fail the way the first two can. Content search runs
+    //     degraded-but-alive for this session; WasRebuilt still reports true so the caller never
+    //     mistakes it for a healthy, populated index.
+    private static ContentDb Rebuild(string path)
+    {
+        MoveAside(path, ".corrupt");
+        try { return new ContentDb(path) { WasRebuilt = true }; }
+        catch (Exception ex) when (ex is SqliteException or IOException)
+        {
+            Log.Error("index", $"{path} is still unusable after moving it aside, trying a timestamped name", ex);
+        }
+
+        string stamp = DateTime.UtcNow.ToString("yyyyMMddHHmmss", CultureInfo.InvariantCulture);
+        MoveAside(path, ".corrupt-" + stamp);
+        try { return new ContentDb(path) { WasRebuilt = true }; }
+        catch (Exception ex) when (ex is SqliteException or IOException)
+        {
+            Log.Error("index", $"{path} is still unusable after two rebuild attempts (likely locked by " +
+                                 "another process) - falling back to an in-memory index for this session", ex);
+        }
+
+        return new ContentDb(":memory:") { WasRebuilt = true };
+    }
+
     // The write-ahead log and shared-memory files belong to the database they sit beside; leaving
-    // them behind hands the fresh database somebody else's journal.
-    private static void MoveAside(string path)
+    // them behind hands the fresh database somebody else's journal. `tag` names where the
+    // unreadable path goes - see Rebuild's rungs above.
+    private static void MoveAside(string path, string tag)
     {
         foreach (string tail in new[] { "", "-wal", "-shm" })
         {
             string from = path + tail;
+            string to = path + tag + tail;
+            if (Directory.Exists(from))
+            {
+                // A directory sitting at the database path: File.Exists (and File.Move) below
+                // silently ignore it, which is how this used to escape unnoticed - handled
+                // explicitly rather than falling through to the file branch.
+                try { Directory.Move(from, to); }
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+                {
+                    Log.Error("index", $"could not move directory {from} aside, deleting it instead :: {ex.Message}");
+                    try { Directory.Delete(from, recursive: true); }
+                    catch (Exception ex2) when (ex2 is IOException or UnauthorizedAccessException) { }
+                }
+                continue;
+            }
             if (!File.Exists(from)) continue;
-            try { File.Move(from, path + ".corrupt" + tail, overwrite: true); }
+            try { File.Move(from, to, overwrite: true); }
             catch (IOException ex)
             {
                 Log.Error("index", $"could not move {from} aside, deleting it instead :: {ex.Message}");
