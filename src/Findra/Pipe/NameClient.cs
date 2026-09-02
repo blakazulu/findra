@@ -1,5 +1,7 @@
 using System.Collections.Concurrent;
+using System.Globalization;
 using System.IO.Pipes;
+using System.Threading.Channels;
 
 namespace Findra.Pipe;
 
@@ -14,16 +16,56 @@ public sealed class NameClient : IAsyncDisposable
     private readonly SemaphoreSlim _writeLock = new(1, 1);
     private readonly ConcurrentDictionary<long, TaskCompletionSource<QueryReply>> _pending = new();
     private readonly ConcurrentQueue<TaskCompletionSource<StatusReply>> _statusWaiters = new();
+    private readonly ConcurrentQueue<TaskCompletionSource<SubscribeReply>> _subscribeWaiters = new();
+    private readonly Channel<JournalEvent> _journal;
     private readonly CancellationTokenSource _reader = new();
     private readonly Task _pump;
+    private long _journalDropped;
     private volatile bool _pumpGone;
     private bool _disposed;
 
     public long CurrentGeneration => _gen.Current;
 
+    /// <summary>
+    /// How many pushed journal events this client's own channel has evicted because nothing was
+    /// draining it. THE CLIENT DROP PATH HAS NO RESET MARKER OF ITS OWN - nothing upstream knows
+    /// it happened, and the helper's own count says nothing about it - so this number is the only
+    /// trace, and it is the caller's job to watch it. A consumer that sees it move owes itself a
+    /// fresh walk of every volume it is tracking (the queue's own list of known volumes, not a
+    /// list this type keeps), including any volume whose first full pass is still in flight, or
+    /// the index ends up claiming to be complete over a range it never saw.
+    /// </summary>
+    public long JournalDropped => Interlocked.Read(ref _journalDropped);
+
     public NameClient(Stream transport)
     {
         _transport = transport;
+
+        // The same bound as the helper's per-session outbound queue, for the same reason: a
+        // client channel smaller than one apply slice drops on an ORDINARY catch-up rather than
+        // only under abuse. DropOldest because a UI that stops draining must cost stale events,
+        // not a stalled pipe - a blocked pump also stops answering queries, so back-pressure
+        // here would freeze the card.
+        //
+        // The itemDropped overload, not `if (!TryWrite) ...`: with DropOldest, TryWrite ALWAYS
+        // returns true and the eviction is silent, so this callback is the only way the count
+        // is ever non-zero.
+        _journal = Channel.CreateBounded<JournalEvent>(
+            new BoundedChannelOptions(NameServer.MaxOutbound)
+            {
+                FullMode = BoundedChannelFullMode.DropOldest,
+                SingleWriter = true,        // the pump, and nothing else
+                SingleReader = false,
+            },
+            _ =>
+            {
+                Interlocked.Increment(ref _journalDropped);
+                Log.Once("journal-client-drop", "WARN ", "pipe",
+                    "nothing is draining the journal channel and events are being dropped (bound " +
+                    NameServer.MaxOutbound.ToString(CultureInfo.InvariantCulture) +
+                    ") - a fresh walk is owed");
+            });
+
         _pump = Task.Run(() => PumpAsync(_reader.Token));
     }
 
@@ -114,6 +156,58 @@ public sealed class NameClient : IAsyncDisposable
         return await tcs.Task.WaitAsync(ct).ConfigureAwait(false);
     }
 
+    /// <summary>
+    /// Ask the helper to push journal events, resuming from the positions this caller stored.
+    /// The reply says where each volume actually resumes, which is not always where it asked.
+    ///
+    /// A subscription is a registration, not a question: it does NOT touch the generation
+    /// counter. Stamping it would make the next real query reply look stale and blank the card
+    /// on a keystroke.
+    /// </summary>
+    public async Task<SubscribeReply> SubscribeJournalAsync(IReadOnlyList<VolumeCursor> from,
+                                                            CancellationToken ct)
+    {
+        ThrowIfPumpGone();
+
+        var tcs = new TaskCompletionSource<SubscribeReply>(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        await _writeLock.WaitAsync(ct).ConfigureAwait(false);
+        try
+        {
+            // Subscribe replies carry no id, so waiters are matched positionally, exactly as
+            // status replies are. Enqueue inside the lock: enqueuing before it lets two
+            // concurrent callers queue in one order and write in the other, and each then
+            // receives the other's reply.
+            _subscribeWaiters.Enqueue(tcs);
+            try
+            {
+                await Frame.WriteAsync(_transport, Envelope.Pack(Envelope.KindSubscribe,
+                    new SubscribeRequest(from)), ct).ConfigureAwait(false);
+            }
+            catch
+            {
+                // A stranded waiter at the head of a positional queue desynchronises every later
+                // call permanently, so mark it dead rather than leaving it. The pump skips dead
+                // entries when it dequeues; that is the other half.
+                tcs.TrySetCanceled();
+                throw;
+            }
+        }
+        finally { _writeLock.Release(); }
+
+        if (_pumpGone) { tcs.TrySetCanceled(); ThrowIfPumpGone(); }
+
+        return await tcs.Task.WaitAsync(ct).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Every journal event the helper pushes, in the order it pushed them, until the helper goes
+    /// away. Ends rather than hanging when the pump stops, because the channel is completed in
+    /// the pump's finally.
+    /// </summary>
+    public IAsyncEnumerable<JournalEvent> JournalAsync(CancellationToken ct)
+        => _journal.Reader.ReadAllAsync(ct);
+
     private void ThrowIfPumpGone()
     {
         if (_pumpGone)
@@ -158,8 +252,19 @@ public sealed class NameClient : IAsyncDisposable
                                 if (waiting.TrySetResult(s)) break;
                             break;
                         }
+                        case Envelope.KindSubscribeReply:
+                        {
+                            // Positional, and skip-on-dequeue, for the same reason as status.
+                            SubscribeReply s = e.Body<SubscribeReply>();
+                            while (_subscribeWaiters.TryDequeue(out var waiting))
+                                if (waiting.TrySetResult(s)) break;
+                            break;
+                        }
                         case Envelope.KindJournal:
-                            // Plan 3 hooks the indexer up here.
+                            // Never blocks the pump. A bounded DropOldest channel takes this
+                            // synchronously whether or not anyone is reading; what it evicts is
+                            // counted on JournalDropped, which is the caller's only warning.
+                            _journal.Writer.TryWrite(e.Body<JournalEvent>());
                             break;
                         default:
                             Log.Info("pipe", $"client ignoring unknown kind '{e.Kind}'");
@@ -186,6 +291,11 @@ public sealed class NameClient : IAsyncDisposable
             _pumpGone = true;
             foreach (var kv in _pending) kv.Value.TrySetCanceled();
             while (_statusWaiters.TryDequeue(out var s)) s.TrySetCanceled();
+            while (_subscribeWaiters.TryDequeue(out var sub)) sub.TrySetCanceled();
+
+            // Completed here beside the other drains, so a consumer awaiting JournalAsync ends
+            // rather than hanging when the helper goes away.
+            _journal.Writer.TryComplete();
         }
     }
 

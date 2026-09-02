@@ -1,3 +1,4 @@
+using System.Globalization;
 using SkiaSharp;
 
 namespace Findra.Diagnostics;
@@ -86,6 +87,18 @@ public static class SelfTest
             }
             return null;
         });
+
+        // A correctness bound between two constants that live in different files, checked here
+        // rather than in a static constructor: a static constructor throw surfaces as a type
+        // initialization error from wherever the type is first touched - out of a query, out of
+        // the tail, out of a pipe accept - which is unreportable. A self-check line is something
+        // a person can read and paste.
+        failed += Check("one journal apply slice fits a session's outbound queue", () =>
+            Pipe.NameServer.MaxOutbound < JournalTail.MaxApplyBatch
+                ? $"MaxOutbound is {Pipe.NameServer.MaxOutbound.ToString("N0", CultureInfo.InvariantCulture)} " +
+                  $"but the tail publishes slices of {JournalTail.MaxApplyBatch.ToString("N0", CultureInfo.InvariantCulture)}, " +
+                  "so an ordinary catch-up would drop events on a healthy client"
+                : null);
 
         failed += Check("config.json round-trips", () =>
         {

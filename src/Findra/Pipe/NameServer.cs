@@ -1,7 +1,10 @@
+using System.Collections.Concurrent;
 using System.Diagnostics;
+using System.Globalization;
 using System.IO.Pipes;
 using System.Security.AccessControl;
 using System.Security.Principal;
+using System.Threading.Channels;
 
 namespace Findra.Pipe;
 
@@ -13,6 +16,31 @@ public static class NameServer
 {
     public const string PipeName = "findra-names";
     private const int MaxRows = 4000;
+
+    /// <summary>
+    /// How many journal events one session's outbound queue holds before the oldest are evicted.
+    ///
+    /// This is not a tuning knob, it is a correctness bound: it must be at least
+    /// <see cref="JournalTail.MaxApplyBatch"/>. The tail publishes a slice of up to that many
+    /// events, Publish fills this channel synchronously because a DropOldest TryWrite never
+    /// blocks, and the drain task writes one frame at a time over a named pipe. Any smaller and a
+    /// single ordinary catch-up slice drops events on a PERFECTLY HEALTHY client, which turns the
+    /// drop path from a pathological case into the normal one. <c>--searchtest</c> asserts the
+    /// relationship so a later edit to either constant cannot quietly break it.
+    ///
+    /// Public because the back-pressure tests read it from the test assembly to publish past it.
+    /// </summary>
+    public const int MaxOutbound = 32_768;
+
+    /// <summary>
+    /// How a session catches a subscriber up from its stored position. The real one wraps
+    /// <see cref="NtfsVolume.Read"/> on a private handle; a test supplies its own, which is the
+    /// only reason the gap replay is testable without a disk and without elevation.
+    /// A <c>Reachable</c> of false means the journal has wrapped past that position: the caller
+    /// owes itself a full pass, and no partial replay is honest.
+    /// </summary>
+    public delegate (bool Reachable, IReadOnlyList<JournalEvent> Events) GapReader(
+        char volume, ulong journalId, long fromUsn);
 
     /// <summary>Longest query text accepted off the wire. See AnswerQuery for why it is capped.</summary>
     private const int MaxRaw = 4096;
@@ -29,15 +57,205 @@ public static class NameServer
     private const int MaxCreateFailures = 5;
 
     /// <summary>
-    /// One client's session: read frames, answer queries and status, until the stream ends
-    /// or cancellation fires. The transport is assumed to arrive already protected -
-    /// <see cref="RunAsync"/> owns the pipe's DACL, and any future caller that hands
-    /// <c>Serve</c> a transport owns that guarantee too.
+    /// The shape Plan 1 shipped, kept so its tests and any caller with nothing but indexes
+    /// still compile and still mean what they meant. Each index is wrapped in a zeroed view: no
+    /// journal, no push channel, no gap replay - exactly the behaviour those callers had.
     /// </summary>
-    public static async Task Serve(Stream transport, IReadOnlyDictionary<char, NameIndex> indexes,
+    public static Task Serve(Stream transport, IReadOnlyDictionary<char, NameIndex> indexes,
+                             CancellationToken ct)
+        => Serve(transport,
+                 indexes.ToDictionary(kv => kv.Key,
+                                      kv => new VolumeView(kv.Value, JournalId: 0, NextUsn: 0, EnumerateMs: 0)),
+                 gate: null, bus: null, gap: null, ct);
+
+    /// <summary>
+    /// One client's session: read frames, answer queries and status, push journal events once it
+    /// has subscribed, until the stream ends or cancellation fires. The transport is assumed to
+    /// arrive already protected - <see cref="RunAsync"/> owns the pipe's DACL, and any future
+    /// caller that hands <c>Serve</c> a transport owns that guarantee too.
+    ///
+    /// TWO WRITERS NOW SHARE ONE TRANSPORT: the reply path and the push path. Every write goes
+    /// through one per-session semaphore, because two writers interleaving their bytes into one
+    /// stream leave a half-written frame, and the framing never recovers - every later read is
+    /// garbage, with nothing in the log to say when it started.
+    /// </summary>
+    public static async Task Serve(Stream transport, IReadOnlyDictionary<char, VolumeView> views,
+                                   IndexLock? gate, JournalBroadcast? bus, GapReader? gap,
                                    CancellationToken ct)
     {
         var hits = new List<NameIndex.Hit>();
+
+        // Every write to the transport - a query reply, a status reply, the subscribe ack and
+        // every pushed event - is serialised on this.
+        var writeLock = new SemaphoreSlim(1, 1);
+
+        // Per volume, because the status reply is per volume. A drop is charged to the volume
+        // whose event was evicted, so "which drive lost events" is answerable.
+        var dropped = new ConcurrentDictionary<char, long>();
+        var resetOwed = new ConcurrentDictionary<char, byte>();
+
+        Channel<JournalEvent>? outbound = null;
+        IDisposable? registration = null;
+        Task? drain = null;
+
+        using var sessionEnd = CancellationTokenSource.CreateLinkedTokenSource(ct);
+
+        long NextUsnOf(char volume)
+        {
+            foreach ((char letter, VolumeView view) in views)
+                if (char.ToUpperInvariant(letter) == char.ToUpperInvariant(volume)) return view.NextUsn;
+            return 0;
+        }
+
+        ulong JournalIdOf(char volume)
+        {
+            foreach ((char letter, VolumeView view) in views)
+                if (char.ToUpperInvariant(letter) == char.ToUpperInvariant(volume)) return view.JournalId;
+            return 0;
+        }
+
+        // Assumes the write lock is already held. Used by the subscribe handler, which writes its
+        // ack under the same hold that registered the sink.
+        async Task WriteFrameAsync<T>(string kind, T body, CancellationToken wct)
+            => await Frame.WriteAsync(transport, Envelope.Pack(kind, body), wct).ConfigureAwait(false);
+
+        async Task SendAsync<T>(string kind, T body, CancellationToken sct)
+        {
+            await writeLock.WaitAsync(sct).ConfigureAwait(false);
+            try { await WriteFrameAsync(kind, body, sct).ConfigureAwait(false); }
+            finally { writeLock.Release(); }
+        }
+
+        async Task DrainAsync(ChannelReader<JournalEvent> reader, CancellationToken dct)
+        {
+            try
+            {
+                await foreach (JournalEvent e in reader.ReadAllAsync(dct).ConfigureAwait(false))
+                {
+                    // A drop is a hole in the range the subscriber's cursor is about to claim, so
+                    // it must be impossible to lose. Markers are coalesced per volume per drain
+                    // pass; they are never suppressed across the session, because "once per
+                    // session" makes every drop after the first silent and lets later events
+                    // advance the cursor over holes nobody recorded.
+                    foreach (char letter in resetOwed.Keys)
+                        if (resetOwed.TryRemove(letter, out _))
+                            await SendAsync(Envelope.KindJournal,
+                                JournalTail.ResetMarker(letter, JournalIdOf(letter)), dct).ConfigureAwait(false);
+
+                    await SendAsync(Envelope.KindJournal, e, dct).ConfigureAwait(false);
+                }
+            }
+            catch (OperationCanceledException) { }
+            catch (Exception ex) { Log.Warn("pipe", "this session's journal drain ended: " + ex.Message); }
+        }
+
+        IReadOnlyList<JournalEvent> Backlog(List<VolumeResume> answers)
+        {
+            var all = new List<JournalEvent>();
+            for (int i = 0; i < answers.Count; i++)
+            {
+                VolumeResume r = answers[i];
+                if (r.NeedsFullPass) continue;
+
+                bool reachable = false;
+                IReadOnlyList<JournalEvent> events = [];
+                if (gap is not null) (reachable, events) = gap(r.Volume, r.JournalId, r.Usn);
+
+                if (!reachable)
+                {
+                    answers[i] = r with
+                    {
+                        NeedsFullPass = true,
+                        Usn = NextUsnOf(r.Volume),
+                        Replayed = 0,
+                        Note = "the journal no longer reaches that position - a full pass is owed",
+                    };
+                    continue;
+                }
+
+                answers[i] = r with { Replayed = events.Count };
+                all.AddRange(events);       // already in journal order, per volume
+            }
+            return all;
+        }
+
+        async Task AnswerSubscribeAsync(SubscribeRequest req, CancellationToken sct)
+        {
+            // EVERYTHING below happens under one hold of the write lock: the resume rules, the
+            // registration with its backlog, and the ack. The client therefore cannot see a
+            // journal frame before the ack whatever the order inside - the sink never touches
+            // the transport, and the drain has to take the same semaphore this is holding.
+            await writeLock.WaitAsync(sct).ConfigureAwait(false);
+            try
+            {
+                var answers = JournalTail.ResumeFrom(
+                    views.ToDictionary(kv => kv.Key, kv => kv.Value.JournalId),
+                    views.ToDictionary(kv => kv.Key, kv => kv.Value.NextUsn),
+                    req.From ?? []).ToList();
+
+                if (bus is null)
+                {
+                    // Nothing to register with. Say so rather than leaving the caller waiting for
+                    // a reply that never comes, and owe every volume a full pass, because this
+                    // session will never tell it about a change.
+                    for (int i = 0; i < answers.Count; i++)
+                        answers[i] = answers[i] with
+                        {
+                            NeedsFullPass = true,
+                            Usn = NextUsnOf(answers[i].Volume),
+                            Replayed = 0,
+                            Note = "this helper session pushes no journal events",
+                        };
+                    await WriteFrameAsync(Envelope.KindSubscribeReply, new SubscribeReply(answers), sct)
+                        .ConfigureAwait(false);
+                    return;
+                }
+
+                outbound ??= Channel.CreateBounded<JournalEvent>(
+                    new BoundedChannelOptions(MaxOutbound)
+                    {
+                        // A client that stops reading must cost ITS OWN events, never the journal
+                        // tail: a tail parked on one stuck socket lets the journal wrap, and then
+                        // EVERY subscriber has lost data.
+                        FullMode = BoundedChannelFullMode.DropOldest,
+                        SingleReader = true,
+                        SingleWriter = true,        // Publish holds the broadcast's lock
+                    },
+                    // DropOldest evicts SILENTLY and TryWrite still returns true, so this callback
+                    // is the only place in the runtime where an eviction can be observed at all.
+                    // Written as `if (!writer.TryWrite(e)) dropped++` the count stays at zero
+                    // forever and the gap becomes the one nothing records.
+                    evicted =>
+                    {
+                        dropped.AddOrUpdate(evicted.Volume, 1, static (_, n) => n + 1);
+                        resetOwed[evicted.Volume] = 0;
+                        Log.Once("pipe-outbound-drop", "WARN ", "pipe",
+                            $"a session stopped reading and its outbound journal queue is evicting " +
+                            $"events (bound {MaxOutbound.ToString(CultureInfo.InvariantCulture)}); " +
+                            "it is being sent a reset marker and owes a fresh walk");
+                    });
+
+                Channel<JournalEvent> queue = outbound;
+                drain ??= Task.Run(() => DrainAsync(queue.Reader, sessionEnd.Token), CancellationToken.None);
+
+                // A second subscribe on one session replaces the first rather than doubling it.
+                registration?.Dispose();
+
+                // The gap read happens INSIDE the registration, never before it. Two separate
+                // steps are wrong in both possible orders: register second and an event published
+                // in between is lost; register first and enqueue the gap afterwards and live
+                // events go out ahead of older replayed ones, which makes the feeder delete files
+                // that exist. See JournalBroadcast.SubscribeWithBacklog.
+                registration = bus.SubscribeWithBacklog(
+                    backlog: () => Backlog(answers),
+                    sink: e => queue.Writer.TryWrite(e));
+
+                await WriteFrameAsync(Envelope.KindSubscribeReply, new SubscribeReply(answers), sct)
+                    .ConfigureAwait(false);
+            }
+            finally { writeLock.Release(); }
+        }
+
         try
         {
             while (!ct.IsCancellationRequested)
@@ -54,10 +272,15 @@ public static class NameServer
                     switch (e.Kind)
                     {
                         case Envelope.KindQuery:
-                            await AnswerQuery(transport, e.Body<QueryRequest>(), indexes, hits, ct).ConfigureAwait(false);
+                            await SendAsync(Envelope.KindQueryReply,
+                                AnswerQuery(e.Body<QueryRequest>(), views, gate, hits), ct).ConfigureAwait(false);
                             break;
                         case Envelope.KindStatus:
-                            await AnswerStatus(transport, indexes, ct).ConfigureAwait(false);
+                            await SendAsync(Envelope.KindStatusReply,
+                                AnswerStatus(views, gate, dropped), ct).ConfigureAwait(false);
+                            break;
+                        case Envelope.KindSubscribe:
+                            await AnswerSubscribeAsync(e.Body<SubscribeRequest>(), ct).ConfigureAwait(false);
                             break;
                         default:
                             Log.Info("pipe", $"ignoring unknown kind '{e.Kind}'");
@@ -77,11 +300,23 @@ public static class NameServer
         }
         catch (OperationCanceledException) { }
         catch (Exception ex) { Log.Error("pipe", "serve loop ended", ex); }
+        finally
+        {
+            // A session that ends stops receiving. Unregister first, so the tail stops handing
+            // this queue events, then let the drain run itself out.
+            registration?.Dispose();
+            outbound?.Writer.TryComplete();
+            await sessionEnd.CancelAsync().ConfigureAwait(false);
+            if (drain is not null) { try { await drain.ConfigureAwait(false); } catch { } }
+
+            // writeLock is deliberately not disposed, for the reason NameClient's own semaphore
+            // is not: SemaphoreSlim.Dispose neither resumes nor faults a queued async waiter, so
+            // disposing it under one hangs that caller silently and throws out of its finally.
+        }
     }
 
-    private static async Task AnswerQuery(Stream transport, QueryRequest req,
-                                          IReadOnlyDictionary<char, NameIndex> indexes,
-                                          List<NameIndex.Hit> hits, CancellationToken ct)
+    private static QueryReply AnswerQuery(QueryRequest req, IReadOnlyDictionary<char, VolumeView> views,
+                                          IndexLock? gate, List<NameIndex.Hit> hits)
     {
         long started = Stopwatch.GetTimestamp();
 
@@ -93,9 +328,7 @@ public static class NameServer
         if (req.Raw.Length > MaxRaw)
         {
             Log.Warn("pipe", $"query of {req.Raw.Length} chars refused (cap {MaxRaw})");
-            await Frame.WriteAsync(transport, Envelope.Pack(Envelope.KindQueryReply,
-                new QueryReply(req.Gen, Stopwatch.GetTimestamp() - started, [])), ct).ConfigureAwait(false);
-            return;
+            return new QueryReply(req.Gen, Stopwatch.GetTimestamp() - started, []);
         }
 
         var q = new SearchQuery(req.Raw);
@@ -115,8 +348,16 @@ public static class NameServer
 
         var candidates = new List<NameRow>(Math.Min(max, 512));
 
-        foreach ((char letter, NameIndex ix) in indexes)
+        foreach ((char letter, VolumeView view) in views)
         {
+            NameIndex ix = view.Index;
+
+            // The whole scan for one volume goes inside that volume's read lock. The journal tail
+            // writes this index now, and an unlocked read can pair a rehashed key array with the
+            // old value array and hand back the WRONG record - a real row, with someone else's
+            // path on it, that a person then clicks.
+            using IDisposable? held = gate?.Read(letter);
+
             hits.Clear();
             ix.Search(q, hits, scan);
             foreach (NameIndex.Hit h in hits)
@@ -145,23 +386,54 @@ public static class NameServer
         candidates.Sort(static (a, b) => b.Score.CompareTo(a.Score));
         List<NameRow> rows = candidates.Count > max ? candidates.GetRange(0, max) : candidates;
 
-        var reply = new QueryReply(req.Gen, Stopwatch.GetTimestamp() - started, rows);
-        await Frame.WriteAsync(transport, Envelope.Pack(Envelope.KindQueryReply, reply), ct).ConfigureAwait(false);
+        return new QueryReply(req.Gen, Stopwatch.GetTimestamp() - started, rows);
     }
 
-    private static async Task AnswerStatus(Stream transport, IReadOnlyDictionary<char, NameIndex> indexes,
-                                           CancellationToken ct)
+    private static StatusReply AnswerStatus(IReadOnlyDictionary<char, VolumeView> views, IndexLock? gate,
+                                            ConcurrentDictionary<char, long> dropped)
     {
-        var vols = indexes.Select(kv => new VolumeStatus(kv.Key, kv.Value.Count, kv.Value.BufferBytes, true)).ToList();
-        var reply = new StatusReply(Environment.ProcessId, vols);
-        await Frame.WriteAsync(transport, Envelope.Pack(Envelope.KindStatusReply, reply), ct).ConfigureAwait(false);
+        var vols = new List<VolumeStatus>(views.Count);
+        foreach ((char letter, VolumeView view) in views)
+        {
+            int count;
+            long bytes;
+
+            // Count and BufferBytes are two reads of an index the tail mutates; taken without the
+            // lock they can straddle a rehash and disagree with each other.
+            using (gate?.Read(letter))
+            {
+                count = view.Index.Count;
+                bytes = view.Index.BufferBytes;
+            }
+
+            long lost = 0;
+            foreach ((char v, long n) in dropped)
+                if (char.ToUpperInvariant(v) == char.ToUpperInvariant(letter)) lost += n;
+
+            vols.Add(new VolumeStatus(letter, count, bytes, Live: true,
+                                      view.EnumerateMs, view.NextUsn, lost));
+        }
+        return new StatusReply(Environment.ProcessId, vols);
     }
 
-    /// <summary>What `--names` runs: build the indexes, then serve clients over the pipe.</summary>
+    /// <summary>
+    /// What `--names` runs: build the indexes, start the journal tail, then serve clients over
+    /// the pipe.
+    /// </summary>
     public static async Task RunAsync(CancellationToken ct)
     {
-        var indexes = new Dictionary<char, NameIndex>();
+        var views = new Dictionary<char, VolumeView>();
         var volumes = new List<NtfsVolume>();
+        var tailed = new List<(NtfsVolume Volume, VolumeView View)>();
+
+        // A SECOND handle per volume, for catch-up reads. Never the tail's: NextUsn on that one
+        // is live state the tail owns, and a gap read would move it, so the tail would skip
+        // everything the replay had just consumed.
+        var catchUp = new Dictionary<char, NtfsVolume>();
+        var catchUpLocks = new Dictionary<char, object>();
+
+        using var gate = new IndexLock();
+        var bus = new JournalBroadcast();
         try
         {
             foreach ((char letter, _, _, bool fixedDisk) in NtfsVolume.Volumes())
@@ -203,20 +475,87 @@ public static class NameServer
                     foreach (NtfsVolume.Record r in vol.Enumerate())
                         ix.Upsert(r.Frn, r.ParentFrn, r.Attributes, r.Name);
                     ix.Trim();
-                    indexes[letter] = ix;
+
+                    // The enumeration time was measured here already and thrown away after one
+                    // log line. It is what --searchbench publishes as the cold-start cost, and
+                    // nothing at normal integrity can measure it, so it goes into the view.
+                    double enumerateMs = Stopwatch.GetElapsedTime(started).TotalMilliseconds;
+                    var view = new VolumeView(ix, vol.JournalId, vol.NextUsn, enumerateMs);
+                    views[letter] = view;
                     volumes.Add(vol);
+                    tailed.Add((vol, view));
                     Log.Info("names", $"{letter}: {ix.Count:N0} names in " +
-                        $"{Stopwatch.GetElapsedTime(started).TotalSeconds:F2}s, {ix.BufferBytes / 1048576} MB, " +
+                        $"{enumerateMs / 1000.0:F2}s, {ix.BufferBytes / 1048576} MB, " +
                         $"journal cursor {vol.NextUsn}");
                     vol = null;   // handed over to `volumes`, which owns it now
+
+                    // Never fatal either. Without a catch-up handle this volume simply cannot
+                    // replay a subscriber's gap, and every subscriber is told it owes a full
+                    // pass - slower, and correct.
+                    NtfsVolume? second = null;
+                    try
+                    {
+                        second = new NtfsVolume(letter);
+                        second.QueryJournal();          // Read needs the journal id on THIS handle
+                        catchUp[letter] = second;
+                        catchUpLocks[letter] = new object();
+                        volumes.Add(second);
+                        second = null;                  // handed over to `volumes`
+                    }
+                    catch (Exception ex)
+                    {
+                        Log.Warn("names", $"{letter}: no catch-up handle ({ex.GetType().Name}: " +
+                            $"{ex.Message}) - subscribers behind the tail will be asked to re-walk");
+                    }
+                    finally { second?.Dispose(); }
                 }
                 catch (Exception ex) { Log.Error("names", $"{letter}: enumeration failed", ex); }
                 finally { vol?.Dispose(); }
             }
 
-            if (indexes.Count == 0) { Log.Error("names", "no volume could be read - is this running elevated?"); return; }
+            if (views.Count == 0) { Log.Error("names", "no volume could be read - is this running elevated?"); return; }
 
-            await ListenAsync(indexes, ct).ConfigureAwait(false);
+            // The tail starts BEFORE the first accept, so a client that connects immediately is
+            // subscribing to a journal already being read rather than to a silent bus.
+            Task tail = Task.Run(() => JournalTail.RunAsync(tailed, gate, bus, ct), CancellationToken.None);
+
+            await ListenAsync(views, gate, bus, ReadGap, ct).ConfigureAwait(false);
+            try { await tail.ConfigureAwait(false); } catch (OperationCanceledException) { }
+
+            (bool Reachable, IReadOnlyList<JournalEvent> Events) ReadGap(char volume, ulong journalId, long fromUsn)
+            {
+                char letter = char.ToUpperInvariant(volume);
+                if (!catchUp.TryGetValue(letter, out NtfsVolume? second) ||
+                    !views.TryGetValue(letter, out VolumeView? view))
+                    return (false, []);
+
+                var changes = new List<NtfsVolume.Change>();
+
+                // One catch-up read at a time per volume: NtfsVolume reuses one buffer, so two
+                // concurrent sessions replaying the same drive would read each other's bytes.
+                lock (catchUpLocks[letter])
+                    if (!second.Read(fromUsn, changes)) return (false, []);   // wrapped, or recreated
+
+                var events = new List<JournalEvent>(changes.Count);
+                using (gate.Read(letter))                                     // shared: this only READS
+                    foreach (NtfsVolume.Change c in changes)
+                    {
+                        // Resolve against the index as it stands now. This does NOT apply the
+                        // change - the tail owns every write, and applying here would double-apply
+                        // what the tail already did. A record since deleted resolves to "", which
+                        // is correct: the feeder keys deletes on (volume, frn).
+                        string path = (c.Reason & NtfsVolume.ReasonFileDelete) != 0 ? ""
+                            : view.Index.TryIndexOf(c.Frn, out int rec) ? view.Index.PathOf(rec) ?? ""
+                            : "";
+
+                        // Stamped from the VIEW, not from anywhere else. A replayed record with a
+                        // zero id makes the feeder store (0, usn), and the whole resume story then
+                        // dies on precisely the path this replay was added to fix.
+                        events.Add(new JournalEvent(letter, view.JournalId, c.Frn, c.ParentFrn,
+                                                    c.Attributes, c.Name, path, c.Reason, c.Usn));
+                    }
+                return (true, events);
+            }
         }
         finally
         {
@@ -232,13 +571,12 @@ public static class NameServer
     /// accepted concurrently, so a second client - `--searchprobe`, typically - is served
     /// while the UI holds a session rather than queueing behind it.
     ///
-    /// Concurrent <see cref="Serve"/> calls read ONE shared <see cref="NameIndex"/> per
-    /// volume. That is safe only while the index is immutable, which it is here: every index
-    /// is built before the first accept and never written again. When journal streaming lands
-    /// and the index starts mutating, these readers must be serialised against the writer -
-    /// one lock around replay and search, as NameIndex's own header says.
+    /// Concurrent <see cref="Serve"/> calls read ONE shared <see cref="NameIndex"/> per volume,
+    /// and the journal tail now WRITES those indexes. That is what <paramref name="gate"/> is
+    /// for - the serialisation this header used to say a future reader would owe.
     /// </summary>
-    private static async Task ListenAsync(IReadOnlyDictionary<char, NameIndex> indexes, CancellationToken ct)
+    private static async Task ListenAsync(IReadOnlyDictionary<char, VolumeView> views, IndexLock gate,
+                                          JournalBroadcast bus, GapReader gap, CancellationToken ct)
     {
         var sessions = new List<Task>();
         int live = 0;         // instances that exist right now: the listener plus every session
@@ -277,7 +615,7 @@ public static class NameServer
                     try
                     {
                         using (connected)
-                            await Serve(connected, indexes, ct).ConfigureAwait(false);
+                            await Serve(connected, views, gate, bus, gap, ct).ConfigureAwait(false);
                     }
                     finally
                     {
