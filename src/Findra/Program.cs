@@ -16,7 +16,7 @@ public static class Program
                 args.Length > 1 ? args[1] : "searchshot.png",
                 args.Length > 2 ? args[2] : "results",
                 args.Length > 3 ? args[3] : null),
-            "--version"     => Hello(),
+            "--version"     => Version(),
 
             // A mistyped mode must not look like a success. `--searchprob` falling through to
             // the no-argument greeting exits 0, which is what a script checks, so the typo
@@ -54,10 +54,12 @@ public static class Program
         return 1;
     }
 
-    private static int Hello()
+    // --version answers the question a bug report starts with: which build is this, and where
+    // are its logs. It writes nothing to the log itself - asking a version should not add a line
+    // to the file the answer points at.
+    private static int Version()
     {
-        Log.Info("startup", $"findra {Log.Version} - no UI yet");
-        Log.Flush();
+        Console.WriteLine($"findra {Log.Version}");
         Console.WriteLine($"log: {Log.Dir}");
         return 0;
     }
