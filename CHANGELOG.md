@@ -41,6 +41,17 @@ into a numbered section on the first release.
 - **The content store**: a SQLite full-text index with a recorded schema version, a
   resumable work queue, and a consumed journal position per volume, so an interrupted
   index continues rather than starting over.
+- **A memory-mapped vector store** for meaning-based search: every embedded photo,
+  document chunk or transcript segment is a half-precision row tagged with its kind,
+  appended by the indexer and ranked by a normalised dot product over the whole file -
+  brute force on purpose, since a single pass beats an index below a million rows. A
+  deleted or replaced file's row is zeroed rather than removed, so it can never answer
+  a query again, and a reader only ever sees rows the writer has flushed.
+
+- **The groundwork for searching inside photos, recordings and meaning**: the model store
+  that knows which model files are present and what they cost, the accelerator selection that
+  tries the graphics card first and falls back to the processor while recording every provider
+  it rejected and why, and the vector store the embeddings live in.
 
 - **A privacy policy** at `PRIVACY.md`, saying what Findra stores, where, and the single
   request that leaves the machine. It states plainly that the index holds the text of the
