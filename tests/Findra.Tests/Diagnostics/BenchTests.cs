@@ -319,4 +319,38 @@ public class BenchTests
         }
         finally { CultureInfo.CurrentCulture = was; }
     }
+
+    [Fact]
+    public void TheBenchmarkOpensTheRealIndexReadOnlyAndCanNeverRebuildOrCreateOne()
+    {
+        // A BENCHMARK. Everything it does with this connection is a read - MeasureFts, Stats,
+        // Stores - and it was opening the user's index through OpenOrRebuild, which moves an
+        // unreadable index aside and builds a fresh one, and which runs CreateSchema and
+        // OpenSchema for any writable open. Once Migrations is non-empty a benchmark run would
+        // silently migrate someone's index and re-queue their files, and nothing in the fragment
+        // it prints would mention that it had happened.
+        string dir = Path.Combine(Path.GetTempPath(), "findra-bench-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        try
+        {
+            string missing = Path.Combine(dir, "none.db");
+            Assert.Null(SearchBench.OpenIndex(missing));
+            Assert.False(File.Exists(missing), "measuring an index must not bring one into existence");
+
+            string broken = Path.Combine(dir, "broken.db");
+            File.WriteAllText(broken, "this is not a database, it is a text file");
+            Assert.Null(SearchBench.OpenIndex(broken));
+            Assert.False(File.Exists(broken + ".corrupt"), "a benchmark must not move a user's index aside");
+            Assert.Equal("this is not a database, it is a text file", File.ReadAllText(broken));
+
+            string good = Path.Combine(dir, "search.db");
+            using (var real = new ContentDb(good)) real.Enqueue("C", 1, @"C:\a.pdf", ResultKind.Document, "new");
+
+            using ContentDb? open = SearchBench.OpenIndex(good);
+            Assert.NotNull(open);
+            Assert.Equal(1, open.PendingCount());                       // it can read
+            Assert.ThrowsAny<Exception>(() => open.Set("index:rebuilt", "1"));   // and only read
+        }
+        finally { try { Directory.Delete(dir, true); } catch { } }
+    }
 }

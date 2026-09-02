@@ -304,6 +304,35 @@ public static class SearchBench
     private static readonly string[] NameQueries = ["report", "invoice", "sunset", "readme", "config"];
     private static readonly string[] FtsQueries = ["lease", "agreement", "invoice", "total", "report"];
 
+    /// <summary>
+    /// The user's real index, opened READ-ONLY, or null when there is nothing to measure.
+    ///
+    /// <para>A benchmark must not be able to change the thing it is measuring.
+    /// <c>ContentDb.OpenOrRebuild</c> moves an index it cannot read aside and builds a fresh one,
+    /// and any writable open runs <c>CreateSchema</c> and <c>OpenSchema</c> - so from the moment
+    /// <c>ContentDb.Migrations</c> stops being empty, running this command would silently migrate
+    /// someone's index and re-queue their files, and nothing in the fragment it prints would say
+    /// that had happened. Everything this mode does with the connection is a read.</para>
+    ///
+    /// <para>The <c>File.Exists</c> guard matters as much as the mode: a read-only open of a
+    /// missing file is an error, and a writable one would CREATE an index on a machine that has
+    /// never run Findra, just for asking how fast it is. <c>--searchprobe</c> takes the same two
+    /// steps for the same reason.</para>
+    /// </summary>
+    public static ContentDb? OpenIndex(string? path = null)
+    {
+        string p = path ?? ContentDb.DefaultPath;
+        if (!File.Exists(p)) return null;
+        try { return new ContentDb(p, readOnly: true); }
+        catch (Exception ex)
+        {
+            // An index nobody can read is a fact about the machine, not a reason to rebuild it
+            // from under someone in the middle of a measurement.
+            Console.Error.WriteLine($"the content index could not be read ({ex.GetType().Name}: {ex.Message})");
+            return null;
+        }
+    }
+
     public static async Task<int> RunAsync(string[] args)
     {
         ArgumentNullException.ThrowIfNull(args);
@@ -354,20 +383,31 @@ public static class SearchBench
             finally { await client.DisposeAsync().ConfigureAwait(false); }
         }
 
-        using ContentDb db = ContentDb.OpenOrRebuild();
+        using ContentDb? db = OpenIndex();
 
         var fts = new List<LatencySet>(FtsQueries.Length);
-        foreach (string q in FtsQueries) fts.Add(MeasureFts(db, q));
+        long items = 0, segments = 0;
+        IReadOnlyList<StoreRow> stores = [];
+        if (db is not null)
+        {
+            foreach (string q in FtsQueries) fts.Add(MeasureFts(db, q));
+            (items, segments, _) = db.Stats();
+            stores = Stores(db.Path);
+        }
+        else
+        {
+            // No readable index. An empty sample set renders "not measured" in every cell, which
+            // is the truth; a zero would read as an unbelievably fast query against nothing.
+            foreach (string q in FtsQueries) fts.Add(new LatencySet(q, [], [], 0));
+        }
 
         (ThroughputRow row, string corpusNote) = MeasureExtraction(corpus);
-
-        (long items, long segments, long _) = db.Stats();
 
         var result = new BenchResult(
             Machine: machine, Version: Log.Version,
             Volumes: volumes, Names: names, NamesUnavailable: unavailable,
             Fts: fts, Extraction: [row], CorpusNote: corpusNote,
-            Stores: Stores(db.Path), IndexedItems: items, Segments: segments);
+            Stores: stores, IndexedItems: items, Segments: segments);
 
         string md = Bench.Fragment(result);
         Console.WriteLine(md);
