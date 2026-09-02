@@ -149,7 +149,7 @@ public sealed class QueueFeeder : IDisposable
         var positions = new Dictionary<char, Position>();
         int queued = 0;
 
-        using SqliteTransaction tx = _db.Begin();
+        using ContentDb.Scope tx = _db.Begin();
 
         foreach (JournalEvent e in events)
         {
@@ -317,7 +317,7 @@ public sealed class QueueFeeder : IDisposable
         Dictionary<(string, ulong), long> known = _db.KnownItems();
         var queued = new HashSet<ulong>();
 
-        using SqliteTransaction tx = _db.Begin();
+        using ContentDb.Scope tx = _db.Begin();
 
         foreach (EnumeratedFile f in files)
         {
@@ -496,7 +496,7 @@ public sealed class QueueFeeder : IDisposable
         IReadOnlyList<string> roots = _repoRoots;
         int touched = 0;
 
-        using SqliteTransaction tx = _db.Begin();
+        using ContentDb.Scope tx = _db.Begin();
 
         foreach (ContentDb.Pending p in _db.PendingRows())
         {

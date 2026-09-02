@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
+using System.Runtime.CompilerServices;
 using System.Security.Cryptography;
 using System.Text;
 using Microsoft.Data.Sqlite;
@@ -21,6 +22,24 @@ namespace Findra;
 // (audio or video speech), 3 = a video frame at t0. This build writes only kind 1 - words in
 // documents is the one capability that needs no model - and the other three are the numbers a
 // later capability will write, fixed here so the meaning of a stored row never shifts under it.
+//
+// ONE FLOW OWNS THE WRITER, AND THAT IS ENFORCED HERE. A SqliteConnection is not safe for two
+// flows at once, and this one is not merely used carefully - it refuses. Every mutating method
+// claims the connection on the way in, Begin holds the claim for the whole transaction, and a
+// second flow arriving is an immediate InvalidOperationException naming the rule and the call that
+// broke it. Everything that only reads - the card, --searchprobe, --searchtest, --searchbench -
+// opens a read-only connection of its own, which is not guarded and does not need to be.
+//
+// The failure that buys is not hypothetical. In the engine this code came from, an index thread
+// and a debounce timer on the thread pool shared one connection. Both opened a transaction, the
+// provider refused the second with an InvalidOperationException, a catch swallowed it as noise -
+// and the batch of journal changes had already been drained out of its queue into a local list, so
+// those changes were gone and those files stayed stale for good. The log said so once per process
+// and was silent afterwards. Findra survives the same shape because the consumed USN position is
+// written inside the same transaction as the enqueues it came from, so a throw rolls the position
+// back and the next subscription replays the gap - do not change that either - but the swallowed
+// exception is a bug that takes months to find, and the point of the guard is that it says which
+// rule was broken rather than leaving somebody to infer it from "wrong transaction".
 public sealed class ContentDb : IDisposable
 {
     public const int SegImage = 0, SegText = 1, SegSpeech = 2, SegFrame = 3;
@@ -63,6 +82,7 @@ public sealed class ContentDb : IDisposable
     public ContentDb(string? path = null, bool readOnly = false, IReadOnlyList<Migration>? migrations = null)
     {
         Path = path ?? DefaultPath;
+        _guarded = !readOnly;
         // Skip for a bare DataSource with no directory component - ":memory:" (OpenOrRebuild's
         // last rung) and a bare relative filename both hit this. Directory.CreateDirectory("")
         // throws ArgumentException, which would defeat the very "this cannot throw" promise the
@@ -129,9 +149,6 @@ CREATE TABLE IF NOT EXISTS opened(path TEXT PRIMARY KEY, count INTEGER NOT NULL,
 
     // ---- the schema stamp, and the migrations it gates ----
 
-    /// <summary>Read the recorded schema version, run whatever steps stand between it and this
-    /// build, and stamp the result. A step re-queues only the kinds it invalidated; everything
-    /// else on disk is left exactly as it was found.</summary>
     /// <summary>
     /// The schema version this open found on disk and migrated FROM.
     ///
@@ -156,6 +173,9 @@ CREATE TABLE IF NOT EXISTS opened(path TEXT PRIMARY KEY, count INTEGER NOT NULL,
 
     private readonly List<string> _migrationsRun = [];
 
+    /// <summary>Read the recorded schema version, run whatever steps stand between it and this
+    /// build, and stamp the result. A step re-queues only the kinds it invalidated; everything
+    /// else on disk is left exactly as it was found.</summary>
     private void OpenSchema(IReadOnlyList<Migration> steps)
     {
         string? stamped = Get("schema");
@@ -291,7 +311,113 @@ CREATE TABLE IF NOT EXISTS opened(path TEXT PRIMARY KEY, count INTEGER NOT NULL,
         cmd.ExecuteNonQuery();
     }
 
-    public SqliteTransaction Begin() => _c.BeginTransaction();
+    // ---- one flow at a time, enforced ---------------------------------------------------------
+
+    /// <summary>Whether this connection polices its own ownership. Only a writer does: the card
+    /// reads through its own read-only connection from pool threads, more than one of them over a
+    /// session, and arming this there would break the card for no gain.</summary>
+    private readonly bool _guarded;
+
+    /// <summary>The managed thread id of the flow currently inside the writer, 0 when nobody is,
+    /// and how deep it has re-entered. A detector rather than a lock: see <see cref="Claim"/>.
+    /// </summary>
+    private int _inside;
+    private int _depth;
+
+    /// <summary>
+    /// Say that this flow is now inside the writer, and refuse if another one already is.
+    ///
+    /// <para>THE RULE IS ONE FLOW AT A TIME, and it is enforced here rather than remembered across
+    /// three files. The failure it prevents is not hypothetical: in the engine this code was ported
+    /// from, an index thread and a debounce timer shared one connection, both opened a transaction,
+    /// the provider refused the second, the catch swallowed it - and the batch of changes had
+    /// already been drained out of its queue into a local list, so those files stayed stale
+    /// permanently. The log said so once per process and was then silent.</para>
+    ///
+    /// <para>It refuses rather than waits, on purpose. A lock would let a second writer in by
+    /// serialising it, which hides the design violation instead of reporting it; and the claim has
+    /// to span a whole transaction, so a lock could be held for the length of a full disk walk.
+    /// Nothing user-facing waits on this connection - the card has its own - so there is nothing to
+    /// be gained by blocking and a rule to be lost.</para>
+    ///
+    /// <para>It is not pinned to the thread that constructed the writer, because the loop that owns
+    /// it is async: it awaits a pipe session and a delay with <c>ConfigureAwait(false)</c>, so its
+    /// continuations resume on whatever pool thread is free and the owning thread id changes
+    /// several times a minute in ordinary running. A construction-thread check would fire on the
+    /// first await and never stop. What is forbidden is OVERLAP, not movement.</para>
+    ///
+    /// <para>It is a detector and not a barrier: two threads arriving in the same few nanoseconds
+    /// could both pass. Any overlap that lasts longer than that - which is every real one, because
+    /// the shortest thing behind this guard is a SQLite command - is caught at the call that broke
+    /// the rule.</para>
+    /// </summary>
+    private void Claim(string what)
+    {
+        if (!_guarded) return;
+        int me = Environment.CurrentManagedThreadId;
+        int held = Volatile.Read(ref _inside);
+        if (held != 0 && held != me)
+            throw new InvalidOperationException(
+                $"ContentDb.{what} was called on thread {me.ToString(CultureInfo.InvariantCulture)} while " +
+                $"thread {held.ToString(CultureInfo.InvariantCulture)} was still inside this writer. " +
+                "One flow owns the writer connection at a time; everything else reads through a " +
+                "read-only connection of its own. Two flows sharing one connection is how a batch of " +
+                "journal changes gets lost to a swallowed nested-transaction error.");
+        Volatile.Write(ref _inside, me);
+        _depth++;
+    }
+
+    private void Leave()
+    {
+        if (!_guarded) return;
+        if (--_depth <= 0) { _depth = 0; Volatile.Write(ref _inside, 0); }
+    }
+
+    /// <summary>One mutating call's claim on the writer.</summary>
+    private readonly struct Use : IDisposable
+    {
+        private readonly ContentDb _db;
+        public Use(ContentDb db, string what) { _db = db; db.Claim(what); }
+        public void Dispose() => _db.Leave();
+    }
+
+    private Use Enter([CallerMemberName] string what = "") => new(this, what);
+
+    /// <summary>
+    /// One transaction, and the owning flow's claim on the writer for as long as it is open.
+    ///
+    /// <para>The claim has to span the transaction and not merely each call inside it: the damage
+    /// in the ported engine happened between one flow's <c>BEGIN</c> and its <c>COMMIT</c>, which
+    /// is a window no per-call check can see. Converting to <see cref="SqliteTransaction"/> is
+    /// implicit so every existing call site keeps reading the way it did.</para>
+    /// </summary>
+    public sealed class Scope : IDisposable
+    {
+        private readonly ContentDb _db;
+        private readonly SqliteTransaction _tx;
+        private bool _left;
+
+        internal Scope(ContentDb db, SqliteTransaction tx) { _db = db; _tx = tx; }
+
+        public void Commit() => _tx.Commit();
+        public void Rollback() => _tx.Rollback();
+
+        public void Dispose()
+        {
+            if (_left) return;
+            _left = true;
+            try { _tx.Dispose(); } finally { _db.Leave(); }
+        }
+
+        public static implicit operator SqliteTransaction(Scope s) => s._tx;
+    }
+
+    public Scope Begin()
+    {
+        Claim(nameof(Begin));
+        try { return new Scope(this, _c.BeginTransaction()); }
+        catch { Leave(); throw; }
+    }
 
     /// <summary>What the bundled SQLite was built with. Everything here is FTS5, and a bundle
     /// without it fails deep inside a child process nobody is watching - so it is checkable.</summary>
@@ -322,6 +448,7 @@ CREATE TABLE IF NOT EXISTS opened(path TEXT PRIMARY KEY, count INTEGER NOT NULL,
     // was already done or loses work that was not.
     public void Set(string key, string value, SqliteTransaction? tx = null)
     {
+        using var claim = Enter();
         using var cmd = _c.CreateCommand();
         cmd.Transaction = tx;
         cmd.CommandText = "INSERT INTO meta(key,value) VALUES($k,$v) ON CONFLICT(key) DO UPDATE SET value=excluded.value";
@@ -358,6 +485,7 @@ CREATE TABLE IF NOT EXISTS opened(path TEXT PRIMARY KEY, count INTEGER NOT NULL,
     /// next subscribe resumes from a place the journal threw away.</summary>
     public void ClearUsnPosition(char volume, SqliteTransaction? tx = null)
     {
+        using var claim = Enter();
         using var cmd = _c.CreateCommand();
         cmd.Transaction = tx;
         cmd.CommandText = "DELETE FROM meta WHERE key=$k";
@@ -466,6 +594,7 @@ CREATE TABLE IF NOT EXISTS opened(path TEXT PRIMARY KEY, count INTEGER NOT NULL,
 
     public void RecordOpen(string path)
     {
+        using var claim = Enter();
         using var cmd = _c.CreateCommand();
         cmd.CommandText = "INSERT INTO opened(path,count,last) VALUES($p,1,$t) ON CONFLICT(path) DO UPDATE SET count=count+1, last=excluded.last";
         cmd.Parameters.AddWithValue("$p", path);
@@ -490,6 +619,7 @@ CREATE TABLE IF NOT EXISTS opened(path TEXT PRIMARY KEY, count INTEGER NOT NULL,
     /// <summary>Queue a file. Re-queuing a file already waiting just refreshes its path and reason.</summary>
     public void Enqueue(string vol, ulong frn, string path, ResultKind kind, string reason, SqliteTransaction? tx = null)
     {
+        using var claim = Enter();
         using var cmd = _c.CreateCommand();
         cmd.Transaction = tx;
         cmd.CommandText = @"INSERT INTO pending(vol,frn,path,kind,reason,queued_at) VALUES($v,$f,$p,$k,$r,$t)
@@ -515,6 +645,7 @@ CREATE TABLE IF NOT EXISTS opened(path TEXT PRIMARY KEY, count INTEGER NOT NULL,
     /// <summary>Queued deletes for files the index never held. Returns how many were dropped.</summary>
     public int PurgeOrphanDeletes(SqliteTransaction tx)
     {
+        using var claim = Enter();
         using var cmd = _c.CreateCommand();
         cmd.Transaction = tx;
         cmd.CommandText = "DELETE FROM pending WHERE reason='delete' AND NOT EXISTS (SELECT 1 FROM items i WHERE i.vol=pending.vol AND i.frn=pending.frn)";
@@ -652,6 +783,7 @@ CREATE TABLE IF NOT EXISTS opened(path TEXT PRIMARY KEY, count INTEGER NOT NULL,
 
     public Pending? TakeNext()
     {
+        using var claim = Enter();
         using var cmd = _c.CreateCommand();
         // Deletes first, then oldest first. A delete takes rows OUT, so running it ahead of the
         // re-index of the same path keeps the index from briefly holding both.
@@ -664,6 +796,7 @@ CREATE TABLE IF NOT EXISTS opened(path TEXT PRIMARY KEY, count INTEGER NOT NULL,
 
     public void Dequeue(long id, SqliteTransaction? tx = null)
     {
+        using var claim = Enter();
         using var cmd = _c.CreateCommand();
         cmd.Transaction = tx;
         cmd.CommandText = "DELETE FROM pending WHERE id=$i";
@@ -673,6 +806,7 @@ CREATE TABLE IF NOT EXISTS opened(path TEXT PRIMARY KEY, count INTEGER NOT NULL,
 
     public void ClearQueue()
     {
+        using var claim = Enter();
         Exec("DELETE FROM pending");
     }
 
@@ -689,6 +823,7 @@ CREATE TABLE IF NOT EXISTS opened(path TEXT PRIMARY KEY, count INTEGER NOT NULL,
     public List<long> Upsert(string vol, ulong frn, string path, ResultKind kind, long mtime, long size,
         int state, string? error, IReadOnlyList<Segment> segments, SqliteTransaction tx)
     {
+        using var claim = Enter();
         long itemId;
         var dead = new List<long>();
         using (var cmd = _c.CreateCommand())
@@ -741,6 +876,7 @@ CREATE TABLE IF NOT EXISTS opened(path TEXT PRIMARY KEY, count INTEGER NOT NULL,
     /// build, for the reason <see cref="Upsert"/> gives.</summary>
     public List<long> Delete(string vol, ulong frn, SqliteTransaction tx)
     {
+        using var claim = Enter();
         long? itemId;
         using (var cmd = _c.CreateCommand())
         {
@@ -902,6 +1038,7 @@ CREATE TABLE IF NOT EXISTS opened(path TEXT PRIMARY KEY, count INTEGER NOT NULL,
 
     public void UpdateVec(long segId, long vec, SqliteTransaction? tx = null)
     {
+        using var claim = Enter();
         using var cmd = _c.CreateCommand();
         cmd.Transaction = tx;
         cmd.CommandText = "UPDATE segments SET vec=$v WHERE id=$i";
@@ -916,6 +1053,7 @@ CREATE TABLE IF NOT EXISTS opened(path TEXT PRIMARY KEY, count INTEGER NOT NULL,
     /// the re-run. Returns how many rows were queued.</summary>
     public int RequeueKinds(int[] kinds, string reason)
     {
+        using var claim = Enter();
         int n = 0;
         using var tx = Begin();
         using (var cmd = _c.CreateCommand())
