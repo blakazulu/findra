@@ -321,6 +321,19 @@ public class BenchTests
     }
 
     [Fact]
+    public void AMachineWithNoIndexSaysSoRatherThanPrintingAnEmptyTable()
+    {
+        // Now that the benchmark refuses to create an index just for measuring one, there is a
+        // real run in which no store exists. A markdown table with a header row and nothing under
+        // it is what that used to render as, on a page that is pasted onto a README.
+        string md = Bench.Fragment(Sample(names: SomeNames()) with { Stores = [] });
+        string section = Section(md, "Stores");
+
+        Assert.DoesNotContain("| Store | Path | Size |", section, StringComparison.Ordinal);
+        Assert.Contains("no content index", section, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
     public void TheBenchmarkOpensTheRealIndexReadOnlyAndCanNeverRebuildOrCreateOne()
     {
         // A BENCHMARK. Everything it does with this connection is a read - MeasureFts, Stats,

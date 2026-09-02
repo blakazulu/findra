@@ -227,10 +227,20 @@ public static class Bench
         // ---- 6. the stores -----------------------------------------------------------------
         Line("### Stores");
         Line();
-        Line("| Store | Path | Size |");
-        Line("|---|---|---|");
-        foreach (StoreRow s in r.Stores)
-            Line($"| {Cell(s.Name)} | {Cell(s.Path)} | {Bytes(s.Bytes)} |");
+        // A machine that has never run Findra has no index, and this mode will not create one
+        // just to measure it. A table header with nothing under it is not an honest way to say
+        // that on a page whose whole promise is that it pastes unedited.
+        if (r.Stores.Count == 0)
+        {
+            Line("Not measured: there is no content index on this machine yet.");
+        }
+        else
+        {
+            Line("| Store | Path | Size |");
+            Line("|---|---|---|");
+            foreach (StoreRow s in r.Stores)
+                Line($"| {Cell(s.Name)} | {Cell(s.Path)} | {Bytes(s.Bytes)} |");
+        }
         Line();
         Line($"Indexed items: {N(r.IndexedItems)}. Text segments: {N(r.Segments)}.");
         Line();
