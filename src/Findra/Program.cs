@@ -13,6 +13,7 @@ public static class Program
             "--index"       => Indexer.Run(args),
             "--searchprobe" => Diagnostics.SearchProbe.RunAsync(args).GetAwaiter().GetResult(),
             "--searchtest"  => Diagnostics.SelfTest.Run(),
+            "--searchindex" => Diagnostics.SearchIndex.Run(args),
             "--searchshot"  => Diagnostics.SearchShot.Render(
                 args.Length > 1 ? args[1] : "searchshot.png",
                 args.Length > 2 ? args[2] : "results",
@@ -50,6 +51,7 @@ public static class Program
         Console.Error.WriteLine("  --index <parentPid>      the content indexer, started by the UI - not run by hand");
         Console.Error.WriteLine("  --searchprobe [query]    the whole query path, end to end");
         Console.Error.WriteLine("  --searchtest             engine self-check");
+        Console.Error.WriteLine("  --searchindex [file|folder|q:query]...   what is indexed, and what is queued");
         Console.Error.WriteLine("  --searchshot out.png <state> [palette]   render a surface, no screen required");
         Console.Error.WriteLine("                           palette defaults to the configured one, not a fixed built-in");
         Console.Error.WriteLine("  --version                print the version and log location, then exit");
