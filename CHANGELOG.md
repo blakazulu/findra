@@ -44,9 +44,11 @@ into a numbered section on the first release.
 
 ### Security
 
-- The elevated helper parses no file content. Every decoder runs in the unelevated
-  indexer, because decoders read arbitrary files found on disk and are the most
-  likely thing a malformed file could exploit.
+- The elevated helper parses no file content. It reads names, paths, sizes and
+  modification times - metadata the filesystem hands over without opening anything -
+  and never a byte of a file. Every decoder runs in the unelevated indexer, because
+  decoders read arbitrary files found on disk and are the most likely thing a
+  malformed file could exploit.
 - The named pipe is restricted to the current user, and the interface verifies the
   owner before trusting a connection.
 
