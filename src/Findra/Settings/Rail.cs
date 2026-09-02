@@ -63,8 +63,28 @@ public static class RailLayout
     /// <para>Worked against the row, which is 546px wide (240..786): at the wide column five
     /// options get <c>(546 - 232 - 4*8) / 5 = 56px</c> each, and <see cref="Parts.Pill"/>
     /// ellipsises to <c>width - 12</c>, so a five-option row at 232 is five ellipses. Narrowing
-    /// to 140 gives <c>(546 - 140 - 32) / 5 = 74.8px</c>, and 128px of label column - enough for
-    /// every row label the model writes, all of which are short for this reason.</para>
+    /// to 140 gives <c>(546 - 140 - 32) / 5 = 74.8px</c>, and 128px of label column.</para>
+    ///
+    /// <para><b>The budgets, measured in the shipped face</b> (Quicksand Regular at
+    /// <see cref="Parts.LabelSize"/>, not the host's default - Quicksand runs 2 to 6 per cent
+    /// wider than Segoe UI at this size, so every margin below is real rather than estimated):
+    /// </para>
+    ///
+    /// <list type="table">
+    /// <item><description>2 or 3 options: 220px of label, 141px / 87.3px of pill</description></item>
+    /// <item><description>4 options: 156px of label, 76.5px of pill</description></item>
+    /// <item><description>5 options: 128px of label, 62.8px of pill</description></item>
+    /// </list>
+    ///
+    /// <para><b>62.8px is the tight one, and it is already tight.</b> The five-option row is the
+    /// transcription limit, and <c>TranscribeLimit.Describe</c>'s longest word - "30 minutes",
+    /// measured at 65.3px - does not fit it. The rule is to shorten the label rather than widen
+    /// the tolerance or re-narrow the column, so the pills say "30 min" (40.2px), "5 min"
+    /// (32.8px), "2 hr" (23.3px), "No limit" (45.6px) and "Off" (19.1px); the long form stays on
+    /// the command line, where nothing is measuring it. The row labels themselves arrive with the
+    /// settings model and each has to come in under the column its own option count buys - 128px
+    /// for the five-option row, which "Recordings" (67.6px) and "Transcribe up to" (98.3px) both
+    /// clear.</para>
     ///
     /// <para>The numbers are not free parameters: <c>EveryOptionLabelFitsThePillItIsDrawnIn</c>
     /// and <c>EveryRowLabelFitsItsOwnColumn</c> measure real labels against what this returns,

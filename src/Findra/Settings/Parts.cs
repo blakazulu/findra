@@ -13,21 +13,60 @@ namespace Findra;
 public static class Parts
 {
     /// <summary>
-    /// The face every surface in this plan draws with, and the one its tests measure with.
+    /// The face every surface draws with, and the one every test measures with.
     ///
-    /// <para>It exists because a test that measures a label with one typeface while the painter
-    /// draws it with another is not a test of anything. Both go through here.</para>
+    /// <para>One resolver, because a test that measures a label with one typeface while the
+    /// painter draws it with another is not a test of anything - and because spec §9a's promise
+    /// that a README screenshot is the product rather than a mockup only holds if the product
+    /// looks the same on the machine that regenerates it.</para>
     ///
-    /// <para><b>It resolves to <see cref="SKTypeface.Default"/> in THIS task and to the shipped
-    /// Quicksand in the next one.</b> Spec §7 says "Typeface: Quicksand throughout, shipped with
-    /// the app", and nothing in the tree ships it: no font file, no resource entry, and
-    /// <c>CardWindow.cs</c>, <c>CapsuleWindow.cs</c> and <c>SearchShot.cs</c> all assign the
-    /// platform default. The next task fills this property in, and it is a task rather than a
-    /// note because spec §9a's README screenshots are only reproducible if the product draws in a
-    /// face that ships with it. Leave the property here and the placeholder body; do not scatter
-    /// a second resolver.</para>
+    /// <para>Resolved ONCE. The settings window repaints on every pointer move and measures
+    /// several labels per repaint, so a property that loaded the stream per access would allocate
+    /// a typeface per measurement.</para>
+    ///
+    /// <para>Quicksand is bundled under the SIL Open Font License 1.1; see
+    /// <c>assets/fonts/OFL.txt</c>, which ships beside the executable, and <c>NOTICE</c>.</para>
     /// </summary>
-    public static SKTypeface Face { get; } = SKTypeface.Default;
+    public static SKTypeface Face { get; } =
+        Resolve(typeof(Parts).Assembly.GetManifestResourceStream("Findra.Quicksand-Regular.ttf"));
+
+    /// <summary>
+    /// The face in <paramref name="stream"/>, or the system default when there is not one.
+    ///
+    /// <para>Never throws, and that is the point: this runs in a static initialiser, and a type
+    /// initialiser that throws surfaces as a <c>TypeInitializationException</c> from wherever the
+    /// type is first touched - out of a paint, out of a measure, out of a shot - which is
+    /// unreportable. A missing font is a product that looks wrong, not one that will not start.
+    /// </para>
+    ///
+    /// <para>Public rather than internal only so the fallback can be tested: this assembly grants
+    /// no <c>InternalsVisibleTo</c>, and every other seam the tests reach is public too. It is a
+    /// seam, not an API - nothing but <see cref="Face"/> should call it.</para>
+    /// </summary>
+    public static SKTypeface Resolve(Stream? stream)
+    {
+        if (stream is null)
+        {
+            Log.Warn("look", "the bundled typeface is missing; falling back to the system default");
+            return SKTypeface.Default;
+        }
+
+        try
+        {
+            using (stream)
+            {
+                SKTypeface? face = SKTypeface.FromStream(stream);
+                if (face is not null) return face;
+            }
+        }
+        catch (Exception ex)
+        {
+            Log.Warn("look", "the bundled typeface could not be read: " + ex.Message);
+        }
+
+        Log.Warn("look", "the bundled typeface could not be read; falling back to the system default");
+        return SKTypeface.Default;
+    }
 
     public const float HeaderSize = 15f;
     public const float LabelSize = 13f;

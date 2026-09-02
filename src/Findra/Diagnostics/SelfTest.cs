@@ -195,7 +195,7 @@ public static class SelfTest
             using var surface = SKSurface.Create(new SKImageInfo(
                 (int)SearchCardLayout.Width, 400, SKColorType.Bgra8888, SKAlphaType.Premul));
             SearchCardPainter.Paint(surface.Canvas, SearchCardState.Empty,
-                                    Derived.From(Palette.DefaultDark), SKTypeface.Default);
+                                    Derived.From(Palette.DefaultDark), Parts.Face);
             surface.Canvas.Flush();
             return null;
         });

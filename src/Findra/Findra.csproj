@@ -53,4 +53,18 @@
          runtime for whatever instruction set it finds. No intrinsics are written by hand. -->
     <PackageReference Include="System.Numerics.Tensors" Version="10.0.11" />
   </ItemGroup>
+  <ItemGroup>
+    <!-- Embedded rather than copied: the shot command and the tests both need the face without
+         Avalonia's font infrastructure, and a file beside the executable is one more thing a
+         publish can leave behind. LogicalName is what Parts.Resolve asks for - the two are edited
+         together or TheFontIsInTheAssemblyUnderTheNameTheResolverAsksFor fails. -->
+    <EmbeddedResource Include="..\..\assets\fonts\Quicksand-Regular.ttf"
+                      LogicalName="Findra.Quicksand-Regular.ttf" />
+    <!-- The licence is NOT embedded: OFL condition 2 wants it to accompany each copy where a
+         person can read it, which means beside the executable, in the publish folder, and so in
+         the installer - whose [Files] entry copies the whole publish folder. -->
+    <None Include="..\..\assets\fonts\OFL.txt" Link="OFL-Quicksand.txt">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
 </Project>

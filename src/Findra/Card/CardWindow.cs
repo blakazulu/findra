@@ -191,9 +191,10 @@ public sealed class CardWindow : Window
             _semantic = semantic;
             _installed = installed;
             _scale = Math.Clamp(scale, 0.85, 1.7);
-            // The real face is not embedded yet; this is the platform default until it ships
-            // (SearchShot.cs renders with the same fallback for the same reason).
-            _face = SKTypeface.Default;
+            // The shipped face, not the platform's - one resolver for every surface, so the card
+            // and the shot of the card are the same picture. Parts.Face falls back to the system
+            // default on its own if the resource is missing.
+            _face = Parts.Face;
             _derived = derived;
             Focusable = true;
 
