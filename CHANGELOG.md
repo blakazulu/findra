@@ -188,6 +188,15 @@ into a numbered section on the first release.
   the whole model set still measures the 2.93 GB quoted everywhere else. It runs on a machine
   that has downloaded nothing, which is the point.
 
+- **One version number, and a release that cannot ship without its notes.** The version Findra
+  reports in the tray, in the log header and in every diagnostic mode now comes from a single
+  place, so the number in a bug report is the number that was built. The update check reads it
+  as a number rather than as text, and a build whose version could not be read says so instead
+  of quietly telling you that you are up to date. Tagging a release checks that the tag, the
+  built version and this file all agree before anything is published, and the notes for a
+  release are this file's section for that version - so a tag nobody wrote anything about does
+  not become a release.
+
 ### Changed
 
 - **Content indexing is off until you ask for it**, including the free full-text search of
