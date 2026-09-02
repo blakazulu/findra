@@ -87,9 +87,25 @@ public static class Bench
         return s[rank - 1];
     }
 
+    /// <summary>
+    /// How long the extraction run has to have taken before its rates are published.
+    ///
+    /// <para>Two runs of the same default corpus came back sixteen percent apart because the whole
+    /// thing drained in under two tenths of a second: at that scale the figure is measuring one
+    /// scheduler hiccup, not the machine. A files-per-minute extrapolated from a fraction of a
+    /// second is noise wearing a unit, and this fragment is the only source the README is allowed
+    /// to quote. Under this, the rate cells say so and the section says how to get a real
+    /// one.</para>
+    /// </summary>
+    public const double MinThroughputSeconds = 1.0;
+
     /// <summary>The Markdown fragment, ready to paste into the README with no editing at all: six
     /// sections, every one a table or a plain sentence, nothing indented, and the machine first
-    /// because a number without its machine is marketing rather than measurement (spec §9).</summary>
+    /// because a number without its machine is marketing rather than measurement (spec §9).
+    ///
+    /// <para>Its own heading is a LEVEL TWO. The README it is pasted into already has a level one
+    /// of its own, and a fragment that opens with a second `#` has to be hand-demoted before it
+    /// can be used - which breaks the one promise this mode makes.</para></summary>
     public static string Fragment(BenchResult r)
     {
         ArgumentNullException.ThrowIfNull(r);
@@ -97,14 +113,14 @@ public static class Bench
         var sb = new StringBuilder();
         void Line(string text = "") => sb.Append(text).Append('\n');
 
-        Line("# Findra benchmark");
+        Line("## Findra benchmark");
         Line();
         Line("Produced by `findra --searchbench`. Every number below was measured on the machine");
         Line("named here, by this build, and re-running that command reproduces the whole page.");
         Line();
 
         // ---- 1. the machine ----------------------------------------------------------------
-        Line("## Machine");
+        Line("### Machine");
         Line();
         Line("| Part | Value |");
         Line("|---|---|");
@@ -125,7 +141,7 @@ public static class Bench
         bool helper = r.NamesUnavailable is null;
 
         // ---- 2. the volumes ----------------------------------------------------------------
-        Line("## Volumes");
+        Line("### Volumes");
         Line();
         if (!helper || r.Volumes is null || r.Volumes.Count == 0)
         {
@@ -143,7 +159,7 @@ public static class Bench
         Line();
 
         // ---- 3. name latency ---------------------------------------------------------------
-        Line("## Name query latency");
+        Line("### Name query latency");
         Line();
         if (!helper || r.Names is null || r.Names.Count == 0)
         {
@@ -168,7 +184,7 @@ public static class Bench
         // No scan column here, and that is not an omission: this query runs in this process
         // against a local file, so the round trip IS the scan and a second column would be the
         // same number printed twice.
-        Line("## Full-text query latency");
+        Line("### Full-text query latency");
         Line();
         Line("| Query | p50 | p95 | Worst | Hits | Samples |");
         Line("|---|---|---|---|---|---|");
@@ -179,22 +195,37 @@ public static class Bench
         Line();
 
         // ---- 5. extraction throughput ------------------------------------------------------
-        Line("## Document extraction");
+        Line("### Document extraction");
         Line();
         Line("| Kind | Files | Seconds | files/min | MB/s |");
         Line("|---|---|---|---|---|");
+        bool tooShort = false;
         foreach (ThroughputRow t in r.Extraction)
         {
             // files/minute is what spec §9 asks for; the per-second byte rate is what makes two
             // machines comparable, because "files" is whatever size the corpus happened to be.
-            string perMin = t.Seconds > 0 ? N((long)Math.Round(t.Files * 60.0 / t.Seconds)) : "not measured";
-            string perSec = t.Seconds > 0 ? (t.Bytes / 1048576.0 / t.Seconds).ToString("0.00", Fixed) : "not measured";
+            //
+            // Both are WITHHELD below the floor rather than printed with a caveat. A rate in a
+            // table is quoted on its own, away from whatever sentence sat under it, and a number
+            // this mode will not stand behind must not be available to quote at all.
+            bool enough = t.Seconds >= MinThroughputSeconds;
+            if (!enough) tooShort = true;
+            string perMin = enough ? N((long)Math.Round(t.Files * 60.0 / t.Seconds)) : Short;
+            string perSec = enough ? (t.Bytes / 1048576.0 / t.Seconds).ToString("0.00", Fixed) : Short;
             Line($"| {Cell(FileKinds.Label(t.Kind))} | {N(t.Files)} | {t.Seconds.ToString("0.00", Fixed)} | {perMin} | {perSec} |");
         }
         Line();
+        if (tooShort)
+        {
+            Line($"A rate is published only for a run of at least {MinThroughputSeconds.ToString("0.0", Fixed)} s. " +
+                 "One that finished faster is measuring a scheduler hiccup rather than the machine, and");
+            Line("this page is quoted verbatim. Re-run with a larger corpus - `findra --searchbench out.md " +
+                 $"{(SearchBench.DefaultCorpus * 4).ToString(Fixed)}` - to get one.");
+            Line();
+        }
 
         // ---- 6. the stores -----------------------------------------------------------------
-        Line("## Stores");
+        Line("### Stores");
         Line();
         Line("| Store | Path | Size |");
         Line("|---|---|---|");
@@ -207,6 +238,11 @@ public static class Bench
 
         return sb.ToString();
     }
+
+    /// <summary>What a rate cell says when the run it came from was too short to publish one.
+    /// Distinct from "not measured": the run happened, and what it produced is not fit to
+    /// quote.</summary>
+    public const string Short = "sample too short";
 
     private static string NotMeasured(string? why) =>
         "Not measured: " + (why is { Length: > 0 } ? Cell(why) : "the name helper is not running") + ".";
@@ -252,6 +288,19 @@ public static class SearchBench
     /// cold pipe and JIT, and publishing those as latency would describe a machine nobody has.</summary>
     private const int Warmups = 5, Runs = 50;
 
+    /// <summary>
+    /// How many .txt the generated corpus holds when the caller names no size, plus a tenth as
+    /// many .docx.
+    ///
+    /// <para>Two hundred used to be the default and it drained in about two tenths of a second, so
+    /// two runs on one idle machine reported rates sixteen percent apart - a figure that describes
+    /// whatever else the scheduler was doing, not the machine. This is sized so an ordinary run
+    /// clears <see cref="Bench.MinThroughputSeconds"/> with room to spare and publishes a number
+    /// that reproduces; generating and deleting the files is the price, and a benchmark that takes
+    /// a few seconds longer is not the problem a benchmark that lies is.</para>
+    /// </summary>
+    public const int DefaultCorpus = 2_500;
+
     private static readonly string[] NameQueries = ["report", "invoice", "sunset", "readme", "config"];
     private static readonly string[] FtsQueries = ["lease", "agreement", "invoice", "total", "report"];
 
@@ -259,9 +308,9 @@ public static class SearchBench
     {
         ArgumentNullException.ThrowIfNull(args);
         string? outPath = args.Length > 1 && args[1].Length > 0 ? args[1] : null;
-        int corpus = 200;
+        int corpus = DefaultCorpus;
         if (args.Length > 2 && int.TryParse(args[2], NumberStyles.Integer, CultureInfo.InvariantCulture, out int n))
-            corpus = Math.Clamp(n, 1, 20_000);
+            corpus = Math.Clamp(n, 1, 50_000);
 
         Console.Error.WriteLine("findra --searchbench: measuring, this takes a moment...");
 

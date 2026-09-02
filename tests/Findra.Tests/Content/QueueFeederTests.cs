@@ -222,6 +222,42 @@ public sealed class QueueFeederTests : IDisposable
     }
 
     [Fact]
+    public void ADropInASecondConnectionOwesAWalkEvenThoughItsCounterStartsLower()
+    {
+        // JournalDropped belongs to ONE NameClient, and the shell opens a new one every time the
+        // helper goes away and comes back - so the counter restarts at zero while the feeder
+        // outlives it. Reading 3 after 17 as "nothing new" is how the whole of a second session's
+        // losses hide behind the first session's larger number, on the one path in the design
+        // that has nothing upstream to notice a hole.
+        using ContentDb db = Open();
+        using var feeder = new QueueFeeder(db, () => Cfg);
+        feeder.Consume([Change(1, "a.pdf", @"C:\a.pdf", NtfsVolume.ReasonFileCreate, 10)]);
+
+        feeder.NoteClientDrops(17);
+        db.ClearWalkOwed('C');
+
+        feeder.NoteClientDrops(3);          // a new connection, three events already lost
+
+        Assert.True(db.WalkOwed('C'));
+    }
+
+    [Fact]
+    public void ADropIsRecordedWhereTheIndexReportReadsIt()
+    {
+        // --searchindex prints this row, and it is the only count in that report a dropped event
+        // ever moves - the index otherwise looks finished. Nothing wrote it until now, so the
+        // report said "0 dropped" however many files the feeder never heard about.
+        using ContentDb db = Open();
+        using var feeder = new QueueFeeder(db, () => Cfg);
+        feeder.Consume([Change(1, "a.pdf", @"C:\a.pdf", NtfsVolume.ReasonFileCreate, 10)]);
+
+        Assert.Null(db.Get("journal:dropped"));
+        feeder.NoteClientDrops(17);
+
+        Assert.Equal("17", db.Get("journal:dropped"));
+    }
+
+    [Fact]
     public void AFullPassDischargesTheDebtAndNothingElseDoes()
     {
         using ContentDb db = Open();

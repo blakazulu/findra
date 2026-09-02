@@ -357,15 +357,26 @@ public sealed class QueueFeeder : IDisposable
     /// is still in flight - the channel is not per-volume, so it cannot be attributed more
     /// precisely, and over-walking is the safe direction. An unchanged total is not a new drop:
     /// re-reporting the same number must not re-owe a walk that a pass has since discharged.
+    ///
+    /// A LOWER total is not a correction either - it is a new connection, whose counter starts at
+    /// zero again. Reading it as "nothing new" would let every drop in the second session hide
+    /// behind the first session's larger number, which is the one thing this path exists to stop.
+    ///
+    /// The running total is written to <c>journal:dropped</c>, which is where
+    /// <c>--searchindex</c> reads it. Without that row the report says zero however many events
+    /// were lost, and a dropped event is invisible in every other count it prints.
     /// </summary>
     public void NoteClientDrops(long journalDropped)
     {
-        if (_disposed || journalDropped <= _drops) { _drops = Math.Max(_drops, journalDropped); return; }
+        if (_disposed || journalDropped == _drops) return;
+        // A restart of the counter means a fresh channel that has ALREADY dropped this many.
         _drops = journalDropped;
+        if (journalDropped == 0) return;
 
         var charged = new SortedSet<char>(_db.KnownVolumes());
         foreach (char v in _walking.Keys) charged.Add(v);
         foreach (char v in charged) _db.SetWalkOwed(v);
+        _db.Set("journal:dropped", journalDropped.ToString(CultureInfo.InvariantCulture));
 
         Log.Warn("index", string.Create(CultureInfo.InvariantCulture,
             $"{journalDropped} journal event(s) were dropped before they reached the queue; " +

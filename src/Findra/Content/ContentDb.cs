@@ -17,8 +17,10 @@ namespace Findra;
 // largest write. A second pipe would have needed a protocol, reconnect logic and a story for a dead
 // peer; a table needs none of that and survives either process dying mid-write.
 //
-// Segment kinds: 0 = a photo (one vector for the whole image), 1 = a text chunk of a document,
-// 2 = a transcript segment (audio or video speech), 3 = a video frame at t0.
+// Segment kinds: 0 = a whole image, 1 = a text chunk of a document, 2 = a transcript segment
+// (audio or video speech), 3 = a video frame at t0. This build writes only kind 1 - words in
+// documents is the one capability that needs no model - and the other three are the numbers a
+// later capability will write, fixed here so the meaning of a stored row never shifts under it.
 public sealed class ContentDb : IDisposable
 {
     public const int SegImage = 0, SegText = 1, SegSpeech = 2, SegFrame = 3;
@@ -599,7 +601,8 @@ CREATE TABLE IF NOT EXISTS opened(path TEXT PRIMARY KEY, count INTEGER NOT NULL,
     public Pending? TakeNext()
     {
         using var cmd = _c.CreateCommand();
-        // deletes first (they free vectors), then oldest first
+        // Deletes first, then oldest first. A delete takes rows OUT, so running it ahead of the
+        // re-index of the same path keeps the index from briefly holding both.
         cmd.CommandText = "SELECT id, vol, frn, path, kind, reason FROM pending ORDER BY (reason=$d) DESC, id LIMIT 1";
         cmd.Parameters.AddWithValue("$d", ReasonDelete);
         using var r = cmd.ExecuteReader();
@@ -625,8 +628,12 @@ CREATE TABLE IF NOT EXISTS opened(path TEXT PRIMARY KEY, count INTEGER NOT NULL,
 
     public readonly record struct Segment(int Kind, double T0, double T1, long Vec, string Text);
 
-    /// <summary>Replace an item's segments with a fresh set. Returns the vector rows that are now
-    /// dead (the previous segments' rows), for the caller to tombstone.</summary>
+    /// <summary>Replace an item's segments with a fresh set.
+    ///
+    /// <para>Returns the <c>vec</c> values the replaced segments carried. This build writes -1 on
+    /// every segment it creates, so that list is always empty and no caller has anything to do
+    /// with it; the column and this return exist so the row shape does not have to change when
+    /// something starts filling it.</para></summary>
     public List<long> Upsert(string vol, ulong frn, string path, ResultKind kind, long mtime, long size,
         int state, string? error, IReadOnlyList<Segment> segments, SqliteTransaction tx)
     {
@@ -677,7 +684,9 @@ CREATE TABLE IF NOT EXISTS opened(path TEXT PRIMARY KEY, count INTEGER NOT NULL,
         return dead;
     }
 
-    /// <summary>Drop an item and everything under it. Returns the dead vector rows.</summary>
+    /// <summary>Drop an item and every segment under it, and take its text back out of the
+    /// full-text index. Returns the <c>vec</c> values those segments carried - empty in this
+    /// build, for the reason <see cref="Upsert"/> gives.</summary>
     public List<long> Delete(string vol, ulong frn, SqliteTransaction tx)
     {
         long? itemId;
@@ -742,7 +751,9 @@ CREATE TABLE IF NOT EXISTS opened(path TEXT PRIMARY KEY, count INTEGER NOT NULL,
 
     public readonly record struct SegmentHit(long SegmentId, string Path, ResultKind Kind, int SegKind, double T0, double T1, string Text, long Vec);
 
-    /// <summary>The segments behind a set of vector rows.</summary>
+    /// <summary>The segments carrying these <c>vec</c> values. Nothing in this build fills that
+    /// column, so nothing in this build calls this; it is the read side of a row shape the store
+    /// already writes.</summary>
     public List<SegmentHit> SegmentsByVec(IReadOnlyList<long> vecs)
     {
         var list = new List<SegmentHit>(vecs.Count);
@@ -825,7 +836,8 @@ CREATE TABLE IF NOT EXISTS opened(path TEXT PRIMARY KEY, count INTEGER NOT NULL,
         return rows;
     }
 
-    /// <summary>Every segment that carries text - what a model migration re-embeds in place.</summary>
+    /// <summary>Every segment that carries text, oldest first - the whole indexed corpus, read
+    /// back without re-opening a single file.</summary>
     public List<(long SegId, string Path, int SegKind, string Text)> TextSegments()
     {
         var list = new List<(long, string, int, string)>();
@@ -846,8 +858,10 @@ CREATE TABLE IF NOT EXISTS opened(path TEXT PRIMARY KEY, count INTEGER NOT NULL,
         cmd.ExecuteNonQuery();
     }
 
-    /// <summary>Queue every item of the given kinds again (a capability arrived under them).
-    /// Their textless segments are dropped so nothing points at the old space.</summary>
+    /// <summary>Queue every item of the given kinds again, because something that can now read
+    /// them arrived. Nothing is deleted here: the indexer replaces an item's segments when it
+    /// gets to the row, so removing them up front would only blank the index for the length of
+    /// the re-run. Returns how many rows were queued.</summary>
     public int RequeueKinds(int[] kinds, string reason)
     {
         int n = 0;

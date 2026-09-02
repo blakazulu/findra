@@ -268,6 +268,12 @@ internal sealed class Shell
     private static readonly TimeSpan RetryEvery = TimeSpan.FromSeconds(30);
     private static readonly TimeSpan WalkNoOftenThan = TimeSpan.FromSeconds(60);
 
+    /// <summary>How often the indexer's control rows and the capsule's line are refreshed while
+    /// this loop is waiting for a helper it cannot reach. One small read of a local file a second
+    /// is what the card already costs itself; a capsule that only learns the queue moved every
+    /// thirty seconds looks stuck for twenty-nine of them.</summary>
+    private static readonly TimeSpan PumpEvery = TimeSpan.FromSeconds(1);
+
     /// <summary>
     /// A repository is found by the one file every git checkout has in the same place. The
     /// enumerate call never returns directories - a folder whose name ends in a suffix is exactly
@@ -353,8 +359,19 @@ internal sealed class Shell
                     Log.Once("index|session|" + ex.GetType().Name, "WARN ", "index",
                         "the queue is not being fed from the journal :: " + ex.Message);
                 }
-                try { await Task.Delay(RetryEvery, ct).ConfigureAwait(false); }
-                catch (OperationCanceledException) { break; }
+                // Pumped rather than slept through. With no helper registered there is no session
+                // to run, so this is the whole of the loop - and the indexer child is still
+                // draining whatever the queue holds. A capsule reporting a count from thirty
+                // seconds ago reads as a stall, which is the exact impression spec §3 says the
+                // widget must not give.
+                bool cancelled = false;
+                for (TimeSpan waited = TimeSpan.Zero; waited < RetryEvery; waited += PumpEvery)
+                {
+                    try { await Task.Delay(PumpEvery, ct).ConfigureAwait(false); }
+                    catch (OperationCanceledException) { cancelled = true; break; }
+                    PumpIndexer(db);
+                }
+                if (cancelled) break;
             }
         }
         finally
@@ -569,12 +586,57 @@ internal sealed class Shell
             // with it. That is the whole of the "indexing stops when the app quits" rule, and
             // there is no other lifetime code anywhere.
             if (!cfg.IndexPaused && db.PendingCount() > 0) host.EnsureRunning();
+
+            ShowOnCapsule(db);
         }
         catch (Exception ex)
         {
             Log.Once("index|pump|" + ex.GetType().Name, "WARN ", "index",
                 "the indexer could not be kept up to date :: " + ex.Message);
         }
+    }
+
+    // What the capsule was last told. Posted only when it changes: the line moves every few
+    // seconds and this loop comes round every second, so three of every four posts would repaint
+    // the desktop widget to say exactly what it already says.
+    private string _capsuleLine = "";
+    private float _capsuleFraction = -1;
+
+    /// <summary>
+    /// Put the content index's one-line status under the capsule's bar.
+    ///
+    /// <para>This is what stops the widget looking broken at startup. A queue left over from a
+    /// previous session reads "N waiting - indexing is paused while Findra is closed" until the
+    /// child comes up, rather than showing a progress bar that does not move (spec §3); an index
+    /// that had to be rebuilt says so instead (spec §2a). An empty line draws nothing at all -
+    /// <see cref="CapsulePainter"/> skips the whole progress row - which is what keeps an idle
+    /// widget from looking busy.</para>
+    ///
+    /// <para>Read on the content loop's thread, off the writer connection this loop owns, and
+    /// posted to the interface thread. The capsule is a window; nothing about it may be touched
+    /// from here.</para>
+    /// </summary>
+    private void ShowOnCapsule(ContentDb db)
+    {
+        long pending = db.PendingCount(), indexed = db.IndexedCount();
+        string line = IndexStatus.Line(db.Get("indexer:state") ?? "off", pending, indexed,
+                                       IndexStatus.Alive(db.Get("indexer:beat")),
+                                       db.WasRebuilt || db.Get("index:rebuilt") == "1");
+        // Zero rather than a full bar when there is nothing waiting: "up to date" is a sentence,
+        // not a completed job, and a bar sitting at 100% invites the reader to wait for something.
+        float fraction = pending == 0 ? 0f : (float)(indexed / (double)(indexed + pending));
+
+        if (line == _capsuleLine && Math.Abs(fraction - _capsuleFraction) < 0.001f) return;
+        _capsuleLine = line;
+        _capsuleFraction = fraction;
+
+        Dispatcher.UIThread.Post(() =>
+        {
+            CapsuleWindow? capsule = _capsule;
+            if (capsule is null) return;
+            capsule.Progress = line;
+            capsule.ProgressFraction = fraction;
+        });
     }
 
     // ---- screens ---------------------------------------------------------------------------------
@@ -616,7 +678,15 @@ internal sealed class Shell
                 : $"the capsule has no saved position; it opens at ({at.X},{at.Y}) on the primary screen");
         }
 
-        var capsule = new CapsuleWindow(_palette, Zoom) { Position = at };
+        // Seeded from whatever the content loop last worked out, so a capsule created after the
+        // index has already been read - the tray toggle, or a slow first paint - opens carrying
+        // the current line instead of a blank one until the queue next moves.
+        var capsule = new CapsuleWindow(_palette, Zoom)
+        {
+            Position = at,
+            Progress = _capsuleLine,
+            ProgressFraction = Math.Max(_capsuleFraction, 0f),
+        };
         capsule.Clicked += OpenFromCapsule;
         capsule.Moved += SaveCapsulePosition;
         capsule.Show();

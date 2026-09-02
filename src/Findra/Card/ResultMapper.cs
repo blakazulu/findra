@@ -73,22 +73,48 @@ public static class ResultMapper
     public static SearchResults Build(string query, IReadOnlyList<NameRow> rows, SearchQuery parsed,
                                       SearchSort sort, double namesMs, Func<string, bool, Stat>? stat = null)
     {
+        var mapped = new List<SearchResult>(rows.Count);
+        foreach (NameRow row in rows) mapped.Add(Map(row, Stat.Missing));
+        return new SearchResults(query, Finish(mapped, parsed, sort, stat), namesMs, 0, false);
+    }
+
+    /// <summary>
+    /// The last step of every search, whichever half answered it: give each row its directory
+    /// entry, drop what the stat filters exclude, and put what is left in the order the sort chips
+    /// ask for.
+    ///
+    /// <para><b>Both halves come through here, and that is the point.</b> A full-text hit arrives
+    /// from the index with no size and no date on it - the store holds text, not directory
+    /// entries - so a Content search that skipped this step would leave `size:&gt;1mb`,
+    /// `modified:week` and the Newest and Largest chips silently doing nothing, while the card
+    /// went on showing them as applied. The grammar has to mean the same thing on both sides of
+    /// the pill, and one shared pass is the only way it stays that way.</para>
+    ///
+    /// <para>`size:` and `modified:` are ours to enforce either way. The helper holds names in RAM
+    /// and no stats at all, and the content store holds text, so neither source can answer those
+    /// filters - dropping this shows every sunset on the disk for `sunset size:&gt;1mb`. A row
+    /// that cannot be statted cannot be shown to satisfy such a filter, so it does not survive
+    /// one; with no stat filter in the query it is kept, with a size of -1 that the card reads as
+    /// "unknown".</para>
+    ///
+    /// <para>One stat per row, on whatever thread the caller is on - never the UI thread.</para>
+    /// </summary>
+    public static List<SearchResult> Finish(IReadOnlyList<SearchResult> rows, SearchQuery parsed,
+                                            SearchSort sort, Func<string, bool, Stat>? stat = null)
+    {
+        ArgumentNullException.ThrowIfNull(rows);
+        ArgumentNullException.ThrowIfNull(parsed);
         stat ??= StatOf;
         var list = new List<SearchResult>(rows.Count);
-        foreach (NameRow row in rows)
+        foreach (SearchResult r in rows)
         {
-            bool dir = IsDirectory(row.Attributes);
-            Stat st = stat(row.Path, dir);
-            // `size:` and `modified:` are ours to enforce. The helper holds names in RAM and no
-            // stats at all, so it answers those queries unfiltered by design - dropping the call
-            // below shows every sunset on the disk for `sunset size:>1mb`. A row we could not
-            // stat cannot be shown to satisfy such a filter, so it does not survive one.
+            Stat st = stat(r.Path, r.Kind == ResultKind.Folder);
             if (parsed.NeedsStat && (!st.Found || !parsed.AllowsStat(st.Size, st.Modified, st.Created, st.Accessed)))
                 continue;
-            list.Add(Map(row, st));
+            list.Add(st.Found ? r with { Size = st.Size, Modified = st.Modified } : r);
         }
         Order(list, sort);
-        return new SearchResults(query, list, namesMs, 0, false);
+        return list;
     }
 
     // A total order, not just a key: List.Sort is unstable, so equal scores would otherwise

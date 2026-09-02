@@ -222,9 +222,9 @@ public static class SearchIndex
                             && pid == Environment.ProcessId;
         bool alive = !sameProcess && IndexStatus.Alive(db.Get("indexer:beat"));
 
-        // Not yet written by anything landed in this tree - QueueFeeder is the process that will
-        // own a running total of journal events its own channel dropped. Reading a meta row that
-        // does not exist yet is exactly "0, never shown", the correct answer until it does.
+        // Written by QueueFeeder.NoteClientDrops - the running total of journal events this
+        // install's own receive channel evicted before the queue ever saw them. An absent row is
+        // "0, never shown", which is the right answer on a machine that has not lost any.
         long dropped = long.TryParse(db.Get("journal:dropped"), NumberStyles.Integer, CultureInfo.InvariantCulture, out long jd) ? jd : 0;
 
         return new IndexSnapshot(

@@ -15,6 +15,7 @@ public static class Program
             "--searchtest"  => Diagnostics.SelfTest.Run(),
             "--searchindex" => Diagnostics.SearchIndex.Run(args),
             "--searchbench" => Diagnostics.SearchBench.RunAsync(args).GetAwaiter().GetResult(),
+            "--searchmodels" => NotBuiltYet(),
             "--searchshot"  => Diagnostics.SearchShot.Render(
                 args.Length > 1 ? args[1] : "searchshot.png",
                 args.Length > 2 ? args[2] : "results",
@@ -52,12 +53,28 @@ public static class Program
         Console.Error.WriteLine("  --index <parentPid>      the content indexer, started by the UI - not run by hand");
         Console.Error.WriteLine("  --searchprobe [query]    the whole query path, end to end");
         Console.Error.WriteLine("  --searchtest             engine self-check");
+        Console.Error.WriteLine("  --searchmodels           are the models present, do they load - not built yet");
         Console.Error.WriteLine("  --searchindex [file|folder|q:query]...   what is indexed, and what is queued");
         Console.Error.WriteLine("  --searchbench [out.md] [corpus]     measure it, and print numbers fit to publish");
         Console.Error.WriteLine("  --searchshot out.png <state> [palette]   render a surface, no screen required");
         Console.Error.WriteLine("                           palette defaults to the configured one, not a fixed built-in");
         Console.Error.WriteLine("  --version                print the version and log location, then exit");
         return 1;
+    }
+
+    // A mode that is named everywhere - the docs, the usage above - and has nothing behind it
+    // yet. It gets its own arm rather than falling into Unknown: "unknown mode '--searchmodels'"
+    // reads as a typo and sends the reader looking for the right spelling, when the truth is that
+    // the mode is real and this build has nothing for it to report. Non-zero, because a script
+    // that asked about models did not get an answer.
+    private static int NotBuiltYet()
+    {
+        Console.Error.WriteLine("findra: --searchmodels is not built yet.");
+        Console.Error.WriteLine();
+        Console.Error.WriteLine("  This build loads no model, so there is no provider to name and nothing to");
+        Console.Error.WriteLine("  check. Searching the words inside documents needs no model and is always on;");
+        Console.Error.WriteLine("  see `findra --searchindex` for what it has read.");
+        return 2;
     }
 
     // --version answers the question a bug report starts with: which build is this, and where

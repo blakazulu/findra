@@ -113,6 +113,7 @@ public sealed class Indexer
     {
         var ix = new Indexer(db, 0);
         long stuck = -1;
+        string stuckOn = "";
         while (true)
         {
             ContentDb.Pending? next = db.TakeNext();
@@ -123,7 +124,8 @@ public sealed class Indexer
                 // Handle failed even to record its own failure, so the row is still queued and the
                 // next TakeNext hands back the same one. Looping on it forever would hang whoever
                 // called this; stopping with the queue intact is the honest outcome.
-                report($"stuck    {item.Kind,-8} {Path.GetFileName(item.Path)} - the queue could not be advanced past it");
+                stuckOn = Path.GetFileName(item.Path);
+                report($"stuck    {item.Kind,-8} {stuckOn} - the queue could not be advanced past it");
                 break;
             }
             var t = Stopwatch.StartNew();
@@ -131,7 +133,11 @@ public sealed class Indexer
             stuck = item.Id;
             report($"{what,-8} {item.Kind,-8} {t.ElapsedMilliseconds.ToString(CultureInfo.InvariantCulture),6} ms  {Path.GetFileName(item.Path)}");
         }
-        ix.Status("idle");
+        // "idle" means the queue is empty. A drain that stopped because it could not get past one
+        // row leaves the queue full, and recording that as idle is the status row telling the card
+        // and --searchindex that there is nothing to do while the count sits there not moving. The
+        // running loop already says "stuck" for exactly this; a one-shot drain owes the same word.
+        if (stuckOn.Length > 0) ix.Status("stuck", stuckOn); else ix.Status("idle");
     }
 
     // The parent is polled rather than waited on: a handle would have to be inherited or opened by

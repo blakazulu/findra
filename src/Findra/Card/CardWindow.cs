@@ -687,7 +687,7 @@ public sealed class CardWindow : Window
                 // outrank the lease itself, found by its words - which is the thing the pill
                 // exists to ask for. No _issue queue either: there is no wire here to keep in
                 // order, only a local file, so the generation and the token are the whole guard.
-                _ = Task.Run(() => ContentOnce(q, gen, started, mine.Token));
+                _ = Task.Run(() => ContentOnce(q, gen, sort, started, mine.Token));
                 return;
             }
             Task<QueryReply?> reply = _issue.Enqueue(() => RunSearchAsync(q, _life.Token));
@@ -705,7 +705,7 @@ public sealed class CardWindow : Window
         /// signature here would promise a yield it never makes. It runs on the pool because
         /// <see cref="RunSearch"/> put it there.</para>
         /// </summary>
-        private void ContentOnce(string raw, int gen, long started, CancellationToken ct)
+        private void ContentOnce(string raw, int gen, SearchSort sort, long started, CancellationToken ct)
         {
             SearchResults r;
             try
@@ -720,7 +720,7 @@ public sealed class CardWindow : Window
                 else
                 {
                     // MaxRows * 8: the card shows eight rows and scrolls through the rest.
-                    lock (_dbGate) r = ContentBranch.Search(db, raw, SearchCardLayout.MaxRows * 8);
+                    lock (_dbGate) r = ContentBranch.Search(db, raw, SearchCardLayout.MaxRows * 8, sort);
                 }
             }
             catch (Exception ex)

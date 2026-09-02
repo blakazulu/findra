@@ -128,15 +128,19 @@ public sealed class CapsuleWindow : Window
     /// shell writes it to the config; the window itself owns no settings.</summary>
     public event Action<PixelPoint>? Moved;
 
-    /// <summary>The line under the bar. Empty means no line is drawn at all - an idle widget with
-    /// a permanently visible empty progress bar looks busy when it is not. Content indexing sets
-    /// this in a later plan; it is a property rather than a constant so that wiring is one line.</summary>
+    /// <summary>The line under the bar - what the content index is doing, in one sentence, from
+    /// <see cref="IndexStatus.Line"/>. Empty means no line is drawn at all: an idle widget with a
+    /// permanently visible empty progress bar looks busy when it is not. Set from the shell's
+    /// content loop, on the interface thread.</summary>
     public string Progress
     {
         get => _canvas.Progress;
         set { _canvas.Progress = value; _canvas.InvalidateVisual(); }
     }
 
+    /// <summary>How much of the progress track is filled, 0..1 - indexed over indexed plus
+    /// waiting. Zero while nothing is queued, so a drained index shows its sentence without a bar
+    /// sitting at full inviting the reader to wait for something.</summary>
     public float ProgressFraction
     {
         get => _canvas.ProgressFraction;

@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Globalization;
 using Findra.Pipe;
 using Findra.Startup;
 
@@ -25,6 +26,8 @@ public static class SearchProbe
         Console.WriteLine(ui is { } u
             ? $"  ui                     : running (pid {u.Pid}, hotkey {u.Hotkey ?? "none"})"
             : "  ui                     : not running");
+
+        Console.WriteLine(Indexer());
 
         NameClient client;
         try
@@ -58,6 +61,12 @@ public static class SearchProbe
             Console.WriteLine($"  reply generation       : {reply.Gen}" +
                               $"{(reply.Gen == client.CurrentGeneration ? "" : "  (MISMATCH)")}");
             Console.WriteLine($"  round trip             : {elapsed.TotalMilliseconds:F1} ms");
+            // Only when it moved. A dropped journal event is a file the queue feeder never heard
+            // about, and it leaves no other trace anywhere: the index simply looks finished. A
+            // line that always said "dropped: 0" would train the reader to skip it.
+            if (client.JournalDropped != 0)
+                Console.WriteLine($"  journal dropped        : {client.JournalDropped.ToString("N0", CultureInfo.InvariantCulture)}" +
+                                  "  (events this session never saw - a full pass is owed)");
             Console.WriteLine($"  rows                   : {reply.Rows.Count}");
             Console.WriteLine();
             foreach (NameRow r in reply.Rows.Take(20))
@@ -66,5 +75,49 @@ public static class SearchProbe
             return reply.Rows.Count > 0 ? 0 : 2;
         }
         finally { await client.DisposeAsync(); }
+    }
+
+    private const string Label = "  indexer                : ";
+
+    /// <summary>
+    /// What the content indexer is doing, read from the <c>indexer:*</c> meta rows through a
+    /// read-only connection.
+    ///
+    /// <para>Guarded on <see cref="File.Exists"/> rather than on catching the open: a read-only
+    /// SQLite connection over a path that is not there throws, and a fresh machine that has never
+    /// started the interface is exactly when somebody runs this. The existence check is also why
+    /// <see cref="ContentDb.DefaultPath"/> does not call <c>Paths.Ensure</c> - a property getter
+    /// that creates a directory would have this probe bring the index folder into being just by
+    /// asking whether anything was in it.</para>
+    ///
+    /// <para>A stale heartbeat is not a running child. The queue is still reported, because "not
+    /// running - 42 file(s) waiting" is the whole answer to "why is nothing being indexed".</para>
+    /// </summary>
+    private static string Indexer()
+    {
+        try
+        {
+            if (!File.Exists(ContentDb.DefaultPath)) return Label + "no content index yet";
+
+            using var db = new ContentDb(ContentDb.DefaultPath, readOnly: true);
+            string N(long v) => v.ToString("N0", CultureInfo.InvariantCulture);
+
+            if (!IndexStatus.Alive(db.Get("indexer:beat")))
+                return Label + $"not running - {N(db.PendingCount())} file(s) waiting";
+
+            string pid = db.Get("indexer:pid") ?? "?";
+            string state = db.Get("indexer:state") is { Length: > 0 } s ? s : "working";
+            string current = db.Get("indexer:current") ?? "";
+            string rate = db.Get("indexer:rate") ?? "";
+            return Label + $"running (pid {pid}) - {state}" +
+                   (current.Length > 0 ? " " + current : "") +
+                   (rate.Length > 0 ? ", " + rate : "");
+        }
+        catch (Exception ex)
+        {
+            // Never fatal. The rest of this probe is about the name path, which does not touch
+            // this file at all, and an index nobody can read is itself worth printing.
+            return Label + $"the index could not be read ({ex.GetType().Name}: {ex.Message})";
+        }
     }
 }

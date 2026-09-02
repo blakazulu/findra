@@ -11,8 +11,8 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <LangVersion>latest</LangVersion>
     <InvariantGlobalization>false</InvariantGlobalization>
-    <!-- System.IO.Pipes.AccessControl (below) is unused until Task 7 wires up the
-         named-pipe ACLs, and 5.0.0 is the only stable release NuGet has ever published
+    <!-- System.IO.Pipes.AccessControl (below) carries the PipeSecurity the helper puts on
+         its listener, and 5.0.0 is the only stable release NuGet has ever published
          for it, so restore always flags NU1510 ("will not be pruned"). Per-package
          suppression via NoWarn metadata on the PackageReference item (both attribute
          and child-element form) does not silence NU1510 on this SDK - verified by

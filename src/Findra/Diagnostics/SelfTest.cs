@@ -100,6 +100,55 @@ public static class SelfTest
                   "so an ordinary catch-up would drop events on a healthy client"
                 : null);
 
+        // ---- the content path ----
+        //
+        // Three checks, in the order a failure would actually bite: can the bundled SQLite do
+        // full-text search at all, does the index on this machine match this build, and does a
+        // real document survive extraction, chunking, indexing and a query.
+
+        failed += Check("sqlite has fts5", () =>
+            ContentDb.CompileOptions().Any(o => o.Contains("FTS5", StringComparison.OrdinalIgnoreCase))
+                ? null : "the bundled sqlite has no FTS5 - document search cannot work");
+
+        failed += Check("the index schema is current", () =>
+        {
+            // A missing index is the ordinary state of a machine that has not run the interface
+            // yet. It is not a failure, and saying so is more useful than an "ok" that skipped
+            // silently.
+            if (!File.Exists(ContentDb.DefaultPath)) { Console.WriteLine("        no index yet - nothing to check"); return null; }
+            using var db = new ContentDb(ContentDb.DefaultPath, readOnly: true);
+            string? v = db.Get("schema");
+            return v == ContentDb.SchemaVersion.ToString(CultureInfo.InvariantCulture)
+                ? null
+                : $"index schema is '{v}', this build wants {ContentDb.SchemaVersion.ToString(CultureInfo.InvariantCulture)}";
+        });
+
+        failed += Check("a document round-trips through a temporary index", () =>
+        {
+            // The whole content path in one check, against a throwaway database in a temp folder:
+            // queue a real file, drain it with the indexer's own code, and ask for a word that is
+            // inside it. It never touches the real index - a self-test that left files in
+            // someone's search results is a self-test nobody runs twice.
+            string dir = Path.Combine(Path.GetTempPath(), "findra-selftest-" + Guid.NewGuid().ToString("N"));
+            try
+            {
+                Directory.CreateDirectory(dir);
+                string doc = Path.Combine(dir, "selftest.txt");
+                File.WriteAllText(doc, "Findra self-test: the quarterly lease agreement and its deposit.");
+                using var db = new ContentDb(Path.Combine(dir, "search.db"));
+                db.Enqueue("C", 1, doc, ResultKind.Document, "selftest");
+                Indexer.DrainOnce(db, _ => { });
+                if (db.PendingCount() != 0) return "the queue did not drain";
+                if (db.Fts("deposit", 5).Count != 1) return "the indexed word was not found again";
+                // Through the branch the card actually calls, not just the store: the grammar, the
+                // dedupe and the finish-and-order pass are all between a keystroke and a row.
+                if (ContentBranch.Search(db, "deposit", 5).Rows.Count != 1)
+                    return "the content branch did not answer with the file the store found";
+                return null;
+            }
+            finally { try { Directory.Delete(dir, true); } catch (IOException) { } catch (UnauthorizedAccessException) { } }
+        });
+
         failed += Check("config.json round-trips", () =>
         {
             Config c = Config.Default with

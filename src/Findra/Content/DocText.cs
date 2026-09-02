@@ -18,7 +18,11 @@ namespace Findra;
 // normal integrity and never in the elevated helper (spec §3).
 public static class DocText
 {
-    public const int MaxChars = 400_000;   // ~100k tokens; past that a file is a corpus, not a document
+    /// <summary>How many CHARACTERS of one file are read. Roughly a two-hundred-page book; past
+    /// that a "document" is a corpus - a database dump, a concatenated log - and reading it whole
+    /// costs minutes and finds nothing anyone was looking for. Characters because that is what is
+    /// counted and what is chunked: nothing here has a vocabulary to measure in.</summary>
+    public const int MaxChars = 400_000;
 
     /// <summary>Formats Findra classifies as documents and cannot yet read INSIDE: the legacy
     /// binary Office files and the OpenDocument zips. An .odt's words are deflate-compressed, so
@@ -30,9 +34,9 @@ public static class DocText
 
     /// <summary>Can this build read the words inside that file, or would <see cref="Extract"/>
     /// fall through to reading its bytes as text? RTF is on the no list deliberately: it is ASCII,
-    /// so a raw read does yield some real words - alongside \fonttbl, \pard and colour tables as
-    /// indexed tokens. A half-good index is harder to reason about than an honest gap, and
-    /// stripping RTF control words is writing a reader.</summary>
+    /// so a raw read does yield some real words - alongside \fonttbl, \pard and colour tables,
+    /// indexed as words in their own right. A half-good index is harder to reason about than an
+    /// honest gap, and stripping RTF control words is writing a reader.</summary>
     public static bool CanExtract(string path) => !NoReader.Contains(Path.GetExtension(path).TrimStart('.'));
 
     public static string Extract(string path)

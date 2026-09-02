@@ -27,14 +27,22 @@ verified without a screen, and `--searchshot` in particular is how UI gets itera
 
 ```bash
 findra.exe --searchprobe [query]      # whole path end to end; must report which process
-                                      # answered and the current generation counter
+                                      # answered, the current generation counter, and what
+                                      # the content indexer is doing
 findra.exe --searchmodels             # are models present, do they load, do they agree
-findra.exe --searchindex              # what is indexed, what is queued
-findra.exe --searchshot out.png <capsule|empty|typing|results|noresults|many|adv|opening|openingempty>
+                                      # (says it is not built yet until Plan 5 lands)
+findra.exe --searchindex [file|folder|q:query]...   # what is indexed, what is queued; given
+                                      # paths it queues and drains them, given q: it queries
+findra.exe --searchshot out.png <capsule|empty|typing|results|noresults|many|adv|opening|openingempty> [palette]
 findra.exe --searchtest               # engine self-check
-findra.exe --searchbench [out.md]     # measured numbers, as a pasteable Markdown fragment
+findra.exe --searchbench [out.md] [corpus]   # measured numbers, as a pasteable Markdown
+                                      # fragment; `corpus` is how many files it generates
 findra.exe --version                  # print the version and log location, then exit
 ```
+
+The `--searchbench` fragment opens at heading level two and every section below it at level
+three, so it pastes under the README's own `#` with nothing to edit. It refuses to print a
+throughput rate for a run shorter than a second and says how to get a longer one.
 
 `--searchshot` must learn every new palette and every new surface as it is written.
 

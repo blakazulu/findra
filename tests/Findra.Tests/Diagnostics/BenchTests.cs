@@ -28,10 +28,13 @@ public class BenchTests
         Machine: Box, Version: "0.4.0",
         Volumes: volumes ?? Vols(),
         Names: names, NamesUnavailable: unavailable,
+        // Deliberately three different sample counts - names 4, lease 5, invoice 6. A single
+        // shared count lets a table that lost its own "n=" pass on another table's marker, which
+        // is the hole EveryLatencyNumberCarriesItsUnitAndItsSampleSize used to have.
         Fts:
         [
-            new("lease", [1.0, 2.0, 3.0, 4.0], [], 12),
-            new("invoice", [2.0, 2.5, 3.5, 9.0], [], 0),
+            new("lease", [1.0, 2.0, 3.0, 4.0, 4.5], [], 12),
+            new("invoice", [2.0, 2.5, 3.5, 9.0, 9.5, 10.0], [], 0),
         ],
         Extraction: [new ThroughputRow(ResultKind.Document, 200, 4.0, 1_638_400)],
         CorpusNote: "200 generated .txt of 8 KB and 20 generated .docx of 12 KB",
@@ -134,15 +137,80 @@ public class BenchTests
         Assert.Contains("pipe", md, StringComparison.OrdinalIgnoreCase);
     }
 
+    /// <summary>One "## ..." section of the fragment, header line included, up to the next one.
+    /// Asserting inside a section is what makes a claim about THAT table rather than about the
+    /// document.</summary>
+    private static string Section(string md, string heading)
+    {
+        string[] parts = md.Split("### " + heading + "\n");
+        Assert.Equal(2, parts.Length);
+        return parts[1].Split("\n### ")[0];
+    }
+
     [Fact]
     public void EveryLatencyNumberCarriesItsUnitAndItsSampleSize()
     {
+        // Scoped per TABLE, and with a different sample count in each. Asserting "n=4 appears
+        // somewhere in the fragment" cannot fail while any table still carries a marker: drop
+        // "n=" from the name table and the full-text table's own marker keeps the test green,
+        // which is the opposite of what it claims to prove.
         string md = Bench.Fragment(Sample(names: SomeNames()));
 
-        Assert.Contains("p50", md);
-        Assert.Contains("p95", md);
-        Assert.Contains("ms", md);
-        Assert.Contains("n=4", md);
+        string names = Section(md, "Name query latency");
+        Assert.Contains("p50", names, StringComparison.Ordinal);
+        Assert.Contains("p95", names, StringComparison.Ordinal);
+        Assert.Contains(" ms ", names, StringComparison.Ordinal);
+        Assert.Contains("n=4", names, StringComparison.Ordinal);
+
+        string fts = Section(md, "Full-text query latency");
+        Assert.Contains("p50", fts, StringComparison.Ordinal);
+        Assert.Contains("p95", fts, StringComparison.Ordinal);
+        Assert.Contains(" ms ", fts, StringComparison.Ordinal);
+        Assert.Contains("n=5", fts, StringComparison.Ordinal);   // lease
+        Assert.Contains("n=6", fts, StringComparison.Ordinal);   // invoice
+    }
+
+    [Fact]
+    public void TheFragmentCarriesNoTopLevelHeadingSoItPastesUnderTheReadmesOwn()
+    {
+        // The whole promise of this mode is "paste it in, edit nothing". A README already has one
+        // level-one heading; a fragment that opens with a second has to be demoted by hand first,
+        // every time, and a fragment that needs hand-editing is not a reproducible number.
+        string md = Bench.Fragment(Sample(names: SomeNames()));
+
+        Assert.StartsWith("## Findra benchmark", md, StringComparison.Ordinal);
+        foreach (string line in md.Split('\n'))
+            Assert.False(line.StartsWith("# ", StringComparison.Ordinal),
+                         $"a top-level heading collides with the README's own: '{line}'");
+    }
+
+    [Fact]
+    public void ARunTooShortToMeasureWithholdsItsRateAndSaysWhy()
+    {
+        // 190 ms of extraction is what two runs sixteen percent apart look like. Publishing
+        // files/min off it puts a number on a product page that the next run will not reproduce,
+        // so no rate is printed at all and the reader is told how to get one.
+        BenchResult r = Sample(names: SomeNames()) with
+        {
+            Extraction = [new ThroughputRow(ResultKind.Document, 220, 0.19, 1_638_400)],
+        };
+
+        string md = Bench.Fragment(r);
+        string section = Section(md, "Document extraction");
+
+        Assert.Contains(Bench.Short, section, StringComparison.Ordinal);
+        Assert.DoesNotContain("69,474", section, StringComparison.Ordinal);   // 220 files / 0.19 s
+        Assert.Contains("0.19", section, StringComparison.Ordinal);           // the run is still reported
+        Assert.Contains("--searchbench", section, StringComparison.Ordinal);  // and how to fix it
+    }
+
+    [Fact]
+    public void ARunLongEnoughToMeasurePublishesItsRateWithNoCaveat()
+    {
+        string section = Section(Bench.Fragment(Sample(names: SomeNames())), "Document extraction");
+
+        Assert.Contains("3,000", section, StringComparison.Ordinal);          // 200 files in 4.0 s
+        Assert.DoesNotContain(Bench.Short, section, StringComparison.Ordinal);
     }
 
     [Fact]

@@ -18,42 +18,83 @@ namespace Findra;
 /// </summary>
 public static class ContentBranch
 {
-    /// <summary>Every exact-word hit is worth the same: bm25 has already put the best first, and
-    /// a score invented on top of it would only pretend to a precision this branch does not
+    /// <summary>Every exact-word hit is worth the same band: bm25 has already put the best first,
+    /// and a score invented on top of it would only pretend to a precision this branch does not
     /// have. The value sits just under a perfect name match so the two scales stay comparable
     /// if anything ever displays them side by side.</summary>
     public const float WordScore = 0.86f;
 
     /// <summary>
+    /// How much each place down the bm25 ranking costs a row's score.
+    ///
+    /// <para>It is not a judgement about the file, it is the RANK, carried where the shared
+    /// finish-and-order pass can see it. That pass sorts on Score and breaks a tie by path
+    /// length, so leaving every content row on one flat constant would quietly redefine "best
+    /// match" as "shortest path" and throw away the only ordering bm25 produced. The step is
+    /// small enough that all of them stay inside one band - a hundred rows span 0.001 - so
+    /// nothing reads as a confidence this branch has not got.</para>
+    /// </summary>
+    public const float RankStep = 1e-5f;
+
+    /// <summary>What the card says when a Content query carries filters but no words at all.</summary>
+    public const string NoWords =
+        "Content search needs a word to look for - a filter narrows what the words found, " +
+        "it cannot find files on its own.";
+
+    /// <summary>
     /// The rows a Content query answers with. <paramref name="max"/> is how many the card can
     /// show; the FTS read asks for several times that, because one file can own many chunks and
-    /// only the first of each survives the dedupe below.
+    /// only the best of each survives the dedupe below, and the stat filters can still drop rows
+    /// after that.
+    ///
+    /// <para><paramref name="sort"/> and <paramref name="stat"/> exist so this half of the pill
+    /// goes through <see cref="ResultMapper.Finish"/> exactly as the name half does: same stat
+    /// filters, same sort chips, same order. <paramref name="stat"/> is injected only so tests can
+    /// describe a disk without having one.</para>
     /// </summary>
-    public static SearchResults Search(ContentDb db, string raw, int max)
+    public static SearchResults Search(ContentDb db, string raw, int max,
+                                       SearchSort sort = SearchSort.Best,
+                                       Func<string, bool, ResultMapper.Stat>? stat = null)
     {
         ArgumentNullException.ThrowIfNull(db);
         var sw = Stopwatch.StartNew();
         var q = new SearchQuery(raw);
-        // A query of filters alone (`ext:pdf` with no words) has no ContentText, and matching the
-        // raw string would send `ext:pdf` itself to the tokenizer. Fall back to the raw text only
-        // when the parse found nothing to say.
-        string text = q.ContentText.Length > 0 ? q.ContentText : raw;
+        string text = q.ContentText;
+
+        // A query of filters alone - `ext:pdf`, or `-draft`, or a bare glob - has no ContentText.
+        // Sending the raw string instead put `ext:pdf` itself through the tokenizer, which finds
+        // any document containing the words "ext" and "pdf" and presents them as matches for a
+        // query that never asked for a word. There is nothing to look for, so nothing is found,
+        // and the card says which half of the query is missing.
+        if (text.Length == 0)
+            return new SearchResults(raw, Array.Empty<SearchResult>(), NamesMs: 0,
+                                     ContentMs: sw.Elapsed.TotalMilliseconds,
+                                     ContentReady: true, Note: NoWords);
 
         var byPath = new Dictionary<string, SearchResult>(StringComparer.OrdinalIgnoreCase);
+        int rank = 0;
         foreach (ContentDb.SegmentHit h in db.Fts(text, max * 4))
         {
             // The grammar is a filter on the FILE, not on its text: `lease ext:txt` still means
             // the txt one. Skipping this would make the pill quietly ignore half the query
             // language the card advertises.
             if (!q.Allows(Path.GetFileName(h.Path), h.Path, h.Kind)) continue;
-            // One row per file. A two hundred page contract that says "lease" on every page is
-            // one result, and the FTS read is in bm25 order, so the first hit for a path is its
-            // best one.
+            // One row per file, and it is the file's BEST chunk. A two hundred page contract that
+            // says "lease" on every page is one result; the FTS read is in bm25 order, so the
+            // first hit for a path outranks every later one, and the excerpt the row carries is
+            // the one bm25 chose rather than whichever chunk happened to come last.
             if (byPath.ContainsKey(h.Path)) continue;
-            byPath[h.Path] = ToResult(h, WordScore, text);
+            byPath[h.Path] = ToResult(h, WordScore - rank * RankStep, text);
+            rank++;
         }
 
-        List<SearchResult> rows = byPath.Values.OrderByDescending(r => r.Score).Take(max).ToList();
+        // The same finish-and-order pass the name half runs: it is what gives these rows a size
+        // and a date at all, and therefore what makes `size:`, `modified:` and the sort chips mean
+        // the same thing on both sides of the pill. The store holds text, not directory entries,
+        // so without this those controls would sit on the card doing nothing.
+        List<SearchResult> rows = ResultMapper.Finish([.. byPath.Values], q, sort, stat);
+        if (rows.Count > max) rows.RemoveRange(max, rows.Count - max);
+
         // "No matches" and "nothing has been read yet" are different facts, and only one of them
         // is about the query. An empty index must never read as an answer.
         string note = rows.Count == 0 && db.IndexedCount() == 0
