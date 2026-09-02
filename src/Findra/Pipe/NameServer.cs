@@ -64,8 +64,19 @@ public static class NameServer
     /// the frame: the suffix list is a per-record inner loop the CALLER controls inside the
     /// elevated process, so an unbounded list turns one small frame into hours of comparisons on
     /// a 1.5M-record volume.
+    ///
+    /// <para>128 rather than a tighter number because the bound is paid against a real list that
+    /// grows. Every content extension this build knows about travels in one of these frames, and
+    /// a clamp the shipped list can reach is a clamp that silently deletes the extensions sorting
+    /// last from every first pass on every machine. The cost of the number itself is one ordinal
+    /// EndsWith per suffix per record, each rejected on its final character: 128 of them over
+    /// 1.5M records is about a second inside the elevated process, once per volume per walk, and
+    /// is bounded whatever the frame asks for. <c>NameClient.EnumerateAsync</c> splits a longer
+    /// list across requests rather than letting this trim it, and
+    /// <c>EnumerateTests.TheContentSuffixListFitsInOneEnumerateRequest</c> is what says when this
+    /// number has to move again.</para>
     /// </summary>
-    private const int MaxSuffixes = 64;
+    public const int MaxSuffixes = 128;
     private const int MaxSuffixLength = 16;
 
     /// <summary>
@@ -290,12 +301,24 @@ public static class NameServer
             int batch = Math.Clamp(req.BatchSize, 1, MaxEnumerateBatch);
 
             var suffixes = new List<string>(MaxSuffixes);
+            int unheard = 0;
             foreach (string s in req.Suffixes ?? [])
             {
-                if (suffixes.Count == MaxSuffixes) break;
                 if (string.IsNullOrEmpty(s) || s.Length > MaxSuffixLength) continue;
+                if (suffixes.Count == MaxSuffixes) { unheard++; continue; }
                 suffixes.Add(s);
             }
+
+            // Said out loud, every time. Trimming the tail of a caller's suffix list makes the
+            // answer LOOK complete - the stream still ends in a Done frame - while the files whose
+            // extensions sorted last are simply absent, and nothing downstream can tell that from
+            // a disk that does not have them. The client splits an over-long list rather than
+            // letting this happen, so a machine that logs this line has a caller that did not.
+            if (unheard > 0)
+                Log.Warn("names", string.Create(CultureInfo.InvariantCulture,
+                    $"{letter}: an enumerate request named {suffixes.Count + unheard} suffixes and only " +
+                    $"{MaxSuffixes} are honoured; {unheard} were not compared and files with those " +
+                    $"extensions are missing from this answer"));
 
             NameIndex? ix = null;
             foreach ((char l, VolumeView v) in views)

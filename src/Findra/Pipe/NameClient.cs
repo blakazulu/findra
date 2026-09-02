@@ -221,8 +221,48 @@ public sealed class NameClient : IAsyncDisposable
     /// Throws if the helper goes away mid-walk rather than ending quietly. A caller that took a
     /// truncated stream for a finished one would stamp a consumed position and clear the walk
     /// debt over a disk it never finished reading, and nothing afterwards would ever notice.
+    ///
+    /// A list longer than one request can carry is SPLIT across requests, never trimmed. The
+    /// helper clamps the frame at <see cref="NameServer.MaxSuffixes"/> to bound a per-record
+    /// inner loop it did not choose, and it drops the tail to do it - so a caller whose list
+    /// outgrew the clamp would lose whichever extensions sort last, on every machine, with no
+    /// error anywhere. Splitting costs one extra pass over the volume per extra chunk, which is
+    /// the honest price and is visible in the log rather than in a hole in the index.
     /// </summary>
     public async IAsyncEnumerable<EnumeratedFile> EnumerateAsync(
+        char volume, IReadOnlyList<string> suffixes, int batchSize,
+        [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken ct)
+    {
+        if (suffixes.Count <= NameServer.MaxSuffixes)
+        {
+            await foreach (EnumeratedFile f in OneEnumerationAsync(volume, suffixes, batchSize, ct)
+                               .ConfigureAwait(false))
+                yield return f;
+            yield break;
+        }
+
+        int chunks = (suffixes.Count + NameServer.MaxSuffixes - 1) / NameServer.MaxSuffixes;
+        Log.Warn("pipe", string.Create(CultureInfo.InvariantCulture,
+            $"{char.ToUpperInvariant(volume)}: {suffixes.Count} suffixes is more than one enumerate " +
+            $"request carries ({NameServer.MaxSuffixes}), so the volume is walked {chunks} times"));
+
+        // One file can end in two of the caller's suffixes at once - ".gz" and ".tar.gz" - so the
+        // chunks are not disjoint over files even though they are disjoint over suffixes. The
+        // caller is handed each file once whatever it named.
+        var seen = new HashSet<ulong>();
+        for (int i = 0; i < suffixes.Count; i += NameServer.MaxSuffixes)
+        {
+            var chunk = new List<string>(NameServer.MaxSuffixes);
+            for (int j = i; j < suffixes.Count && j < i + NameServer.MaxSuffixes; j++) chunk.Add(suffixes[j]);
+
+            await foreach (EnumeratedFile f in OneEnumerationAsync(volume, chunk, batchSize, ct)
+                               .ConfigureAwait(false))
+                if (seen.Add(f.Frn)) yield return f;
+        }
+    }
+
+    /// <summary>One enumerate request and the whole of its reply stream.</summary>
+    private async IAsyncEnumerable<EnumeratedFile> OneEnumerationAsync(
         char volume, IReadOnlyList<string> suffixes, int batchSize,
         [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken ct)
     {

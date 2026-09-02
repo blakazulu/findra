@@ -108,4 +108,58 @@ public class EnumerateTests
         Assert.Empty(only.Files);
         await cts.CancelAsync();
     }
+
+    /// <summary>One file per suffix, all of the same shape so no suffix is a suffix of another
+    /// and the count is the only thing under test.</summary>
+    private static NameIndex Many(int count)
+    {
+        var ix = new NameIndex('C');
+        ix.Upsert(5, 0, NtfsVolume.FileAttributeDirectory, "C:");
+        ix.Upsert(10, 5, NtfsVolume.FileAttributeDirectory, "Papers");
+        for (int i = 0; i < count; i++)
+            ix.Upsert((ulong)(100 + i), 10, 0, "f" + i.ToString("000") + Suffix(i));
+        return ix;
+    }
+
+    private static string Suffix(int i) => ".x" + i.ToString("000");
+
+    [Fact]
+    public async Task EveryNamedSuffixComesBackEvenWhenTheListIsLongerThanOneRequestCarries()
+    {
+        // The helper clamps the suffix list and drops the tail. ContentSuffixes() is sorted, so a
+        // build that outgrows the clamp loses the alphabetically LAST extensions from every first
+        // pass on every machine, silently and forever - the exact drift the generated list exists
+        // to prevent. The caller must never be able to lose a suffix by naming too many.
+        int count = NameServer.MaxSuffixes + 3;
+        var (server, client) = NameServerTests.PairForTests();
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+        _ = NameServer.Serve(server,
+            new Dictionary<char, VolumeView> { ['C'] = new(Many(count), JournalId: 0, NextUsn: 0, EnumerateMs: 0) },
+            new IndexLock(), new JournalBroadcast(), null, cts.Token);
+
+        await using var c = new NameClient(client);
+        string[] asked = [.. Enumerable.Range(0, count).Select(Suffix)];
+        var got = new List<string>();
+        await foreach (EnumeratedFile f in c.EnumerateAsync('C', asked, 100, cts.Token)) got.Add(f.Path);
+
+        Assert.Equal(count, got.Count);
+        Assert.Equal(count, got.Distinct().Count());
+        // The ones that vanish first are the tail of the list: the clamp drops the tail.
+        Assert.Contains(got, p => p.EndsWith(Suffix(count - 1), StringComparison.Ordinal));
+        await cts.CancelAsync();
+    }
+
+    [Fact]
+    public void TheContentSuffixListFitsInOneEnumerateRequest()
+    {
+        // A pin, not a preference. The helper honours at most NameServer.MaxSuffixes suffixes per
+        // request; anything beyond that costs a second full walk of the volume. When this fails,
+        // the choice is to raise the clamp (a longer per-record inner loop inside the elevated
+        // process) or to accept the extra pass - not to quietly ship a shorter list.
+        int have = QueueFeeder.ContentSuffixes().Count;
+        Assert.True(have <= NameServer.MaxSuffixes,
+            $"FileKinds now yields {have} content extensions and one enumerate request carries " +
+            $"{NameServer.MaxSuffixes}; the first pass would take {1 + have / NameServer.MaxSuffixes} " +
+            "walks of every volume. Raise NameServer.MaxSuffixes or accept the extra pass.");
+    }
 }
