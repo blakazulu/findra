@@ -33,10 +33,14 @@ public sealed class CardWindow : Window
     private readonly CardCanvas _canvas;
     private DimWindow? _dim;
 
-    public CardWindow(Palette palette, double scale)
+    /// <summary><paramref name="content"/> is the process's ONE open content index, or null when
+    /// this session has none. The window borrows it and never disposes it: the store outlives
+    /// every card, and a second connection would mean a second schema check and a second place a
+    /// migration could run.</summary>
+    public CardWindow(Palette palette, double scale, ContentDb? content = null)
     {
         Derived derived = Derived.From(palette);
-        _canvas = new CardCanvas(derived, scale, this);
+        _canvas = new CardCanvas(derived, scale, this, content);
         Content = _canvas;
 
         Title = "Findra";
@@ -136,6 +140,19 @@ public sealed class CardWindow : Window
         private CancellationTokenSource? _search;       // the search in flight, cancelled by the next
         private volatile string _indexLine = "";
 
+        // The content index. Borrowed from the process, never opened or disposed here. Null is a
+        // normal state: a session with no content store answers the Content pill with a sentence
+        // rather than an empty card.
+        private readonly ContentDb? _db;
+        // ContentDb wraps one SQLite connection, which is not re-entrant. These are the card's own
+        // two readers - a query and the once-a-second status line - and this keeps them off each
+        // other. It says nothing about other holders of the same instance; see the note on the
+        // constructor's parameter.
+        private readonly object _dbGate = new();
+        private volatile string _contentLine = "";
+        private long _contentReadAt;                    // Stopwatch timestamp; 0 = never read
+        private int _contentReading;                    // 0 = idle, 1 = a read is out
+
         private volatile SearchCardState _state = SearchCardState.Empty;
         private readonly SearchGate _gate = new();
         private readonly SearchIssueQueue _issue = new();
@@ -152,9 +169,10 @@ public sealed class CardWindow : Window
         public double CardWidth => SearchCardLayout.Width * _scale;
         public double CardHeight => SearchCardLayout.Height(_state.Rows.Count, _state.HasQuery, _state.AdvOpen) * _scale;
 
-        public CardCanvas(Derived derived, double scale, Window owner)
+        public CardCanvas(Derived derived, double scale, Window owner, ContentDb? db)
         {
             _owner = owner;
+            _db = db;
             _scale = Math.Clamp(scale, 0.85, 1.7);
             // The real face is not embedded yet; this is the platform default until it ships
             // (SearchShot.cs renders with the same fallback for the same reason).
@@ -169,6 +187,7 @@ public sealed class CardWindow : Window
             {
                 // the caret blinks and the index line moves; nothing else here needs frames -
                 // except the unfold, which wants them faster for a quarter of a second
+                PumpContentLine();
                 _state = _state with { Clock = _clock.Elapsed.TotalSeconds, IndexLine = IndexLine() };
                 InvalidateVisual();
             };
@@ -192,11 +211,71 @@ public sealed class CardWindow : Window
             if (c is not null) CloseClient(c);
         }
 
-        // The elevated helper streams its own freshness; the index line is a status readout, not
-        // a query, so it is asked for ONCE when the card opens (RefreshIndexLineAsync) and the
-        // 66 ms tick only ever reads the string that left behind. A status call on the tick
-        // would put a pipe round trip on the UI thread fifteen times a second.
-        private string IndexLine() => _indexLine;
+        // The elevated helper streams its own freshness; the names half of the index line is a
+        // status readout, not a query, so it is asked for ONCE when the card opens
+        // (RefreshIndexLineAsync) and the 66 ms tick only ever reads the string that left behind.
+        // A status call on the tick would put a pipe round trip on the UI thread fifteen times a
+        // second. The content half is a local database rather than a pipe, so it can be re-read
+        // while the card is up - but not per frame; see PumpContentLine.
+        private string IndexLine()
+        {
+            string names = _indexLine, content = _contentLine;
+            if (names.Length == 0) return content;
+            if (content.Length == 0) return names;
+            return names + " · " + content;
+        }
+
+        /// <summary>How often the content half of the index line is re-read. Fifteen reads a
+        /// second for a string that changes every few seconds is fifteen SQLite queries a second
+        /// nobody asked for.</summary>
+        private static readonly TimeSpan ContentStatusEvery = TimeSpan.FromSeconds(1);
+
+        /// <summary>
+        /// Called from the 66 ms tick, on the UI thread, and it only ever SCHEDULES: the read
+        /// itself is four small SELECTs against a file, which belongs on the pool like every other
+        /// disk touch here. At most one is in flight and at most one a second is started.
+        /// </summary>
+        private void PumpContentLine()
+        {
+            ContentDb? db = _db;
+            if (db is null || _life.IsCancellationRequested) return;
+            long last = Volatile.Read(ref _contentReadAt);
+            if (last != 0 && Stopwatch.GetElapsedTime(last) < ContentStatusEvery) return;
+            if (Interlocked.CompareExchange(ref _contentReading, 1, 0) != 0) return;
+            // Stamped when the read STARTS, not when it lands: a slow read must not be followed
+            // immediately by another the moment it finishes.
+            Volatile.Write(ref _contentReadAt, Stopwatch.GetTimestamp());
+            _ = Task.Run(() =>
+            {
+                try { _contentLine = ContentStatusLine(db); }
+                catch (Exception ex)
+                {
+                    // A status line is a nicety. The card keeps whatever it last said rather than
+                    // replacing a true sentence with an error nobody can act on.
+                    Log.Once("card|indexstatus|" + ex.GetType().Name, "WARN", "card",
+                        "could not read the content index status :: " + ex.Message);
+                }
+                finally { Volatile.Write(ref _contentReading, 0); }
+            });
+        }
+
+        /// <summary>The content half of the index line, read from the meta rows the indexer child
+        /// writes. Synchronous on purpose: every ContentDb call is, and wrapping a synchronous
+        /// SQLite read in an async signature would only promise a yield it does not make.</summary>
+        private string ContentStatusLine(ContentDb db)
+        {
+            string state, beat;
+            long pending, indexed;
+            bool rebuilt = db.WasRebuilt;
+            lock (_dbGate)
+            {
+                state = db.Get("indexer:state") ?? "off";
+                beat = db.Get("indexer:beat") ?? "";
+                pending = db.PendingCount();
+                indexed = db.IndexedCount();
+            }
+            return IndexStatus.Line(state, pending, indexed, IndexStatus.Alive(beat), rebuilt);
+        }
 
         // ---- typing ----
 
@@ -576,6 +655,10 @@ public sealed class CardWindow : Window
             // holding it is still deciding whether to apply its answer is the worse bug.
             Interlocked.Exchange(ref _search, mine)?.Cancel();
             SearchSort sort = _state.Sort;
+            // Read HERE, on the UI thread, in the same breath as the generation - never inside the
+            // task. The pill can be pressed between scheduling the work and the pool thread
+            // reading _state, and the answer would then come back from the wrong half of the card.
+            bool content = _state.Content;
 
             // Queued HERE, on the UI thread, in the same breath as the generation above - that
             // adjacency is the whole fix. The card numbers its searches locally, the pipe client
@@ -592,8 +675,64 @@ public sealed class CardWindow : Window
             // the indicator. Starting the clock later would report a round trip that had already
             // finished as having taken no time at all.
             long started = Stopwatch.GetTimestamp();
+            if (content)
+            {
+                // A different question, not a second opinion: the content answer is never merged
+                // with the name answer, because blending them lets a file merely NAMED "lease"
+                // outrank the lease itself, found by its words - which is the thing the pill
+                // exists to ask for. No _issue queue either: there is no wire here to keep in
+                // order, only a local file, so the generation and the token are the whole guard.
+                _ = Task.Run(() => ContentOnce(q, gen, started, mine.Token));
+                return;
+            }
             Task<QueryReply?> reply = _issue.Enqueue(() => RunSearchAsync(q, _life.Token));
             _ = Task.Run(() => SearchOnceAsync(reply, q, gen, sort, started, mine.Token));
+        }
+
+        private const string NoContentIndex = "the content index is not open in this session";
+
+        /// <summary>
+        /// The Content pill's answer, off the UI thread. The store is the interface process's own
+        /// file at normal integrity, so this asks it directly - the elevated helper holds names in
+        /// RAM and has never seen this database.
+        ///
+        /// <para>Not async, and deliberately: every ContentDb call is synchronous, so an async
+        /// signature here would promise a yield it never makes. It runs on the pool because
+        /// <see cref="RunSearch"/> put it there.</para>
+        /// </summary>
+        private void ContentOnce(string raw, int gen, long started, CancellationToken ct)
+        {
+            SearchResults r;
+            try
+            {
+                ContentDb? db = _db;
+                if (db is null)
+                {
+                    // Nothing to ask. Saying so is the answer; an empty card would read as "your
+                    // words are in no file", which is a different and untrue claim.
+                    r = SearchResults.Empty with { Query = raw, ContentReady = true, Note = NoContentIndex };
+                }
+                else
+                {
+                    // MaxRows * 8: the card shows eight rows and scrolls through the rest.
+                    lock (_dbGate) r = ContentBranch.Search(db, raw, SearchCardLayout.MaxRows * 8);
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Once("search|content|" + ex.GetType().Name, "WARN", "search",
+                    $"content search failed :: {ex.Message}");
+                r = SearchResults.Empty with { Query = raw, ContentReady = true, Note = "content search failed - see the log" };
+            }
+
+            // The same gate the name path uses, for the same reasons - except that nothing here
+            // came off a wire, so there is no third verdict to fold in.
+            if (!_gate.MayApply(gen, replyIsNull: false, ct.IsCancellationRequested))
+            {
+                ClearSearchingIfNewest(gen);
+                return;
+            }
+            Apply(r with { ContentMs = Stopwatch.GetElapsedTime(started).TotalMilliseconds }, gen);
         }
 
         /// <summary>
@@ -670,6 +809,13 @@ public sealed class CardWindow : Window
                 r = SearchResults.Empty with { Query = raw, Note = "search failed - see the log" };
             }
 
+            Apply(r, gen);
+        }
+
+        /// <summary>Put an answer on the card. Shared by both halves of the pill so the two paths
+        /// cannot drift on what "newest" means or on which state a new answer resets.</summary>
+        private void Apply(SearchResults r, int gen)
+        {
             Dispatcher.UIThread.Post(() =>
             {
                 if (!_gate.IsNewest(gen)) return;   // a newer query is already running
