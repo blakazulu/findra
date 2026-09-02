@@ -4,15 +4,25 @@ using Findra.Diagnostics;
 using Xunit;
 
 [Collection("culture")]
-public class SearchIndexReportTests
+public sealed class SearchIndexReportTests : IDisposable
 {
+    private readonly string _dir = Path.Combine(Path.GetTempPath(), "findra-report-" + Guid.NewGuid().ToString("N"));
+
+    private string Db()
+    {
+        Directory.CreateDirectory(_dir);
+        return Path.Combine(_dir, "search.db");
+    }
+
+    public void Dispose() { try { Directory.Delete(_dir, true); } catch { } }
+
     private static IndexSnapshot Sample(
         IReadOnlyList<(string, string)>? failures = null,
         long failed = 2,
         IReadOnlyDictionary<ResultKind, long>? byKind = null) => new(
         Schema: 1, WasRebuilt: false,
         DbPath: @"C:\Users\liraz\AppData\Local\Findra\index\search.db",
-        DbBytes: 12_582_912,
+        Stores: [("search.db", 12_582_912)],
         Cursors: [('C', 0xBEEF, 4242), ('D', 0x1234, 77)],
         Queued: 12, Indexed: 3400, Failed: failed, Skipped: 900,
         ByKind: byKind ?? new Dictionary<ResultKind, long>
@@ -22,7 +32,7 @@ public class SearchIndexReportTests
             [ResultKind.File] = 0, [ResultKind.Folder] = 0,
         },
         IndexerState: "indexing", IndexerCurrent: "lease.pdf", IndexerRate: "180/min",
-        IndexerAlive: true, JournalDropped: 0,
+        IndexerPid: "10052", IndexerAlive: true, JournalDropped: 0,
         Failures: failures ?? []);
 
     [Fact]
@@ -79,6 +89,93 @@ public class SearchIndexReportTests
         Assert.Contains("indexing", s);
         Assert.Contains("lease.pdf", s);
         Assert.Contains("180/min", s);
+        Assert.Contains("pid 10052", s);
+    }
+
+    [Fact]
+    public void AnIdleIndexerWithNoFileAndNoRateStillReadsAsASentence()
+    {
+        // The ordinary steady state on a finished machine: a live child with nothing in hand.
+        // Both existing tests fill all three fields, so the empty case was rendered nowhere in
+        // the suite - and on a real machine this line came out literally as "idle -  ()": a
+        // dash, two spaces and an empty pair of brackets. It is the line most people will see.
+        string s = SearchIndexReport.Render(Sample() with { IndexerState = "idle", IndexerCurrent = "", IndexerRate = "" });
+
+        Assert.Contains("indexer  : running (pid 10052) - idle\n", s);
+        Assert.DoesNotContain("()", s);
+        Assert.DoesNotContain("- \n", s);
+    }
+
+    [Fact]
+    public void TheIndexerLineNamesTheProcessAnsweringJustAsTheProbeDoes()
+    {
+        // --searchprobe reads the same two meta rows and has always printed the pid. Without it
+        // the reader cannot tell a real --index child from a one-shot drain some other terminal
+        // is running, and the two mean opposite things about whether the queue will keep moving.
+        Assert.Contains("pid 10052", SearchIndexReport.Render(Sample()));
+
+        // An index written before the pid row existed says nothing rather than "(pid ?)".
+        string older = SearchIndexReport.Render(Sample() with { IndexerPid = "" });
+        Assert.Contains("indexer  : running - indexing", older);
+        Assert.DoesNotContain("pid", older);
+    }
+
+    [Fact]
+    public void TheIndexSizeCountsTheWriteAheadLogAndTheSharedMemoryFileToo()
+    {
+        // Measured on a real machine: this line printed "4.0 KB" for an index that was 68 KB the
+        // moment the connection closed and checkpointed, with a 988 KB -wal beside it. Those are
+        // real bytes on the user's disk, and "how big is my index" is the whole point of the
+        // line. --searchbench has sized all three files since it was written and its comment says
+        // the sidecars are routinely the larger ones; the same fact was reported two ways.
+        string s = SearchIndexReport.Render(Sample() with
+        {
+            Stores = [("search.db", 68 * 1024), ("search.db-wal", 988 * 1024), ("search.db-shm", 32 * 1024)],
+        });
+
+        Assert.Contains("1.1 MB", s);            // the total, not the database on its own
+        Assert.DoesNotContain("(68.0 KB)", s);
+        Assert.Contains("search.db-wal 988.0 KB", s);
+        Assert.Contains("search.db-shm 32.0 KB", s);
+    }
+
+    [Fact]
+    public void AnIndexWithNoSidecarsIsSizedWithoutABreakdownNobodyNeeds()
+    {
+        // A checkpointed index is one file. Printing "search.db 12.0 MB" underneath "12.0 MB" is
+        // the noise that trains people to stop reading the report.
+        string s = SearchIndexReport.Render(Sample());
+
+        Assert.Contains("(12.0 MB)", s);
+        Assert.DoesNotContain("search.db 12.0 MB", s);
+    }
+
+    [Fact]
+    public void ARebuildTheRunningInterfacePerformedIsAnnouncedHereToo()
+    {
+        // WasRebuilt is a fact about the OPEN that rebuilt the file, and this diagnostic opens
+        // its own connection, which never rebuilt anything. The interface records the fact in the
+        // index itself precisely because a flag cannot cross a connection, and the card and the
+        // capsule both read that row. The worst shape this can take is the one measured: the card
+        // says the index was thrown away, and the diagnostic the user runs to find out why says
+        // nothing at all.
+        using var db = new ContentDb(Db());
+        Assert.False(db.WasRebuilt);
+        db.Set("index:rebuilt", "1");
+
+        string s = SearchIndexReport.Render(SearchIndex.Snapshot(db));
+
+        Assert.Contains("rebuilt", s, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void AnIndexNobodyRebuiltSaysNothingAboutRebuilding()
+    {
+        // The pair, so a notice printed unconditionally cannot pass the test above.
+        using var db = new ContentDb(Db());
+
+        Assert.DoesNotContain("rebuilt", SearchIndexReport.Render(SearchIndex.Snapshot(db)),
+                              StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
