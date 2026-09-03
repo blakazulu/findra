@@ -167,6 +167,50 @@ public class SettingsModelTests
 
     // ---- Look -----------------------------------------------------------------------------
 
+    [Theory]
+    // showing dark, pick a light palette -> the mode has to move or the click is invisible
+    [InlineData(ThemeMode.AlwaysDark, false, ControlId.LightPalette, ThemeMode.AlwaysLight)]
+    [InlineData(ThemeMode.FollowWindows, false, ControlId.LightPalette, ThemeMode.AlwaysLight)]
+    // showing light, pick a dark palette -> likewise, the other way
+    [InlineData(ThemeMode.AlwaysLight, true, ControlId.DarkPalette, ThemeMode.AlwaysDark)]
+    [InlineData(ThemeMode.FollowWindows, true, ControlId.DarkPalette, ThemeMode.AlwaysDark)]
+    // picking the side already on screen changes nothing about the mode, and in particular does
+    // not throw away Follow Windows for somebody who never left it
+    [InlineData(ThemeMode.FollowWindows, false, ControlId.DarkPalette, ThemeMode.FollowWindows)]
+    [InlineData(ThemeMode.FollowWindows, true, ControlId.LightPalette, ThemeMode.FollowWindows)]
+    [InlineData(ThemeMode.AlwaysDark, false, ControlId.DarkPalette, ThemeMode.AlwaysDark)]
+    [InlineData(ThemeMode.AlwaysLight, true, ControlId.LightPalette, ThemeMode.AlwaysLight)]
+    public void PickingAPaletteFromTheSideYouCannotSeeSwitchesToThatSide(
+        ThemeMode before, bool windowsIsLight, ControlId row, ThemeMode after)
+    {
+        // The defect a person hit: clicking a light swatch while the dark side was on screen wrote
+        // the light slot and changed nothing they could see, so the swatch read as broken and they
+        // had to go up and move the mode themselves before anything happened. A control that looks
+        // like it applies a colour has to apply it.
+        //
+        // Mode is a row on the same panel, so it visibly moves with the click rather than changing
+        // behind their back, and the two-pick design survives: a palette for the side already
+        // showing is applied without disturbing Follow Windows, because that click was never
+        // silent in the first place.
+        SettingsState s = State(Config.Default with { Mode = before }) with { WindowsIsLight = windowsIsLight };
+
+        // Read the name out of the row rather than writing one down: option 2 is Verdigris in the
+        // dark list and Porcelain in the light one, and a hard-coded name would be asserting which
+        // palettes ship rather than what the click did.
+        string picked = Row(s, row).Options[2];
+
+        SettingsOutcome o = SettingsModel.Apply(s, new PanelHit(PanelTarget.Option, RowOf(s, row), 2));
+
+        Assert.Equal(after, o.State.Config.Mode);
+        // And the palette itself still landed in its own slot, whichever way the mode went.
+        Assert.Equal(picked, row == ControlId.DarkPalette
+            ? o.State.Config.DarkPalette
+            : o.State.Config.LightPalette);
+        // The other slot is untouched: this is still two picks, not one.
+        Assert.Equal(row == ControlId.DarkPalette ? Config.Default.LightPalette : Config.Default.DarkPalette,
+                     row == ControlId.DarkPalette ? o.State.Config.LightPalette : o.State.Config.DarkPalette);
+    }
+
     [Fact]
     public void ChoosingADarkPaletteLeavesTheLightOneAlone()
     {

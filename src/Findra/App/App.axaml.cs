@@ -1408,6 +1408,7 @@ internal sealed class Shell : ISettingsHost
                 EverIndexed = _everIndexed,
                 IndexerAlive = _indexerAlive,
                 Drives = _drives,
+                WindowsIsLight = Theme.WindowsIsLight(),
                 Version = BuildInfo.Version,
                 Update = _update,
                 Latest = _latest,
