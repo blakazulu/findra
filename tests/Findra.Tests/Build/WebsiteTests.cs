@@ -287,8 +287,14 @@ public class WebsiteTests
             Assert.Contains($"href={href}", NotFound, StringComparison.Ordinal);
         }
 
-        // Nothing on this site may advertise the platform it happens to be hosted on. Comments
-        // are excluded because one of them records that this is what the file replaced.
+        // Nothing WE author advertises the platform the site happens to be hosted on. That is the
+        // whole of what this can promise, and the limit is worth stating: Netlify injects a
+        // hosting-provider meta tag and a netlify.new referral comment into every HTML response on
+        // the current plan, after these bytes leave the repository. The live page is not clean and
+        // no test here can make it so - a plan or a platform setting can. What this catches is the
+        // thing that IS in our hands: a referral link somebody pastes into a file.
+        //
+        // Comments are excluded because two of them explain this very situation.
         Assert.DoesNotContain("netlify.new", WithoutComments(NotFound), StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("netlify.new", WithoutComments(Index), StringComparison.OrdinalIgnoreCase);
     }

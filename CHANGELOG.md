@@ -392,10 +392,12 @@ into a numbered section on the first release.
   asked for more" hands raw Markdown to every human visitor.
 
 - **A 404 page of the site's own, structured data, and `llms.txt`.** A missing path used to serve
-  Netlify's default page, which carries a `netlify.new` referral link in its body on a site whose
-  whole argument is that nothing is reaching out anywhere. Ours lists every page and every
-  machine-readable file instead, because whoever is reading it either mistyped or guessed a URL and
-  both need the real list. The homepage carries JSON-LD naming the application, its author and its
+  Netlify's default page, which says nothing about Findra and offers no way onward. Ours lists
+  every page and every machine-readable file instead, because whoever is reading it either mistyped
+  or guessed a URL and both need the real list. It does not remove Netlify's own injection: the
+  platform adds a hosting-provider meta tag and a `netlify.new` referral comment to every HTML
+  response on the current plan, after the file leaves the repository, and no file here can prevent
+  that. The homepage carries JSON-LD naming the application, its author and its
   licence, with the price and the version checked against `Directory.Build.props` by a test.
   `llms.txt` says when to reach for Findra and, more usefully, when not to: it is a Windows desktop
   application with no API, no accounts and no MCP server, and a readiness scan of this domain had

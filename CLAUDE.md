@@ -586,10 +586,14 @@ running it, and shipping a page that still says the old thing.
   A readiness scan of this domain credited the hosting platform's own MCP server, CLI, SDKs and
   OAuth endpoints to Findra and scored the product on them; saying plainly that there is nothing to
   call is what stops the next one.
-- **The 404 page is ours and it is a map.** Netlify's default page carries a `netlify.new` referral
-  link in its body, on a site whose whole argument is that nothing is reaching out anywhere.
-  Whoever is reading a 404 either mistyped or guessed a URL, so the page lists every real one
-  rather than apologising.
+- **The 404 page is ours and it is a map.** Whoever is reading a 404 either mistyped or guessed a
+  URL, so it lists every real one rather than apologising. Netlify's default page did neither.
+- **Netlify injects a `hosting-provider` meta tag and a `netlify.new` referral comment into every
+  HTML response, and no file in this repository can stop it.** It is added after the file leaves
+  the repository, on the front page and the 404 alike, and it is on the current plan rather than
+  being anything the site asked for. `WebsiteTests` therefore asserts what it can actually
+  guarantee - that OUR sources carry no such link - and says so rather than implying the live page
+  is clean. Removing it needs a plan change or a platform setting, and is not a code change.
 
 ## Shipping
 
