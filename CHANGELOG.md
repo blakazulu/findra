@@ -499,6 +499,22 @@ into a numbered section on the first release.
   prompt for the scheduled task was left on screen, Findra logged an unrelated error, called it
   a registration failure, and left a temporary file behind in `%TEMP%`.
 
+- **The welcome screen is the only thing on the display until it is answered.** It was shown
+  and not waited for, so the hotkey, the capsule and the tray icon were all built behind it
+  while the first sentence was still being read - and pressing "Get these" landed in a product
+  that was already running, which made the download just asked for read as a window in the way
+  of it. Nothing else is built now until the screen is answered, and it all arrives from the
+  answer. The one exception is the name helper, which is registered and started the moment the
+  screen is answered: searching by name is what works with nobody's models, and nobody should
+  wait on a 1.5 GB download for their filenames. Closing the screen mid-download still leaves
+  the download running and Findra in the tray, exactly as the screen says.
+
+- **The welcome screen's dead band reads as a parting rather than a hole.** Sixty pixels of
+  nothing sat between the last capability row and the switches below it. The gap cannot close -
+  a click one row past the end of the list has to land on nothing rather than on the content
+  toggle - so it is now exactly one row tall, with a rule drawn through it, and the screen is
+  eight pixels shorter for it.
+
 - **The Content pill goes somewhere when there is nothing to search.** It used to flip a flag
   and re-run the query whatever the index held, so with reading turned off, or turned on and
   nothing read yet, it emptied the card and offered nothing to press next - which is the state a

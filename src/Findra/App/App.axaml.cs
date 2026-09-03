@@ -259,6 +259,16 @@ internal sealed class Shell : ISettingsHost
         _desktop = desktop;
     }
 
+    /// <summary>True once the welcome screen is actually on the display. Everything else waits
+    /// for it, so a screen that never appeared has to be told apart from one that is up: the
+    /// first is a launch that must carry on, the second a launch that must not.</summary>
+    private bool _firstRunIsUp;
+
+    /// <summary>What was held back has been built. The answer can only arrive once - the screen
+    /// guards that itself - but a second call here would be a second tray icon over one process.
+    /// </summary>
+    private bool _restIsBuilt;
+
     public void Start()
     {
         Stage("settings", () =>
@@ -292,47 +302,104 @@ internal sealed class Shell : ISettingsHost
                     : $"the last check found {_latest}: up to date");
         });
 
-        // Before the capsule, the tray and the content loop. It decides whether there is anything
-        // for the content loop to do, and it is where the one elevated thing Findra needs gets
-        // registered - which nothing in the tree did before it existed.
-        if (!_config.FirstRunDone) Stage("first run", ShowFirstRun);
+        bool firstRun = !_config.FirstRunDone;
+        foreach (StartupStep step in StartupOrder.Immediate(firstRun)) Run(step);
 
-        // EnsureRunning asks the scheduler to start the helper and then waits up to five seconds
-        // for the pipe to answer. On the UI thread that is five seconds of nothing on screen.
-        Stage("names helper", () => _ = Task.Run(() =>
+        // The screen is up and owns the display. Everything else is built from the answer, in
+        // OnFirstRunAnswered - because Show() does not block, and carrying on here is what used
+        // to put a capsule, a tray icon and a global hotkey behind a window somebody was still
+        // reading.
+        if (firstRun && _firstRunIsUp) return;
+
+        // The screen was wanted and is not there. Every stage is wrapped, so this is a real path
+        // rather than a defensive one, and the answer that would have built the rest is never
+        // coming: build it here instead of leaving a process with nothing on screen at all.
+        if (firstRun)
         {
-            bool up = HelperTask.EnsureRunning();
-            Log.Info("startup", up
-                ? "the names helper is answering"
-                : "the names helper is not answering; name search will be empty until it is registered");
-        }));
+            Log.Warn("startup", "the first screen could not be shown; starting the rest of Findra without it");
+            foreach (StartupStep step in StartupOrder.WhenTheScreenCouldNotBeShown()) Run(step);
+        }
+    }
 
-        Stage("hotkey", () =>
+    /// <summary>
+    /// One stage. The default arm THROWS rather than returning quietly: a step added to
+    /// <see cref="StartupStep"/> and forgotten here is a stage that silently stops happening, and
+    /// on this list that is the tray icon, the hotkey or the content index simply not existing.
+    /// </summary>
+    private void Run(StartupStep step)
+    {
+        switch (step)
         {
-            var host = new HotkeyHost();
-            host.Pressed += () => Dispatcher.UIThread.Post(() => OpenCentred(fromClick: false));
-            // Owned before it is started: Start creates a real window, and a throw inside it would
-            // otherwise leave that window with nobody holding it and nobody to Dispose it.
-            _hotkey = host;
-            host.Start(HotkeyChain.Build(_config.Hotkey, Hotkey.DefaultChain));
-            UiStatus.Write(Environment.ProcessId, host.Landed);
-        });
+            // Before the capsule, the tray and the content loop. It decides whether there is
+            // anything for the content loop to do, and it is where the one elevated thing Findra
+            // needs gets registered - which nothing in the tree did before it existed.
+            case StartupStep.FirstRun:
+                Stage("first run", ShowFirstRun);
+                return;
 
-        Stage("capsule", () =>
-        {
-            if (_config.ShowCapsule) CreateCapsule();
-            else Log.Info("app", "the capsule is turned off; the hotkey and the tray open the card");
-        });
+            // EnsureRunning asks the scheduler to start the helper and then waits up to five
+            // seconds for the pipe to answer. On the UI thread that is five seconds of nothing on
+            // screen.
+            case StartupStep.NamesHelper:
+                Stage("names helper", () => _ = Task.Run(() =>
+                {
+                    bool up = HelperTask.EnsureRunning();
+                    Log.Info("startup", up
+                        ? "the names helper is answering"
+                        : "the names helper is not answering; name search will be empty until it is registered");
+                }));
+                return;
 
-        Stage("content index", OpenContentIndex);
+            case StartupStep.Hotkey:
+                Stage("hotkey", () =>
+                {
+                    var host = new HotkeyHost();
+                    host.Pressed += () => Dispatcher.UIThread.Post(() => OpenCentred(fromClick: false));
+                    // Owned before it is started: Start creates a real window, and a throw inside
+                    // it would otherwise leave that window with nobody holding it and nobody to
+                    // Dispose it.
+                    _hotkey = host;
+                    host.Start(HotkeyChain.Build(_config.Hotkey, Hotkey.DefaultChain));
+                    UiStatus.Write(Environment.ProcessId, host.Landed);
+                });
+                return;
 
-        Stage("tray", CreateTray);
+            case StartupStep.Capsule:
+                Stage("capsule", () =>
+                {
+                    if (_config.ShowCapsule) CreateCapsule();
+                    else Log.Info("app", "the capsule is turned off; the hotkey and the tray open the card");
+                });
+                return;
 
-        Stage("update check", () => _ = Task.Run(async () =>
-        {
-            await Task.Delay(UpdateCheckDelay).ConfigureAwait(false);
-            await RunUpdateCheck(force: false).ConfigureAwait(false);
-        }));
+            case StartupStep.ContentIndex:
+                Stage("content index", OpenContentIndex);
+                return;
+
+            case StartupStep.Tray:
+                Stage("tray", CreateTray);
+                return;
+
+            case StartupStep.UpdateCheck:
+                Stage("update check", () => _ = Task.Run(async () =>
+                {
+                    await Task.Delay(UpdateCheckDelay).ConfigureAwait(false);
+                    await RunUpdateCheck(force: false).ConfigureAwait(false);
+                }));
+                return;
+
+            default:
+                throw new ArgumentOutOfRangeException(nameof(step), step, "no startup stage arm for this value");
+        }
+    }
+
+    /// <summary>Build everything the welcome screen held back. Once: a second call would be a
+    /// second tray icon and a second capsule over one process.</summary>
+    private void StartTheRest()
+    {
+        if (_restIsBuilt) return;
+        _restIsBuilt = true;
+        foreach (StartupStep step in StartupOrder.AfterTheScreenIsAnswered()) Run(step);
     }
 
     private static void Stage(string what, Action body)
@@ -346,10 +413,16 @@ internal sealed class Shell : ISettingsHost
     /// <summary>
     /// Spec §6's screen, shown once, before anything else has been built.
     ///
-    /// <para>Not modal and not awaited: the rest of the startup carries on behind it, so a person
-    /// reading the disclosure is not looking at a desktop with no tray icon. What the screen
-    /// decides - whether content indexing runs at all - is read by the content loop every second
-    /// out of <c>_config</c>, so answering it late costs nothing.</para>
+    /// <para><b>It owns the display until it is answered.</b> Not modal in code - nothing blocks a
+    /// thread - but nothing else is built while it is up, and <see cref="OnFirstRunAnswered"/> is
+    /// what carries the launch on. It used to be shown and not waited for, and since <c>Show()</c>
+    /// does not block, the hotkey, the capsule and the tray were all built behind it: pressing
+    /// "Get these" landed in a product that was already running, which made the download somebody
+    /// had just asked to watch read as a window in the way of it.</para>
+    ///
+    /// <para>Closing the screen mid-download still leaves the download running and Findra in the
+    /// tray - the screen says so itself. That stays true and is now a choice rather than the only
+    /// behaviour.</para>
     /// </summary>
     private void ShowFirstRun()
     {
@@ -371,7 +444,12 @@ internal sealed class Shell : ISettingsHost
         var window = new FirstRunWindow(state, _palette);
         window.Answered += answer => OnFirstRunAnswered(window, answer);
         window.Show();
-        Log.Info("startup", "the first-run screen is up; nothing is downloaded until it is answered");
+        // AFTER Show, because this is what tells Start that the screen really is on the display
+        // and the rest of the launch may wait for an answer. Set before it, a window that threw on
+        // its way up would leave a process with nothing on screen and nothing to answer.
+        _firstRunIsUp = true;
+        Log.Info("startup", "the first-run screen is up and has the display; " +
+                            "nothing is downloaded and nothing else is built until it is answered");
     }
 
     /// <summary>
@@ -397,7 +475,15 @@ internal sealed class Shell : ISettingsHost
         string exe = Environment.ProcessPath ?? "";
         if (answer.StartAtLogon) Autostart.Set(exe); else Autostart.Clear();
 
+        // The names helper first, and immediately: it is the one thing that does not wait for the
+        // download, because searching by name is what works with nobody's models and nobody should
+        // wait on a 1.5 GB file for their filenames.
         RegisterAndStartHelper(exe);
+
+        // And now the rest of Findra - the hotkey, the capsule, the content index, the tray and
+        // the update check - which have been waiting for this answer rather than appearing behind
+        // the screen while it was being read.
+        StartTheRest();
 
         IReadOnlyList<Model> wanted = FirstRun.Wanted(answer);
         // Always, even when it is empty: the bars are drawn from what is NOT being fetched as
