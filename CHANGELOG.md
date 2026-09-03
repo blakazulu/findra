@@ -365,6 +365,22 @@ into a numbered section on the first release.
   machine" should not itself be reaching out, so a content security policy permits the two font
   hosts and nothing else - no analytics, no beacons, and no way for one to arrive by accident.
 
+- **Settings is on the card.** A Settings button sits under Advanced, in the same column as
+  the Content pill, so the capability list, the transcription limit, the indexing power and the
+  switch that starts reading inside files can be reached from the thing you are looking at.
+  Until now Settings opened from the tray icon's menu or a right-click on the capsule, and
+  nothing on any surface said so.
+- **"Start now", in Settings under Content.** A toggle states a preference; this says begin, and
+  the sentence above it changes to say that reading has started. It works whether the switch was
+  off or already on, because Findra only reads while it is open.
+- **"Indexing power", in Settings under Content**, at 25, 50, 75 or 100 per cent. It is how much
+  of the machine reading may take, the indexer has honoured it since it was written, and until
+  now the only way to change it was to edit `config.json` by hand.
+- **The pointer says what each surface is.** The capsule takes the four-way move cursor, which is
+  the first time anything has said out loud that it can be dragged; the search field takes the
+  I-beam; every button, pill, chip and row on the card, in Settings and on the welcome screen
+  takes the hand. Nothing that answers a click offers to move anything.
+
 ### Changed
 
 - **The size beside a capability on the first screen is that capability's download, and it
@@ -482,6 +498,13 @@ into a numbered section on the first release.
 - **A registration prompt nobody answers is now reported as what it is.** If the elevation
   prompt for the scheduled task was left on screen, Findra logged an unrelated error, called it
   a registration failure, and left a temporary file behind in `%TEMP%`.
+
+- **The Content pill goes somewhere when there is nothing to search.** It used to flip a flag
+  and re-run the query whatever the index held, so with reading turned off, or turned on and
+  nothing read yet, it emptied the card and offered nothing to press next - which is the state a
+  fresh install is in. Now: where files have already been read and reading is merely off, it
+  turns reading back on and answers the query; where nothing has been read at all, it opens
+  Settings at Content, which is where the switch, the power, the limit and the capabilities are.
 
 - **`findra --searchmodels` prints its title before its own measurements.** The probe wrote its
   vector norms and image similarities straight to the terminal while the models were still open,

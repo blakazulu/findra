@@ -1,7 +1,7 @@
 namespace Findra;
 
 /// <summary>
-/// The eight things a settings click can ask the machine for. An interface rather than a switch
+/// The nine things a settings click can ask the machine for. An interface rather than a switch
 /// inside the window, so the last link from a click to the operating system has a test.
 /// </summary>
 public interface ISettingsHost
@@ -14,6 +14,7 @@ public interface ISettingsHost
     void InstallCapability(Capability capability);
     void CheckNow();
     void RecentreCapsule();
+    void StartIndexing();
 }
 
 public static class SettingsActions
@@ -38,6 +39,7 @@ public static class SettingsActions
             case SettingsAction.PickFolder: host.PickFolder(); return;
             case SettingsAction.CheckNow: host.CheckNow(); return;
             case SettingsAction.RecentreCapsule: host.RecentreCapsule(); return;
+            case SettingsAction.StartIndexing: host.StartIndexing(); return;
 
             case SettingsAction.InstallCapability:
                 // The argument crossed a string boundary. A parse that falls back to the first

@@ -307,6 +307,10 @@ public sealed class CapsuleWindow : Window
             // command use, so the capsule on screen is the capsule in the README.
             _face = Parts.Face;
             Focusable = false;
+            // One object with no parts, so the shape is set once rather than per pointer move.
+            // The capsule has been draggable since it was written and, until this, said so
+            // nowhere: it showed the same arrow the desktop behind it does.
+            Cursor = PointerCursor.Of(Pointers.OverCapsule);
         }
 
         protected override void OnPointerPressed(PointerPressedEventArgs e)

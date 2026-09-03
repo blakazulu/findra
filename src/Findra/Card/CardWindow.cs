@@ -33,6 +33,17 @@ public sealed class CardWindow : Window
     private readonly CardCanvas _canvas;
     private DimWindow? _dim;
 
+    /// <summary>The Settings pill was pressed, or the Content pill had nowhere to send somebody.
+    /// The section is which one to land on: the card knows what it wanted to show and the shell
+    /// knows how to open a window.</summary>
+    public event Action<Section>? SettingsRequested;
+
+    /// <summary>Content was pressed over an index that already holds files, with reading turned
+    /// off. The card has no configuration of its own - it reads the index through a read-only
+    /// connection - so it asks the shell to move the setting and carries on with the search.
+    /// </summary>
+    public event Action? ContentReadingRequested;
+
     /// <summary><paramref name="content"/> is the process's ONE open content index, or null when
     /// this session has none. The window borrows it and never disposes it: the store outlives
     /// every card, and a second connection would mean a second schema check and a second place a
@@ -62,6 +73,8 @@ public sealed class CardWindow : Window
 
         _canvas.CardResized += Resize;
         _canvas.CloseRequested += Close;
+        _canvas.SettingsRequested += s => SettingsRequested?.Invoke(s);
+        _canvas.ContentReadingRequested += () => ContentReadingRequested?.Invoke();
         Resize();
 
         // The field is drawn, not a TextBox, so the keys arrive here. TextInput carries typed
@@ -170,6 +183,13 @@ public sealed class CardWindow : Window
         private volatile string _contentLine = "";
         private long _contentReadAt;                    // Stopwatch timestamp; 0 = never read
         private int _contentReading;                    // 0 = idle, 1 = a read is out
+        // The two facts the Content pill's decision needs, taken from the same once-a-second read
+        // that makes the status line rather than from a query of their own. -1 is "nobody has
+        // looked yet", which ContentPill.Decide is written to answer safely; a 0 there would be
+        // indistinguishable from an index that really is empty, and would send the first press on
+        // every freshly opened card into the settings window.
+        private long _contentIndexed = -1;
+        private volatile bool _contentReadingOn;
 
         private volatile SearchCardState _state = SearchCardState.Empty;
         private readonly SearchGate _gate = new();
@@ -183,6 +203,8 @@ public sealed class CardWindow : Window
         public bool Dragging { get; private set; }
         public event Action? CloseRequested;
         public event Action? CardResized;
+        public event Action<Section>? SettingsRequested;
+        public event Action? ContentReadingRequested;
 
         public double CardWidth => SearchCardLayout.Width * _scale;
         public double CardHeight => SearchCardLayout.Height(_state.Rows.Count, _state.HasQuery, _state.AdvOpen) * _scale;
@@ -311,6 +333,10 @@ public sealed class CardWindow : Window
                 // and the property still counts for a card handed the writer directly.
                 rebuilt = db.WasRebuilt || db.Get("index:rebuilt") == "1";
             }
+            // Kept beside the sentence, because the pill's decision and the line under the rows
+            // have to be talking about the same index at the same moment.
+            Volatile.Write(ref _contentIndexed, indexed);
+            _contentReadingOn = contentOn;
             return IndexStatus.Line(contentOn, state, pending, indexed, IndexStatus.Alive(beat, pid), rebuilt);
         }
 
@@ -536,12 +562,53 @@ public sealed class CardWindow : Window
 
         // The Content toggle: pressed, the query searches what is inside files; released, names.
         // Re-runs the current query so the switch answers immediately rather than at the next key.
+        //
+        // What a press MEANS is ContentPill's, not this method's: it used to flip the flag
+        // whatever the index held, which on a machine that has read nothing empties the card and
+        // offers nothing to press next.
         private void ToggleContent()
         {
+            long indexed = Volatile.Read(ref _contentIndexed);
+            ContentPress press = ContentPill.Decide(
+                pillOn: _state.Content,
+                haveStore: _db is not null,
+                readingOn: _contentReadingOn,
+                indexed: indexed < 0 ? null : indexed);
+
+            if (press == ContentPress.OpenSettings)
+            {
+                // The pill is left where it was. Turning it on would leave a card in a mode with
+                // nothing behind it, sitting under the window that explains why.
+                Log.Info("search", "content was asked for and nothing has been read yet; " +
+                                   "settings is opening at Content");
+                OpenSettings(ContentPill.Section);
+                return;
+            }
+
+            if (press == ContentPress.TurnOnReading)
+            {
+                Log.Info("search", "content was asked for while reading inside files was off; " +
+                                   "turning it back on and searching what has already been read");
+                ContentReadingRequested?.Invoke();
+                // Believed here as well as asked for, so the next press this second does not make
+                // the same decision again off a status row that is up to a second behind.
+                _contentReadingOn = true;
+            }
+
             _state = _state with { Content = !_state.Content, Searching = _state.HasQuery };
             Log.Info("search", $"content mode -> {(_state.Content ? "on" : "off")}");
             InvalidateVisual();
             if (_state.HasQuery) RunSearch();
+        }
+
+        /// <summary>Ask the shell for the settings window, and get out of the way. The card is
+        /// dismissed on deactivation anyway, so leaving it up would have it close under the new
+        /// window a moment later and read as a flicker rather than as a hand-off.</summary>
+        private void OpenSettings(Section section)
+        {
+            Log.Info("card", $"settings asked for from the card, at {RailLayout.Title(section)}");
+            SettingsRequested?.Invoke(section);
+            CloseRequested?.Invoke();
         }
 
         private void SetSort(SearchSort sort)
@@ -1058,12 +1125,16 @@ public sealed class CardWindow : Window
             var hit = HitAt(p);
             if (hit.Target == _state.HoverTarget && hit.Index == _state.HoverIndex) return;
             _state = _state with { HoverTarget = hit.Target, HoverIndex = hit.Index };
+            // Beside the hover, from the same answer: a shape decided anywhere else could
+            // disagree with the hit test about what the pointer is over.
+            Cursor = PointerCursor.Of(Pointers.ForCard(hit.Target));
             InvalidateVisual();
         }
 
         protected override void OnPointerExited(PointerEventArgs e)
         {
             _state = _state with { HoverTarget = SearchTarget.None, HoverIndex = -1 };
+            Cursor = PointerCursor.Of(Pointers.ForCard(SearchTarget.None));
             InvalidateVisual();
         }
 
@@ -1092,6 +1163,7 @@ public sealed class CardWindow : Window
                 }
                 case SearchTarget.Content: ToggleContent(); break;
                 case SearchTarget.Adv: SetAdvOpen(!_state.AdvOpen); break;
+                case SearchTarget.Settings: OpenSettings(Section.Look); break;
                 case SearchTarget.AdvField:
                     _state = _state with { AdvFocus = hit.Index };
                     break;

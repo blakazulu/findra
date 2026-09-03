@@ -22,6 +22,7 @@ public class SettingsActionTests
         public void InstallCapability(Capability c) => Calls.Add("install:" + c);
         public void CheckNow() => Calls.Add("check");
         public void RecentreCapsule() => Calls.Add("recentre");
+        public void StartIndexing() => Calls.Add("start");
     }
 
     [Fact]
@@ -45,6 +46,7 @@ public class SettingsActionTests
             [SettingsAction.InstallCapability] = "install:Photos",
             [SettingsAction.CheckNow] = "check",
             [SettingsAction.RecentreCapsule] = "recentre",
+            [SettingsAction.StartIndexing] = "start",
         };
 
         foreach (SettingsAction action in Enum.GetValues<SettingsAction>())
