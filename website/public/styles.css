@@ -130,9 +130,14 @@ main, header, footer { position: relative; z-index: 1; }
   -webkit-backdrop-filter: blur(14px);
 }
 .brand { display: flex; align-items: center; gap: 12px; flex-shrink: 0; }
+/* Findra's mark, unplated. Same path data as assets/icon/findra-flat.svg, which
+   build/Make-Icon.mjs generates from the same numbers the application icon is rasterised from;
+   IconTests fails if the two drift. Unplated because the page ground is already Mond's, and the
+   icon's dark plate on top of it would be a square nobody can see the edges of. */
 .brand-mark {
-  width: 26px; height: 26px; border-radius: 8px; background: var(--accent);
-  animation: orb 2.4s ease-out infinite;
+  width: 26px; height: 26px; flex-shrink: 0;
+  background: center / contain no-repeat url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 256 256'%3E%3Cg transform='translate(128 128) scale(1.16) translate(-128 -128)'%3E%3Cpath fill='%23FA7E00' fill-rule='evenodd' d='M46 108a64 64 0 1 0 128 0a64 64 0 1 0 -128 0zM90 94h40a14 14 0 0 1 0 28h-40a14 14 0 0 1 0 -28z'/%3E%3Cline x1='158' y1='156' x2='200' y2='198' stroke='%23FA7E00' stroke-width='30' stroke-linecap='round'/%3E%3C/g%3E%3C/svg%3E");
+  animation: mark-glow 2.4s ease-out infinite;
 }
 .brand-name { font-size: 20px; font-weight: 700; letter-spacing: 0.14em; color: var(--ink-bright); }
 
@@ -160,6 +165,13 @@ main, header, footer { position: relative; z-index: 1; }
 @keyframes orb {
   0%, 100% { box-shadow: 0 0 0 0 rgba(250,126,0,0.55), 0 0 14px rgba(250,126,0,0.85); }
   70%      { box-shadow: 0 0 0 9px rgba(250,126,0,0), 0 0 14px rgba(250,126,0,0.85); }
+}
+/* The same pulse as orb, for a shape rather than a box. box-shadow would ring the mark's square
+   element and give a transparent glyph a rectangular halo; drop-shadow follows the alpha, so the
+   light comes off the lens and the handle. */
+@keyframes mark-glow {
+  0%, 100% { filter: drop-shadow(0 0 2px rgba(250,126,0,0.45)); }
+  60%      { filter: drop-shadow(0 0 8px rgba(250,126,0,0.85)); }
 }
 @keyframes flicker {
   0%, 92%, 100% { opacity: 1; }

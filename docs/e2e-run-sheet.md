@@ -240,6 +240,36 @@ diagnostic prints replacement characters from then on.
 **Pass:** the install-folder, licence-file and PE-subsystem rows are green. The scheduled-task and
 autostart rows still say "not set up yet".
 
+### 1.7 (catalogue 60, 61, 62) The mark, on every surface Windows draws it on - eye
+
+You have already walked past most of these; this step is going back and looking at them.
+
+1. **The installer you downloaded**, in Explorer, before you ran it: the lens, not a generic
+   application icon. This one is already proven - the mark was extracted back out of a compiled
+   `setup.exe` - so a failure here means the build that produced your copy predates the icon.
+2. **The wizard**, top corner of every page, on Inno's light background.
+3. **The Start-menu shortcut** and, if you made one, a **desktop shortcut**.
+4. **The taskbar button** while Findra runs, and **Alt-Tab**.
+5. **Explorer** at `C:\Program Files\Findra`, at Large icons and then at Details. Details is the
+   16 px size, which is drawn differently from the large one on purpose: the slot through the lens
+   is dropped because at that size it is a smudge rather than a hole.
+6. **The tray icon**, which is the mark now rather than the old pill, painted in whatever palette
+   is running. Switch to a light palette and back and watch it change. Then, if you can, put the
+   taskbar in **light** mode: the slot has to read as a hole there. Filled with the palette's own
+   ground it would look identical on a dark taskbar and like a dark smudge on a light one.
+7. **Add and Remove Programs**, which reads its icon out of `findra.exe` itself.
+
+**Pass:** the same mark everywhere, recognisable at 16 px, and nothing showing a generic or
+default icon.
+
+**A failure at one size only** is the hinting rather than the wiring: `IconTests` decodes every
+size in `assets/icon/findra.ico` and checks named pixels, so a size that is wrong is wrong on
+purpose and the numbers to change are in `build/Make-Icon.mjs`. **A failure everywhere** is
+`ApplicationIcon` in `src/Findra/Findra.csproj`.
+
+The uninstaller is the open question and is step 9.x rather than this one: nothing sets what
+`unins000.exe` or the "Remove Findra" dialog shows, so note what they show when you get there.
+
 ---
 
 # Phase 2 - First run

@@ -29,6 +29,13 @@ into a numbered section on the first release.
   taken on some machines. Findra says which one it registered, and says so plainly if
   none could be.
 - **A tray icon** carrying the version, the hotkey, and the update state.
+- **An application icon.** Findra's mark - a lens with the capsule's own search field cut
+  out of it - on the taskbar, in Alt-Tab, on the Start-menu and desktop shortcuts, in
+  Explorer, on the installer, and in the Add and Remove Programs entry. It ships at every
+  size Windows asks for, including the two that only appear at 125% and 150% display
+  scaling, and the smallest sizes are drawn differently rather than shrunk. The tray paints
+  the same mark in whichever palette is in force, and the website carries it as its favicon
+  and in its header. One set of numbers produces all of them.
 - **A version check**: one anonymous request to the GitHub releases API, at most once
   a day, in the background. It never installs anything, and switching it off means no
   request is made.

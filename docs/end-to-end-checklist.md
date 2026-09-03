@@ -492,6 +492,31 @@ person makes by looking; two are destructive and belong last.
     honoured by the indexer since it was written and until now there was no way to change it
     without hand-editing `config.json`.
 
+## From the mark
+
+60. **The icon is on every surface the shell draws it on.** After a real install, look at each:
+    the taskbar button while Findra is running, Alt-Tab, the Start-menu shortcut, a desktop
+    shortcut, the Explorer listing at Large icons and at Details, and the Add and Remove Programs
+    entry. `IconTests` decodes every size in `assets/icon/findra.ico` and checks named pixels, and
+    the icon has been extracted back out of a compiled `findra.exe` - but WHICH size Windows picks
+    on a real desktop, at a real scaling factor, is a thing no test here can see. The 16 px and
+    20 px sizes are drawn differently from the large ones on purpose; whether that reads as the
+    same mark at a glance in a real taskbar is a judgement nobody has made yet.
+61. **The installer and the uninstaller.** `setup.exe`'s own icon is DONE and was checked here
+    rather than assumed: the script compiles with `SetupIconFile` and `WizardSmallImageFile`, and
+    the mark was extracted back out of the built `findra-0.1.0-x64.exe`. What remains by eye is
+    the wizard itself - the mark should sit in the top corner of every page, on Inno's light
+    background, at whatever scaling the machine is set to.
+    What `unins000.exe` shows, and what the "Remove Findra" dialog puts in its title bar, is NOT
+    known: Inno decides it, nothing in `findra.iss` sets it, and no uninstaller built from this
+    script has been looked at. If they show Inno's default rather than the mark, that is the
+    finding, and the fix is somewhere in the installer rather than in the application.
+62. **The tray icon is the mark now, not the old pill.** It is drawn at 32 px in the running
+    palette, with the lens's slot left as a genuine hole rather than filled. `IconTests` asserts
+    the hole on three palettes. What it cannot show is the icon sitting on a real taskbar: check
+    it on a **light** taskbar in particular, which is where a filled slot would have looked like a
+    smudge and where the hole has to read as one.
+
 ## What could not be verified in this project at all
 
 Written down so they are known gaps rather than assumed passes. Every one of them is a step above.

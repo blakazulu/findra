@@ -1,6 +1,7 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256">
   <title>Findra</title>
-  <rect width="256" height="256" rx="72" fill="#14141A"/>
-  <path fill="#FA7E00" fill-rule="evenodd" d="M46 108a64 64 0 1 0 128 0a64 64 0 1 0 -128 0zM90 94h40a14 14 0 0 1 0 28h-40a14 14 0 0 1 0 -28z"/>
+  <g transform="translate(128 128) scale(1.16) translate(-128 -128)">
+    <path fill="#FA7E00" fill-rule="evenodd" d="M46 108a64 64 0 1 0 128 0a64 64 0 1 0 -128 0zM90 94h40a14 14 0 0 1 0 28h-40a14 14 0 0 1 0 -28z"/>
   <line x1="158" y1="156" x2="200" y2="198" stroke="#FA7E00" stroke-width="30" stroke-linecap="round"/>
+  </g>
 </svg>

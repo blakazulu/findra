@@ -58,6 +58,15 @@ Compression=lzma2/max
 SolidCompression=yes
 WizardStyle=modern
 LicenseFile=..\LICENSE
+; The mark, on setup.exe itself and in the wizard's title bar. Same file the application icon is
+; compiled from, so the installer a stranger downloads carries the icon they are about to get.
+SetupIconFile=..\assets\icon\findra.ico
+; And in the corner of every wizard page, so the thing being installed is on screen throughout
+; rather than only on the file somebody downloaded. Inno scales one bitmap to whatever the
+; display is set to; 128 px is what it reads at 250%.
+WizardSmallImageFile=..\assets\icon\findra-wizard.png
+; Add/Remove Programs reads its icon out of this binary, which carries the mark as a PE resource
+; (see ApplicationIcon in src/Findra/Findra.csproj). Nothing here needs the .ico a second time.
 UninstallDisplayIcon={app}\findra.exe
 UninstallDisplayName=Findra
 
