@@ -293,7 +293,31 @@ moment rather than an elevation prompt at every launch.
     `TheSigningPageSaysItIsNotInForceForAsLongAsTheSigningStepDoesNothing` couples the two in
     both directions and fails on whichever one moves alone.
 
+38. **The first winget submission, which nobody but you can start.** `.github/workflows/winget.yml`
+    is reachable by `workflow_dispatch` and by nothing else: no push, no tag, no release and no
+    schedule may ever be added to it, because a mis-tagged build that reaches a GitHub release can
+    be deleted and one that reaches the catalogue is on other people's machines by their next
+    `winget upgrade`. Everything the workflow does has been asserted as text and nothing more.
+
+    Once step 36 has produced a release, go to the Actions tab, run **publish to winget** with the
+    version and **submit unticked**, and then:
+
+    - the first step must find `findra-<version>-x64.exe` and `findra-<version>-arm64.exe` on the
+      release and stop if either is missing, before anything is built;
+    - the manifests are uploaded as the `winget-manifests` artefact. Download and read them: the
+      identifier, the installer type, the `/INSTALLSOURCE=winget` switch and the description are
+      whatever `packaging/winget/` says, and only the version and the two hashes were substituted;
+    - both `InstallerSha256` values must be real hex. The repository copy carries sixty-four zeros
+      on purpose and the workflow throws if either survives;
+    - `winget validate` runs only if the App Installer CLI is on the runner. If the log says it is
+      not, that is the documented fallback and not a failure.
+
+    Only then re-run it with **submit ticked**. That needs `WINGET_PKGS_TOKEN` to be a token with
+    access to a fork of the catalogue repository, and it opens a pull request that somebody else
+    reviews. Nothing in this repository can do either of those, and nothing in it ever starts this
+    workflow on its own.
+
 ## Notes
 
-Steps 1 to 4, 9 to 13 and 29 to 37 are the ones that have never executed in any form. Steps 5 to 8
+Steps 1 to 4, 9 to 13 and 29 to 38 are the ones that have never executed in any form. Steps 5 to 8
 have been verified by log line and by inspection, but not by eye.
