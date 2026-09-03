@@ -257,15 +257,15 @@ over a card somebody has just opened is not undone by pressing anything.
 
 ## The progress pill
 
-Under the card's field and under the capsule's bar: a dial, what is being read, the count, and the
+Under the card and under the capsule's bar: a dial, what is being read, the count, and the
 percentage at the far end. **The pill IS the bar** - the fill runs left to right underneath the
 words rather than beside them, so the shape carries the number and the eye reads it without
 reading it.
 
 - **`ProgressPill` paints it and both surfaces go through it.** They show one fact seen in two
   places; two painters is two answers waiting to differ. Each surface supplies only its own
-  rectangle, which is the one thing they are allowed to disagree about - the card's is the field's
-  width, the capsule's is the bar's.
+  rectangle, which is the one thing they are allowed to disagree about - the card's is the card's
+  width less its padding, the capsule's is the bar's.
 - **The card always shows it; the capsule shows it only while there is work.** `evenWhenSettled`
   is the difference and it is not a preference. The capsule is on the desktop all day with nothing
   asked of it, and a pill sitting there reading "up to date" is a widget that looks busy doing
@@ -273,8 +273,13 @@ reading it.
   they opened it with - drawing nothing there is indistinguishable from a broken feature, which is
   exactly how it read to the first person who went looking for this pill on a machine whose first
   pass had finished while they were installing.
-- **It changes the card's HEIGHT**, so `SearchCardLayout.Height` takes it. The empty card is 154
-  rather than 129 whenever a pill is drawn.
+- **It hangs BELOW the card, outside the card's shape**, the way the capsule's hangs under the bar.
+  `SearchCardLayout.Height` is the card and `WindowHeight` is the card plus the pill's band; sizing
+  a window or a bitmap takes the second, drawing or hit-testing the card takes the first. It sat
+  inside the card once, between the field and the hints, and the painter drew the card's body at
+  the height WITHOUT the pill while the window was sized WITH it - so the hints were painted onto
+  the desktop under the card's bottom edge. `CardProgressTests` reads a column of pixels down the
+  middle of a render and requires card, then nothing, then pill.
 - **`IndexStatus.Doing` maps the kind to a word, and it switches on the ENUM.** It was written on
   strings, matching `"Doc"` - the column heading `--searchindex` prints - against a value that is
   `"Document"`. Documents are most of what a first pass finds, so the noun vanished for nearly

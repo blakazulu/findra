@@ -53,7 +53,7 @@ public class CapsuleTests
         foreach ((string where, SKRect r) in new[]
                  {
                      ("the capsule", CapsuleLayout.PillRect()),
-                     ("the card", SearchCardLayout.ProgressRect()),
+                     ("the card", SearchCardLayout.ProgressRect(0, hasQuery: false)),
                  })
         {
             float room = r.Right - (r.Left + ProgressPillLayout.Inset + ProgressPillLayout.Ring * 2 + 8f)

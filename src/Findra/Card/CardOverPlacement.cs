@@ -30,7 +30,7 @@ public static class CardOverPlacement
         double s = screenScaling > 0 ? screenScaling : 1.0;
         return new PixelSize(
             (int)Math.Ceiling(SearchCardLayout.Width * zoom * s),
-            (int)Math.Ceiling(SearchCardLayout.Height(SearchCardLayout.MaxRows, true) * zoom * s));
+            (int)Math.Ceiling(SearchCardLayout.WindowHeight(SearchCardLayout.MaxRows, true, progress: true) * zoom * s));
     }
 
     /// <param name="widgetPos">The widget window's top-left, in physical pixels.</param>
