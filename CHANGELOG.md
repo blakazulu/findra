@@ -449,6 +449,10 @@ into a numbered section on the first release.
 
 ### Changed
 
+- **The first screen becomes a shorter window while the files come down.** With the choices
+  settled there is nothing to draw where they were, so the window closes up around what is
+  left instead of leaving a hand's width of nothing under the progress.
+
 - **While the models download, the first screen is only a status screen.** Nothing on it
   takes a click, including the button: the choice has been made and there is nothing left
   to answer. Closing the window still works, and the download carries on in the tray. A

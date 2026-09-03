@@ -202,6 +202,13 @@ public sealed class FirstRunWindow : Window
                 {
                     Stage = answer.Chosen.Count > 0 ? FirstRunStage.Downloading : FirstRunStage.Finished,
                 };
+                // The one resize this window does. The choosing height is sized for its tallest
+                // configuration so that ticking Speech cannot move the window under the pointer
+                // that ticked it - but the second act draws no tiles, no switches, no limit row
+                // and no notes, and the fixed height left a large empty band under the summary.
+                // Here is the safe moment: a deliberate click on a button that then stops
+                // existing, with nothing left under the pointer to be hit.
+                _owner.Height = FirstRunLayout.SettledHeight(Rows, LimitRow);
                 InvalidateVisual();
 
                 Answered?.Invoke(answer);

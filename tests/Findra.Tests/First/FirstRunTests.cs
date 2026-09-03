@@ -1143,16 +1143,19 @@ public class FirstRunTests
         // way out here is the window's own close, which is never disabled - a 2.93 GB fetch is
         // long enough that a screen answering nothing at all AND refusing to close would be a
         // trap rather than a settled question.
+        // The settled window is SHORTER than the choosing one, so the button is not where it was
+        // - taking its rect from the choosing height would test a point off the bottom of the
+        // window and pass for the wrong reason.
+        SKRect wayOut = FirstRunLayout.ButtonRect(1, FirstRunLayout.SettledHeight(rows, 3));
+
         Assert.Equal(FirstRunTarget.None,
-            FirstRunLayout.HitTest(FirstRunLayout.ButtonRect(1).MidX, FirstRunLayout.ButtonRect(1).MidY,
-                                   rows, 3, settled: true, finished: false).Target);
+            FirstRunLayout.HitTest(wayOut.MidX, wayOut.MidY, rows, 3, settled: true, finished: false).Target);
 
         // And once the last byte has landed it answers, because now there is something for it to
         // say. Both halves are asserted at the same point on the screen, so this is a statement
         // about the stage and not about where the button happens to sit.
         Assert.Equal(FirstRunTarget.Go,
-            FirstRunLayout.HitTest(FirstRunLayout.ButtonRect(1).MidX, FirstRunLayout.ButtonRect(1).MidY,
-                                   rows, 3, settled: true, finished: true).Target);
+            FirstRunLayout.HitTest(wayOut.MidX, wayOut.MidY, rows, 3, settled: true, finished: true).Target);
 
         // Nothing ELSE answers when it is finished either - the chooser stays settled.
         foreach ((string what, float x, float y) in points)
