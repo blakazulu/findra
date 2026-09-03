@@ -483,6 +483,13 @@ into a numbered section on the first release.
   prompt for the scheduled task was left on screen, Findra logged an unrelated error, called it
   a registration failure, and left a temporary file behind in `%TEMP%`.
 
+- **`findra --searchmodels` prints its title before its own measurements.** The probe wrote its
+  vector norms and image similarities straight to the terminal while the models were still open,
+  so they arrived above the heading that explains what they are: a headerless block of numbers,
+  then the title, then the report. The numbers were right and the reading order was wrong. The
+  probe is now a section of the report, under a heading of its own, after everything else - and
+  a run with no models on disk prints no probe heading at all rather than an empty one.
+
 ### Security
 
 - The elevated helper parses no file content. It reads names, paths, sizes and
