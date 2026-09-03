@@ -95,6 +95,38 @@ public class ModelDownloadTests : IDisposable
         Assert.Contains("9", r.Problem!, StringComparison.Ordinal);
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task AShortDownloadIsRefusedEvenWhenTheServerNeverSaidHowLongTheFileWas(bool resuming)
+    {
+        // The truncation guard above compares against the length the response declared, which is
+        // exactly the thing a server is not obliged to send. Chunked transfer encoding, a
+        // re-encoding proxy, and a handler that strips the header after decompressing all give a
+        // length of zero - and the guard skips itself when it does not know the length, which is
+        // when it is needed most.
+        //
+        // The resuming case is the worse of the two and the reason this is a theory. `total` on a
+        // resumed leg is the declared length PLUS the bytes already on disk, so with no header it
+        // equals what we already had - and `done` starts there too. The comparison is then false
+        // however few bytes arrive, so a one-byte answer to a resume promotes the part.
+        //
+        // Tiny's floor is 6 of 9 bytes, so 5 is short of the floor as well as of the file, which
+        // is what makes it catchable without knowing the length at all.
+        if (resuming) File.WriteAllBytes(Part, Content[..4]);
+
+        Fetch silentAboutLength = (url, from, ct) =>
+            Task.FromResult(new Fetched(new MemoryStream(Content[(int)from..5]), TotalBytes: 0, IsResume: from > 0));
+
+        DownloadOutcome r = await ModelDownloader.GetAsync(Tiny, _dir, silentAboutLength, null, default);
+
+        Assert.False(r.Complete);
+        Assert.False(File.Exists(Final));               // nothing promoted under the real name
+        Assert.True(File.Exists(Part));                 // and what arrived is kept, to resume from
+        Assert.NotNull(r.Problem);
+        Assert.False(ModelStore.Present(Tiny, _dir));   // the consequence that matters
+    }
+
     [Fact]
     public async Task AStalePartAgainstARepublishedFileStartsOver()
     {
