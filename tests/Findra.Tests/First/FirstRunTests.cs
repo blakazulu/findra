@@ -38,7 +38,8 @@ public class FirstRunTests
     private static bool Differs(FirstRunState a, FirstRunState b) =>
         !a.Chosen.SetEquals(b.Chosen)
         || a.ContentOn != b.ContentOn || a.CheckUpdates != b.CheckUpdates
-        || a.StartAtLogon != b.StartAtLogon || a.Stage != b.Stage || a.Problem != b.Problem;
+        || a.StartAtLogon != b.StartAtLogon || a.Stage != b.Stage || a.Problem != b.Problem
+        || a.TranscribeMinutes != b.TranscribeMinutes;
 
     [Fact]
     public void EveryThingYouCanTouchOnThisScreenDoesSomething()
@@ -74,6 +75,18 @@ public class FirstRunTests
 
         foreach (FirstRunTarget t in new[] { FirstRunTarget.Content, FirstRunTarget.Updates, FirstRunTarget.Autostart })
             Assert.True(Differs(s, FirstRun.Apply(s, new FirstRunHit(t, -1))), $"{t} changes nothing");
+
+        // The limit row, from a state where Speech is taken and so the row is on the screen. Every
+        // option but the one already chosen has to move the number; the one already chosen is an
+        // idempotent choice rather than a dead control, exactly as "Just names" is on an empty
+        // screen.
+        FirstRunState speech = State(Capability.Speech);
+        for (int o = 0; o < FirstRun.LimitOptions.Count; o++)
+        {
+            if (TranscribeLimit.Presets[o] == speech.TranscribeMinutes) continue;
+            Assert.True(Differs(speech, FirstRun.Apply(speech, new FirstRunHit(FirstRunTarget.Limit, o))),
+                $"limit option {o} ({FirstRun.LimitOptions[o]}) changes nothing");
+        }
     }
 
     // ---- the presets --------------------------------------------------------------------
@@ -187,22 +200,55 @@ public class FirstRunTests
     }
 
     [Fact]
-    public void EveryRowsSizeIsWhatItAddsToWhatIsAlreadyTicked()
+    public void ARowsSizeIsTheSameNumberWhateverElseIsTicked()
     {
-        // Spec §6: "Every size shown in the UI is the MARGINAL cost given what is already
-        // selected. A fixed per-row number would make the total visibly fail to add up."
-        string alone = RowFor(State(), Capability.Speech).Size;
-        string withDocs = RowFor(State(Capability.Meaning), Capability.Speech).Size;
-
-        Assert.NotEqual(alone, withDocs);
-        Assert.Equal(Sizes.Human(Capabilities.MarginalBytes(Capability.Speech, [])), alone);
-        Assert.Equal(Sizes.Human(Capabilities.MarginalBytes(Capability.Speech, [Capability.Meaning])), withDocs);
+        // The number beside a row is that row's download, and it does not move. A marginal figure
+        // is internally consistent and useless to read: the size you are weighing turns into
+        // "0 MB" at the moment you tick it, so the one number you were deciding on disappears
+        // exactly when you decide. What it costs is a fact about the row, not about the screen's
+        // current state.
+        foreach (Capability c in Capabilities.All)
+        {
+            string alone = RowFor(State(), c).Size;
+            Assert.Equal(alone, RowFor(State(c), c).Size);                        // ticked
+            Assert.Equal(alone, RowFor(State(Capability.Meaning), c).Size);       // a neighbour ticked
+            Assert.Equal(alone, RowFor(State(Capability.Hebrew), c).Size);        // everything ticked
+        }
     }
 
     [Fact]
-    public void ATickedRowCostsNothingMoreToKeep()
+    public void ARowIsPricedAtItsOwnFilesSoTheRowsAddUpToTheEverythingTotal()
     {
-        Assert.Equal(Sizes.Human(0), RowFor(State(Capability.Photos), Capability.Photos).Size);
+        // OWN files, not the closed set. Speech's closed set is 818 MB and Hebrew's is 2.37 GB,
+        // and four rows priced that way add up to 4.08 GB - a list whose own arithmetic disagrees
+        // with the "2.93 GB" printed on the Everything tile above it. Own files are the only
+        // pricing where the column sums to the total.
+        long sum = 0;
+        foreach (FirstRunRow row in FirstRun.Rows(State()))
+        {
+            if (row.Capability is not { } c) continue;
+            long own = ModelStore.TotalBytes(Capabilities.OwnModels(c));
+            Assert.Equal(Sizes.Human(own), row.Size);
+            sum += own;
+        }
+
+        Assert.Equal(Capabilities.TotalBytes(Capabilities.All), sum);
+        Assert.Equal(FirstRun.PresetSize(Preset.Everything), Sizes.Human(sum));
+    }
+
+    [Fact]
+    public void SpeechCostsMoreThanItsOwnRowAndTheSummaryIsWhereThatIsSaid()
+    {
+        // The honest consequence of pricing rows by their own files: Speech pulls the document
+        // models with it, so ticking it alone downloads more than its row says. The summary is
+        // the number that tells the truth about the download, and it is the closed set.
+        FirstRunState s = State(Capability.Speech);
+        long own = ModelStore.TotalBytes(Capabilities.OwnModels(Capability.Speech));
+
+        Assert.Equal(Sizes.Human(own), RowFor(s, Capability.Speech).Size);
+        Assert.True(FirstRun.TotalBytes(s) > own,
+            "the summary is the closed set, so it has to be larger than Speech's own files");
+        Assert.Contains(Sizes.Human(FirstRun.TotalBytes(s)), FirstRun.Summary(s), StringComparison.Ordinal);
     }
 
     [Fact]
@@ -213,6 +259,121 @@ public class FirstRunTests
         // arithmetic is visibly wrong to anyone who adds the rows up.
         Assert.Equal(FirstRun.TotalBytes(State(Capability.Speech)),
                      FirstRun.TotalBytes(State(Capability.Speech, Capability.Meaning)));
+    }
+
+    // ---- how long a recording is worth transcribing ------------------------------------------
+
+    [Fact]
+    public void TheTranscriptionLimitIsOnTheScreenExactlyWhenSpeechIsTaken()
+    {
+        // Ticking Speech signs somebody up for transcription, and one number decides how much of
+        // each recording is transcribed. Five minutes by default, so a two-hour lecture is cut at
+        // five - and until now the only place that number could be changed was the settings
+        // window, which nobody has opened yet on the screen that turned speech on.
+        Assert.Equal(-1, FirstRun.LimitRow(State()));
+        Assert.Equal(-1, FirstRun.LimitRow(State(Capability.Photos)));
+
+        FirstRunState speech = State(Capability.Speech);
+        Assert.Equal(IndexOf(speech, Capability.Speech), FirstRun.LimitRow(speech));
+
+        // Hebrew closes over Speech, so it brings the row with it.
+        FirstRunState hebrew = State(Capability.Hebrew);
+        Assert.Equal(IndexOf(hebrew, Capability.Speech), FirstRun.LimitRow(hebrew));
+
+        // And it goes when Speech goes.
+        Assert.Equal(-1, FirstRun.LimitRow(
+            FirstRun.Apply(speech, new FirstRunHit(FirstRunTarget.Row, IndexOf(speech, Capability.Speech)))));
+    }
+
+    [Fact]
+    public void TheLimitRowSitsUnderSpeechAndAboveTheHebrewPass()
+    {
+        // Under Speech because it is Speech's setting, and above Hebrew because Hebrew is a second
+        // pass over the same recordings - a limit drawn below it would read as belonging to the
+        // fine-tune alone.
+        FirstRunState s = State(Capability.Hebrew);
+        int limit = FirstRun.LimitRow(s);
+        SKRect speech = FirstRunLayout.RowRect(IndexOf(s, Capability.Speech), limit);
+        SKRect band = FirstRunLayout.LimitRect(limit);
+        SKRect hebrew = FirstRunLayout.RowRect(IndexOf(s, Capability.Hebrew), limit);
+
+        Assert.True(speech.Bottom <= band.Top, "the limit row is drawn over the Speech row");
+        Assert.True(band.Bottom <= hebrew.Top, "the limit row is drawn over the Hebrew row");
+        // The rows below it MOVE, rather than the band being painted on top of them.
+        Assert.True(hebrew.Top > FirstRunLayout.RowRect(IndexOf(s, Capability.Hebrew), -1).Top,
+            "the Hebrew row did not move down when the limit row appeared above it");
+    }
+
+    [Fact]
+    public void EveryLimitOptionAnswersWithItsOwnIndexAndSetsThatManyMinutes()
+    {
+        FirstRunState s = State(Capability.Speech);
+        int rows = FirstRun.Rows(s).Count, limit = FirstRun.LimitRow(s);
+
+        Assert.Equal(TranscribeLimit.Presets.Count, FirstRun.LimitOptions.Count);
+        for (int o = 0; o < FirstRun.LimitOptions.Count; o++)
+        {
+            SKRect r = FirstRunLayout.LimitOptionRect(o, limit);
+            FirstRunHit hit = FirstRunLayout.HitTest(r.MidX, r.MidY, rows, limit);
+
+            Assert.Equal(FirstRunTarget.Limit, hit.Target);
+            Assert.Equal(o, hit.Index);
+            Assert.Equal(TranscribeLimit.Presets[o], FirstRun.Apply(s, hit).TranscribeMinutes);
+        }
+    }
+
+    [Fact]
+    public void AnOptionOffTheEndOfTheListChangesNothing()
+    {
+        // The same shape as the row arm: a hit carries an index and an index can be wrong, and
+        // indexing Presets with it is a crash on a screen with no way out but the task manager.
+        FirstRunState s = State(Capability.Speech);
+        Assert.Equal(s.TranscribeMinutes, FirstRun.Apply(s, new FirstRunHit(FirstRunTarget.Limit, 9)).TranscribeMinutes);
+        Assert.Equal(s.TranscribeMinutes, FirstRun.Apply(s, new FirstRunHit(FirstRunTarget.Limit, -1)).TranscribeMinutes);
+    }
+
+    [Fact]
+    public void TheLimitChosenOnThisScreenIsTheOneTheIndexerIsGiven()
+    {
+        // Answered here or not, the number reaches the config the content loop reads. Without the
+        // last line the row is a control that draws and decides nothing.
+        FirstRunState s = State(Capability.Speech);
+        Assert.Equal(TranscribeLimit.Default, FirstRun.Outcome(s, Config.Default).TranscribeMinutes);
+
+        int twoHours = TranscribeLimit.Presets.ToList().IndexOf(120);
+        FirstRunState raised = FirstRun.Apply(s, new FirstRunHit(FirstRunTarget.Limit, twoHours));
+
+        Assert.Equal(120, raised.TranscribeMinutes);
+        Assert.Equal(120, FirstRun.Outcome(raised, Config.Default).TranscribeMinutes);
+    }
+
+    [Fact]
+    public void EveryLimitLabelFitsThePillItIsDrawnIn()
+    {
+        // Measured with Parts.Face at Parts.LabelSize, which is what the painter hands Parts.Pill.
+        // The settings window's five-option row is where these labels were shortened - "30 minutes"
+        // is 65.3px against a 62.8px pill - and the short forms are shared rather than written out
+        // twice, so a pill that ellipsises here is one that ellipsises there.
+        for (int o = 0; o < FirstRun.LimitOptions.Count; o++)
+        {
+            float room = FirstRunLayout.LimitOptionRect(o, 3).Width - 12;
+            float need = CardText.Measure(FirstRun.LimitOptions[o], Parts.Face, Parts.LabelSize);
+            Assert.True(need <= room,
+                $"'{FirstRun.LimitOptions[o]}' needs {need:F1}px and its pill gives {room:F1}px");
+        }
+    }
+
+    [Fact]
+    public void TheLimitRowsLabelFitsTheColumnBeforeItsPills()
+    {
+        // The other direction, and the pair is the point: widening the pills to fit their labels
+        // narrows this column, and widening this column narrows the pills. Satisfying one by
+        // moving the geometry breaks the other, so the answer to a tight label is a shorter label.
+        float room = FirstRunLayout.LimitOptionRect(0, 3).Left - FirstRunLayout.LimitLabelLeft(3) - 12;
+        float need = CardText.Measure(FirstRun.LimitLabel, Parts.Face, Parts.LabelSize);
+
+        Assert.True(need <= room,
+            $"the label '{FirstRun.LimitLabel}' needs {need:F1}px and its column gives {room:F1}px");
     }
 
     // ---- the three switches --------------------------------------------------------------
@@ -509,12 +670,20 @@ public class FirstRunTests
             ("an unchosen preset's size", FirstRunPainter.TileSizeInk(chosen: false, d), d.Tile),
             ("a row's price, on the card", FirstRunPainter.PriceInk(priced, d), d.Ground),
             ("a row's price, hovered", FirstRunPainter.PriceInk(priced, d), d.RowHover),
-            ("a ticked row's nothing-more-to-pay", FirstRunPainter.PriceInk(paid, d), d.Ground),
+            ("a ticked row's price", FirstRunPainter.PriceInk(paid, d), d.Ground),
             ("the free row's \"free\"", FirstRunPainter.PriceInk(free, d), d.Ground),
             ("a row title, hovered", d.Ink, d.RowHover),
             ("a row note", d.Fade(150), d.Ground),
             ("a row note, hovered", d.Fade(150), d.RowHover),
-            ("the disclosure and the summary", d.Fade(150), d.Ground),
+            ("the disclosure", d.Fade(150), d.Ground),
+            // The summary is the one line the whole screen comes down to, so it is drawn in full
+            // ink at the lead size rather than as another note. Its reading is the ink ramp's top,
+            // which is the point of moving it.
+            ("the summary", d.Ink, d.Ground),
+            ("the transcription limit's label", d.Ink, d.Ground),
+            ("a limit pill, resting", d.Ink, d.Chip),
+            ("a limit pill, hovered", d.Ink, d.RowHover),
+            ("the chosen limit pill", d.Ink, d.RowSelected),
             ("the two buttons", d.Ink, d.Chip),
             ("a tick, on a taken row", taken.Mark, taken.Fill),
             ("the free row's tick", always.Mark, always.Fill),
@@ -540,26 +709,31 @@ public class FirstRunTests
 
     // ---- the layout ----------------------------------------------------------------------------
 
-    [Fact]
-    public void EverythingFitsTheScreenWithHebrewOffered()
+    [Theory]
+    [InlineData(-1)]
+    [InlineData(3)]
+    public void EverythingFitsTheScreenWithHebrewOffered(int limit)
     {
-        // The tallest the screen gets: five rows, three switches with a wrapped disclosure under
-        // one, a summary line and two buttons.
+        // The tallest the screen gets: five rows, the transcription limit under Speech where
+        // Speech is taken, three switches with a wrapped disclosure under one, a summary and two
+        // buttons. Both configurations, because the limit row pushes everything below it down and
+        // the screen has to hold the taller one.
         int rows = FirstRun.Rows(State()).Count;
         Assert.Equal(5, rows);      // the free documents row plus the four capabilities
 
-        Assert.True(FirstRunLayout.SwitchRect(2, rows).Bottom < FirstRunLayout.SummaryRect(rows).Top,
+        Assert.True(FirstRunLayout.SwitchRect(2, rows, limit).Bottom < FirstRunLayout.SummaryRect(rows, limit).Top,
             "the switches overlap the summary");
-        Assert.True(FirstRunLayout.SummaryRect(rows).Bottom <= FirstRunLayout.ButtonRect(0).Top,
+        Assert.True(FirstRunLayout.SummaryRect(rows, limit).Bottom <= FirstRunLayout.ButtonRect(0).Top,
             "the summary overlaps the buttons");
-        Assert.True(FirstRunLayout.SummaryRect(rows).Height >= 24,
+        Assert.True(FirstRunLayout.SummaryRect(rows, limit).Height >= Parts.LeadHeight(3),
             "there is no room for the sentence that says what will be downloaded");
     }
 
     [Theory]
-    [InlineData(4)]
-    [InlineData(5)]
-    public void ThereIsARealDeadZoneBetweenTheLastRowAndTheFirstSwitch(int rows)
+    [InlineData(4, -1)]
+    [InlineData(5, -1)]
+    [InlineData(5, 3)]
+    public void ThereIsARealDeadZoneBetweenTheLastRowAndTheFirstSwitch(int rows, int limit)
     {
         // The first draft placed the switches 14px below the last row while a row band is 48px
         // tall, so the notional next row and the first switch interleaved: a click one row past
@@ -567,16 +741,36 @@ public class FirstRunTests
         // walks the whole interval.
         //
         // Rows(state) is one shorter where Hebrew is not offered, which is why both counts are
-        // tested: a hit test given a fixed count answers with an index Apply cannot look up.
-        float from = FirstRunLayout.RowRect(rows - 1).Bottom + 1;
-        float to = FirstRunLayout.SwitchRect(0, rows).Top - 1;
+        // tested: a hit test given a fixed count answers with an index Apply cannot look up. The
+        // third case is the same interval with the transcription limit on the screen, which moves
+        // both ends of it.
+        float from = FirstRunLayout.RowRect(rows - 1, limit).Bottom + 1;
+        float to = FirstRunLayout.SwitchRect(0, rows, limit).Top - 1;
 
         Assert.True(to - from >= FirstRunLayout.RowH,
             $"only {to - from}px of dead air between the last row and the first switch");
 
         for (float y = from; y <= to; y += 4f)
             Assert.Equal(FirstRunTarget.None,
-                FirstRunLayout.HitTest(FirstRunLayout.RowRect(0).MidX, y, rows).Target);
+                FirstRunLayout.HitTest(FirstRunLayout.RowRect(0).MidX, y, rows, limit).Target);
+    }
+
+    [Fact]
+    public void NoRowIsDrawnWhereTheLimitRowIsAndNoClickThereLandsOnOne()
+    {
+        // The band is inserted into the list rather than laid over it, so the rows below Speech
+        // move and the band's own air belongs to nothing. A click on it that fell through to a row
+        // would tick a capability somebody was aiming a pill at.
+        int rows = FirstRun.Rows(State()).Count;
+        SKRect band = FirstRunLayout.LimitRect(3);
+        float x = FirstRunLayout.RowRect(0).Left + 4;   // left of the label, right of the edge
+
+        for (float y = band.Top; y <= band.Bottom; y += 4f)
+            Assert.Equal(FirstRunTarget.None, FirstRunLayout.HitTest(x, y, rows, 3).Target);
+
+        for (int i = 0; i < rows; i++)
+            Assert.False(FirstRunLayout.RowRect(i, 3).IntersectsWith(band),
+                $"row {i} overlaps the transcription limit");
     }
 
     [Fact]
@@ -593,6 +787,50 @@ public class FirstRunTests
         Assert.True(Parts.NoteHeight(lines) <= FirstRunLayout.DisclosureH,
             $"the disclosure wraps to {lines} lines, needing {Parts.NoteHeight(lines)}px of the " +
             $"{FirstRunLayout.DisclosureH}px reserved between the update switch and the one below it");
+    }
+
+    [Fact]
+    public void TheSummaryIsAHeadlineRatherThanAnotherNote()
+    {
+        // The rows say what each one costs; the summary is the only place the whole download is
+        // stated, and since the rows stopped moving it is the number that carries the screen. It
+        // is drawn in the vocabulary's largest register, which is the one the section headers use,
+        // and the note size is the smallest - "raising" it by moving NoteSize would raise the row
+        // notes and the disclosure with it.
+        Assert.True(Parts.LeadSize > Parts.LabelSize,
+            $"the summary is drawn at {Parts.LeadSize}px and a row label at {Parts.LabelSize}px");
+        Assert.True(Parts.LabelSize > Parts.NoteSize,
+            $"a row label is {Parts.LabelSize}px and a note {Parts.NoteSize}px");
+    }
+
+    [Fact]
+    public void TheLongestSummaryFitsTheBandTheLayoutLeavesForIt()
+    {
+        // The same shape as the disclosure's check, and needed for the same reason: the band is
+        // arithmetic in FirstRunLayout, the sentence is prose in FirstRun, and nothing but this
+        // holds the two together. The worst case is the second act with something wrong - the
+        // longest capability title, a real network message, and the promise about the tray, all
+        // in one sentence - measured in the SHIPPED face at the size the summary is drawn.
+        FirstRunState worst = State(Capability.Hebrew) with
+        {
+            Stage = FirstRunStage.Downloading,
+            Downloads =
+            [
+                new CapabilityProgress(Capability.Meaning, 283_000_000, 283_000_000),
+                new CapabilityProgress(Capability.Speech, 12_000, 574_000_000),
+                new CapabilityProgress(Capability.Hebrew, 0, 1_549_000_000),
+            ],
+            Problem = "No such host is known. (huggingface.co:443)",
+        };
+
+        // In the TIGHTEST configuration: Hebrew closes over Speech, so the transcription limit is
+        // on the screen and every band below it has moved down.
+        SKRect band = FirstRunLayout.SummaryRect(FirstRun.Rows(worst).Count, FirstRun.LimitRow(worst));
+        int lines = Parts.Wrap(FirstRun.Summary(worst), Parts.Face, Parts.LeadSize, band.Width).Count;
+
+        Assert.True(Parts.LeadHeight(lines) <= band.Height,
+            $"the summary wraps to {lines} lines, needing {Parts.LeadHeight(lines)}px of the " +
+            $"{band.Height}px between the last switch and the buttons");
     }
 
     [Fact]

@@ -273,35 +273,14 @@ public static class SettingsModel
             : "On, but nothing is being read - indexing only happens while Findra is open.";
     }
 
-    /// <summary>
-    /// A preset's name, shortened to what a five-option pill holds. The long form is still what
-    /// the row's Value says, so nothing is hidden - only abbreviated where there is no room, and
-    /// expanded two inches to the left where there is.
-    ///
-    /// <para>Measured in the shipped face at <see cref="Parts.LabelSize"/>: the pill holds 62.8px,
-    /// and these are "Off" 19.1, "5 min" 32.8, "30 min" 40.2, "2 hr" 23.3, "No limit" 45.6.
-    /// <c>TranscribeLimit.Describe</c>'s own "30 minutes" is 65.3px and does not fit, which is
-    /// why this exists rather than the column being re-narrowed. "2 hours" (44.5px) would fit on
-    /// its own; it is short here so the five pills read as one register rather than four
-    /// abbreviations and a spelled-out one.</para>
-    /// </summary>
-    private static string Short(int minutes) => minutes switch
-    {
-        TranscribeLimit.Off => "Off",
-        TranscribeLimit.NoLimit => "No limit",
-        5 => "5 min",
-        30 => "30 min",
-        120 => "2 hr",
-        _ => minutes.ToString("N0", Fixed) + " min",
-    };
-
     private static IReadOnlyList<Control> Content(SettingsState s)
     {
         // SHORT forms for the pills, and TranscribeLimit.Describe for the value beside the label.
         // Five options give each pill 74.8px and Parts.Pill ellipsises to 62.8, which "30 minutes"
         // (65.3) does not fit. Describe() is what --content prints and parses, so it is not the
-        // thing to shorten; this is.
-        string[] presets = [.. TranscribeLimit.Presets.Select(Short)];
+        // thing to shorten; TranscribeLimit.ShortName is, and the first-run screen's own limit row
+        // reads the same list rather than writing out a second one that can drift from it.
+        string[] presets = [.. TranscribeLimit.Presets.Select(TranscribeLimit.ShortName)];
         var rows = new List<Control>
         {
             new(ControlId.IndexContent, ControlKind.Toggle, "Look inside my files", "", s.Config.IndexContent, [], [],

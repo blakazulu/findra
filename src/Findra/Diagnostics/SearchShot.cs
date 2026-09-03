@@ -23,7 +23,7 @@ public static class SearchShot
     [
         "capsule", "empty", "typing", "results", "noresults", "many", "adv", "opening", "openingempty",
         "settings", "settingsopening", "settingssearches", "settingscontent", "settingsabout",
-        "firstrun", "firstrundownloading",
+        "firstrun", "firstrunspeech", "firstrundownloading",
     ];
 
     public static int Render(string outPath, string state, string? paletteName = null)
@@ -170,24 +170,36 @@ public static class SearchShot
     }
 
     /// <summary>
-    /// Spec §6's first screen, in both of its acts.
+    /// Spec §6's first screen, in all three of the shapes it takes.
     ///
-    /// <para>Built on the REAL numbers - every size is <c>Capabilities.MarginalBytes</c> through
-    /// <c>FirstRun.Rows</c>, so a shot of this screen cannot quote a figure the product would not.
-    /// The downloading state carries one capability finished, one part-way AND a problem, because
-    /// those are the three things the second act can be showing and none of them has a unit test
-    /// that looks at pixels.</para>
+    /// <para>Built on the REAL numbers - every size comes through <c>FirstRun.Rows</c> and the
+    /// summary through <c>FirstRun.Summary</c>, so a shot of this screen cannot quote a figure the
+    /// product would not. The downloading state carries one capability finished, one part-way AND
+    /// a problem, because those are the three things the second act can be showing and none of
+    /// them has a unit test that looks at pixels.</para>
+    ///
+    /// <para><c>firstrunspeech</c> is a state of its own rather than a variation of the first,
+    /// because the transcription limit is only on the screen when Speech is taken and the two
+    /// layouts are what a review has to compare: the row appears between Speech and the Hebrew
+    /// pass, and everything below it moves down by a band.</para>
     /// </summary>
     private static SKBitmap RenderFirstRun(string state, Derived d, SKTypeface face)
     {
         bool busy = state == "firstrundownloading";
+        bool speech = state == "firstrunspeech";
         var s = new FirstRunState
         {
-            Chosen = Capabilities.Close([Capability.Photos, Capability.Meaning]),
+            Chosen = speech
+                ? Capabilities.Close([Capability.Photos, Capability.Speech])
+                : Capabilities.Close([Capability.Photos, Capability.Meaning]),
             HebrewOffered = true,
             ContentOn = true,
             CheckUpdates = true,
             StartAtLogon = true,
+            // Not the default, so the shot shows a chosen pill somewhere other than where an
+            // untouched screen would put it - and shows that the control is answered rather than
+            // decorative.
+            TranscribeMinutes = speech ? 30 : TranscribeLimit.Default,
             Stage = busy ? FirstRunStage.Downloading : FirstRunStage.Choosing,
             Downloads = busy
                 ?
@@ -198,8 +210,12 @@ public static class SearchShot
                 : [],
             Problem = busy ? "the connection dropped" : "",
             // Hovered, because a resting surface never shows what RowHover looks like beside Row -
-            // the defect that let hover sit within 1.4 L* of a resting row on two palettes.
-            HoverTarget = busy ? FirstRunTarget.NotNow : FirstRunTarget.Row,
+            // the defect that let hover sit within 1.4 L* of a resting row on two palettes. The
+            // speech state hovers a limit pill that is not the chosen one, which is the only place
+            // a pill's hover fill is painted on this screen at all.
+            HoverTarget = busy ? FirstRunTarget.NotNow : speech ? FirstRunTarget.Limit : FirstRunTarget.Row,
+            // 3 is the Hebrew row on the choosing screen and the "2 hr" pill on the speech one -
+            // in both cases something other than what is already chosen.
             HoverIndex = busy ? -1 : 3,
         };
 

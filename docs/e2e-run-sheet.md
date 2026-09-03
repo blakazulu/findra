@@ -287,8 +287,8 @@ to start a task nothing has ever created.
 ### 2.3 (catalogue 29) The first screen, answered by a person - admin, eye
 
 Rename the config again and launch. Nothing about a window can be checked headlessly;
-`--searchshot firstrun` and `--searchshot firstrundownloading` draw the two surfaces and nothing
-else.
+`--searchshot firstrun`, `--searchshot firstrunspeech` and `--searchshot firstrundownloading` draw
+the three surfaces and nothing else.
 
 **Pass:**
 - the screen appears **before** the capsule and the tray, and reads as the same object as the
@@ -296,6 +296,11 @@ else.
 - the three preset tiles light **one at a time**, and touching any row moves the choice to none of
   them;
 - ticking Speech ticks the document models under it; unticking Speech takes Hebrew with it;
+- ticking Speech puts the transcription limit under it and unticking Speech takes it away; the
+  five pills answer, the rows below move down rather than being drawn over, and the number chosen
+  here is the one `--content` reports afterwards;
+- every row's size stays the same number when it is ticked, and the four of them add up to the
+  2.93 GB the Everything tile quotes;
 - the Hebrew row is on the screen only on a machine with Hebrew installed;
 - press **"Not now"**: **one** administrator prompt, the screen goes, and it does **not** come back
   at the next launch;

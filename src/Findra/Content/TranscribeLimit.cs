@@ -53,6 +53,31 @@ public static class TranscribeLimit
     public static string Describe(int minutes)
         => Named(minutes) ?? $"{minutes.ToString(CultureInfo.InvariantCulture)} minutes";
 
+    /// <summary>
+    /// The same setting, shortened to what a pill holds. The long form is what
+    /// <see cref="Describe"/> prints beside the row and on the command line; this is what goes
+    /// inside the control, wherever five choices share a row.
+    ///
+    /// <para>Measured in the shipped face at <c>Parts.LabelSize</c>: "Off" 19.1px, "5 min" 32.8,
+    /// "30 min" 40.2, "2 hr" 23.3, "No limit" 45.6, against a pill that holds 62.8px in the
+    /// settings window and 64px on the first-run screen. <see cref="Describe"/>'s own
+    /// "30 minutes" is 65.3px and fits neither, which is why this exists rather than either
+    /// column being re-narrowed. "2 hours" (44.5px) would fit on its own; it is short here so
+    /// the five read as one register rather than four abbreviations and a spelled-out one.</para>
+    ///
+    /// <para>One list, two surfaces. The settings window and the first-run screen offer the same
+    /// five choices, and a second table of names is how they come to disagree.</para>
+    /// </summary>
+    public static string ShortName(int minutes) => minutes switch
+    {
+        Off => "Off",
+        5 => "5 min",
+        30 => "30 min",
+        120 => "2 hr",
+        < 0 => "No limit",
+        _ => minutes.ToString(CultureInfo.InvariantCulture) + " min",
+    };
+
     /// <summary>A preset name or a bare number of minutes. Null for anything else - zero is a
     /// real setting, so falling back to it would turn speech off for somebody who mistyped.</summary>
     public static int? Parse(string word)

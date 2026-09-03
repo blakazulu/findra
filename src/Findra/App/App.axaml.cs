@@ -359,6 +359,9 @@ internal sealed class Shell : ISettingsHost
             // not have to make it.
             HebrewOffered = Capabilities.HebrewIsOffered(Capabilities.SystemLanguages()),
             ContentOn = _config.IndexContent,
+            // The limit as it stands, not the default: a reinstall over an existing config must
+            // not show five minutes to somebody who chose two hours the last time.
+            TranscribeMinutes = _config.TranscribeMinutes,
             CheckUpdates = _config.CheckForUpdates,
             // What is actually in the Run key, not a default: a reinstall over an existing entry
             // must not show the switch off while the entry is there.
@@ -388,7 +391,8 @@ internal sealed class Shell : ISettingsHost
                                 ? "no capabilities"
                                 : string.Join(", ", answer.Chosen.Select(Capabilities.Title))) +
                             ", looking inside files " + (_config.IndexContent ? "on" : "off") +
-                            ", update checks " + (_config.CheckForUpdates ? "on" : "off"));
+                            ", update checks " + (_config.CheckForUpdates ? "on" : "off") +
+                            ", transcribing up to " + TranscribeLimit.Describe(_config.TranscribeMinutes));
 
         string exe = Environment.ProcessPath ?? "";
         if (answer.StartAtLogon) Autostart.Set(exe); else Autostart.Clear();

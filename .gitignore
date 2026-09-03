@@ -15,3 +15,6 @@ installer/redist/
 # A runtime lock naming a session and a process id. It regenerates, it is different on every
 # machine, and committing it would put a dirty file in every future checkout.
 .claude/scheduled_tasks.lock
+
+# Review renders. Regenerate with --searchshot; they are a conversation, not a record.
+/docs/shots/review/
