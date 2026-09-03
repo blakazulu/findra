@@ -215,7 +215,14 @@ public static class SearchShot
         bool installed = state == "firstruninstalled";
         var s = new FirstRunState
         {
-            Chosen = speech
+            // The installed shot ticks what it has, exactly as the product does - a row reading
+            // "installed" beside an empty tick box is a state the shell cannot produce, and a shot
+            // of it would be reviewing something that does not exist.
+            Chosen = installed
+                ? FirstRun.AlreadyChosen(
+                    new HashSet<string>(ModelStore.All.Select(m => m.File), StringComparer.OrdinalIgnoreCase),
+                    hebrewOffered: true)
+                : speech
                 ? Capabilities.Close([Capability.Photos, Capability.Speech])
                 : Capabilities.Close([Capability.Photos, Capability.Meaning]),
             HebrewOffered = true,

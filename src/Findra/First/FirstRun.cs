@@ -282,6 +282,44 @@ public static class FirstRun
         return own.Count > 0 && own.All(m => onDisk.Contains(m.File));
     }
 
+    /// <summary>
+    /// What is ticked when the screen opens: everything this machine already has.
+    ///
+    /// <para>An uninstall keeps the models unless the purge box is ticked, so a reinstall meets a
+    /// folder that may already hold all 2.9 GB - and the screen opened with every row unticked,
+    /// asking somebody to choose again from a list where every answer was already yes. Leaving one
+    /// unticked did not even take the capability away: what Findra can read is read from the FILES
+    /// on disk, never from this selection, which only decides what gets fetched. So an unticked
+    /// row over a present model was a control whose two positions meant the same thing.</para>
+    ///
+    /// <para>CLOSED, so a machine holding the Whisper model but not the e5 pair opens with Speech
+    /// ticked and its dependency ticked with it - which is the truth: Speech needs both, and one
+    /// of them still has to be fetched. That is also why this cannot simply tick what is present.
+    /// </para>
+    ///
+    /// <para>Hebrew is dropped where it is not offered. Its row is not drawn on a machine with no
+    /// Hebrew, and a selection carrying a capability with no row would price a download nobody can
+    /// see and put the preset tiles on a set they do not match.</para>
+    /// </summary>
+    public static IReadOnlySet<Capability> AlreadyChosen(IReadOnlySet<string> onDisk, bool hebrewOffered)
+    {
+        ArgumentNullException.ThrowIfNull(onDisk);
+        var here = new HashSet<Capability>();
+        foreach (Capability c in Capabilities.All)
+        {
+            if (c == Capability.Hebrew && !hebrewOffered) continue;
+            if (AlreadyHere(c, onDisk)) here.Add(c);
+        }
+
+        IReadOnlySet<Capability> closed = Capabilities.Close(here);
+        if (hebrewOffered) return closed;
+
+        // Close can pull Hebrew back in only if something depended on it, which nothing does - but
+        // asserting that here rather than trusting it costs one filter and survives a change to
+        // the graph.
+        return new HashSet<Capability>(closed.Where(c => c != Capability.Hebrew));
+    }
+
     /// <summary>What the size column says instead of a size. The same word the settings window
     /// uses for the same fact, so the two surfaces describe an installed capability identically.
     /// </summary>
