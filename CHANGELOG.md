@@ -531,6 +531,13 @@ into a numbered section on the first release.
   on screen and read as a dead button. It now shows the same live count the card and the capsule
   show - one answer to that question across every surface that gives it.
 
+- **Findra does not open behind its own welcome screen.** The hotkey, the tray icon, the tray's
+  Search and Settings items and the capsule all opened a card or a settings window while the first
+  screen was still downloading, so a half-configured Findra appeared in front of the one still
+  setting itself up. All of them now bring the welcome screen back to the front instead, until it
+  is closed. Setting up continues behind it: names are searchable within seconds of answering, so
+  nothing waits on the download.
+
 - **The welcome screen stops standing over everything once you have answered it.** It is pinned
   in front while the question is on it, on purpose - a first screen that opened behind whatever
   was already on the desktop would read as an install that did nothing. It kept the pin through
