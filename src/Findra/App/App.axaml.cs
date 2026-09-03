@@ -174,6 +174,11 @@ internal sealed class Shell : ISettingsHost
     // else depends on them, so a stale read costs one repaint of a status line.
     private volatile bool _everIndexed;
     private volatile bool _indexerAlive;
+
+    /// <summary>The last IndexStatus.Line the status pump produced, so a settings window opening
+    /// between two pumps starts with the sentence the capsule is already showing rather than with
+    /// a second of the two-boolean fallback.</summary>
+    private volatile string _indexLine = "";
     private IReadOnlyList<string> _drives = [];
 
     // ---- the content index ----
@@ -1103,13 +1108,14 @@ internal sealed class Shell : ISettingsHost
         // line happens to change.
         _everIndexed = indexed > 0;
         _indexerAlive = alive;
+        _indexLine = line;
 
         // And to the settings window if one is open. It reads both for its Content sentence and
         // took them when it opened, so without this the sentence describes the moment somebody
         // arrived rather than the one they are looking at - which is why "Start now" appeared to
         // do nothing. Refresh compares before it repaints, so an unchanged answer costs nothing.
         if (SettingsWindow.Open is { } panel)
-            Dispatcher.UIThread.Post(() => panel.UseIndexState(indexed > 0, alive));
+            Dispatcher.UIThread.Post(() => panel.UseIndexState(indexed > 0, alive, line));
         // Zero rather than a full bar when there is nothing waiting: "up to date" is a sentence,
         // not a completed job, and a bar sitting at 100% invites the reader to wait for something.
         float fraction = pending == 0 ? 0f : (float)(indexed / (double)(indexed + pending));
@@ -1414,6 +1420,7 @@ internal sealed class Shell : ISettingsHost
                 StartsAtLogon = Autostart.IsSet(),
                 EverIndexed = _everIndexed,
                 IndexerAlive = _indexerAlive,
+                Progress = _indexLine,
                 Drives = _drives,
                 WindowsIsLight = Theme.WindowsIsLight(),
                 Version = BuildInfo.Version,

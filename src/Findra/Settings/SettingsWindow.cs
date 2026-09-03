@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Runtime.Versioning;
 using Avalonia;
@@ -111,10 +111,11 @@ public sealed class SettingsWindow : Window
     /// it. The shell already reads both once a second for the capsule; this is the same answer
     /// arriving here too.</para>
     /// </summary>
-    public void UseIndexState(bool everIndexed, bool indexerAlive) =>
+    public void UseIndexState(bool everIndexed, bool indexerAlive, string progress) =>
         _canvas.Refresh(s => s.EverIndexed == everIndexed && s.IndexerAlive == indexerAlive
+                             && string.Equals(s.Progress, progress, StringComparison.Ordinal)
             ? s
-            : s with { EverIndexed = everIndexed, IndexerAlive = indexerAlive });
+            : s with { EverIndexed = everIndexed, IndexerAlive = indexerAlive, Progress = progress });
 
     /// <summary>
     /// Mark a row as waiting on its own work, or as finished with it.
