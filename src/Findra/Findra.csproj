@@ -66,5 +66,17 @@
     <None Include="..\..\assets\fonts\OFL.txt" Link="OFL-Quicksand.txt">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
+    <!-- Findra's own licence and, more importantly, the NOTICE. Apache-2.0 section 4(d) requires
+         the NOTICE to travel with every distribution, and the installer's [Files] entry copies the
+         publish folder and nothing else - so a NOTICE that only sits in the repository reaches
+         nobody who installs. LicenseFile in the installer script only DISPLAYS the licence in the
+         wizard; it does not put a copy on the disk. Apache was chosen over MIT for the propagating
+         attribution NOTICE carries, so shipping without it gives up the reason for the choice. -->
+    <None Include="..\..\LICENSE" Link="LICENSE.txt">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="..\..\NOTICE" Link="NOTICE.txt">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
   </ItemGroup>
 </Project>

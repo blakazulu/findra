@@ -91,6 +91,34 @@ public class TypefaceTests
     }
 
     [Fact]
+    public void TheNoticeAndTheLicenceReachTheMachineAndNotJustTheRepository()
+    {
+        // Apache-2.0 section 4(d) requires the NOTICE to travel with every distribution, and the
+        // reason this project chose Apache over MIT is that NOTICE is the mechanism carrying the
+        // attribution forward. For a long time neither file reached an installed copy: the
+        // installer's only [Files] entry copies the publish folder, the publish folder held one
+        // licence and it was the font's, and the script's LicenseFile line merely DISPLAYS the
+        // licence in the wizard rather than putting a copy on the disk. Nothing failed, nothing
+        // warned, and every installed Findra shipped without the file its licence turns on.
+        //
+        // Asserted against the csproj rather than against a publish folder, because a publish
+        // folder is not present in a fresh clone and a test that quietly skips is worse than none.
+        string proj = Repo.Read("src/Findra/Findra.csproj");
+
+        foreach (string file in new[] { "LICENSE", "NOTICE" })
+        {
+            // \s* spans the line ending, so no normalising is needed and none is done: a
+            // Replace here would be a second thing to get right for no gain.
+            Assert.Matches($@"<None\s+Include=""[^""]*{file}""[^>]*>\s*<CopyToOutputDirectory>", proj);
+        }
+
+        // And they have to say what they are, so a copy rule pointed at an empty file is caught.
+        Assert.Contains("Apache License", Repo.Read("LICENSE"), StringComparison.Ordinal);
+        Assert.Contains("blakazulu", Repo.Read("NOTICE"), StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("github.com/blakazulu/findra", Repo.Read("NOTICE"), StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
     public void OnlyOnePlaceInTheTreeResolvesATypeface()
     {
         // The drift this catches: a new surface written later that says SKTypeface.Default because
