@@ -862,6 +862,16 @@ First, record the numbers to compare against:
 
     "C:\Program Files\Findra\findra.exe" --uninstall --dry-run
 
+Then check that the question can be asked at all:
+
+    reg query "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall" /s /v QuietUninstallString | findstr /i findra
+
+**It must print nothing.** Inno registers a `QuietUninstallString` of its own beside the ordinary
+one, and Windows 11's Settings prefers it: the uninstaller then starts with `/SILENT`,
+`UninstallSilent()` is true, `InitializeUninstall` returns before it has built anything, and every
+line below happens with no prompt and nothing deleted. The installer deletes that value at
+`ssPostInstall`, and a real install is the only place that can be shown.
+
 Then uninstall from **Apps & features**.
 
 **Pass:**

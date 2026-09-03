@@ -512,6 +512,27 @@ into a numbered section on the first release.
 
 ### Fixed
 
+- **Uninstalling from Windows Settings asks about your data again.** Inno Setup registers a
+  silent uninstall command of its own beside the ordinary one, and Settings > Apps prefers it,
+  so removing Findra there ran the uninstaller with no window: the checkbox that offers to
+  delete the models, the index and the settings never appeared, and 2.93 GB was kept on the
+  disk of somebody who had just asked for Findra to be gone. The installer now removes that
+  command, so the question is asked on the route nearly everybody takes. Anything that really
+  needs a removal with no questions still has `findra.exe --uninstall --purge --quiet`.
+
+- **The log now says which way an uninstall went.** A run that kept your index, your models and
+  your settings and a run that deleted them left the same lines behind - the scheduled task, the
+  stopped processes, and nothing at all about the choice. One line goes in before anything is
+  stopped, naming the choice and the size that was measured: "keeping models, index, logs and
+  settings (2.98 GB)".
+
+- **An uninstall no longer reports that the name helper did not answer.** It asked the helper for
+  its process id over the name pipe, and from an uninstall that can never be answered: the pipe is
+  owned by your account so that Findra's own window can reach it, an uninstall runs as an
+  administrator, and the check that keeps other accounts out compares the two. The ask is gone
+  along with the two seconds it spent failing and the warning it left in the log of every
+  successful removal. Every Findra process is stopped exactly as before.
+
 - **Clicking a palette applies it.** Choosing a light palette while the dark side was on
   screen wrote the setting and changed nothing you could see, so you had to find the mode
   row and switch that too. Picking a palette from the side you are not looking at now moves
