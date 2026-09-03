@@ -59,7 +59,11 @@ public sealed class FirstRunWindow : Window
         // Topmost, unlike settings: this is the first thing a new install shows and it is the
         // only route into content indexing and the capability list. A screen that opened behind
         // whatever was already on the desktop would look like nothing happened.
-        Topmost = true;
+        //
+        // Through FirstRun.OwnsTheDisplay and not a bare `true`, because the same question is
+        // asked again the moment the screen is answered and the two answers have to come from one
+        // rule. See that method for why the download does not keep the pin.
+        Topmost = FirstRun.OwnsTheDisplay(state.Stage);
 
         Opened += (_, _) => { Activate(); _canvas.Focus(); };
         _canvas.Answered += s => Answered?.Invoke(s);
@@ -209,6 +213,10 @@ public sealed class FirstRunWindow : Window
                 // Here is the safe moment: a deliberate click on a button that then stops
                 // existing, with nothing left under the pointer to be hit.
                 _owner.Height = FirstRunLayout.SettledHeight(Rows, LimitRow);
+                // And it stops standing over everything else. The question is answered; what is
+                // left is a progress bar that can run for tens of minutes, and a progress bar
+                // pinned in front of every other window is not a courtesy.
+                _owner.Topmost = FirstRun.OwnsTheDisplay(_state.Stage);
                 InvalidateVisual();
 
                 Answered?.Invoke(answer);

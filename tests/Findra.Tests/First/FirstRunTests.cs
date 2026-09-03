@@ -1,4 +1,4 @@
-using System.Globalization;
+﻿using System.Globalization;
 
 using Findra;
 using Findra.Startup;   // HelperTaskState
@@ -1255,4 +1255,26 @@ public class FirstRunDownloadTests : IDisposable
                                        () => Task.CompletedTask, cts.Token));
     }
 
+
+    [Fact]
+    public void TheScreenHoldsTheDisplayForTheQuestionAndGivesItBackForTheDownload()
+    {
+        // "When the first screen is needed, it owns the display until it is answered" is about the
+        // QUESTION. A welcome screen opening behind whatever was already on the desktop reads as an
+        // install that did nothing, and this is the only route into content indexing and the
+        // capability list.
+        //
+        // The download inherited the same pin and should not have. Answering "Get these" starts up
+        // to 2.9 GB - tens of minutes on an ordinary line - and for every second of it the window
+        // sat over every other application on the machine, not modal and not busy, just permanently
+        // in front of whatever somebody had moved to while they waited. It was reported by the
+        // first person to run a real install and choose everything.
+        Assert.True(FirstRun.OwnsTheDisplay(FirstRunStage.Choosing));
+        Assert.False(FirstRun.OwnsTheDisplay(FirstRunStage.Downloading));
+        Assert.False(FirstRun.OwnsTheDisplay(FirstRunStage.Finished));
+
+        // Every stage answered, so a fourth one added to the enum cannot quietly default to a
+        // window that stands in front of the whole desktop for as long as it is open.
+        Assert.Equal(3, Enum.GetValues<FirstRunStage>().Length);
+    }
 }
