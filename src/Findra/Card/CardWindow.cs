@@ -349,8 +349,10 @@ public sealed class CardWindow : Window
                 indexed: indexed < 0 ? null : indexed);
             // And the pill under the field, from the same reading and the same composer the
             // capsule and the tray's tooltip use.
+            // evenWhenSettled: this is a window somebody opened, and it owes an answer whether or
+            // not there is work in hand. The capsule, which is on the desktop all day, does not.
             _progress = IndexStatus.Pill(contentOn, db.Get("indexer:kind") ?? "", pending, indexed,
-                                         IndexStatus.Alive(beat, pid));
+                                         IndexStatus.Alive(beat, pid), evenWhenSettled: true);
             return IndexStatus.Line(contentOn, state, pending, indexed, IndexStatus.Alive(beat, pid), rebuilt);
         }
 

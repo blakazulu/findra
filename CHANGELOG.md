@@ -576,8 +576,10 @@ into a numbered section on the first release.
 
 - **The card shows how far the index has got, under the search field.** A pill with a dial, what
   is being read, the count and the percentage - and the pill itself is the bar, filling left to
-  right underneath the words. It appears while there is something to report and takes no room at
-  all when there is not. The desktop capsule carries the same pill from the same painter.
+  right underneath the words. It is always there when the card is open: reading, paused, off, or
+  "up to date, 12,480 files" once a pass has finished. The desktop capsule carries the same pill
+  from the same painter but stays quiet when there is no work, because it sits on the desktop all
+  day and a widget that says "up to date" for eight hours is one that looks busy doing nothing.
 
 - **The capsule has its own progress pill.** What is being read, a track, and how far it has got -
   "indexing photos, 6,680 of 10,800" - in a smaller pill under the search bar. It used to be a bare

@@ -113,17 +113,29 @@ public static class SearchProbe
             using var db = new ContentDb(ContentDb.DefaultPath, readOnly: true);
             // The switch as the INDEX records it. The shell reads its own config; this process has
             // none, and index:paused is the one copy of that bit both of them go by.
+            string N(long v) => v.ToString("N0", CultureInfo.InvariantCulture);
             bool reading = db.Get("index:paused") != "1";
             string kind = db.Get("indexer:kind") ?? "";
             IndexProgress pill = IndexStatus.Pill(
                 reading, kind, db.PendingCount(), db.IndexedCount(),
                 IndexStatus.Alive(db.Get("indexer:beat"), db.Get("indexer:pid")));
 
-            return PillLabel + (pill.Show
-                ? $"\"{pill.Label}\"  [{pill.Fraction * 100:F0}%]  \"{pill.Count}\""
-                : "nothing drawn" +
-                  (reading ? "" : " (reading is off)") +
-                  (kind.Length == 0 ? " (no indexer:kind row)" : ""));
+            if (pill.Show)
+                return PillLabel + $"\"{pill.Label}\"  [{pill.Fraction * 100:F0}%]  \"{pill.Count}\"" +
+                       (kind.Length == 0 ? "   (no indexer:kind row - an index from an older build)" : "");
+
+            // THE reason, in the order Pill decides them, and one of them. The first version of
+            // this listed every condition that happened to be unmet, so a finished index reported
+            // "nothing drawn (no indexer:kind row)" - which is true, irrelevant, and sent somebody
+            // reinstalling twice looking for a fault in a pill that was correctly drawing nothing.
+            // A diagnostic that names a reason which is not the reason is worse than none.
+            long pending = db.PendingCount();
+            return PillLabel + "nothing drawn - " + (
+                !reading ? "reading inside files is off"
+                : !IndexStatus.Alive(db.Get("indexer:beat"), db.Get("indexer:pid"))
+                    ? $"no indexer is running ({N(pending)} file(s) waiting)"
+                : pending == 0 ? $"nothing is queued; the index is up to date at {N(db.IndexedCount())} file(s)"
+                : "the pill said no with every condition met, which should not happen");
         }
         catch (Exception ex)
         {

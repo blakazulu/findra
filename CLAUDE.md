@@ -266,9 +266,15 @@ reading it.
   places; two painters is two answers waiting to differ. Each surface supplies only its own
   rectangle, which is the one thing they are allowed to disagree about - the card's is the field's
   width, the capsule's is the bar's.
-- **It changes the card's HEIGHT**, so `SearchCardLayout.Height` takes it and the empty card grows
-  from 129 to 154 while there is something to report. Reserving the band always would put an empty
-  strip under the field on an idle machine, which is the thing the pill exists not to do.
+- **The card always shows it; the capsule shows it only while there is work.** `evenWhenSettled`
+  is the difference and it is not a preference. The capsule is on the desktop all day with nothing
+  asked of it, and a pill sitting there reading "up to date" is a widget that looks busy doing
+  nothing (spec §3). The card is a window somebody OPENED, and it owes an answer to the question
+  they opened it with - drawing nothing there is indistinguishable from a broken feature, which is
+  exactly how it read to the first person who went looking for this pill on a machine whose first
+  pass had finished while they were installing.
+- **It changes the card's HEIGHT**, so `SearchCardLayout.Height` takes it. The empty card is 154
+  rather than 129 whenever a pill is drawn.
 - **`IndexStatus.Doing` maps the kind to a word, and it switches on the ENUM.** It was written on
   strings, matching `"Doc"` - the column heading `--searchindex` prints - against a value that is
   `"Document"`. Documents are most of what a first pass finds, so the noun vanished for nearly
