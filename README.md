@@ -107,6 +107,11 @@ restart it once before you look for a photo by what is in it.
 
 `findra --searchshot docs/shots/settings.png settingscontent Paper`
 
+Settings is on the card itself, under Advanced, as well as on the tray icon and a right-click
+on the capsule. "Start now" begins reading inside files in that session and the sentence above
+it says so; "Indexing power" is how much of the machine that reading may take, which the
+indexer has always honoured and until now could only be changed by hand.
+
 A global hotkey opens the card from anywhere, over whatever you were doing. If the
 combination you asked for is already taken, Findra walks a fallback chain, takes the first
 that registers, and tells you which one it landed on rather than failing quietly.

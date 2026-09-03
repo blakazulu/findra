@@ -9,7 +9,7 @@ namespace Findra;
 // result large. The layout is a PURE FUNCTION of the state's shape, called by the painter and by
 // the hit test, so there is no stored rect list for a pointer event to race against. Do not add one.
 
-public enum SearchTarget { None, Field, Chip, Row, Open, Reveal, Copy, Stage, Content, Adv, AdvField, AdvCheck, AdvKind, AdvButton }
+public enum SearchTarget { None, Field, Chip, Row, Open, Reveal, Copy, Stage, Content, Adv, Settings, AdvField, AdvCheck, AdvKind, AdvButton }
 
 public readonly record struct SearchHit(SearchTarget Target, int Index)
 {
@@ -37,7 +37,7 @@ public static class SearchCardLayout
     public static readonly string[] ChipLabels = { "All", "Photos", "Videos", "Documents", "Audio", "Files & folders" };
     private static readonly float[] ChipW = { 54, 76, 74, 104, 68, 128 };
 
-    public const float ContentW = 96f;        // the two pills beside the field, stacked
+    public const float ContentW = 96f;        // the three pills beside the field, stacked
 
     public static SKRect FieldRect() => new(Pad, FieldTop, Width - Pad - ContentW - 10, FieldTop + FieldH);
 
@@ -46,6 +46,24 @@ public static class SearchCardLayout
 
     public static SKRect AdvRect()
         => new(Width - Pad - ContentW, FieldTop + FieldH - 31, Width - Pad, FieldTop + FieldH - 1);
+
+    /// <summary>
+    /// The third pill, under Advanced and outside the field's own height.
+    ///
+    /// <para>It is here because settings could be opened from exactly two places and both were
+    /// hidden - the tray icon's menu and a right-click on the capsule - so the capability list,
+    /// the transcription limit and the switch that starts reading inside files all read as
+    /// features Findra does not have. Six pixels under Advanced, which is the air between Content
+    /// and Advanced, so the three read as one column rather than two and a stray.</para>
+    /// </summary>
+    public static SKRect SettingsRect()
+        => new(Width - Pad - ContentW, FieldTop + FieldH + 5, Width - Pad, FieldTop + FieldH + 35);
+
+    /// <summary>Where the header line's right-aligned half ends: the field's own right edge,
+    /// NOT the card's. The pill column now reaches down into the header's band, and a timing
+    /// right-aligned to the card would be drawn straight across the Settings pill on every
+    /// search that reports one.</summary>
+    public static float HeaderRight => FieldRect().Right;
 
     public static SKRect ChipRect(int i)
     {
@@ -68,7 +86,11 @@ public static class SearchCardLayout
 
     public static float Height(int count, bool hasQuery, bool advOpen = false)
     {
-        float h = hasQuery ? BodyTop + BodyH(count, hasQuery) + FooterH : FieldTop + FieldH + EmptyHintH + 6;
+        // The empty card is the hint's height OR the pill column's, whichever needs more. It was
+        // the hint's alone, which ended nine pixels above the bottom of the third pill.
+        float h = hasQuery
+            ? BodyTop + BodyH(count, hasQuery) + FooterH
+            : Math.Max(FieldTop + FieldH + EmptyHintH + 6, SettingsRect().Bottom + Pad);
         // the popup draws inside this window, so the card grows to hold it while it is open
         return advOpen ? Math.Max(h, SearchAdvancedLayout.Panel().Bottom + 14) : h;
     }
@@ -137,13 +159,15 @@ public static class SearchCardLayout
     {
         if (x < 0 || x > Width || y < 0 || y > Height(count, hasQuery, advOpen)) return SearchHit.None;
         // the open popup overlays the card: it answers first, and a miss outside it carries the
-        // "close me" marker (Index -2) - except the two pills, which keep working
+        // "close me" marker (Index -2) - except the three pills, which keep working
         if (advOpen)
         {
             var ab0 = AdvRect(); ab0.Inflate(2, 4);
             if (ab0.Contains(x, y)) return new SearchHit(SearchTarget.Adv, -1);
             var cb0 = ContentRect(); cb0.Inflate(2, 4);
             if (cb0.Contains(x, y)) return new SearchHit(SearchTarget.Content, -1);
+            var sb0 = SettingsRect(); sb0.Inflate(2, 4);
+            if (sb0.Contains(x, y)) return new SearchHit(SearchTarget.Settings, -1);
             return SearchAdvancedLayout.HitTest(x, y);
         }
         if (FieldRect().Contains(x, y)) return new SearchHit(SearchTarget.Field, -1);
@@ -151,6 +175,8 @@ public static class SearchCardLayout
         if (cb.Contains(x, y)) return new SearchHit(SearchTarget.Content, -1);
         var ab = AdvRect(); ab.Inflate(2, 4);
         if (ab.Contains(x, y)) return new SearchHit(SearchTarget.Adv, -1);
+        var sb = SettingsRect(); sb.Inflate(2, 4);
+        if (sb.Contains(x, y)) return new SearchHit(SearchTarget.Settings, -1);
         if (!hasQuery) return SearchHit.None;
 
         for (int i = 0; i < ChipLabels.Length; i++)
@@ -235,6 +261,25 @@ public sealed record SearchCardState(
 /// <summary>The paint pass. Pure: state in, pixels out.</summary>
 public static class SearchCardPainter
 {
+    /// <summary>The size every pill in the column beside the field is lettered at, and the three
+    /// labels themselves. Constants rather than literals at the draw site, because the pills draw
+    /// their label CENTRED and do not ellipsise: a label wider than its pill is drawn over both
+    /// ends of its own outline, and the only thing that catches that is a measurement.</summary>
+    public const float PillTextSize = 12.5f;
+    public const string ContentLabel = "Content";
+    public const string AdvancedLabel = "Advanced";
+    public const string SettingsLabel = "Settings";
+
+    /// <summary>The grammar line under the field on a card with nothing typed into it, in each
+    /// of its two moods. Named, because it is the longest line on that card and it now shares
+    /// the row with the pill column - the test measures these two rather than a copy of them.
+    /// </summary>
+    public static IReadOnlyList<string> EmptyHints { get; } =
+    [
+        "*.jpg  ·  \"exact words\"  ·  a | b  ·  !word  ·  ext:pdf  ·  type:photo  ·  in:Downloads  ·  size:huge  ·  modified:week  ·  regex:",
+        "a sunset over water  ·  the lease agreement  ·  what was said in a recording  ·  type:photo still narrows",
+    ];
+
     public static void Paint(SKCanvas canvas, SearchCardState s, Derived d, SKTypeface face)
     {
         SKColor accent = d.Accent; SKColor text = d.Ink;
@@ -291,7 +336,7 @@ public static class SearchCardPainter
                     canvas.DrawRoundRect(rr, p);
             using (var p = new SKPaint { Color = on ? accent : d.Fade(hover ? (byte)140 : (byte)70), IsAntialias = true, Style = SKPaintStyle.Stroke, StrokeWidth = 1.2f })
                 canvas.DrawRoundRect(rr, p);
-            CardText.DrawCentred(canvas, label, cr.MidX, cr.MidY + 4.3f, 12.5f, face, on ? accent : hover ? text : dim);
+            CardText.DrawCentred(canvas, label, cr.MidX, cr.MidY + 4.3f, PillTextSize, face, on ? accent : hover ? text : dim);
             if (badge)
             {
                 float bx = cr.Right - 3, by = cr.Top + 3, br = 8f;
@@ -300,14 +345,14 @@ public static class SearchCardPainter
                 CardText.DrawCentred(canvas, "!", bx, by + 3.8f, 11.5f, face, d.OnAccent, bold: true);
             }
         }
-        Pill(SearchCardLayout.ContentRect(), "Content", s.Content, s.HoverTarget == SearchTarget.Content, false);
-        Pill(SearchCardLayout.AdvRect(), "Advanced", s.AdvOpen || s.QueryAdv, s.HoverTarget == SearchTarget.Adv, s.QueryAdv);
+        Pill(SearchCardLayout.ContentRect(), ContentLabel, s.Content, s.HoverTarget == SearchTarget.Content, false);
+        Pill(SearchCardLayout.AdvRect(), AdvancedLabel, s.AdvOpen || s.QueryAdv, s.HoverTarget == SearchTarget.Adv, s.QueryAdv);
+        // Never latched on: settings is a place to go, not a mode the card is in.
+        Pill(SearchCardLayout.SettingsRect(), SettingsLabel, false, s.HoverTarget == SearchTarget.Settings, false);
 
         if (!hasQuery)
         {
-            CardText.Draw(canvas, s.Content
-                    ? "a sunset over water  ·  the lease agreement  ·  what was said in a recording  ·  type:photo still narrows"
-                    : "*.jpg  ·  \"exact words\"  ·  a | b  ·  !word  ·  ext:pdf  ·  type:photo  ·  in:Downloads  ·  size:huge  ·  modified:week  ·  regex:",
+            CardText.Draw(canvas, EmptyHints[s.Content ? 1 : 0],
                 SearchCardLayout.Pad + 6, f.Bottom + 24, 12.5f, face, dim);
             if (s.AdvOpen) SearchAdvancedPainter.Paint(canvas, s, d, face);
             if (unfolding) canvas.Restore();
@@ -323,7 +368,7 @@ public static class SearchCardPainter
             timing += (timing.Length > 0 ? " · " : "") + $"content {s.Results.ContentMs:0} ms";
         if (s.Results.Note.Length > 0) timing = s.Results.Note;
         if (s.Sort != SearchSort.Best) timing = (s.Sort == SearchSort.Newest ? "newest first" : "largest first") + (timing.Length > 0 ? " · " + timing : "");
-        CardText.DrawRight(canvas, timing, w - SearchCardLayout.Pad - 4, SearchCardLayout.HeaderTop + 12, 11.5f, face, faint);
+        CardText.DrawRight(canvas, timing, SearchCardLayout.HeaderRight, SearchCardLayout.HeaderTop + 12, 11.5f, face, faint);
 
         // ---- chips ----
         for (int i = 0; i < SearchCardLayout.ChipLabels.Length; i++)

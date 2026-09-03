@@ -139,12 +139,14 @@ public sealed class FirstRunWindow : Window
             FirstRunHit hit = FirstRunLayout.HitTest((float)p.X, (float)p.Y, Rows, LimitRow);
             if (hit.Target == _state.HoverTarget && hit.Index == _state.HoverIndex) return;
             _state = _state with { HoverTarget = hit.Target, HoverIndex = hit.Index };
+            Cursor = PointerCursor.Of(Pointers.ForFirstRun(hit.Target));
             InvalidateVisual();
         }
 
         protected override void OnPointerExited(PointerEventArgs e)
         {
             _state = _state with { HoverTarget = FirstRunTarget.None, HoverIndex = -1 };
+            Cursor = PointerCursor.Of(Pointers.ForFirstRun(FirstRunTarget.None));
             InvalidateVisual();
         }
 

@@ -1122,6 +1122,17 @@ internal sealed class Shell : ISettingsHost
         // The card BORROWS the read-only store and never disposes it: the store outlives every
         // card, and null is a supported state the card already answers with a sentence.
         var card = new CardWindow(_palette, Zoom, _cardStore, _semantic, _installed);
+        card.SettingsRequested += OpenSettings;
+        // The card cannot write a setting - it reads the index through a read-only connection -
+        // so this is where "turn reading back on" from the Content pill actually lands. Through
+        // ApplyConfig, so an open settings window shows the switch move rather than keeping a
+        // stale view that would write it back off on its owner's next click.
+        card.ContentReadingRequested += () =>
+        {
+            if (_config.IndexContent) return;
+            Log.Info("index", "the card asked for reading inside files to be turned back on");
+            ApplyConfig(_config with { IndexContent = true });
+        };
         card.Closed += (_, _) => { if (ReferenceEquals(_card, card)) _card = null; };
         _card = card;
         return card;
@@ -1304,14 +1315,20 @@ internal sealed class Shell : ISettingsHost
     /// it; the row reads "Findra could not tell" for that moment, which is exactly what is true
     /// while nobody has asked.</para>
     /// </summary>
-    private void OpenSettings()
+    private void OpenSettings() => OpenSettings(Section.Look);
+
+    private void OpenSettings(Section section)
     {
         try
         {
-            if (SettingsWindow.Open is { } already) { already.Activate(); return; }
+            // Already open: bring it forward AND take it to the section that was asked for. A
+            // window raised on whichever section it was left on answers the wrong question when
+            // the card sent somebody here to find one particular row.
+            if (SettingsWindow.Open is { } already) { already.ShowSection(section); already.Activate(); return; }
 
             var state = new SettingsState(_config)
             {
+                Section = section,
                 Palettes = PaletteStore.LoadFromDisk(),
                 Installed = _installed,
                 HebrewOffered = Capabilities.HebrewIsOffered(Capabilities.SystemLanguages()),
@@ -1474,6 +1491,33 @@ internal sealed class Shell : ISettingsHost
             Log.Info("app", "the capsule's saved position was cleared; it opens on the primary " +
                             "monitor when it is turned back on");
         }
+    }
+
+    /// <summary>
+    /// Begin reading inside files NOW, rather than at the next turn of the content loop.
+    ///
+    /// <para>The model has already written <c>IndexContent</c>; this is the half in front of the
+    /// person who pressed it. The child is started, never stopped, by this: it watches this
+    /// process's id and dies with it, which is the whole of "indexing stops when Findra quits".
+    /// </para>
+    ///
+    /// <para>Posted to the flow that owns the writer connection, because <c>ContentDb.Claim</c> is
+    /// a thread-id detector rather than a lock and a settings click arrives on the interface
+    /// thread. A session with no content loop yet answers 0 and logs it - the loop's own pump
+    /// starts the child a second later off the configuration this click has already saved.</para>
+    /// </summary>
+    void ISettingsHost.StartIndexing()
+    {
+        Log.Info("index", "reading inside files was started from settings");
+        _ = OnContentLoopAsync(db =>
+        {
+            // The same two rows the pump writes, so nothing waits a second to agree with the
+            // setting, and the same EnsureRunning - there is one way to start this child.
+            db.Set("index:paused", "0");
+            _indexerPaused = "0";
+            _indexer?.EnsureRunning();
+            return 1;
+        });
     }
 
     /// <summary>The system folder dialog, deliberately: spec §12 accepts that these two surfaces

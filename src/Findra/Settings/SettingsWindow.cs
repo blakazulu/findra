@@ -97,6 +97,12 @@ public sealed class SettingsWindow : Window
     public void NoteUpdate(UpdateState update, string? latest) =>
         _canvas.Refresh(s => s with { Update = update, Latest = latest });
 
+    /// <summary>Go to a section, on the same terms a click on the rail does. The card can ask for
+    /// settings at a particular section - the Content pill sends somebody here when there is
+    /// nothing indexed to search - and a window already open has to follow rather than stay where
+    /// it was last left.</summary>
+    public void ShowSection(Section section) => _canvas.Refresh(s => SettingsModel.GoTo(s, section));
+
     /// <summary>A folder the picker returned. It is a configuration change like any other, so it
     /// saves and announces itself down the same path a click does.</summary>
     public void AddExclusion(string path) => _canvas.Refresh(s => SettingsModel.AddExclusion(s, path));
@@ -207,12 +213,14 @@ public sealed class SettingsWindow : Window
             if (hit.Target == _state.HoverTarget && hit.Row == _state.HoverRow && hit.Option == _state.HoverOption)
                 return;
             _state = _state with { HoverTarget = hit.Target, HoverRow = hit.Row, HoverOption = hit.Option };
+            Cursor = PointerCursor.Of(Pointers.ForPanel(hit.Target));
             InvalidateVisual();
         }
 
         protected override void OnPointerExited(PointerEventArgs e)
         {
             _state = _state with { HoverTarget = PanelTarget.None, HoverRow = -1, HoverOption = -1 };
+            Cursor = PointerCursor.Of(Pointers.ForPanel(PanelTarget.None));
             InvalidateVisual();
         }
 

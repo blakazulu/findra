@@ -70,8 +70,11 @@ public sealed record Config
     /// nothing reaches, so there is nothing to protect the user from.</para></summary>
     public int TranscribeMinutes { get; init; } = TranscribeLimit.Default;
 
-    /// <summary>A duty cycle, 10..100. At 50 the indexer rests as long as it worked.</summary>
-    public int IndexPower { get; init; } = 50;
+    /// <summary>A duty cycle, <see cref="IndexPowerLevels.Min"/>..<see cref="IndexPowerLevels.Max"/>.
+    /// At 50 the indexer rests as long as it worked. The settings row offers presets over this
+    /// number, exactly as the transcription limit's pills do, so a hand-edited value in range is
+    /// kept and simply ticks none of them.</summary>
+    public int IndexPower { get; init; } = IndexPowerLevels.Default;
 
     /// <summary>Whether the first-run screen has been answered. "Not now" answers it: content
     /// indexing is off by default, so choosing nothing is a complete answer rather than a
@@ -135,7 +138,7 @@ public sealed record Config
         try
         {
             Config c = JsonSerializer.Deserialize<Config>(json, Opts) ?? new Config();
-            return c with { IndexPower = Math.Clamp(c.IndexPower, 10, 100) };
+            return c with { IndexPower = Math.Clamp(c.IndexPower, IndexPowerLevels.Min, IndexPowerLevels.Max) };
         }
         catch (Exception ex)
         {

@@ -20,7 +20,7 @@ public enum ControlId
     Mode, DarkPalette, LightPalette, PalettesFile,
     Hotkey, ShowCapsule, ResetCapsule, Autostart, Helper,
     Drives, AddFolder,
-    IndexContent, Transcribe, Capability,
+    IndexContent, StartIndexing, IndexPower, Transcribe, Capability,
     Version, Updates, CheckUpdates, CheckNow, InstalledVia, Removing,
 }
 
@@ -52,6 +52,15 @@ public enum SettingsAction
     /// control shape one layer down: the click is answered by the model and dropped by the
     /// shell.</para></summary>
     RecentreCapsule,
+
+    /// <summary>Begin reading inside files NOW, in this session.
+    ///
+    /// <para>The configuration change beside it is what survives a restart; this is what a person
+    /// actually sees happen. Without it the row waits for the next turn of the content loop and
+    /// reads as a button that did nothing - which is the whole complaint the row answers, since
+    /// a toggle beside a sentence states a preference and never announces a start.</para>
+    /// </summary>
+    StartIndexing,
 }
 
 /// <summary>What the painter draws. It switches on this and on nothing else.</summary>
@@ -281,10 +290,21 @@ public static class SettingsModel
         // thing to shorten; TranscribeLimit.ShortName is, and the first-run screen's own limit row
         // reads the same list rather than writing out a second one that can drift from it.
         string[] presets = [.. TranscribeLimit.Presets.Select(TranscribeLimit.ShortName)];
+        // The levels, on the same terms: one table of numbers, one function for their labels, and
+        // the row reads both rather than writing out four strings of its own.
+        string[] powers = [.. IndexPowerLevels.Presets.Select(IndexPowerLevels.ShortName)];
+
         var rows = new List<Control>
         {
             new(ControlId.IndexContent, ControlKind.Toggle, "Look inside my files", "", s.Config.IndexContent, [], [],
                 ContentSentence(s.Config, s.EverIndexed, s.IndexerAlive), 0),
+            // A toggle states a preference. This says begin, and the sentence above it changes the
+            // moment it is pressed - which is the half that was missing rather than the switch.
+            Control.Plain(ControlId.StartIndexing, ControlKind.Button, "Start reading now", "Start now"),
+            new(ControlId.IndexPower, ControlKind.Choice, "Indexing power",
+                IndexPowerLevels.ShortName(s.Config.IndexPower), false, powers,
+                [.. IndexPowerLevels.Presets.Select(p => p == s.Config.IndexPower)],
+                "How much of the machine reading may take. Lower is slower and less noticeable.", 0),
             new(ControlId.Transcribe, ControlKind.Choice, "Transcribe up to",
                 TranscribeLimit.Describe(s.Config.TranscribeMinutes), false, presets,
                 [.. TranscribeLimit.Presets.Select(m => m == s.Config.TranscribeMinutes)],
@@ -347,15 +367,7 @@ public static class SettingsModel
         ArgumentNullException.ThrowIfNull(s);
 
         if (hit.Target == PanelTarget.Section && hit.Row >= 0 && hit.Row < RailLayout.Sections.Count)
-            return SettingsOutcome.Changed(s with
-            {
-                Section = RailLayout.Sections[hit.Row],
-                ExclusionScroll = 0,
-                // Leaving the section cancels capture. A mode nothing cancels is one the person is
-                // stuck in, reading every key they press as a hotkey.
-                Capturing = false,
-                HotkeyMessage = "",
-            });
+            return SettingsOutcome.Changed(GoTo(s, RailLayout.Sections[hit.Row]));
 
         IReadOnlyList<Control> rows = Controls(s);
         if (hit.Row < 0 || hit.Row >= rows.Count) return SettingsOutcome.Nothing(s);
@@ -411,6 +423,16 @@ public static class SettingsModel
 
             ControlId.IndexContent =>
                 SettingsOutcome.Changed(s with { Config = c with { IndexContent = !c.IndexContent } }),
+            // Both halves, for the reason the autostart toggle needs both: the config write is what
+            // survives a restart, the action is what happens in front of the person who pressed it.
+            // Asked for even when the switch is already on - Findra reads only while it is open,
+            // so "start" over an idle session is a real request rather than a no-op.
+            ControlId.StartIndexing =>
+                SettingsOutcome.Ask(s with { Config = c with { IndexContent = true } }, SettingsAction.StartIndexing),
+            // The NUMBER at that index, never the index itself: writing the option number here
+            // clamps to 10 and leaves the indexer resting nine tenths of the time.
+            ControlId.IndexPower when hit.Target == PanelTarget.Option =>
+                SettingsOutcome.Changed(s with { Config = c with { IndexPower = IndexPowerLevels.Presets[hit.Option] } }),
             ControlId.Transcribe when hit.Target == PanelTarget.Option =>
                 SettingsOutcome.Changed(s with { Config = c with { TranscribeMinutes = TranscribeLimit.Presets[hit.Option] } }),
             ControlId.Capability when row.Kind == ControlKind.Button =>
@@ -422,6 +444,22 @@ public static class SettingsModel
 
             _ => SettingsOutcome.Nothing(s),
         };
+    }
+
+    /// <summary>
+    /// Move to a section. Shared by the rail's own click and by anything outside the window that
+    /// sends somebody to a particular row - the card's Content pill does when there is nothing
+    /// indexed for it to search.
+    ///
+    /// <para>Leaving a section cancels a hotkey capture and forgets how far the exclusions list
+    /// was scrolled. A capture mode nothing cancels is one the person is stuck in, reading every
+    /// key they press as a hotkey, and it must not survive an arrival from outside any more than
+    /// it survives a click on the rail.</para>
+    /// </summary>
+    public static SettingsState GoTo(SettingsState s, Section section)
+    {
+        ArgumentNullException.ThrowIfNull(s);
+        return s with { Section = section, ExclusionScroll = 0, Capturing = false, HotkeyMessage = "" };
     }
 
     /// <summary>Option 0 is "All", which is an EMPTY list - Config.IndexDrives documents empty as
