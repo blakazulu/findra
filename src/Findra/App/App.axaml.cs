@@ -1233,8 +1233,11 @@ internal sealed class Shell : ISettingsHost
         Screen? on = screens?.ScreenFromPoint(saved);
         double scaling = (on ?? primary)?.Scaling ?? 1.0;
 
-        int w = (int)Math.Round(CapsuleLayout.Width * Zoom * scaling);
-        int h = (int)Math.Round(CapsuleLayout.Height * Zoom * scaling);
+        // The same clamp the window and its canvas use, so the rectangle this placement reasons
+        // about is the rectangle that ends up on the desktop.
+        double zoom = CapsulePlacement.Scale(Zoom);
+        int w = (int)Math.Round(CapsuleLayout.Width * zoom * scaling);
+        int h = (int)Math.Round(CapsuleLayout.Height * zoom * scaling);
 
         IReadOnlyList<PixelRect> all = screens?.All.Select(s => s.Bounds).ToArray() ?? Array.Empty<PixelRect>();
 

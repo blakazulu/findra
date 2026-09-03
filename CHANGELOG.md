@@ -553,6 +553,16 @@ into a numbered section on the first release.
   comes from the files on disk and never from that selection. A machine that has the speech model
   but not the document models it needs opens with both ticked and prices only the missing half.
 
+- **`--searchprobe` reports what the capsule's progress pill would draw.** A surface with no
+  diagnostic is one nobody can be asked a question about: "I cannot see the progress pill" had no
+  answer that did not involve reading source and guessing. It now prints the label, the percentage
+  and the count, composed the way the running product composes them.
+
+- **The capsule window and its own drawing agree about how big it is.** The window sized itself
+  with the zoom it was given and the canvas drew with a clamped copy, so outside the clamp the two
+  disagreed - and since the window is what Windows crops to, the larger drawing lost its bottom
+  edge, where the progress pill sits. They matched only because the zoom is 1.0 today.
+
 - **The card's content-mode placeholder is not cut short any more.** With the Content pill down
   the field read "Describe a photo, words in a docum..." - the sentence measured 606.6px against a
   field that holds 580.6px, and the field silently ellipsises, so it stopped mid-word on every
