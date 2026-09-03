@@ -34,6 +34,10 @@ identifier, and nothing about your files or your searches. It never blocks anyth
 failure is a line in the log rather than a dialog. Turning the check off means the request is
 not made at all.
 
+The model downloads are the "specifically requested" case in the sentence above: they happen
+only when you choose a capability and ask for it, they fetch model files, and they send nothing
+about you. If you never choose one, Findra never makes them.
+
 Findra never sends your files, their names, their contents, or your searches anywhere. There is
 no account, no cloud and no telemetry. Everything it indexes stays on the machine that indexed
 it.

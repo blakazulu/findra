@@ -7,10 +7,11 @@ analytics, no crash reporting and no telemetry of any kind.
 This page says exactly what Findra stores, where it stores it, and the single thing it
 sends anywhere.
 
-## The one request that leaves your machine
+## The one request Findra makes on its own
 
-Findra checks whether a newer version has been released. That is the only outbound request
-it ever makes.
+Findra checks whether a newer version has been released. That is the only time Findra
+reaches the network without being asked. The one other time it goes out at all is when you
+choose a capability and tell it to download the models, which is described further down.
 
 - It is an anonymous HTTPS GET to the GitHub releases API.
 - It happens at most once every 24 hours, on startup, in the background.
@@ -23,9 +24,9 @@ it ever makes.
 Findra never downloads or installs an update by itself. It tells you a newer version exists
 and leaves the decision to you.
 
-Downloading a capability's model files is a separate thing, and it only happens when you
-choose a capability and ask for it. Those requests fetch model files and send nothing about
-you.
+Downloading a capability's model files is the other time Findra uses the network, and it
+happens only when you choose a capability and ask for it. Those requests fetch model files
+and send nothing about you. If you never choose a capability, they never happen.
 
 ## What Findra stores, and where
 

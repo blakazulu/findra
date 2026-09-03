@@ -371,6 +371,11 @@ into a numbered section on the first release.
 
 ### Fixed
 
+- **The privacy page says exactly what it means about the network.** It claimed the update
+  check was the only request Findra ever makes, and then described model downloads three
+  paragraphs later. Findra makes one request on its own; the other time it uses the network
+  is a download you asked for. The README and the code signing policy say the same.
+
 - **Installing a capability while Findra is open no longer loses everything it was going
   to read.** The files a new model covers were queued straight away, but the part of
   Findra that reads inside files had looked at what was installed only once, when it

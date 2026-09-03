@@ -206,7 +206,8 @@ Corpus for the extraction row: 10,000 generated .txt of 8 KB and 1,000 generated
 Your files, their names, their contents and your searches never leave your machine. There is
 no account, no cloud service, no analytics, no crash reporting and no telemetry.
 
-There is exactly one outbound request, and it is written down here rather than buried: an
+Findra makes exactly one request on its own, and it is written down here rather than
+buried (the other time it uses the network is a model download you asked for): an
 anonymous HTTPS GET to the GitHub releases API, at most once every 24 hours, on startup, in
 the background, to learn whether a newer version exists. It carries no query parameters, no
 machine identifier, no install identifier, and nothing about your files or your searches. It
