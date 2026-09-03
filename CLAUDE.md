@@ -1,4 +1,4 @@
-# CLAUDE.md
+﻿# CLAUDE.md
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
@@ -81,7 +81,7 @@ findra.exe --searchmodels             # are models present, do they load, do the
                                       # which execution provider answered for each runtime
 findra.exe --searchindex [file|folder|q:query]...   # what is indexed, what is queued; given
                                       # paths it queues and drains them, given q: it queries
-findra.exe --searchshot out.png <state> [palette]   # seventeen states, listed below
+findra.exe --searchshot out.png <state> [palette]   # nineteen states, listed below
 findra.exe --searchtest               # engine self-check
 findra.exe --searchbench [out.md] [corpus]   # measured numbers, as a pasteable Markdown
                                       # fragment; `corpus` is how many files it generates
@@ -89,13 +89,18 @@ findra.exe --version                  # print the version and log location, then
 ```
 
 The `--searchshot` states are `SearchShot.States`, and that list is the only definition of them.
-Nine draw the card, five the settings window and three the first-run screen:
+Ten draw the card, five the settings window and four the first-run screen:
 
 ```
-capsule  empty  typing  results  noresults  many  adv  opening  openingempty
+capsule  empty  contentwaiting  typing  results  noresults  many  adv  opening  openingempty
 settings  settingsopening  settingssearches  settingscontent  settingsabout
-firstrun  firstrunspeech  firstrundownloading
+firstrun  firstrunspeech  firstrundownloading  firstrunfinished
 ```
+
+`contentwaiting` is the Content pill drawn NOT offering - reading is on and the first pass has not
+finished a file, so there is nothing to search, nothing to turn on and nothing settings could add.
+It is hovered on purpose: suppressing the hover fill is half of what makes a dead control read as
+dead, and a state that never hovers it proves only the resting colour.
 
 `firstrunspeech` is not a variation of `firstrun`: the transcription limit is on that screen
 only when Speech is ticked, and the two layouts - with the row and without it - are what a

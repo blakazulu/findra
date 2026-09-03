@@ -531,6 +531,13 @@ into a numbered section on the first release.
   that was already reading, pressing it changed nothing on screen and read as a dead button. The
   button now reports "Indexing 640/1,973" and refuses the press until there is something to start.
 
+- **The Content pill stops offering while there is nothing behind it.** With reading on and the
+  first file not yet finished, pressing it used to open the settings window over the card you had
+  just opened, to say that reading was already on. There is nothing to search, nothing to turn on
+  and nothing settings could add, so the pill is drawn faded, takes the plain arrow instead of the
+  hand, and refuses the press. It comes back on the FIRST file read, not the last, so it is a
+  minute or two on a fresh install rather than the hours the whole first pass takes.
+
 - **The tray icon's tooltip says what the index is doing**, in the same words the capsule shows
   under its bar.
 

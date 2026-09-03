@@ -42,15 +42,55 @@ public class ContentPillTests
     }
 
     [Fact]
-    public void NothingReadYetSendsThePersonToSettingsWhetherReadingIsOnOrOff()
+    public void NothingReadYetIsTwoDifferentStatesAndGetsTwoDifferentAnswers()
     {
-        // The verbatim decision: an index with nothing in it is not a search that failed, it is
-        // a machine that has not been set up - and everything that sets it up (the switch, the
+        // Reading OFF, nothing read: an index with nothing in it is not a search that failed, it
+        // is a machine that has not been set up - and everything that sets it up (the switch, the
         // power, the limit, the capabilities) is on one page.
         Assert.Equal(ContentPress.OpenSettings,
             ContentPill.Decide(pillOn: false, haveStore: true, readingOn: false, indexed: 0));
-        Assert.Equal(ContentPress.OpenSettings,
+
+        // Reading ON, nothing read: this used to give the same answer, and it is the wrong one.
+        // The machine IS set up and IS working; the first file simply is not finished. Sending
+        // somebody to a settings page that says "reading is on" answers a question they did not
+        // ask, over the card they had just opened. There is nothing to search, nothing to turn on
+        // and nothing to set, so the pill stops offering - faded, plain arrow, press refused.
+        Assert.Equal(ContentPress.Nothing,
             ContentPill.Decide(pillOn: false, haveStore: true, readingOn: true, indexed: 0));
+    }
+
+    [Fact]
+    public void TheOnlyRefusedPressLiftsOnTheFirstFileAndNotOnTheLast()
+    {
+        // Which is the difference between a pill that is dead for a minute or two and a pill that
+        // is dead for the several hours a first pass over a real disk takes. One file read is
+        // enough to have something to show.
+        Assert.False(ContentPill.Offers(pillOn: false, haveStore: true, readingOn: true, indexed: 0));
+        Assert.True(ContentPill.Offers(pillOn: false, haveStore: true, readingOn: true, indexed: 1));
+
+        // And a pill already down is always releasable, whatever the index holds. Somebody stuck
+        // in content mode with no way back out would be a worse trap than the one this removes.
+        Assert.True(ContentPill.Offers(pillOn: true, haveStore: true, readingOn: true, indexed: 0));
+
+        // Nobody has read the count yet - the second after a card opens. Offered, for the same
+        // reason Decide answers Search there: a control that appears disabled and then works is
+        // read as broken.
+        Assert.True(ContentPill.Offers(pillOn: false, haveStore: true, readingOn: true, indexed: null));
+    }
+
+    [Fact]
+    public void WhatIsDrawnAndWhatIsAnsweredComeFromTheSameCall()
+    {
+        // Offers is Decide, asked a different way. Two rules would let the card paint a live pill
+        // that refuses the click, or a faded one that answers it - and the faded-but-live pill is
+        // the exact defect this whole change removes.
+        foreach (bool on in new[] { false, true })
+            foreach (bool store in new[] { false, true })
+                foreach (bool reading in new[] { false, true })
+                    foreach (long? indexed in new long?[] { null, 0, 1, 4_000 })
+                        Assert.Equal(
+                            ContentPill.Decide(on, store, reading, indexed) != ContentPress.Nothing,
+                            ContentPill.Offers(on, store, reading, indexed));
     }
 
     [Fact]

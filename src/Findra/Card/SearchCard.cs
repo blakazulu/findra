@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using SkiaSharp;
@@ -225,7 +225,14 @@ public sealed record SearchCardState(
     SearchAdvanced? AdvRules = null,
     bool AdvOpen = false,
     int AdvFocus = 0,
-    bool QueryAdv = false)
+    bool QueryAdv = false,
+
+    /// <summary>Is the Content pill offering anything? False only while Findra is reading and has
+    /// not finished a file yet - see <c>ContentPill.Offers</c>, which is where it comes from and
+    /// the only place it is decided. The painter fades it, the pointer drops to the plain arrow,
+    /// and the press is refused; all three read this one flag so they cannot disagree about
+    /// whether the pill is alive.</summary>
+    bool ContentOffered = true)
 {
     public static readonly SearchCardState Empty =
         new("", SearchResults.Empty, Array.Empty<SearchResult>(), 0, 0, 0, false);
@@ -328,15 +335,20 @@ public static class SearchCardPainter
         // ---- the two pills: Content (what question the query asks) and Advanced (the popup).
         // Advanced latches orange with a `!` badge while any rule is set, which is the whole
         // "an advanced search is active" indicator - the field stays the user's own words. ----
-        void Pill(SKRect cr, string label, bool on, bool hover, bool badge)
+        void Pill(SKRect cr, string label, bool on, bool hover, bool badge, bool offered = true)
         {
             var rr = new SKRoundRect(cr, cr.Height / 2);
             if (on || hover)
                 using (var p = new SKPaint { Color = on ? d.RowSelected : d.RowHover, IsAntialias = true })
                     canvas.DrawRoundRect(rr, p);
-            using (var p = new SKPaint { Color = on ? accent : d.Fade(hover ? (byte)140 : (byte)70), IsAntialias = true, Style = SKPaintStyle.Stroke, StrokeWidth = 1.2f })
+            // A pill that is not offering keeps its outline and loses its contrast: still a pill,
+            // visibly not one to press. Drawn rather than hidden, because a control that vanishes
+            // for the first minutes of a fresh install and appears later is a product that changed
+            // shape while somebody was looking at it.
+            using (var p = new SKPaint { Color = on ? accent : d.Fade(!offered ? (byte)30 : hover ? (byte)140 : (byte)70), IsAntialias = true, Style = SKPaintStyle.Stroke, StrokeWidth = 1.2f })
                 canvas.DrawRoundRect(rr, p);
-            CardText.DrawCentred(canvas, label, cr.MidX, cr.MidY + 4.3f, PillTextSize, face, on ? accent : hover ? text : dim);
+            CardText.DrawCentred(canvas, label, cr.MidX, cr.MidY + 4.3f, PillTextSize, face,
+                                 !offered ? d.Fade(70) : on ? accent : hover ? text : dim);
             if (badge)
             {
                 float bx = cr.Right - 3, by = cr.Top + 3, br = 8f;
@@ -345,7 +357,10 @@ public static class SearchCardPainter
                 CardText.DrawCentred(canvas, "!", bx, by + 3.8f, 11.5f, face, d.OnAccent, bold: true);
             }
         }
-        Pill(SearchCardLayout.ContentRect(), ContentLabel, s.Content, s.HoverTarget == SearchTarget.Content, false);
+        // Hover is suppressed with the offer, not just the press: a pill that lights up under the
+        // pointer and then does nothing is the exact shape of a dead control.
+        Pill(SearchCardLayout.ContentRect(), ContentLabel, s.Content,
+             s.ContentOffered && s.HoverTarget == SearchTarget.Content, false, s.ContentOffered);
         Pill(SearchCardLayout.AdvRect(), AdvancedLabel, s.AdvOpen || s.QueryAdv, s.HoverTarget == SearchTarget.Adv, s.QueryAdv);
         // Never latched on: settings is a place to go, not a mode the card is in.
         Pill(SearchCardLayout.SettingsRect(), SettingsLabel, false, s.HoverTarget == SearchTarget.Settings, false);
