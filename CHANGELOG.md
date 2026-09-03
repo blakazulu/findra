@@ -369,6 +369,13 @@ into a numbered section on the first release.
   publishes from that build onwards, so the whole application is built against it.
 
 
+### Fixed
+
+- **The privacy page no longer says that deleting Findra's two folders by hand removes
+  everything.** Two things live outside them: the scheduled task that starts the name helper
+  at sign-in, and the start-at-sign-in entry. The page now names both and says to run
+  `findra.exe --uninstall`, or use the uninstaller, to remove them.
+
 ### Security
 
 - The elevated helper parses no file content. It reads names, paths, sizes and
