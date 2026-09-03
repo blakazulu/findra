@@ -405,6 +405,21 @@ person makes by looking; two are destructive and belong last.
     holds the same text and the terminal holds none of it. A windows-subsystem process is not
     waited for by the shell, so expect the prompt to come back before the text does; that is the
     one visible cost of step 50 and it is worth confirming it is only cosmetic.
+52. **A capability installed while Findra is open is read without a restart.** With content
+    indexing on and the first pass finished, install photos - from the settings window, and again
+    on another run from `findra --models install photos` in a terminal while Findra is running.
+    Both times, without touching Findra afterwards, `findra --searchindex` must show the photos
+    moving off "no decoder for this kind yet" and the log must carry the one line saying what
+    Findra can read has changed while the indexer was running. Then restart and search a photo by
+    what is in it: the card's own half of a capability is loaded when Findra starts, which is the
+    only part of this that still needs a restart, and the closing sentence of `--models install`
+    says exactly that. No automated test can see this step, because the gate it turns on needs
+    629 MB of real model files.
+53. **The transcription limit raised from a terminal reaches a running Findra.** With speech
+    installed, the limit at five minutes and a recording of half an hour already passed over, run
+    `findra --content limit 60` while Findra is running. The recording must be transcribed without
+    a restart, and its phrase must be findable after one. Then confirm the reverse costs nothing:
+    lowering the limit again throws no transcript away.
 
 ## What could not be verified in this project at all
 

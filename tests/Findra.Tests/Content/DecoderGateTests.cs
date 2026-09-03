@@ -168,11 +168,54 @@ public class DecoderGateTests : IDisposable
         // The real Decoders, with an empty model folder and a throwaway vector store - never
         // Decoders.ForThisMachine(), which opens a writer on the REAL index directory.
         using var vectors = new VectorStore(Path.Combine(_dir, "vectors.bin"), writer: true);
-        using var real = new Decoders(CapabilitySet.Installed(_dir), vectors, modelDir: _dir);
+        using var real = new Decoders(() => CapabilitySet.Installed(_dir), vectors, modelDir: _dir);
         Indexer.DrainOnce(db, _ => { }, real);
 
         Assert.Equal(ContentDb.StateIndexed, db.StateOf("C", 1));
         Assert.Single(db.Fts("deposit", 5));
+    }
+
+    [Fact]
+    public void TheDecodersNoticeACapabilityThatArrivesWhileTheyAreRunning()
+    {
+        // What is installed is read through a delegate, exactly as the transcription limit is,
+        // and for the same reason: both change while the child is running, and the child is
+        // started once. Captured instead, a model installed while Findra is open reaches nothing
+        // until the next launch - and the files queued for it in the meantime are drained by a
+        // child that cannot read them, recorded skipped a second time, and written off, because
+        // the record that the backlog was cleared has already been written.
+        //
+        // The same object throughout. A test that built a second Decoders would prove only that
+        // a new child sees a new model, which was never in doubt.
+        CapabilitySet have = CapabilitySet.None;
+        using var vectors = new VectorStore(Path.Combine(_dir, "vectors.bin"), writer: true);
+        using var d = new Decoders(() => have, vectors, modelDir: _dir);
+
+        Assert.False(d.CanRead(ResultKind.Photo));
+        Assert.False(d.Installed.Has(Capability.Photos));
+
+        have = Set(Capability.Photos);
+
+        Assert.True(d.CanRead(ResultKind.Photo));
+        Assert.True(d.Installed.Has(Capability.Photos));
+    }
+
+    [Fact]
+    public void ACapabilityThatGoesAwayIsNoticedTheSameWay()
+    {
+        // The other direction, which is not symmetry for its own sake: somebody who clears
+        // %LOCALAPPDATA%\Findra\models by hand must stop having their photos opened, rather than
+        // have every one of them recorded as a failure by a decoder reaching for a file that is
+        // no longer there.
+        CapabilitySet have = Set(Capability.Photos);
+        using var vectors = new VectorStore(Path.Combine(_dir, "vectors.bin"), writer: true);
+        using var d = new Decoders(() => have, vectors, modelDir: _dir);
+
+        Assert.True(d.CanRead(ResultKind.Photo));
+
+        have = CapabilitySet.None;
+
+        Assert.False(d.CanRead(ResultKind.Photo));
     }
 
     // ---- the vector rows a replace or a delete hands back ----

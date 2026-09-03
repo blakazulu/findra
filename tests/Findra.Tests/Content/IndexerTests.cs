@@ -31,7 +31,7 @@ public sealed class IndexerTests : IDisposable
     {
         Directory.CreateDirectory(_dir);
         _vectors ??= new VectorStore(Path.Combine(_dir, "vectors.bin"), writer: true);
-        return _decoders ??= new Decoders(CapabilitySet.None, _vectors, modelDir: _dir);
+        return _decoders ??= new Decoders(() => CapabilitySet.None, _vectors, modelDir: _dir);
     }
 
     public void Dispose()

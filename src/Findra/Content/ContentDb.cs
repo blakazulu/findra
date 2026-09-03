@@ -800,6 +800,30 @@ CREATE TABLE IF NOT EXISTS opened(path TEXT PRIMARY KEY, count INTEGER NOT NULL,
         return (long)(cmd.ExecuteScalar() ?? 0L);
     }
 
+    /// <summary>
+    /// How many SKIPPED items of these kinds carry this reason and are NOT waiting in the queue -
+    /// files nothing has read, and nothing is going to.
+    ///
+    /// <para>The queue clause is the whole point of this being separate from
+    /// <see cref="CountSkippedFor"/>. A row that has just been queued for a capability that
+    /// arrived is skipped and unread too, and reading that as work lost re-queues the entire
+    /// backlog on every launch. What it answers is the narrower question: is anything that was
+    /// once passed over for this reason now stranded, with no queue entry to bring it back.</para>
+    /// </summary>
+    public long CountSkippedAndNotQueued(int[] kinds, string reason)
+    {
+        ArgumentNullException.ThrowIfNull(kinds);
+        if (kinds.Length == 0) return 0;
+        using var cmd = _c.CreateCommand();
+        // The kinds stay concatenated - ints from an enum this code owns - and the reason is a
+        // parameter, because a skip reason is free text out of an exception message.
+        cmd.CommandText = $"SELECT COUNT(*) FROM items i WHERE i.state={StateSkipped.ToString(CultureInfo.InvariantCulture)} " +
+                          $"AND i.kind IN ({string.Join(",", kinds)}) AND i.error = $r " +
+                          "AND NOT EXISTS (SELECT 1 FROM pending p WHERE p.vol = i.vol AND p.frn = i.frn)";
+        cmd.Parameters.AddWithValue("$r", reason);
+        return (long)(cmd.ExecuteScalar() ?? 0L);
+    }
+
     /// <summary>Is this file already indexed at this mtime? The UI asks before queuing during the
     /// first pass, so a restart does not re-queue a whole drive.</summary>
     public bool IsCurrent(string vol, ulong frn, long mtime)

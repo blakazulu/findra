@@ -86,8 +86,10 @@ public sealed class Indexer
         {
             using ContentDb db = ContentDb.OpenOrRebuild(dbPath);
             // The only place in the product that opens a writer on the real vector store. It is
-            // held for the life of the process and disposed last, and the limit is read through a
-            // delegate rather than captured, so a change to the setting reaches the next file.
+            // held for the life of the process and disposed last, and BOTH of the things that can
+            // move while this process runs - the transcription limit, and which models are on
+            // disk - are read through delegates rather than captured, so each of them reaches the
+            // next file rather than the next launch.
             using IDecoders decoders = Decoders.ForThisMachine(() => TranscribeMinutes(db));
             Loop(db, parent, () => true, decoders);
             Log.Info("index", "indexer down (clean)");

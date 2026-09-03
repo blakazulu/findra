@@ -29,6 +29,14 @@ public static class ContentCommand
         "If Findra is running, it reads these settings when it starts, so restart it for the\n" +
         "change to take effect on the queue. The setting is saved either way.";
 
+    /// <summary>The limit's own ending, because the limit is not one of the settings that waits.
+    /// A running indexer reads the length from the index before each recording it opens, which is
+    /// how the recordings this command has just queued get heard rather than passed over at the
+    /// old length and written off.</summary>
+    private const string LimitNote =
+        "A running Findra reads this length before every recording it opens, so the change has\n" +
+        "already reached it. If it is not running, the setting is saved and applies when it starts.";
+
     /// <summary>
     /// The four things somebody needs in order to know whether Findra is reading anything.
     ///
@@ -141,7 +149,7 @@ public static class ContentCommand
                 }
 
                 Console.WriteLine();
-                Console.WriteLine(RestartNote);
+                Console.WriteLine(LimitNote);
                 return 0;
             }
 

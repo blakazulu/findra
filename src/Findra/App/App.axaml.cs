@@ -633,10 +633,14 @@ internal sealed class Shell : ISettingsHost
         // rather than a lock: whichever flow arrives second gets an InvalidOperationException.
         // Running the gates here means there is no second flow yet.
         //
-        // Once, and only here. A capability installed by `--models install` is applied by that
-        // process on its own connection; one that arrives while Findra is open is picked up at
-        // the next start, because the child reads what is installed once when it starts and the
-        // interface runs this once when it does.
+        // Once at startup, and here rather than anywhere else. A capability installed by
+        // `--models install` is applied by that process on its own connection; one that arrives
+        // while Findra is open is applied by RequeueWhatArrivedAsync, on this same flow. Either
+        // way the indexer child reads it: it looks at what is on disk before every file it opens.
+        //
+        // What this start still owes is anything an earlier one queued and nothing could read.
+        // The stamp alone would say that debt was paid - StampsIn is where the index is asked
+        // instead.
         try
         {
             int requeued = CapabilityGate.Apply(writer, CapabilityGate.Plan(

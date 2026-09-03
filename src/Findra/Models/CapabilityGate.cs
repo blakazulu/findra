@@ -80,8 +80,9 @@ public static class CapabilityGate
         return owed;
     }
 
-    /// <summary>Queue what is owed and record that it was, so the next launch owes nothing.
-    /// Returns how many files were queued in total.</summary>
+    /// <summary>Queue what is owed and record that it was, so a launch that owes nothing does
+    /// nothing. Returns how many files were queued in total. What "owed" means is
+    /// <see cref="StampsIn"/>'s: the record, and the index agreeing with it.</summary>
     public static int Apply(ContentDb db, IReadOnlyList<Requeue> plan)
     {
         ArgumentNullException.ThrowIfNull(db);
@@ -103,19 +104,52 @@ public static class CapabilityGate
             // The exclusions: a new model can read a kind it had no decoder for, and a format the
             // old reader could not open. It cannot make a file smaller or put words into an empty
             // one.
-            int n = db.RequeueKinds(r.Kinds, Indexer.Recheck, [Decoders.TooLarge, Decoders.NoText]);
+            //
+            // Wide the first time, narrow the second. A stamp that already stands means this is
+            // not a capability arriving - it is one whose backlog was queued, drained by
+            // something that could not read it, and left stranded (see StampsIn). Re-running the
+            // wide re-queue there would re-read every file the capability has ALREADY been
+            // through: Speech covers video as well as sound, so recovering one unheard voice memo
+            // would re-embed every frame of every film on the disk. Exactly the rows that were
+            // passed over for want of a model, and nothing else.
+            bool stranded = db.Get(Key(r.Capability)) == r.Stamp;
+            int n = stranded
+                ? db.RequeueKinds(r.Kinds, Indexer.Recheck, onlyBecause: [Decoders.NoModel])
+                : db.RequeueKinds(r.Kinds, Indexer.Recheck, [Decoders.TooLarge, Decoders.NoText]);
             db.Set(Key(r.Capability), r.Stamp);
-            Log.Info("models", $"{r.Why}: {n.ToString("N0", CultureInfo.InvariantCulture)} file(s) queued to be read again");
+            Log.Info("models", $"{r.Why}: {n.ToString("N0", CultureInfo.InvariantCulture)} file(s) queued to be read"
+                               + (stranded ? " (they were queued once before and nothing could read them)" : " again"));
         }
         return (int)(db.PendingCount() - before);
     }
 
-    /// <summary>The stamps as they stand, for <see cref="Plan"/>.</summary>
+    /// <summary>
+    /// The stamps that stand up, for <see cref="Plan"/>.
+    ///
+    /// <para>A stamp is written when the backlog is QUEUED, which is the only moment this code can
+    /// see - and the queue is drained by an indexer child that read what was installed when it
+    /// started. Install a capability while Findra is open and that child records every file just
+    /// queued for it skipped again, for want of a model that is sitting on the disk. The child
+    /// looking again is what stops that happening (Decoders.Refresh); this is what makes it
+    /// recoverable when it happened anyway - an older build, a model deleted by hand, a machine
+    /// where the download landed after the last file was drained.</para>
+    ///
+    /// <para>So the stamp is not taken on its own. A capability whose files are sitting there
+    /// unread with no queue entry to bring them back has not had its backlog cleared, whatever
+    /// the record says: done is a fact the index holds, not a note somebody left. Those rows and
+    /// nothing else are what <see cref="Apply"/> then queues.</para>
+    /// </summary>
     public static IReadOnlyDictionary<Capability, string> StampsIn(ContentDb db)
     {
         ArgumentNullException.ThrowIfNull(db);
         var at = new Dictionary<Capability, string>();
-        foreach (Capability c in Capabilities.All) if (db.Get(Key(c)) is { } v) at[c] = v;
+        foreach (Capability c in Capabilities.All)
+            // The stamp first, and the count only if there is one: a machine that took no
+            // download has no stamps at all, and asking the index four questions about capability
+            // backlogs it has never had is a scan of every item for a known answer.
+            if (db.Get(Key(c)) is { } v
+                && db.CountSkippedAndNotQueued(Capabilities.KindsCovered(c), Decoders.NoModel) == 0)
+                at[c] = v;
         return at;
     }
 
@@ -149,15 +183,29 @@ public static class CapabilityGate
                            Why: $"the transcription limit is now {TranscribeLimit.Describe(nowMinutes)}");
     }
 
-    /// <summary>Reconcile the index against the current limit, and record it. Returns how many
-    /// recordings were queued.</summary>
+    /// <summary>
+    /// Reconcile the index against the current limit, and record it. Returns how many recordings
+    /// were queued.
+    ///
+    /// <para>Telling the indexer the limit is part of reconciling and not a separate errand. The
+    /// child reads <see cref="Indexer.TranscribeMinutesKey"/> before each recording it opens, so
+    /// a limit raised from a terminal while Findra is running - <c>--content limit</c>, whose
+    /// settings file the running interface will not read again - reaches exactly the recordings
+    /// queued below. Without it the child passes over every one of them at the old length,
+    /// records them too long a second time, and the value written here then says there is nothing
+    /// left to hear, for good.</para>
+    /// </summary>
     public static int ApplyLimit(ContentDb db, int nowMinutes)
     {
         ArgumentNullException.ThrowIfNull(db);
         int was = int.TryParse(db.Get(LimitKey), NumberStyles.Integer, CultureInfo.InvariantCulture, out int w)
                   ? w : TranscribeLimit.Default;
         Requeue? owed = PlanForLimit(was, nowMinutes);
-        db.Set(LimitKey, nowMinutes.ToString(CultureInfo.InvariantCulture));
+        string minutes = nowMinutes.ToString(CultureInfo.InvariantCulture);
+        // Before the re-queue, not after: the child may take the first row off the queue while
+        // this is still running, and it must not meet it holding the old length.
+        db.Set(Indexer.TranscribeMinutesKey, minutes);
+        db.Set(LimitKey, minutes);
         if (owed is null) return 0;
 
         // onlyBecause, not notBecause: EXACTLY the recordings that were passed over for being

@@ -256,8 +256,9 @@ public static class ModelsCommand
         // which is simply false on the machine most likely to be running this command - a
         // terminal, with nothing else open - and a diagnostic that states something the reader
         // can see is untrue is not read any further.
-        Console.WriteLine("If Findra is running, its indexer read what is installed when it started, so restart");
-        Console.WriteLine("Findra to begin reading these files. Nothing is lost if you do not - the queue survives.");
+        Console.WriteLine("If Findra is running, its indexer checks what is installed before every file it opens,");
+        Console.WriteLine("so it begins reading these without a restart. The card loads its own half of a");
+        Console.WriteLine("capability when Findra starts, so restart it before searching the new way.");
         return 0;
     }
 
