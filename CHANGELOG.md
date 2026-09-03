@@ -574,6 +574,11 @@ into a numbered section on the first release.
   field that holds 580.6px, and the field silently ellipsises, so it stopped mid-word on every
   empty card in that mode. It is shorter now, and measured.
 
+- **The card shows how far the index has got, under the search field.** A pill with a dial, what
+  is being read, the count and the percentage - and the pill itself is the bar, filling left to
+  right underneath the words. It appears while there is something to report and takes no room at
+  all when there is not. The desktop capsule carries the same pill from the same painter.
+
 - **The capsule has its own progress pill.** What is being read, a track, and how far it has got -
   "indexing photos, 6,680 of 10,800" - in a smaller pill under the search bar. It used to be a bare
   track and a line of text floating under the capsule with nothing around them, the only thing in

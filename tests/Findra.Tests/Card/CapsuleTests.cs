@@ -41,21 +41,26 @@ public class CapsuleTests
     }
 
     [Fact]
-    public void TheWidestLabelAndCountStillLeaveATrackBetweenThem()
+    public void TheWidestSentenceIsNotCutShortOnEitherSurface()
     {
-        // The painter measures both ends and lays the track in what is left, so this is what stops
-        // that room going to nothing: "indexing recordings" is the longest label, and a machine
-        // with a million files to read is the longest count. Below 24px the painter draws no track
-        // at all, which is honest but is not the design.
+        // The pill's middle is ellipsised, so an overlong sentence does not clip or throw - it
+        // stops mid-word, which is the defect the card's own placeholder had. The widest it gets
+        // is the longest label against a machine with a million files to read.
         SKTypeface face = Parts.Face;
-        string label = IndexStatus.Doing(ResultKind.Audio);
-        string count = IndexStatus.Pill(true, nameof(ResultKind.Audio), 1_000_000, 999_999, true).Count;
+        string worst = ProgressPill.Sentence(
+            IndexStatus.Pill(true, nameof(ResultKind.Audio), 1_000_000, 999_999, true));
 
-        float room = CapsuleLayout.PillW - CapsuleLayout.PillPad * 2 - CapsuleLayout.PillGap * 2
-                   - CardText.Measure(label, face, CapsuleLayout.PillTextSize)
-                   - CardText.Measure(count, face, CapsuleLayout.PillTextSize);
-
-        Assert.True(room >= 24f, $"only {room:0.0}px left for the track between '{label}' and '{count}'");
+        foreach ((string where, SKRect r) in new[]
+                 {
+                     ("the capsule", CapsuleLayout.PillRect()),
+                     ("the card", SearchCardLayout.ProgressRect()),
+                 })
+        {
+            float room = r.Right - (r.Left + ProgressPillLayout.Inset + ProgressPillLayout.Ring * 2 + 8f)
+                       - ProgressPillLayout.PercentW;
+            float w = CardText.Measure(worst, face, ProgressPillLayout.TextSize);
+            Assert.True(w <= room, $"on {where}, '{worst}' is {w:0.0}px against {room:0.0}px of room");
+        }
     }
 
     [Fact]

@@ -59,6 +59,21 @@ public static class SearchCardLayout
     public static SKRect SettingsRect()
         => new(Width - Pad - ContentW, FieldTop + FieldH + 5, Width - Pad, FieldTop + FieldH + 35);
 
+    /// <summary>
+    /// The progress pill, directly under the field and exactly as wide as it.
+    ///
+    /// <para>Under the field rather than in the footer because the empty card - the one somebody
+    /// opens and looks at while nothing has been typed - has no footer, and that is precisely when
+    /// "how far has it got" is the question. It clears the Settings pill on the right by the same
+    /// margin the field does, since it is the field's own width.</para>
+    /// </summary>
+    public static SKRect ProgressRect()
+    {
+        float top = FieldTop + FieldH + 8f;
+        SKRect f = FieldRect();
+        return new SKRect(f.Left, top, f.Right, top + ProgressPillLayout.Height);
+    }
+
     /// <summary>Where the header line's right-aligned half ends: the field's own right edge,
     /// NOT the card's. The pill column now reaches down into the header's band, and a timing
     /// right-aligned to the card would be drawn straight across the Settings pill on every
@@ -84,13 +99,18 @@ public static class SearchCardLayout
         return count == 0 ? RowH * 1.6f : Math.Max(rows, StageMinH);
     }
 
-    public static float Height(int count, bool hasQuery, bool advOpen = false)
+    public static float Height(int count, bool hasQuery, bool advOpen = false, bool progress = false)
     {
         // The empty card is the hint's height OR the pill column's, whichever needs more. It was
         // the hint's alone, which ended nine pixels above the bottom of the third pill.
+        //
+        // The progress pill pushes the hint down when there is one, and the card grows with it
+        // rather than reserving the band always: an empty strip under the field on an idle machine
+        // is the thing the pill exists to avoid drawing.
+        float hintTop = progress ? ProgressRect().Bottom : FieldTop + FieldH;
         float h = hasQuery
             ? BodyTop + BodyH(count, hasQuery) + FooterH
-            : Math.Max(FieldTop + FieldH + EmptyHintH + 6, SettingsRect().Bottom + Pad);
+            : Math.Max(hintTop + EmptyHintH + 6, SettingsRect().Bottom + Pad);
         // the popup draws inside this window, so the card grows to hold it while it is open
         return advOpen ? Math.Max(h, SearchAdvancedLayout.Panel().Bottom + 14) : h;
     }
@@ -232,7 +252,12 @@ public sealed record SearchCardState(
     /// the only place it is decided. The painter fades it, the pointer drops to the plain arrow,
     /// and the press is refused; all three read this one flag so they cannot disagree about
     /// whether the pill is alive.</summary>
-    bool ContentOffered = true)
+    bool ContentOffered = true,
+
+    /// <summary>What the progress pill under the field says, or <c>default</c> for no pill. From
+    /// <c>IndexStatus.Pill</c>, the same composer the capsule's pill and the tray's tooltip use.
+    /// </summary>
+    IndexProgress Progress = default)
 {
     public static readonly SearchCardState Empty =
         new("", SearchResults.Empty, Array.Empty<SearchResult>(), 0, 0, 0, false);
@@ -385,8 +410,12 @@ public static class SearchCardPainter
 
         if (!hasQuery)
         {
+            // Under the field, above the hints. It draws nothing at all when there is nothing to
+            // report, and the hints sit where they always did in that case.
+            ProgressPill.Paint(canvas, SearchCardLayout.ProgressRect(), s.Progress, d, face);
+            float hintTop = s.Progress.Show ? SearchCardLayout.ProgressRect().Bottom : f.Bottom;
             CardText.Draw(canvas, EmptyHints[s.Content ? 1 : 0],
-                SearchCardLayout.Pad + 6, f.Bottom + 24, 12.5f, face, dim);
+                SearchCardLayout.Pad + 6, hintTop + 24, 12.5f, face, dim);
             if (s.AdvOpen) SearchAdvancedPainter.Paint(canvas, s, d, face);
             if (unfolding) canvas.Restore();
             return;

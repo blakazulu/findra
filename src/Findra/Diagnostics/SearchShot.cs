@@ -21,8 +21,8 @@ public static class SearchShot
 {
     public static readonly IReadOnlyList<string> States =
     [
-        "capsule", "empty", "contentmode", "contentwaiting", "typing", "results", "noresults",
-        "many", "adv", "opening", "openingempty",
+        "capsule", "empty", "indexing", "contentmode", "contentwaiting", "typing", "results",
+        "noresults", "many", "adv", "opening", "openingempty",
         "settings", "settingsopening", "settingssearches", "settingscontent", "settingsabout",
         "firstrun", "firstruninstalled", "firstrunspeech", "firstrundownloading", "firstrunfinished",
         "firstrunready",
@@ -289,7 +289,7 @@ public static class SearchShot
     {
         SearchCardState s = Build(state);
         int w = (int)Math.Ceiling(SearchCardLayout.Width);
-        int h = (int)Math.Ceiling(SearchCardLayout.Height(s.Rows.Count, s.HasQuery, s.AdvOpen));
+        int h = (int)Math.Ceiling(SearchCardLayout.Height(s.Rows.Count, s.HasQuery, s.AdvOpen, s.Progress.Show));
         var info = new SKImageInfo(w, h, SKColorType.Bgra8888, SKAlphaType.Premul);
         using SKSurface surface = SKSurface.Create(info);
         SearchCardPainter.Paint(surface.Canvas, s, d, face);
@@ -324,6 +324,18 @@ public static class SearchShot
         //
         // The Content pill LATCHED is the other. Every other state leaves Content false, so the
         // one pill on this card that latches had only ever been rendered unlatched.
+        // The card with the progress pill under its field, which is the state somebody opening
+        // Findra during a first pass actually meets. No other state draws it, and the pill changes
+        // the card's HEIGHT - so an unrendered one is a layout nothing has ever looked at.
+        if (state == "indexing")
+            return SearchCardState.Empty with
+            {
+                IndexLine = "indexing 1,030 · 688 done",
+                Progress = IndexStatus.Pill(contentEnabled: true, nameof(ResultKind.Document),
+                                            pending: 342, indexed: 688, alive: true),
+                Clock = 0.2,
+            };
+
         if (state == "contentmode")
             return SearchCardState.Empty with
             {
