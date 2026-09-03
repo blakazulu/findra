@@ -274,6 +274,24 @@ public static class SearchCardPainter
     /// ends of its own outline, and the only thing that catches that is a measurement.</summary>
     public const float PillTextSize = 12.5f;
     public const string ContentLabel = "Content";
+
+    /// <summary>
+    /// What the field says when nothing has been typed. Two of them, because the pill beside it
+    /// changes what a query means and a field that promised the same thing in both modes would be
+    /// the pill's only visible effect on an empty card.
+    ///
+    /// <para>Constants because the content one is MEASURED into the field.
+    /// <c>CardText.Ellipsize</c> silently cuts it, so an overlong sentence is not a bug that shows
+    /// up as a crash or a clipped glyph - it is a placeholder that reads as though the product
+    /// stopped mid-thought. "Describe a photo, words in a document, speech…" was doing exactly
+    /// that: measured 606.6px against a field that holds 580.6px, so the ellipsis ate the last two
+    /// words and it read "Describe a photo, words in a docum…" on every empty card in content
+    /// mode. The rule is the one the pills are written under - shorten the label, never widen the
+    /// field, because the field's right edge is where the pill column starts.</para>
+    /// </summary>
+    public const string NamePlaceholder = "Search files, photos, words…";
+
+    public const string ContentPlaceholder = "Describe a photo, or words in a document…";
     public const string AdvancedLabel = "Advanced";
     public const string SettingsLabel = "Settings";
 
@@ -329,7 +347,7 @@ public static class SearchCardPainter
         // ---- the field: the same capsule shape the desktop capsule shows at rest, now with a caret in it ----
         var f = SearchCardLayout.FieldRect();
         DrawCapsule(canvas, f, accent, text, d, s.Query, s.Caret,
-            hasQuery ? "" : s.Content ? "Describe a photo, words in a document, speech…" : "Search files, photos, words…",
+            hasQuery ? "" : s.Content ? ContentPlaceholder : NamePlaceholder,
             face, caret: true, clock: s.Clock, focused: true, caretSlot: s.CaretSlot);
 
         // ---- the two pills: Content (what question the query asks) and Advanced (the popup).

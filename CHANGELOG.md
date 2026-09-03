@@ -553,6 +553,11 @@ into a numbered section on the first release.
   comes from the files on disk and never from that selection. A machine that has the speech model
   but not the document models it needs opens with both ticked and prices only the missing half.
 
+- **The card's content-mode placeholder is not cut short any more.** With the Content pill down
+  the field read "Describe a photo, words in a docum..." - the sentence measured 606.6px against a
+  field that holds 580.6px, and the field silently ellipsises, so it stopped mid-word on every
+  empty card in that mode. It is shorter now, and measured.
+
 - **The capsule has its own progress pill.** What is being read, a track, and how far it has got -
   "indexing photos, 6,680 of 10,800" - in a smaller pill under the search bar. It used to be a bare
   track and a line of text floating under the capsule with nothing around them, the only thing in

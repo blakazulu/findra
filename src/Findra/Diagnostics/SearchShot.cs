@@ -21,8 +21,8 @@ public static class SearchShot
 {
     public static readonly IReadOnlyList<string> States =
     [
-        "capsule", "empty", "contentwaiting", "typing", "results", "noresults", "many", "adv",
-        "opening", "openingempty",
+        "capsule", "empty", "contentmode", "contentwaiting", "typing", "results", "noresults",
+        "many", "adv", "opening", "openingempty",
         "settings", "settingsopening", "settingssearches", "settingscontent", "settingsabout",
         "firstrun", "firstruninstalled", "firstrunspeech", "firstrundownloading", "firstrunfinished",
         "firstrunready",
@@ -313,6 +313,24 @@ public static class SearchShot
     {
         if (state == "empty")
             return SearchCardState.Empty with { IndexLine = "index: 1.5M names · idle", Clock = 0.2 };
+
+        // The card in content mode with nothing typed, which is two branches nothing else reached.
+        //
+        // The field's content placeholder is one: it is a DIFFERENT string from the name-mode one -
+        // the pill changes what a query means, so a field promising the same thing in both modes
+        // would be the pill's only invisible effect - and the field ellipsises, so an overlong one
+        // is not a crash or a clipped glyph but a sentence that stops mid-thought. It had been
+        // doing exactly that, at 606.6px against 580.6px, on every empty card in content mode.
+        //
+        // The Content pill LATCHED is the other. Every other state leaves Content false, so the
+        // one pill on this card that latches had only ever been rendered unlatched.
+        if (state == "contentmode")
+            return SearchCardState.Empty with
+            {
+                Content = true,
+                IndexLine = "index up to date · 12,480 files",
+                Clock = 0.2,
+            };
 
         // The Content pill drawn NOT offering, which is the one branch of the pill painter no
         // other state reaches: reading is on, the first pass has queued work and not finished a
