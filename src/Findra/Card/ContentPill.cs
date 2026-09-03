@@ -16,6 +16,14 @@ public enum ContentPress
     /// where it was. There is nothing to search and nothing a card can offer that would change
     /// that.</summary>
     OpenSettings,
+
+    /// <summary>Nothing at all, and the pill says so before it is pressed: it is drawn faded and
+    /// takes the plain arrow. Findra IS reading and has simply not finished the first file yet, so
+    /// there is nothing to search, nothing to turn on, and nothing settings could add - every
+    /// answer is "wait a minute". This is the only press in the product that is refused, and it is
+    /// refused for a few minutes on a fresh install rather than for the hours the whole walk
+    /// takes: it lifts on the FIRST file read, not on the last.</summary>
+    Nothing,
 }
 
 /// <summary>
@@ -62,6 +70,20 @@ public static class ContentPill
 
         if (indexed > 0) return readingOn ? ContentPress.Search : ContentPress.TurnOnReading;
 
-        return ContentPress.OpenSettings;
+        // Nothing read. The two halves of that are not the same question and do not get the same
+        // answer. Reading is OFF, so nothing ever will be read: everything that changes it - the
+        // switch, the power, the limit, the capability list - is on one settings page, and that is
+        // where a press goes. Reading is ON, so this is a machine part way through its first pass
+        // with the first file not finished: there is nothing to search and nothing to set, and the
+        // only honest answer is to stop offering until there is something behind it.
+        return readingOn ? ContentPress.Nothing : ContentPress.OpenSettings;
     }
+
+    /// <summary>
+    /// Is the pill offering anything? What the painter fades and what the pointer reads, off the
+    /// same call that decides the press - so a pill drawn live cannot refuse a click, and a pill
+    /// drawn faded cannot answer one.
+    /// </summary>
+    public static bool Offers(bool pillOn, bool haveStore, bool readingOn, long? indexed) =>
+        Decide(pillOn, haveStore, readingOn, indexed) != ContentPress.Nothing;
 }

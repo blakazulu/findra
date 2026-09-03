@@ -21,7 +21,8 @@ public static class SearchShot
 {
     public static readonly IReadOnlyList<string> States =
     [
-        "capsule", "empty", "typing", "results", "noresults", "many", "adv", "opening", "openingempty",
+        "capsule", "empty", "contentwaiting", "typing", "results", "noresults", "many", "adv",
+        "opening", "openingempty",
         "settings", "settingsopening", "settingssearches", "settingscontent", "settingsabout",
         "firstrun", "firstrunspeech", "firstrundownloading", "firstrunfinished",
     ];
@@ -282,6 +283,23 @@ public static class SearchShot
     {
         if (state == "empty")
             return SearchCardState.Empty with { IndexLine = "index: 1.5M names · idle", Clock = 0.2 };
+
+        // The Content pill drawn NOT offering, which is the one branch of the pill painter no
+        // other state reaches: reading is on, the first pass has queued work and not finished a
+        // file, so there is nothing to search, nothing to turn on and nothing settings could add.
+        // A card whose every state showed a live pill would ship the faded one unlooked at - the
+        // same defect as the stage's picture branch, which nine states missed between them.
+        //
+        // Hovered on purpose. The suppression of the hover fill is half of what makes a dead
+        // control read as dead, and a state that never hovers it proves only the resting colour.
+        if (state == "contentwaiting")
+            return SearchCardState.Empty with
+            {
+                IndexLine = "reading inside your files - nothing found yet",
+                ContentOffered = false,
+                HoverTarget = SearchTarget.Content,
+                Clock = 0.2,
+            };
 
         // The unfold has a Restore on each of the painter's two return paths, and an unbalanced
         // canvas is exactly what that shape produces when one is missed - so both are shot. This

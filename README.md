@@ -1,4 +1,4 @@
-# Findra
+﻿# Findra
 
 Desktop search for Windows. A capsule sits on your desktop; click it, or press a global
 hotkey, and it unfolds into a results card. It finds files by name the second it starts, and
@@ -148,7 +148,7 @@ these, and every image above was drawn by the same painter the window uses.
     findra --content on               start reading inside files
     findra --uninstall --dry-run      what removing Findra would do, without doing it
 
-`findra --searchshot` draws eighteen surfaces in any of the six palettes, which is how the
+`findra --searchshot` draws nineteen surfaces in any of the six palettes, which is how the
 images on this page are made and how they are regenerated. The command under each image is
 the whole recipe.
 

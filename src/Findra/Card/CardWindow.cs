@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
@@ -190,6 +190,9 @@ public sealed class CardWindow : Window
         // every freshly opened card into the settings window.
         private long _contentIndexed = -1;
         private volatile bool _contentReadingOn;
+        // True until a reading says otherwise: a card that has not looked yet offers the pill, for
+        // the same reason _contentIndexed starts at -1 rather than 0.
+        private volatile bool _contentOffered = true;
 
         private volatile SearchCardState _state = SearchCardState.Empty;
         private readonly SearchGate _gate = new();
@@ -224,7 +227,7 @@ public sealed class CardWindow : Window
             _derived = derived;
             Focusable = true;
 
-            _state = _state with { IndexLine = IndexLine(), OpenedAt = 0 };
+            _state = _state with { IndexLine = IndexLine(), ContentOffered = _contentOffered, OpenedAt = 0 };
 
             _timer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(66) };
             _timer.Tick += (_, _) =>
@@ -232,7 +235,7 @@ public sealed class CardWindow : Window
                 // the caret blinks and the index line moves; nothing else here needs frames -
                 // except the unfold, which wants them faster for a quarter of a second
                 PumpContentLine();
-                _state = _state with { Clock = _clock.Elapsed.TotalSeconds, IndexLine = IndexLine() };
+                _state = _state with { Clock = _clock.Elapsed.TotalSeconds, IndexLine = IndexLine(), ContentOffered = _contentOffered };
                 InvalidateVisual();
             };
             _timer.Start();
@@ -337,6 +340,12 @@ public sealed class CardWindow : Window
             // have to be talking about the same index at the same moment.
             Volatile.Write(ref _contentIndexed, indexed);
             _contentReadingOn = contentOn;
+            // And whether the pill is offering anything, from the same reading. Decided HERE
+            // rather than in the painter so the pill somebody sees, the shape the pointer takes
+            // and the press it answers all come from one look at one index.
+            _contentOffered = ContentPill.Offers(
+                pillOn: _state.Content, haveStore: true, readingOn: contentOn,
+                indexed: indexed < 0 ? null : indexed);
             return IndexStatus.Line(contentOn, state, pending, indexed, IndexStatus.Alive(beat, pid), rebuilt);
         }
 
@@ -574,6 +583,16 @@ public sealed class CardWindow : Window
                 haveStore: _db is not null,
                 readingOn: _contentReadingOn,
                 indexed: indexed < 0 ? null : indexed);
+
+            // Reading, with the first file not finished. Nothing to search, nothing to turn on and
+            // nothing settings could add - so the press is refused, as the faded pill and the plain
+            // arrow have already said it would be.
+            if (press == ContentPress.Nothing)
+            {
+                Log.Info("search", "content was asked for while the first pass has read nothing yet; " +
+                                   "the pill is not offering until there is something behind it");
+                return;
+            }
 
             if (press == ContentPress.OpenSettings)
             {
@@ -1127,7 +1146,11 @@ public sealed class CardWindow : Window
             _state = _state with { HoverTarget = hit.Target, HoverIndex = hit.Index };
             // Beside the hover, from the same answer: a shape decided anywhere else could
             // disagree with the hit test about what the pointer is over.
-            Cursor = PointerCursor.Of(Pointers.ForCard(hit.Target));
+            // A pill that is not offering reads as ordinary background: the plain arrow, not the
+            // hand. Mapped here rather than inside Pointers, which answers from the target alone
+            // and has no way to know what the index holds.
+            Cursor = PointerCursor.Of(Pointers.ForCard(
+                hit.Target == SearchTarget.Content && !_contentOffered ? SearchTarget.None : hit.Target));
             InvalidateVisual();
         }
 
