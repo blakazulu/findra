@@ -7,3 +7,11 @@ installer/Output/
 installer/redist/
 /2026-*.txt
 .superpowers/
+
+# Website design work, kept local on purpose. It is unreleased and belongs to a different
+# piece of work from the application in this repository.
+/website/
+
+# A runtime lock naming a session and a process id. It regenerates, it is different on every
+# machine, and committing it would put a dirty file in every future checkout.
+.claude/scheduled_tasks.lock
