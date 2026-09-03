@@ -1,0 +1,29 @@
+# The site at https://findra-search.netlify.app is plain static files. There is no
+# build step, nothing to compile and no framework: `publish` is the whole configuration.
+# Everything under website/public is deployed exactly as it sits in the repository.
+
+[build]
+  publish = "website/public"
+  command = ""
+
+# A page that sells "nothing leaves your machine" should not itself be reaching out.
+# The policy below permits the two Google Fonts hosts and nothing else - no analytics,
+# no beacons, no third-party scripts, and no way for one to be added by accident.
+[[headers]]
+  for = "/*"
+  [headers.values]
+    Content-Security-Policy = "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data:; connect-src 'none'; frame-ancestors 'none'; base-uri 'self'; form-action 'none'"
+    Referrer-Policy = "strict-origin-when-cross-origin"
+    X-Content-Type-Options = "nosniff"
+    X-Frame-Options = "DENY"
+    Permissions-Policy = "camera=(), microphone=(), geolocation=(), interest-cohort=()"
+
+[[headers]]
+  for = "/shots/*"
+  [headers.values]
+    Cache-Control = "public, max-age=604800"
+
+[[headers]]
+  for = "/*.svg"
+  [headers.values]
+    Cache-Control = "public, max-age=604800"

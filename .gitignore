@@ -8,9 +8,9 @@ installer/redist/
 /2026-*.txt
 .superpowers/
 
-# Website design work, kept local on purpose. It is unreleased and belongs to a different
-# piece of work from the application in this repository.
-/website/
+# The site under website/public is deployed to findra-search.netlify.app on every push to
+# main, so it has to be in the repository. Netlify serves it straight from there with no
+# build step; netlify.toml names it as the publish directory.
 
 # A runtime lock naming a session and a process id. It regenerates, it is different on every
 # machine, and committing it would put a dirty file in every future checkout.

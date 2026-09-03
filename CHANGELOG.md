@@ -356,6 +356,15 @@ into a numbered section on the first release.
   itself, no other product is named or measured against, and the page says plainly that there
   is no published release yet and that the downloads are not signed.
 
+- **A website, deployed to https://findra-search.netlify.app on every push to `main`.** It is
+  plain static files under `website/public` with no build step, and it holds itself to the same
+  rule the README does: every screenshot is a real `--searchshot` render with its command printed
+  underneath, and every number is a measurement from `--searchbench` beside the machine that
+  produced it. It says which install route works today and which one waits for the first tag,
+  rather than offering a download that does not exist yet. A page that sells "nothing leaves your
+  machine" should not itself be reaching out, so a content security policy permits the two font
+  hosts and nothing else - no analytics, no beacons, and no way for one to arrive by accident.
+
 ### Changed
 
 - **A capability you install is read in the same session you installed it.** Downloading one
