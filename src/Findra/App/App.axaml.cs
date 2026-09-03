@@ -1532,21 +1532,57 @@ internal sealed class Shell : ISettingsHost
         if (on) Autostart.Set(exe); else Autostart.Clear();
     }
 
-    void ISettingsHost.RegisterHelper() => _ = Task.Run(() =>
+    void ISettingsHost.RegisterHelper()
     {
-        // Register raises the one UAC prompt itself (runas), so this must not be on the UI thread.
-        // A refused prompt throws Win32Exception 1223 into Register's own catch and returns false.
-        bool ok = HelperTask.Register(Environment.ProcessPath ?? "");
-        if (ok) HelperTask.EnsureRunning();     // and start it now, not at the next logon
-        HelperTaskState state = HelperTask.Query().State;
-        Dispatcher.UIThread.Post(() => SettingsWindow.Open?.UseHelperState(state));
-    });
+        // Marked BEFORE the task starts, on the thread that got the click, so a second click
+        // cannot slip in while the first is still being scheduled. Two clicks here used to mean
+        // two elevated schtasks calls and two stacked UAC prompts.
+        Waiting(ControlId.Helper, true);
+        _ = Task.Run(() =>
+        {
+            try
+            {
+                // Register raises the one UAC prompt itself (runas), so this must not be on the UI
+                // thread. A refused prompt throws Win32Exception 1223 into Register's own catch and
+                // returns false.
+                bool ok = HelperTask.Register(Environment.ProcessPath ?? "");
+                if (ok) HelperTask.EnsureRunning();     // and start it now, not at the next logon
+                HelperTaskState state = HelperTask.Query().State;
+                Dispatcher.UIThread.Post(() => SettingsWindow.Open?.UseHelperState(state));
+            }
+            finally { Waiting(ControlId.Helper, false); }
+        });
+    }
+
+    /// <summary>Set or clear a row's waiting mark, from any thread. Posted, because it repaints a
+    /// window, and a finally that ran on the pool would otherwise touch it off the UI thread.
+    /// </summary>
+    private static void Waiting(ControlId id, bool waiting) =>
+        Dispatcher.UIThread.Post(() => SettingsWindow.Open?.MarkWaiting(id, waiting));
 
     void ISettingsHost.PickFolder() => _ = PickFolderAsync();
 
-    void ISettingsHost.InstallCapability(Capability c) => _ = InstallAsync(c);
+    void ISettingsHost.InstallCapability(Capability c)
+    {
+        // A second click here re-issues a fetch of hundreds of megabytes, which then collides with
+        // the first one's .part file on a FileShare.None handle - so the row says what it is doing
+        // and stops answering until it is done.
+        Waiting(ControlId.Capability, true);
+        _ = InstallAsync(c).ContinueWith(
+            _ => Waiting(ControlId.Capability, false), TaskScheduler.Default);
+    }
 
-    void ISettingsHost.CheckNow() => _ = RunUpdateCheck(force: true);
+    void ISettingsHost.CheckNow()
+    {
+        // The row says "Asking..." while the request is out and goes back to "Check" whatever
+        // comes back, including the 404 that is the honest answer until a release exists. What the
+        // check FOUND is a separate sentence, on the Updates row above, which NoteUpdate refreshes
+        // - Findra never installs anything itself, so the answer is words and an action to take,
+        // never a button that does it for you.
+        Waiting(ControlId.CheckNow, true);
+        _ = RunUpdateCheck(force: true).ContinueWith(
+            _ => Waiting(ControlId.CheckNow, false), TaskScheduler.Default);
+    }
 
     void ISettingsHost.RecentreCapsule()
     {
@@ -1585,6 +1621,7 @@ internal sealed class Shell : ISettingsHost
     void ISettingsHost.StartIndexing()
     {
         Log.Info("index", "reading inside files was started from settings");
+        Waiting(ControlId.StartIndexing, true);
         Task<int> asked = OnContentLoopAsync(db =>
         {
             // The same two rows the pump writes, so nothing waits a second to agree with the
@@ -1612,13 +1649,17 @@ internal sealed class Shell : ISettingsHost
 
         // Observed rather than discarded. This is posted to another flow, so a fault or a
         // shutdown mid-request is otherwise an unobserved task exception nobody ever sees.
-        _ = asked.ContinueWith(static t =>
+        _ = asked.ContinueWith(t =>
         {
             if (t.Exception is { } failed)
                 Log.Error("index", "starting to read inside files did not reach the content index",
                           failed.GetBaseException());
             else if (t.IsCanceled)
                 Log.Warn("index", "starting to read inside files was cut short by Findra closing");
+
+            // Cleared whichever way it went, including the cancelled one: a row left saying
+            // "Starting..." for the rest of the session is worse than one that never said it.
+            Waiting(ControlId.StartIndexing, false);
         }, CancellationToken.None, TaskContinuationOptions.ExecuteSynchronously, TaskScheduler.Default);
     }
 

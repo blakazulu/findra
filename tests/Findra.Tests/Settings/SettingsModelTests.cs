@@ -786,4 +786,66 @@ public class SettingsModelTests
             }
         }
     }
+
+    [Theory]
+    [InlineData(Section.About, ControlId.CheckNow)]
+    [InlineData(Section.Opening, ControlId.Helper)]
+    [InlineData(Section.Content, ControlId.StartIndexing)]
+    [InlineData(Section.Content, ControlId.Capability)]
+    public void ARowAlreadyWaitingOnItsOwnWorkAnswersNothing(Section section, ControlId id)
+    {
+        // Each of these four starts something slow and none of them used to say so: the update
+        // check makes a request, "Register it" raises a prompt and waits up to a minute on
+        // schtasks, a capability row downloads hundreds of megabytes, "Start now" wakes a child.
+        // Two clicks meant the work twice - two stacked UAC prompts, or a second fetch that then
+        // collides with the first one's part file on a FileShare.None handle.
+        SettingsState s = State(Config.Default with { IndexContent = false }, section);
+        int row = RowOf(s, id);
+        Assert.True(row >= 0, $"{id} is not a row in {section}");
+
+        // The first click asks for the work.
+        SettingsOutcome first = SettingsModel.Apply(s, new PanelHit(PanelTarget.Control, row, -1));
+        Assert.NotEqual(SettingsAction.None, first.Action);
+
+        // The second, while it is still running, asks for nothing.
+        SettingsState waiting = s with { Busy = new HashSet<ControlId> { id } };
+        SettingsOutcome second = SettingsModel.Apply(waiting, new PanelHit(PanelTarget.Control, RowOf(waiting, id), -1));
+        Assert.Equal(SettingsAction.None, second.Action);
+        Assert.Same(waiting, second.State);
+    }
+
+    [Theory]
+    [InlineData(Section.About, ControlId.CheckNow)]
+    [InlineData(Section.Opening, ControlId.Helper)]
+    [InlineData(Section.Content, ControlId.StartIndexing)]
+    [InlineData(Section.Content, ControlId.Capability)]
+    public void AWaitingRowSaysSoRatherThanLookingUntouched(Section section, ControlId id)
+    {
+        // Refusing the click is half of it. A control that refuses AND looks exactly as it did is
+        // a control somebody clicks again harder, so the value beside the label has to change.
+        SettingsState idle = State(Config.Default with { IndexContent = false }, section);
+        SettingsState busy = idle with { Busy = new HashSet<ControlId> { id } };
+
+        // First, not Single: there is one Capability row per capability, so Single throws before
+        // it can assert anything.
+        Control was = SettingsModel.Controls(idle).First(c => c.Id == id);
+        Control now = SettingsModel.Controls(busy).First(c => c.Id == id);
+
+        Assert.NotEqual(was.Value, now.Value);
+        Assert.EndsWith("...", now.Value, StringComparison.Ordinal);
+
+        // And nothing else on the panel changes its mind because one row is busy. Compared by
+        // POSITION rather than by looking each row up by its id: several rows share an id (there
+        // is one Capability row per capability) and a lookup that matched more than one would
+        // throw rather than assert. Position is also the stronger claim - it catches a row that
+        // moved as well as one that changed.
+        IReadOnlyList<Control> before = SettingsModel.Controls(idle);
+        IReadOnlyList<Control> after = SettingsModel.Controls(busy);
+        Assert.Equal(before.Count, after.Count);
+        for (int i = 0; i < before.Count; i++)
+        {
+            Assert.Equal(before[i].Id, after[i].Id);
+            if (before[i].Id != id) Assert.Equal(before[i].Value, after[i].Value);
+        }
+    }
 }

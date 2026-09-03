@@ -512,6 +512,12 @@ into a numbered section on the first release.
 
 ### Fixed
 
+- **Every slow thing in settings says it is working.** Checking for a newer version,
+  registering the name helper, downloading a capability and starting to read your files all
+  looked untouched while they ran, so a second click did the work twice: two stacked
+  administrator prompts, or a second download that collided with the first. Each row now
+  says what it is doing and stops answering until it is done.
+
 - **The tray icon holds still and is drawn large enough to see.** It was painted in whichever
   palette you had chosen, which put a pale mark on a light Windows taskbar, and it was drawn
   at a size the shell then had to enlarge. It is now always the dark Mond mark, rendered at a
