@@ -48,6 +48,10 @@ pwsh -File build/Check-E2E.ps1 -Exe publish/win-x64/findra.exe   # every part of
                                                # anything. Three outcomes, not two - "not yet"
                                                # is a machine that has not got there yet, and is
                                                # not counted as a failure.
+node build/Make-Icon.mjs                       # regenerate the mark - the .ico compiled into the
+                                               # exe, both SVGs, the installer's wizard image and
+                                               # the site's favicon. By hand, when the mark
+                                               # changes; nothing in the build runs it.
 ```
 
 Six diagnostic modes are non-negotiable and are built from day one. They are how the app is
@@ -419,6 +423,33 @@ check a label into its pill and the test that checks the column is not wider tha
 are each other's opposites. **If a label is ever tight, shorten the label.** Do not widen the
 tolerance and do not move the column - satisfying one of that pair by moving the geometry breaks
 the other. Bold is `SKFont.Embolden` on the same face; there is no second file.
+
+## The mark
+
+A lens with the capsule's own search field cut out of it, in Mond's accent on Mond's ground -
+solid mass rather than a stroked outline, because a 21-unit stroke is 1.3 px once the icon is
+16 px across and grey mush is what a taskbar makes of it.
+
+**`build/Make-Icon.mjs` holds the only copy of the geometry.** Everything else is emitted from it:
+`assets/icon/findra.ico`, the plated and unplated SVGs, the installer's wizard image and
+`website/public/favicon.svg`. Hand-editing an output is how one logo quietly becomes two, so
+`IconTests` decodes the shipped bytes and holds every copy to the others - the site header's data
+URI included, which is the fifth and the easiest to forget.
+
+- **It needs node, and nothing in the build does.** `dotnet build`, `Publish.ps1`, the installer
+  and all three workflows read what it produced and do not know it exists.
+- **A binary `.ico` in the tree is a deliberate exception** to Findra drawing its own icons. A
+  Win32 application icon is a PE resource: the linker needs a real file at build time and there is
+  no runtime hook that could paint one. The tray icon, which CAN be drawn at runtime, still is.
+- **The small sizes are drawn, not shrunk.** `HINTS` thickens the handle and drops the slot
+  entirely at 16 px, and 20 and 40 are in the set because that is what Windows picks at 125% and
+  150% scaling - without them it downscales 32 and 48 and throws the hinting away. `IconTests`
+  asserts the 16 px slot is ABSENT, so losing a hint fails rather than passing quietly.
+- **The tray has no plate and its slot is a real hole.** Windows composites a tray icon onto a
+  taskbar whose colour it chose: a plate is a dark square nobody asked for, and a slot filled with
+  Findra's own ground looks right on a dark taskbar and like a smudge on a light one. Both are
+  asserted, on three palettes, through a `Render` seam that exists because a `WindowIcon` needs a
+  running Avalonia and the alternative was a test that reads its own source.
 
 ## Shipping
 
