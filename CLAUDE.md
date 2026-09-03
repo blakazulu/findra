@@ -253,6 +253,31 @@ back on in place; nothing read at all opens Settings at Content, where the switc
 limit and the capabilities are; a count nothing has read yet searches, because a window thrown
 over a card somebody has just opened is not undone by pressing anything.
 
+## The capsule's progress pill
+
+Under the bar, in a pill of its own: what is being read on the left, a track across the middle,
+how far it has got on the right. It was a bare track and a line of floating text before - the only
+thing in the product drawn with no container round it, which read as part of the desktop rather
+than part of Findra.
+
+- **`IndexStatus` owns both shapes.** `Line` is one sentence for the card's footer and the tray's
+  tooltip; `Pill` is the same facts split for a label / track / count, because a sentence cannot be
+  cut in half and put at opposite ends of a pill. Two composers would be two answers.
+- **`Show` false draws no pill at all**, which is not a bar at zero. Reading off, no live indexer
+  or an empty queue all mean nothing is happening, and a permanently visible progress pill makes an
+  idle widget feel busy - the thing spec §3 says the capsule must not do.
+- **The label is a word, never the `ResultKind`.** `IndexStatus.Doing` maps it, and an unrecognised
+  or half-written row falls back to the bare verb rather than naming the wrong thing confidently.
+- **The painter measures both ends and lays the track in what is left.** "indexing recordings" and
+  a seven-figure count are the widest either side gets, and a track placed from a guess runs
+  underneath one of them.
+- **`CapsulePainter.Placeholder` is one constant because it used to be two.** The window drew
+  "Search files, photos, words…" and `--searchshot capsule` drew "Search 1.5M files", so every
+  render this project has reviewed - the README's, the site's, every palette sweep - showed a
+  string the product does not use, and the one it does use had never been looked at. That is the
+  same defect as an unrendered painter branch, one level up: the state was shot, with different
+  data.
+
 ## The pointer
 
 Findra paints all four of its surfaces itself, so nothing about a rectangle tells Windows what is

@@ -115,7 +115,13 @@ public static class SearchShot
         var info = new SKImageInfo((int)CapsuleLayout.Width, (int)CapsuleLayout.Height,
                                    SKColorType.Bgra8888, SKAlphaType.Premul);
         using SKSurface surface = SKSurface.Create(info);
-        CapsulePainter.Paint(surface.Canvas, "Search 1.5M files", "indexing 4,120 to go", 0.62f, d, face);
+        // The pill as the product composes it, through IndexStatus.Pill rather than three literals:
+        // a shot that made up its own label and count would be the second copy this file has
+        // already been caught keeping.
+        CapsulePainter.Paint(surface.Canvas, CapsulePainter.Placeholder,
+                             IndexStatus.Pill(contentEnabled: true, kind: "Photo",
+                                              pending: 4_120, indexed: 6_680, alive: true),
+                             d, face);
         surface.Canvas.Flush();
         var bmp = new SKBitmap(info);
         surface.ReadPixels(info, bmp.GetPixels(), info.RowBytes, 0, 0);

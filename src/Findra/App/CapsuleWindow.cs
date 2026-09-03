@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
@@ -143,19 +143,13 @@ public sealed class CapsuleWindow : Window
     /// <see cref="IndexStatus.Line"/>. Empty means no line is drawn at all: an idle widget with a
     /// permanently visible empty progress bar looks busy when it is not. Set from the shell's
     /// content loop, on the interface thread.</summary>
-    public string Progress
+    /// <summary>What the pill under the bar says, or <c>default</c> for no pill at all. Composed
+    /// once by <c>IndexStatus.Pill</c>, so the capsule, the card's footer and the tray's tooltip
+    /// cannot disagree about what the index is doing.</summary>
+    public IndexProgress Progress
     {
         get => _canvas.Progress;
         set { _canvas.Progress = value; _canvas.InvalidateVisual(); }
-    }
-
-    /// <summary>How much of the progress track is filled, 0..1 - indexed over indexed plus
-    /// waiting. Zero while nothing is queued, so a drained index shows its sentence without a bar
-    /// sitting at full inviting the reader to wait for something.</summary>
-    public float ProgressFraction
-    {
-        get => _canvas.ProgressFraction;
-        set { _canvas.ProgressFraction = value; _canvas.InvalidateVisual(); }
     }
 
     /// <summary>The capsule's bar in layout units, which is what <see cref="CardWindow.PlaceOver"/>
@@ -292,8 +286,7 @@ public sealed class CapsuleWindow : Window
         private PixelPoint _grabPhysical; // the same offset in physical pixels
         private double _travelled;
 
-        public string Progress { get; set; } = "";
-        public float ProgressFraction { get; set; }
+        public IndexProgress Progress { get; set; }
 
         public event Action? Clicked;
         public event Action<PixelPoint>? Moved;
@@ -368,15 +361,15 @@ public sealed class CapsuleWindow : Window
         private sealed class DrawOp : ICustomDrawOperation
         {
             private readonly CapsuleCanvas _c;
-            private readonly string _progress;
-            private readonly float _fraction;
+            // Snapped when the operation is built rather than read at Render time: the render
+            // runs on the compositor thread and the shell writes this from the content loop.
+            private readonly IndexProgress _progress;
 
             public DrawOp(Rect b, CapsuleCanvas c)
             {
                 Bounds = b;
                 _c = c;
                 _progress = c.Progress;
-                _fraction = c.ProgressFraction;
             }
 
             public Rect Bounds { get; }
@@ -391,8 +384,7 @@ public sealed class CapsuleWindow : Window
                 SKCanvas canvas = lease.SkCanvas;
                 canvas.Save();
                 canvas.Scale((float)_c._scale);
-                CapsulePainter.Paint(canvas, "Search files, photos, words…",
-                                     _progress, _fraction, _c._derived, _c._face);
+                CapsulePainter.Paint(canvas, CapsulePainter.Placeholder, _progress, _c._derived, _c._face);
                 canvas.Restore();
             }
         }
