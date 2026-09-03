@@ -516,6 +516,22 @@ into a numbered section on the first release.
 
 ### Fixed
 
+- **Reinstalling gives you back the welcome screen, and a working Findra with it.** Removing
+  Findra takes away the scheduled task that starts the name helper, and the welcome screen is
+  the only thing that registers it - but the settings file, which uninstalling keeps on
+  purpose, still recorded that the screen had been answered. So a reinstall skipped it and
+  came up with no name search, nothing feeding the list of files to read, and a "Start now"
+  that started reading and stopped again a moment later because there was nothing in the
+  queue. Three unrelated-looking faults, one missing task. Uninstalling now marks the welcome
+  screen unanswered, whether or not you keep the rest.
+
+- **The uninstaller's "also delete my index, my settings and the models" checkbox now does
+  it.** The tick was read correctly and then had nowhere to go: the two commands it chose
+  between were written into the uninstall log during the *install*, months before anybody was
+  asked, so the deleting one was never recorded and could not run. Ticking the box removed
+  nothing, kept 2.9 GB of models, and reported success. The uninstall is now run from code
+  that executes while the answer is still in hand.
+
 - **You can see that Findra is reading your files.** Asking it to start said nothing at all
   until the first file had been read, on the card and in settings alike, so it looked as
   though the request had been ignored. The settings window now follows the indexer while it

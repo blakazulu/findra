@@ -91,9 +91,26 @@ public class PolicyPageTests
         // Unticked, because the page's next promise is that keeping is the default.
         Assert.Matches(@"Checked\s*:=\s*False", iss);
 
-        // And the tick reaches the two mutually exclusive runs rather than stopping at the form.
-        Assert.Matches(@"(?m)^Filename:.*--uninstall --quiet.*Check:\s*KeepWanted", iss);
-        Assert.Matches(@"(?m)^Filename:.*--uninstall --purge --quiet.*Check:\s*PurgeWanted", iss);
+        // And the tick reaches something that runs while the answer is still in hand, rather than
+        // stopping at the form.
+        //
+        // These two lines used to read:
+        //
+        //     Assert.Matches(@"(?m)^Filename:.*--uninstall --quiet.*Check:\s*KeepWanted", iss);
+        //     Assert.Matches(@"(?m)^Filename:.*--uninstall --purge --quiet.*Check:\s*PurgeWanted", iss);
+        //
+        // and they passed on every build while the checkbox decided nothing whatsoever. Inno
+        // records [UninstallRun] entries into the uninstall log during the INSTALL, evaluating
+        // their Check parameters there - so `PurgeWanted` was asked months before the person was,
+        // answered False, and the purge entry was never written down at all. The shape was right
+        // and the timing was wrong, and a test that reads the shape cannot tell.
+        //
+        // What it asserts now is the timing: the answer is read inside the routine the uninstaller
+        // calls, and nothing decides a run at install time. InstallerScriptTests holds the same
+        // line from the other side.
+        Assert.DoesNotMatch(@"(?m)^\[UninstallRun\]", iss);
+        Assert.Matches(@"procedure\s+CurUninstallStepChanged", iss);
+        Assert.Matches(@"if\s+Purge\s+then\s*\r?\n\s*Exec\(app,\s*'--uninstall --purge --quiet'", iss);
     }
 
     [Fact]

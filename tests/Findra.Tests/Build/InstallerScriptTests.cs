@@ -169,63 +169,45 @@ public class InstallerScriptTests
         Assert.DoesNotContain("--stop", Body("CurStepChanged"), StringComparison.Ordinal);
     }
 
-    /// <summary>
-    /// The lines of <c>[UninstallRun]</c> that actually run something.
-    ///
-    /// <para>The section header is anchored to the start of a line. The draft of this class
-    /// matched <c>\[UninstallRun\]</c> anywhere, and the <c>[Code]</c> section has a comment
-    /// mentioning the section by name - so deleting the whole section left the search matching
-    /// that comment, and every assertion downstream of it kept passing against an installer that
-    /// ran nothing on the way out. Proved by deleting the section and watching the tests stay
-    /// green.</para>
-    /// </summary>
-    private static string[] UninstallRunLines()
-    {
-        Match run = Regex.Match(Script, @"(?m)^\[UninstallRun\]$(.*?)(?=\n\[|\z)", RegexOptions.Singleline);
-        Assert.True(run.Success, "the installer script has no [UninstallRun] section");
-        return [.. run.Groups[1].Value
-            .Split('\n')
-            .Select(l => l.Trim())
-            .Where(l => l.StartsWith("Filename:", StringComparison.OrdinalIgnoreCase))];
-    }
-
     [Fact]
     public void TheUninstallerRunsFindrasOwnUninstallLogicRatherThanJustDeletingFiles()
     {
-        // Deleting files leaves the scheduled task, which spec §2a calls a defect. [UninstallRun]
-        // entries run before the uninstaller removes anything, which is when findra.exe still
-        // exists to be run.
-        string[] lines = UninstallRunLines();
+        // Deleting files leaves the scheduled task, which spec §2a calls a defect. usUninstall is
+        // before the uninstaller removes anything, which is when findra.exe still exists to be run.
+        string body = Body("CurUninstallStepChanged");
 
-        Assert.NotEmpty(lines);
-        foreach (string line in lines)
-        {
-            Assert.Contains(@"findra.exe", line, StringComparison.OrdinalIgnoreCase);
-            Assert.Contains("--uninstall", line, StringComparison.Ordinal);
-        }
+        Assert.Contains("usUninstall", body, StringComparison.Ordinal);
+        Assert.Contains("findra.exe", body, StringComparison.Ordinal);
+        Assert.Matches(@"Exec\(app,\s*'--uninstall", body);
     }
 
     [Fact]
-    public void ExactlyOneOfTheTwoUninstallRunsCanEverFire()
+    public void TheCheckboxIsReadDuringTheUninstallAndNotWrittenDownAtInstallTime()
     {
-        // The keep run and the purge run are both listed, and the checkbox decides between them.
-        // Two ways to get that wrong, and both delete somebody's models against their answer:
-        // drop a Check and both entries run - the purge one second, so the data goes whatever the
-        // box said; or give them the same RunOnceId and Inno runs whichever it reaches first and
-        // skips the other for ever after.
-        string[] lines = UninstallRunLines();
-        Assert.Equal(2, lines.Length);
+        // This is the defect that made "a checkbox in the uninstaller" untrue for the second time,
+        // by a different mechanism from the QuietUninstallString one below.
+        //
+        // The two runs used to be [UninstallRun] entries with `Check: KeepWanted` and
+        // `Check: PurgeWanted`. Inno's install order says "The entries in [UninstallRun] are
+        // stored in the uninstall log" - during the INSTALL, which is when a Check parameter is
+        // evaluated. Purge is False then and cannot be anything else, because the person is not
+        // asked until they uninstall. So unins000.dat received the keep entry and never received
+        // the purge entry, and the answer given weeks later could not reach either one. Ticking
+        // the box removed nothing and reported success.
+        //
+        // Asserting the ABSENCE of the section, because that is the regression: any future
+        // [UninstallRun] entry conditioned on something the uninstaller decides has this bug
+        // again. The header is anchored to the start of a line - an earlier version of this class
+        // matched the name anywhere and was answered by a comment in [Code] that mentions it.
+        Assert.DoesNotMatch(@"(?m)^\[UninstallRun\]", Script);
 
-        string[] checks = [.. lines.Select(l => Regex.Match(l, @"Check:\s*(\w+)").Groups[1].Value)];
-        Assert.DoesNotContain("", checks);
-        Assert.Equal(2, checks.Distinct(StringComparer.Ordinal).Count());
-
-        string[] ids = [.. lines.Select(l => Regex.Match(l, @"RunOnceId:\s*""([^""]+)""").Groups[1].Value)];
-        Assert.DoesNotContain("", ids);
-        Assert.Equal(2, ids.Distinct(StringComparer.Ordinal).Count());
-
-        // And the keeping one is the negation, not a second copy of the same condition.
-        Assert.Matches(@"Result\s*:=\s*not\s+Purge", Body("KeepWanted"));
+        // Both routes exist, and Purge is what chooses between them rather than two conditions
+        // that could both be true. Comments are stripped by Body, so this reads the code.
+        string body = Body("CurUninstallStepChanged");
+        Assert.Contains("--uninstall --purge --quiet", body, StringComparison.Ordinal);
+        Assert.Contains("--uninstall --quiet", body, StringComparison.Ordinal);
+        Assert.Matches(@"if\s+Purge\s+then", body);
+        Assert.Contains("else", body, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -386,9 +368,10 @@ public class InstallerScriptTests
             Script, @"SaveStringToFile\(\s*ExpandConstant\('\{app\}\\([^']+)'\)");
         Assert.True(written.Count > 0, "no SaveStringToFile into {app} - has the script changed shape?");
 
-        // Reuses the section reader the [UninstallRun] tests use, rather than a second regex: the
-        // last two attempts to write one of these inline lost a backslash to an escaping layer and
-        // produced a pattern that matched nothing, which is the shape of a test that cannot fail.
+        // The header is anchored to the start of a line, like every other section read in this
+        // class: the last two attempts to write one of these inline lost a backslash to an
+        // escaping layer and produced a pattern that matched nothing, which is the shape of a test
+        // that cannot fail.
         Match section = Regex.Match(Script, @"(?m)^\[UninstallDelete\]$([\s\S]*?)(?=^\[|\z)", RegexOptions.Multiline);
         Assert.True(section.Success, "the script writes files into {app} but has no [UninstallDelete] section");
 
