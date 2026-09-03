@@ -37,6 +37,11 @@ and send nothing about you. If you never choose a capability, they never happen.
 | `%LOCALAPPDATA%\Findra\models\` | Model files you chose to download. Nothing personal. |
 | `%LOCALAPPDATA%\Findra\logs\` | Daily log files. See below. |
 
+One more file sits in Findra's own program folder rather than in either of those. The installer
+writes a single word there - `winget` or `installer` - so that when a newer version exists the
+advice matches the way you actually installed Findra. A copy built from source has no such file,
+which is itself the answer. It records nothing else, and nothing about you.
+
 ### The index deserves a straight answer
 
 If you turn on content indexing, the index contains the **text of the documents you

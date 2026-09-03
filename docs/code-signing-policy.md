@@ -49,6 +49,14 @@ it.
   that needs administrator rights.
 - It writes settings to `%APPDATA%\Findra\` and its index, models and logs to
   `%LOCALAPPDATA%\Findra\`.
+- If you switch on "start when I sign in", it writes one value under
+  `HKCU\Software\Microsoft\Windows\CurrentVersion\Run`. That is the only registry value the
+  application itself ever writes, and the installer does not write it - only Findra does, when
+  you ask for it. The installer registers itself with Apps & features in the usual way, which is
+  how it is listed there and removed from there.
+- It installs its program files, including this project's `LICENSE` and `NOTICE`, into a folder
+  with no version number in the path, so an upgrade never leaves the scheduled task pointing at a
+  binary that has been replaced.
 
 The uninstaller stops the helper and the indexer first, then **always** removes the scheduled
 task and any autostart entry. Your settings, your index and any downloaded models are **kept**

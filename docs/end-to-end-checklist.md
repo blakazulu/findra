@@ -234,6 +234,11 @@ moment rather than an elevation prompt at every launch.
     - install again, tick the box this time, and confirm both folders are gone and that nothing
       outside them was touched.
 
+    Before uninstalling, look in the install folder itself: `LICENSE.txt`, `NOTICE.txt` and
+    `OFL-Quicksand.txt` must all be there. Apache-2.0 section 4(d) makes the notice travel with
+    every distribution, and the installer copies the publish folder and nothing else, so a build
+    whose csproj stopped copying them would install without them and nothing would warn.
+
 34. **An upgrade over a running copy.** With Findra running, the capsule on screen and the name
     helper answering, install a build with a higher version over it. `PrepareToInstall` must
     stop all three processes before a file is replaced - no "file in use" dialog, no reboot
@@ -420,6 +425,13 @@ person makes by looking; two are destructive and belong last.
     `findra --content limit 60` while Findra is running. The recording must be transcribed without
     a restart, and its phrase must be findable after one. Then confirm the reverse costs nothing:
     lowering the limit again throws no transcript away.
+54. **Private vulnerability reporting is switched on, the first time the repository is public.**
+    `SECURITY.md` tells a reporter to use GitHub's private advisory form and to put no details in
+    a public issue, and that form only exists once somebody has ticked Settings, Security,
+    "Private vulnerability reporting". Do it in the same sitting as step 35, then load
+    `https://github.com/blakazulu/findra/security/advisories/new` while signed out of the
+    maintainer account and confirm the form is there. Until it is, the page sends people to a
+    door that is not open, which is worse than sending them to the issue tracker.
 
 ## What could not be verified in this project at all
 
@@ -442,11 +454,12 @@ Written down so they are known gaps rather than assumed passes. Every one of the
 - **No launch that a stranger makes has ever happened here.** Every run in this project came from a
   terminal, which attaches to a console that already exists and therefore shows nothing new, or
   from `--searchshot`, which has no window at all. That is exactly why the console window went
-  unnoticed for the whole project, and it is why step 50 is by eye: the subsystem in the PE header
-  is asserted and the diagnostics are proven to reach a terminal, but the absence of the window on
-  a double-click, a sign-in and an elevated logon task is not something this machine can show.
+  unnoticed for the whole project, and it is why step 50 is by eye: the csproj's `OutputType` is
+  asserted and the diagnostics are proven to reach a terminal, but nothing reads the subsystem out
+  of the built PE header, and the absence of the window on a double-click, a sign-in and an
+  elevated logon task is not something this machine can show.
 
 ## Notes
 
-Steps 1 to 4, 9 to 13 and 29 to 51 are the ones that have never executed in any form. Steps 5 to 8
+Steps 1 to 4, 9 to 13 and 29 to 54 are the ones that have never executed in any form. Steps 5 to 8
 have been verified by log line and by inspection, but not by eye.

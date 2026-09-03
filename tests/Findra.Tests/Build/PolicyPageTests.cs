@@ -3,7 +3,7 @@ using System.Text.RegularExpressions;
 using Xunit;
 
 /// <summary>
-/// Two committed, public pages that make promises about code. Nothing else in the suite reads
+/// Three committed, public pages that make promises about code. Nothing else in the suite reads
 /// them, and a policy page that is wrong after the plan that claimed to make it true is worse than
 /// one that was never written.
 ///
@@ -16,6 +16,7 @@ public class PolicyPageTests
 {
     private static readonly string Privacy = Repo.Read("PRIVACY.md");
     private static readonly string Signing = Repo.Read("docs/code-signing-policy.md");
+    private static readonly string Security = Repo.Read("SECURITY.md");
 
     /// <summary>
     /// One Markdown section, from its heading to the next heading at the same level or above.
@@ -149,10 +150,30 @@ public class PolicyPageTests
     }
 
     [Fact]
-    public void NeitherPageDescribesAModeFindraDoesNotHave()
+    public void TheSecurityPageSendsAReporterSomewhereOtherThanThePublicIssueTracker()
     {
-        // Both pages tell people to run commands. A renamed mode makes that advice false on the
-        // two surfaces least likely to be re-read.
+        // The whole value of the page is the door it points at. A security page whose only
+        // address is the issue tracker asks a reporter to publish the exploit, and one that
+        // points at a private form without saying to keep details out of an issue leaves the
+        // usual reflex - open an issue - as the path of least resistance.
+        string report = Section(Security, "Reporting a vulnerability");
+
+        Assert.Contains("security/advisories/new", report, StringComparison.Ordinal);
+        Assert.Matches(@"(?i)do not open a public issue", Flat(report));
+
+        // And the private form has to be the FIRST address on the page, not a footnote under the
+        // issue tracker: whichever link is read first is the one that gets used.
+        int advisory = report.IndexOf("security/advisories/new", StringComparison.Ordinal);
+        int issues = report.IndexOf("findra/issues", StringComparison.Ordinal);
+        Assert.True(issues < 0 || advisory < issues,
+            "SECURITY.md names the public issue tracker before the private advisory form");
+    }
+
+    [Fact]
+    public void NoPolicyPageDescribesAModeFindraDoesNotHave()
+    {
+        // All three pages tell people to run commands. A renamed mode makes that advice false on
+        // the surfaces least likely to be re-read.
         string program = Repo.Read("src/Findra/Program.cs");
         var known = new HashSet<string>(
             Regex.Matches(program, @"""(--[a-z]+)""\s*=>").Select(m => m.Groups[1].Value), StringComparer.Ordinal);
@@ -162,7 +183,8 @@ public class PolicyPageTests
         // Counted PER PAGE. A floor over both together was met by PRIVACY.md's two commands on
         // its own, so the signing page could drop the only one it names - the thing this guard
         // exists to notice - and the total still cleared the bar.
-        foreach ((string name, string page) in new[] { ("PRIVACY.md", Privacy), ("code-signing-policy.md", Signing) })
+        foreach ((string name, string page) in new[]
+                 { ("PRIVACY.md", Privacy), ("code-signing-policy.md", Signing), ("SECURITY.md", Security) })
         {
             int found = 0;
             foreach (Match m in Regex.Matches(page, @"findra(?:\.exe)?\s+(--[a-z-]+)"))

@@ -19,6 +19,11 @@ a README written out of real renders and real measurements. What is left is not 
 `docs/end-to-end-checklist.md`: everything that needs a UAC prompt, a sign-out, a real installer
 or a public tag, none of which has ever run here.
 
+Two adversarial reviews have landed since the last plan. What they found is written down below
+rather than left in a commit message: the console, the seams, the capability refresh, the download
+floor and the installer's architecture identifiers. Each of those is a rule that looks like a
+detail from inside a diff and is a broken machine from outside one.
+
 ## Commands
 
 ```bash
@@ -91,6 +96,45 @@ three, so it pastes under the README's own `#` with nothing to edit. It refuses 
 throughput rate for a run shorter than a second and says how to get a longer one.
 
 `--searchshot` must learn every new palette and every new surface as it is written.
+
+## The console
+
+**`OutputType` is `WinExe`, not `Exe`, and putting it back drags a black console window behind
+every launch.** Windows gives a console-subsystem binary a window every time it starts without a
+terminal, and Findra has five such launches: the installer's run step, the Start-menu shortcut, an
+Explorer double-click, the autostart entry at every sign-in, and the elevated logon task, which
+adds a second one. `ProjectFileTests.TheApplicationIsAWindowsSubsystemBinaryAndNotAConsoleOne`
+asserts the `OutputType` itself, which is the only part of this a test can see; the absence of the
+window on those five launches is checklist step 50, because no run in this project has ever made
+one of them.
+
+A windows-subsystem process has no standard output at all, even when a person typed its name at a
+prompt. `src/Findra/Core/ParentConsole.cs` buys it back, and four things about it are load-bearing:
+
+- **`AttachConsole(ATTACH_PARENT_PROCESS)`, never `AllocConsole`.** Attaching joins a console the
+  caller already owns and fails harmlessly, changing nothing, when there is none. Allocating would
+  conjure the very window `WinExe` exists to prevent, on exactly the launches that have no
+  terminal.
+- **The standard handles are read BEFORE attaching and put back if they were already set.**
+  Attaching resets them to the console's own, so a redirected run would write to the window and
+  hand its caller nothing - and `build/Check-Diagnostics.ps1` pipes every mode it runs, so getting
+  this wrong fails every headless check at once. A pipe or a file wins; only a handle that was not
+  set at all is pointed at `CONOUT$`, and that one is given an auto-flushing UTF-8 writer, because
+  the writer .NET would build lazily sits on the handle as it was, which was nothing.
+- **`ParentConsole.Borrow()` runs before `UseUtf8OnTheConsole()`.** Setting
+  `Console.OutputEncoding` sets the console's output code page, and a process that has not joined
+  a console has no code page to set. Reversed, the exception is caught and every diagnostic prints
+  the card's middle dot and every Hebrew string as replacement characters.
+- **`--names`, `--index` and the interface do not attach.** The first two are headless children
+  nobody typed and they report through the log file. The interface is a deliberate refusal, not an
+  oversight: a shell does not wait for a windows-subsystem process, so its prompt is already back
+  and anything Findra wrote for the next few hours would land in the middle of whatever was typed
+  after it. Everything else beginning with `--` attaches, including a mistyped mode, which owes
+  the caller the list of real modes and exit 1.
+
+The visible price is that a shell does not wait for `findra.exe`: run a diagnostic directly and
+the prompt returns before the text does. That is cosmetic and is the whole cost of the change.
+`dotnet run --project src/Findra -- --version` waits, because the shell is waiting for `dotnet`.
 
 ## The README is a product page
 
@@ -179,6 +223,26 @@ speech              ─  whisper-turbo + [e5 pair]              550 MB (+270 if 
   silently when its model is absent: the indexer skips that kind, content search contributes
   no candidates, and the card offers the download.
 - Enabling a capability later re-queues **only the files it covers**.
+- **The indexer asks what is installed before every file it opens.** `Decoders.CanRead` calls
+  `Refresh()`, which re-reads the disk through the `Func<CapabilitySet>` the child was constructed
+  with. The child is started once and a model can arrive at any moment, so a set captured at
+  startup means the child records every file the interface has just queued for that capability
+  unreadable, for want of a model sitting on the disk - and nothing queues them again. The
+  transcription limit is a delegate for the same reason: `--content limit` writes a settings file
+  a running interface will not read again, so `CapabilityGate.ApplyLimit` writes
+  `index:transcribeminutes` into the index, before its re-queue, and the child reads that row
+  before each recording it opens.
+- **A stamp is not taken while its backlog is still sitting there.** `CapabilityGate.StampsIn`
+  withholds a capability's stamp whenever files of its kinds are skipped for `Decoders.NoModel`
+  and not queued, so `Apply` re-queues exactly those (`onlyBecause: [NoModel]`) rather than
+  believing a record that says the debt was paid. Done is a fact the index holds, not a note
+  somebody left; the same shape is what makes a machine written off by an older build recoverable.
+- **Indexing picks a capability up without a restart; searching by it does not.** The query-side
+  encoders are opened once when the interface starts, so the card cannot answer the new way until
+  Findra is restarted. Any surface that installs a capability has to say both halves.
+  `--models install` ends with exactly that sentence and the README carries it; the settings row
+  and the first-run screen do not yet, and that is a gap rather than a decision. Saying the whole
+  thing is live is the shorter sentence and it is false.
 - **Reading inside files is off until somebody asks**, models or no models. Names are
   searchable the second Findra starts, because a name index costs seconds; looking inside
   files walks every drive and can run for hours, so it never begins on its own. `--content on`
@@ -278,6 +342,16 @@ the other. Bold is `SKFont.Embolden` on the same face; there is no second file.
 - **The installer is a third distribution route and `installer` a fourth install source**, beside
   `winget`, `source` and `unknown`. Spec §2 and §9b still say two and three; the plan document
   argues the amendment and this line is the record until the spec is amended.
+- **Inno Setup's architecture identifiers are not a regular family, so `installer/findra.iss`
+  builds them per architecture rather than by pasting a suffix on.** `x64compatible` is a word;
+  `arm64compatible` is not - the identifier is plain `arm64`. The full list is `x86compatible`,
+  `x86os`, `x64compatible`, `x64os`, `arm32compatible`, `arm64` and `win64`. Appending
+  "compatible" to the `{#Arch}` the workflow passes gave the x64 leg a valid word and the arm64
+  leg one ISCC rejects, which fails that matrix leg and so the whole release, for Intel and Arm
+  alike. `InstallerScriptTests` now reads every `ArchitecturesAllowed` and
+  `ArchitecturesInstallIn64BitMode` in the script against that list, and checks that the uninstall
+  prompt's report variable is declared `AnsiString`, which is the exact type
+  `LoadStringFromFile`'s var parameter takes.
 - **No version number in the install directory**, and `AppId` is a fixed GUID: the scheduled task
   stores an absolute path to `findra.exe`, so a versioned directory points an elevated logon task
   at a binary that no longer exists after every upgrade.
@@ -328,6 +402,16 @@ upgrade did not look first is the worst thing this product could do to someone; 
 
 The name index is exempt - it lives in RAM in the helper and is rebuilt by MFT enumeration
 in seconds at every logon. Only content survives restarts.
+
+**A download that ends short is refused on a floor, not only on a length.** `ModelDownloader`
+checks the bytes written against `Model.MinBytes` as well as against the response's length,
+because the length-only guard was unreachable exactly when it was needed: a response carrying no
+`Content-Length` gives a total of zero, the comparison is skipped, and the truncated file is
+promoted under its real name - after which every capability needing it fails quietly while Findra
+reports it installed. The general rule is worth more than the one fix: **a guard conditioned on
+data the other end may choose not to send is not a guard.** Pair it with one that holds on what is
+on the disk, and reason about the case where the header is absent rather than the case where it
+disagrees.
 
 **Uninstall always removes** the app files, **the `HighestAvailable` scheduled task**, any
 autostart entry, and stops the helper and indexer first. Missing the scheduled task orphans
@@ -382,6 +466,26 @@ The ported engine arrives working and is not rewritten test-first. It gets chara
 tests only where Findra changes its behaviour - principally the all-or-nothing model gates
 becoming per-capability.
 
+**An effect that cannot be run in a test gets a seam, not a test that reads its own source.**
+`Uninstall.Run` and `HelperTask.Unregister` each have an overload taking their effects as
+delegates, and the tests drive those and assert the recorded sequence: what was stopped, what was
+unregistered, what was deleted, and in what order. `Autostart` takes an `IStore` for the same
+reason.
+
+The reason is that a source-reading test cannot fail for the defect it exists to catch. Wrapping
+the whole task-removal block in `if (!quiet)`, with every token those tests grep for still present,
+left the suite green while an uninstall walked away from a `HighestAvailable` logon task pointing
+at a deleted binary - the thing the spec calls a defect rather than an inconvenience. If a test's
+only evidence is that a string appears in a file, ask what edit would keep the string and break the
+behaviour; there is nearly always one. Text assertions are kept only where there is no code to run
+at all: `installer/findra.iss` and the workflow YAML.
+
+**A subprocess is drained asynchronously and killed on a timeout.** `HelperTask.RunSchtasks` reads
+both of `schtasks`'s streams as tasks before it waits, because reading one to the end and then the
+other stops dead the moment the unread one fills its buffer - inside an elevated uninstall, with no
+window and no way out but the task manager. `Register` reads the result of its own timeout instead
+of discarding it, or an elevation prompt nobody answered is reported as an unrelated error.
+
 ## Gotchas
 
 - `schtasks` CSV column headings are localized; the XML is not. Parse the XML form.
@@ -399,3 +503,11 @@ becoming per-capability.
 Apache-2.0 with a `NOTICE` file. The requirement is free use, cloning and modification, with
 propagating attribution to blakazulu and https://github.com/blakazulu/findra. Apache's NOTICE
 is the mechanism that carries that forward; MIT would not.
+
+**`LICENSE` and `NOTICE` are copied into the publish folder by `src/Findra/Findra.csproj`, and
+that is the only reason they reach anybody who installs.** Apache-2.0 section 4(d) requires the
+notice to travel with every distribution, the installer's `[Files]` entry copies the publish
+folder and nothing else, and `LicenseFile=` in `installer/findra.iss` only DISPLAYS the licence in
+the wizard - it puts no copy on the disk. A NOTICE that stays in the repository gives up the whole
+reason Apache was chosen over MIT. `assets/fonts/OFL.txt` travels the same way and for the same
+kind of reason, OFL condition 2, and `TypefaceTests` holds all three to it.
