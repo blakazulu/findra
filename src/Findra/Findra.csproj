@@ -71,6 +71,13 @@
          together or TheFontIsInTheAssemblyUnderTheNameTheResolverAsksFor fails. -->
     <EmbeddedResource Include="..\..\assets\fonts\Quicksand-Regular.ttf"
                       LogicalName="Findra.Quicksand-Regular.ttf" />
+    <!-- The same mark again, this time readable at runtime. ApplicationIcon above puts it on the
+         binary, which is what the shell reads for shortcuts and the Alt-Tab entry - but Avalonia
+         does not hand a window the executable's icon, so a Window with no Icon of its own shows
+         the shell's default in the taskbar. Settings and the first-run screen both appear there.
+         One file, two jobs: the PE resource for what the shell reads off disk, and this for what
+         the product sets on its own windows. -->
+    <EmbeddedResource Include="..\..\assets\icon\findra.ico" LogicalName="Findra.findra.ico" />
     <!-- The licence is NOT embedded: OFL condition 2 wants it to accompany each copy where a
          person can read it, which means beside the executable, in the publish folder, and so in
          the installer - whose [Files] entry copies the whole publish folder. -->

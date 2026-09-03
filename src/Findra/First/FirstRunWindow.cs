@@ -40,6 +40,10 @@ public sealed class FirstRunWindow : Window
     {
         ArgumentNullException.ThrowIfNull(state);
 
+        // This window is in the taskbar, and Avalonia does not hand it the executable's
+        // icon, so without this it shows the shell's placeholder.
+        AppIcon.Apply(this);
+
         _canvas = new FirstRunCanvas(state, palette, this);
         Content = _canvas;
 
