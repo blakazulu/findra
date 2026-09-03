@@ -122,4 +122,26 @@ public class CapsuleTests
             Assert.Equal(p, CardText.Ellipsize(p, face, size, budget));
         }
     }
+
+    [Theory]
+    [InlineData(0.5)]
+    [InlineData(0.85)]
+    [InlineData(1.0)]
+    [InlineData(1.7)]
+    [InlineData(3.0)]
+    public void TheWindowAndItsDrawingAgreeAboutHowBigTheCapsuleIs(double zoom)
+    {
+        // The window sized itself with the caller's zoom raw and the canvas drew with a clamped
+        // copy of it, so outside [0.85, 1.7] the two disagreed. The window is what Windows clips
+        // to, and the drawing being the larger of the two takes the bottom edge off - which is
+        // exactly where the progress pill sits. They agreed only because the zoom is 1.0.
+        //
+        // One function, and this asserts that asking twice gives the same answer, which is the
+        // whole property a second copy of the number breaks.
+        Assert.Equal(CapsulePlacement.Scale(zoom), CapsulePlacement.Scale(zoom));
+
+        // And that the clamp is a clamp: inside the range it is the identity, outside it holds.
+        Assert.InRange(CapsulePlacement.Scale(zoom), 0.85, 1.7);
+        if (zoom >= 0.85 && zoom <= 1.7) Assert.Equal(zoom, CapsulePlacement.Scale(zoom));
+    }
 }

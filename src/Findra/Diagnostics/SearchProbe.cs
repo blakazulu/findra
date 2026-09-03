@@ -1,4 +1,4 @@
-using System.Diagnostics;
+﻿using System.Diagnostics;
 using System.Globalization;
 using Findra.Pipe;
 using Findra.Startup;
@@ -28,6 +28,7 @@ public static class SearchProbe
             : "  ui                     : not running");
 
         Console.WriteLine(Indexer());
+        Console.WriteLine(CapsulePill());
 
         NameClient client;
         try
@@ -87,6 +88,48 @@ public static class SearchProbe
     }
 
     private const string Label = "  indexer                : ";
+    private const string PillLabel = "  capsule pill           : ";
+
+    /// <summary>
+    /// What the capsule's progress pill would draw right now, composed the way the shell composes
+    /// it rather than described.
+    ///
+    /// <para>A surface with no diagnostic is a surface nobody can be asked a question about. "I
+    /// cannot see the progress pill" had no answer that did not involve reading source and
+    /// guessing: the geometry checked out, the render was correct, the index said work was in
+    /// hand, and there was no way to ask the running product what it thought it was drawing. This
+    /// prints exactly that, from a second process over the same rows.</para>
+    ///
+    /// <para><c>indexer:kind</c> is printed beside it because an index written by an older build
+    /// does not have that row, and "indexing" without its noun is the visible symptom of exactly
+    /// that - worth telling apart from a pill that is not being drawn at all.</para>
+    /// </summary>
+    private static string CapsulePill()
+    {
+        try
+        {
+            if (!File.Exists(ContentDb.DefaultPath)) return PillLabel + "no content index yet";
+
+            using var db = new ContentDb(ContentDb.DefaultPath, readOnly: true);
+            // The switch as the INDEX records it. The shell reads its own config; this process has
+            // none, and index:paused is the one copy of that bit both of them go by.
+            bool reading = db.Get("index:paused") != "1";
+            string kind = db.Get("indexer:kind") ?? "";
+            IndexProgress pill = IndexStatus.Pill(
+                reading, kind, db.PendingCount(), db.IndexedCount(),
+                IndexStatus.Alive(db.Get("indexer:beat"), db.Get("indexer:pid")));
+
+            return PillLabel + (pill.Show
+                ? $"\"{pill.Label}\"  [{pill.Fraction * 100:F0}%]  \"{pill.Count}\""
+                : "nothing drawn" +
+                  (reading ? "" : " (reading is off)") +
+                  (kind.Length == 0 ? " (no indexer:kind row)" : ""));
+        }
+        catch (Exception ex)
+        {
+            return PillLabel + $"the index could not be read ({ex.GetType().Name}: {ex.Message})";
+        }
+    }
 
     /// <summary>
     /// What the content indexer is doing, read from the <c>indexer:*</c> meta rows through a

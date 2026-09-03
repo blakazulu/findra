@@ -20,6 +20,14 @@ namespace Findra;
 /// </summary>
 public static class CapsulePlacement
 {
+    /// <summary>How much the capsule is scaled by, in ONE place. The window sizes itself with it,
+    /// the canvas draws with it and the placement measures with it, and the three cannot be allowed
+    /// to differ: the window is what Windows clips to, so a drawing that believes it is larger
+    /// loses its bottom edge - which is where the progress pill lives - and one that believes it is
+    /// smaller sits in the corner of a hole. The window used the caller's zoom raw while the canvas
+    /// clamped it; they agree today only because the zoom is 1.0.</summary>
+    public static double Scale(double zoom) => Math.Clamp(zoom, 0.85, 1.7);
+
     /// <summary>How much of the capsule has to be on a monitor for the saved position to count
     /// as usable. A few pixels peeking over an edge is not a widget anyone can click.</summary>
     public const int MinVisibleWidth = 64;
@@ -174,8 +182,15 @@ public sealed class CapsuleWindow : Window
         Focusable = false;
         WindowStartupLocation = WindowStartupLocation.Manual;
         SizeToContent = SizeToContent.Manual;
-        Width = CapsuleLayout.Width * scale;
-        Height = CapsuleLayout.Height * scale;
+        // Through the SAME clamp the canvas draws with. The window used the caller's scale raw
+        // while the canvas clamped it to [0.85, 1.7], so outside that range the window and its own
+        // drawing disagreed about how big the capsule is - and the drawing being the larger of the
+        // two clips it from the bottom, which is exactly where the progress pill lives. Zoom is
+        // 1.0 today and the two agree by luck; a second number for one size is the bug whether it
+        // is biting or not.
+        double at = CapsulePlacement.Scale(scale);
+        Width = CapsuleLayout.Width * at;
+        Height = CapsuleLayout.Height * at;
         WindowStyle.HideFromAltTab(this);
 
         _canvas.Clicked += () => Clicked?.Invoke();
@@ -295,7 +310,7 @@ public sealed class CapsuleWindow : Window
         public CapsuleCanvas(Derived derived, double scale)
         {
             _derived = derived;
-            _scale = Math.Clamp(scale, 0.85, 1.7);
+            _scale = CapsulePlacement.Scale(scale);
             // The shipped face, not the platform's - the same resolver the card and the shot
             // command use, so the capsule on screen is the capsule in the README.
             _face = Parts.Face;
