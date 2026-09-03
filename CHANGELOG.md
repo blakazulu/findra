@@ -371,6 +371,9 @@ into a numbered section on the first release.
 
 ### Fixed
 
+- **The installer script's architecture and its uninstall prompt are checked by tests**,
+  so neither can quietly go back to a form that fails to build.
+
 - **A download cut short is never mistaken for a finished one**, even when the server
   does not say how long the file should have been. Before, a model that arrived
   incomplete could be filed under its real name, and every capability that needed it
