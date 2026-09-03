@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.IO;
 using Avalonia.Controls;
 using SkiaSharp;
@@ -11,12 +11,26 @@ namespace Findra;
 /// </summary>
 public static class TrayText
 {
-    /// <summary>The tooltip: the version, then the hotkey, then the update state when it is
-    /// known. Windows truncates a tray tooltip, so nothing decorative goes in here.</summary>
-    public static string Tooltip(string version, string? hotkey, UpdateState update, string? latest)
+    /// <summary>
+    /// The tooltip: the version, then the hotkey, then what the index is doing, then the update
+    /// state when it is known. Windows truncates a tray tooltip, so nothing decorative goes in
+    /// here and the two lines that are always true come first.
+    ///
+    /// <para><paramref name="indexing"/> is <see cref="IndexStatus.Line"/> - the same sentence the
+    /// capsule shows under its bar and the card shows in its footer - or null when there is
+    /// nothing to say. It goes ABOVE the update line because it is the one that changes: an update
+    /// state is the same all day, and a truncated tooltip should lose the still thing rather than
+    /// the moving one.</para>
+    /// </summary>
+    public static string Tooltip(string version, string? hotkey, UpdateState update, string? latest,
+                                 string? indexing = null)
     {
-        var lines = new List<string>(3) { "Findra " + version };
+        var lines = new List<string>(4) { "Findra " + version };
         lines.Add(hotkey is null ? "No hotkey could be registered" : "Hotkey: " + hotkey);
+
+        // Capitalised, because this is a line of its own here rather than a fragment under a bar.
+        if (!string.IsNullOrWhiteSpace(indexing))
+            lines.Add(char.ToUpperInvariant(indexing[0]) + indexing[1..]);
 
         string? state = update switch
         {

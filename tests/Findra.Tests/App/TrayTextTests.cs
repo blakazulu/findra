@@ -1,4 +1,4 @@
-using Findra;
+﻿using Findra;
 
 namespace Findra.Tests.App;
 
@@ -95,4 +95,34 @@ public class UpdateMemoryTests
     [Fact]
     public void AnAvailableUpdateWithNoTagDoesNotClaimAVersionItDoesNotHave()
         => Assert.Equal("Checked: could not reach GitHub", UpdateMemory.CheckedHeader(UpdateState.Available, null));
+
+    [Fact]
+    public void TheTooltipSaysWhatTheIndexIsDoing()
+    {
+        // The same sentence the capsule shows under its bar, so hovering the tray and glancing at
+        // the capsule cannot disagree about how far the index has got.
+        string tip = TrayText.Tooltip("1.2.0", "Alt+Space", UpdateState.Current, "1.2.0",
+                                      IndexStatus.Line(true, "indexing", 1_333, 640, true, false));
+        string[] lines = [.. tip.Split(Environment.NewLine)];
+
+        Assert.Equal(4, lines.Length);
+        Assert.Contains("1,333", tip, StringComparison.Ordinal);
+        Assert.Contains("640", tip, StringComparison.Ordinal);
+
+        // ABOVE the update line. Windows truncates a tray tooltip, and the update state is the
+        // same all day while this one moves every second - so a truncation should lose the still
+        // thing rather than the moving one.
+        Assert.Equal("Indexing 1,333 · 640 done", lines[2]);
+        Assert.Equal("Up to date", lines[3]);
+    }
+
+    [Fact]
+    public void NothingToSayAboutTheIndexAddsNoLine()
+    {
+        // Reading turned off, or a session where no reading has been taken yet. A blank line in a
+        // tooltip is a gap somebody reads as a fault.
+        foreach (string? nothing in new[] { null, "", "   " })
+            Assert.Equal(2, TrayText.Tooltip("1.2.0", "Alt+Space", UpdateState.NotDue, null, nothing)
+                                    .Split(Environment.NewLine).Length);
+    }
 }

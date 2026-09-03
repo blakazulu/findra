@@ -525,11 +525,14 @@ into a numbered section on the first release.
   queue. Three unrelated-looking faults, one missing task. Uninstalling now marks the welcome
   screen unanswered, whether or not you keep the rest.
 
-- **Settings says how far it has got, not just that it is on.** The Content section reported
-  "On. Findra reads inside files while it is running." whether the queue held 1,773 files or
-  nothing at all, so on a machine that was already reading, "Start now" could not change anything
-  on screen and read as a dead button. It now shows the same live count the card and the capsule
-  show - one answer to that question across every surface that gives it.
+- **Settings says how far it has got, and stops offering to start what is already running.** The
+  Content section reported "On. Findra reads inside files while it is running." whether the queue
+  held 1,773 files or nothing at all, and "Start now" stayed pressable throughout - so on a machine
+  that was already reading, pressing it changed nothing on screen and read as a dead button. The
+  button now reports "Indexing 640/1,973" and refuses the press until there is something to start.
+
+- **The tray icon's tooltip says what the index is doing**, in the same words the capsule shows
+  under its bar.
 
 - **Findra does not open behind its own welcome screen.** The hotkey, the tray icon, the tray's
   Search and Settings items and the capsule all opened a card or a settings window while the first
