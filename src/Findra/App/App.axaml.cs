@@ -1103,6 +1103,13 @@ internal sealed class Shell : ISettingsHost
         // line happens to change.
         _everIndexed = indexed > 0;
         _indexerAlive = alive;
+
+        // And to the settings window if one is open. It reads both for its Content sentence and
+        // took them when it opened, so without this the sentence describes the moment somebody
+        // arrived rather than the one they are looking at - which is why "Start now" appeared to
+        // do nothing. Refresh compares before it repaints, so an unchanged answer costs nothing.
+        if (SettingsWindow.Open is { } panel)
+            Dispatcher.UIThread.Post(() => panel.UseIndexState(indexed > 0, alive));
         // Zero rather than a full bar when there is nothing waiting: "up to date" is a sentence,
         // not a completed job, and a bar sitting at 100% invites the reader to wait for something.
         float fraction = pending == 0 ? 0f : (float)(indexed / (double)(indexed + pending));

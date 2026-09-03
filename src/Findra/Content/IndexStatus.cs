@@ -42,7 +42,15 @@ public static class IndexStatus
         if (rebuilt && pending > 0) return $"rebuilding the index - {N(pending)} to go";
         if (rebuilt) return $"index rebuilt · {N(indexed)} files";
 
-        if (pending == 0 && indexed == 0) return "";
+        // Nothing read and nothing waiting, with reading TURNED ON, is not silence - it is the
+        // second after somebody pressed "Start now", before the walk has put anything in the
+        // queue. Returning "" there is what the user saw: they asked for it, and no surface said
+        // a word. A live child gets said so; without one this is a switch that is on in a session
+        // where nothing is reading, which is the honest and more useful sentence.
+        if (pending == 0 && indexed == 0)
+            return alive
+                ? "reading inside your files - nothing found yet"
+                : "reading inside files is on, but nothing is reading yet";
         // An honest imprecision: this calls an empty queue "up to date". The stricter definition
         // is a queue that is empty at a journal position the volume still recognises, and that
         // position is only checked when the journal is subscribed to. The gap is a window where

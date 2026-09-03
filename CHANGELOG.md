@@ -512,6 +512,12 @@ into a numbered section on the first release.
 
 ### Fixed
 
+- **You can see that Findra is reading your files.** Asking it to start said nothing at all
+  until the first file had been read, on the card and in settings alike, so it looked as
+  though the request had been ignored. The settings window now follows the indexer while it
+  is open, and the line under the search field says it has started before it has anything
+  to count.
+
 - **Every slow thing in settings says it is working.** Checking for a newer version,
   registering the name helper, downloading a capability and starting to read your files all
   looked untouched while they ran, so a second click did the work twice: two stacked

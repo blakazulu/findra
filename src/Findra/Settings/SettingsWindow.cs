@@ -102,6 +102,21 @@ public sealed class SettingsWindow : Window
         _canvas.Refresh(s => s with { Update = update, Latest = latest });
 
     /// <summary>
+    /// What the index is doing now, pushed while the window is open.
+    ///
+    /// <para>The window took these two facts when it opened and then never asked again, so the
+    /// Content sentence described the moment somebody arrived rather than the moment they are
+    /// looking at. Pressing "Start now" and watching the sentence not change is what "nothing
+    /// happened" looked like - the indexer had started and this surface had no way to hear about
+    /// it. The shell already reads both once a second for the capsule; this is the same answer
+    /// arriving here too.</para>
+    /// </summary>
+    public void UseIndexState(bool everIndexed, bool indexerAlive) =>
+        _canvas.Refresh(s => s.EverIndexed == everIndexed && s.IndexerAlive == indexerAlive
+            ? s
+            : s with { EverIndexed = everIndexed, IndexerAlive = indexerAlive });
+
+    /// <summary>
     /// Mark a row as waiting on its own work, or as finished with it.
     ///
     /// <para>Set before the work starts and cleared in a finally, so a fault leaves no row stuck
