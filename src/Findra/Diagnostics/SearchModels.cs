@@ -27,7 +27,18 @@ public sealed record ModelsSnapshot(
     IReadOnlyList<CapabilityRow> Capabilities,
     IReadOnlyList<ProviderTry> Onnx,
     IReadOnlyList<ProviderTry> Whisper,
-    IReadOnlyList<string> Notes);
+    IReadOnlyList<string> Notes)
+{
+    /// <summary>
+    /// What the encoders answered while they were open, one line each, or empty when no probe ran.
+    ///
+    /// <para>It is carried here rather than written straight to the console because the console is
+    /// read top to bottom: the probe runs while the models are loaded, which is before the report
+    /// can be rendered, so writing as it went put a block of vector norms above the title that
+    /// says what the block is.</para>
+    /// </summary>
+    public IReadOnlyList<string> Probe { get; init; } = [];
+}
 
 /// <summary>
 /// `--searchmodels`'s formatter: which files are on disk against what the table declares, what
@@ -110,6 +121,16 @@ public static class ModelsReport
         if (s.Whisper.Count == 0) Line("    not tried - no model is on disk to open");
         else foreach (ProviderTry t in s.Whisper) Line($"    {t.Name}{(t.Chosen ? Chosen : Rejected + t.Reason)}");
 
+        // After the report, under a heading of its own. A run with nothing on disk probed
+        // nothing, and a heading over no lines would read as a probe that found nothing rather
+        // than one that never ran.
+        if (s.Probe.Count > 0)
+        {
+            Line();
+            Line("  probe:");
+            foreach (string line in s.Probe) Line($"    {line}");
+        }
+
         if (s.Notes.Count > 0)
         {
             Line();
@@ -149,6 +170,7 @@ public static class SearchModels
         }
 
         var notes = new List<string>();
+        IReadOnlyList<string> probe = [];
         IReadOnlyList<ProviderTry> onnxTried = [];
         IReadOnlyList<ProviderTry> whisperTried = [];
         bool aPresentModelFailedToLoad = false;
@@ -180,7 +202,7 @@ public static class SearchModels
                 // Splits "the models are missing" from "DirectML is not being used" from "the
                 // tokenizer is producing garbage" from "the scores are simply low", before any
                 // of the rest of the pipeline is suspected.
-                if (clipText is not null || e5 is not null) Probe(clipText, e5, vision);
+                if (clipText is not null || e5 is not null) probe = Probe(clipText, e5, vision);
             }
             catch (Exception ex)
             {
@@ -205,48 +227,55 @@ public static class SearchModels
             }
         }
 
-        var snapshot = new ModelsSnapshot(dir, modelRows, capRows, onnxTried, whisperTried, notes);
+        var snapshot = new ModelsSnapshot(dir, modelRows, capRows, onnxTried, whisperTried, notes)
+        {
+            Probe = probe,
+        };
         Console.WriteLine(ModelsReport.Render(snapshot));
 
         return aPresentModelFailedToLoad ? 2 : 0;
     }
 
-    /// <summary>Encode a few sentences and one picture and print the similarities, so a nothing-
+    /// <summary>Encode a few sentences and one picture and REPORT the similarities, so a nothing-
     /// found result can be split into "the models are missing", "the accelerator is not being
     /// used", "the tokenizer is producing garbage" and "the scores are simply low" before the rest
-    /// of the pipeline is suspected. Direct console output, separate from <see cref="ModelsReport"/>
-    /// - this is a probe, not a fact the snapshot carries.</summary>
-    private static void Probe(ClipTextEncoder? clipText, E5Encoder? e5, ClipImageEncoder? vision)
+    /// of the pipeline is suspected.
+    ///
+    /// <para>It hands its lines back rather than writing them, and that is the whole ordering: it
+    /// runs while the encoders are open, which is before the report exists, so anything printed
+    /// here would land above the title that explains it.</para></summary>
+    private static IReadOnlyList<string> Probe(ClipTextEncoder? clipText, E5Encoder? e5, ClipImageEncoder? vision)
     {
         string[] texts =
         [
             "a sunset over the sea", "a cat sitting on a sofa",
             "שקיעה מעל הים", "a spreadsheet of quarterly revenue",
         ];
-        Console.WriteLine("  probe:");
+        var lines = new List<string>();
         var clipVecs = new List<float[]>();
         foreach (string t in texts)
         {
-            string line = $"    '{t}'";
+            string line = $"'{t}'";
             if (clipText is not null) { float[] v = clipText.Encode(t); clipVecs.Add(v); line += $"  clip |v|={Norm(v):0.000}"; }
             if (e5 is not null) line += $"  e5 |v|={Norm(e5.EncodeQuery(t)):0.000}";
-            Console.WriteLine(line);
+            lines.Add(line);
         }
 
-        if (vision is null) return;
+        if (vision is null) return lines;
         string? image = FindAnyPhoto();
-        if (image is null) { Console.WriteLine("    no image found under Pictures to probe against"); return; }
+        if (image is null) { lines.Add("no image found under Pictures to probe against"); return lines; }
         using SKBitmap? bmp = SKBitmap.Decode(image);
-        if (bmp is null) { Console.WriteLine($"    could not decode {image}"); return; }
+        if (bmp is null) { lines.Add($"could not decode {image}"); return lines; }
 
         float[] iv = vision.Encode([ClipImageEncoder.Preprocess(bmp)])[0];
-        Console.WriteLine($"    image {Path.GetFileName(image)} ({bmp.Width}x{bmp.Height}) via {vision.Provider}");
+        lines.Add($"image {Path.GetFileName(image)} ({bmp.Width}x{bmp.Height}) via {vision.Provider}");
         if (clipVecs.Count == texts.Length)
         {
-            Console.WriteLine("    image-text similarity:");
+            lines.Add("image-text similarity:");
             for (int i = 0; i < texts.Length; i++)
-                Console.WriteLine($"      {Dot(iv, clipVecs[i]):0.000}  {texts[i]}");
+                lines.Add($"  {Dot(iv, clipVecs[i]):0.000}  {texts[i]}");
         }
+        return lines;
     }
 
     private static string? FindAnyPhoto()

@@ -204,4 +204,34 @@ public class SearchModelsReportTests
         ModelsSnapshot s = Sample() with { Notes = ["e5-base-q.onnx is present but would not load: InvalidProtobuf"] };
         Assert.Contains("would not load", ModelsReport.Render(s), StringComparison.Ordinal);
     }
+
+    [Fact]
+    public void TheTitleComesBeforeTheProbeRatherThanAfterIt()
+    {
+        // The probe used to be written straight to the console while the encoders were open,
+        // which put a headerless block of vector norms above the title that explains what the
+        // block is. The data was right and the reading order was wrong: whatever the run
+        // measured belongs under the report, in a section of its own.
+        ModelsSnapshot s = Sample() with
+        {
+            Probe = ["'a sunset over the sea'  clip |v|=1.000", "  image-text similarity:"],
+        };
+        string text = ModelsReport.Render(s);
+
+        int title = text.IndexOf("findra --searchmodels", StringComparison.Ordinal);
+        int heading = text.IndexOf("probe:", StringComparison.Ordinal);
+        int firstLine = text.IndexOf("a sunset over the sea", StringComparison.Ordinal);
+
+        Assert.True(title >= 0, "the report has no title");
+        Assert.True(heading > title, $"the probe heading is at {heading} and the title at {title}");
+        Assert.True(firstLine > heading, "a probe line is printed above its own heading");
+    }
+
+    [Fact]
+    public void ARunThatProbedNothingPrintsNoProbeHeading()
+    {
+        // A machine with no model on disk runs no probe at all, and an empty section with a
+        // heading over it reads as a probe that found nothing rather than one that never ran.
+        Assert.DoesNotContain("probe:", ModelsReport.Render(Sample()), StringComparison.Ordinal);
+    }
 }
