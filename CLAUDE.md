@@ -56,7 +56,7 @@ findra.exe --searchmodels             # are models present, do they load, do the
                                       # which execution provider answered for each runtime
 findra.exe --searchindex [file|folder|q:query]...   # what is indexed, what is queued; given
                                       # paths it queues and drains them, given q: it queries
-findra.exe --searchshot out.png <state> [palette]   # sixteen states, listed below
+findra.exe --searchshot out.png <state> [palette]   # seventeen states, listed below
 findra.exe --searchtest               # engine self-check
 findra.exe --searchbench [out.md] [corpus]   # measured numbers, as a pasteable Markdown
                                       # fragment; `corpus` is how many files it generates
@@ -64,13 +64,17 @@ findra.exe --version                  # print the version and log location, then
 ```
 
 The `--searchshot` states are `SearchShot.States`, and that list is the only definition of them.
-Nine draw the card, five the settings window and two the first-run screen:
+Nine draw the card, five the settings window and three the first-run screen:
 
 ```
 capsule  empty  typing  results  noresults  many  adv  opening  openingempty
 settings  settingsopening  settingssearches  settingscontent  settingsabout
-firstrun  firstrundownloading
+firstrun  firstrunspeech  firstrundownloading
 ```
+
+`firstrunspeech` is not a variation of `firstrun`: the transcription limit is on that screen
+only when Speech is ticked, and the two layouts - with the row and without it - are what a
+review has to be able to compare.
 
 Two more modes are settings a person changes rather than diagnostics. **They survive the
 first-run screen and the settings window rather than being replaced by them** - they are how the
@@ -226,8 +230,16 @@ speech              ─  whisper-turbo + [e5 pair]              550 MB (+270 if 
   files it calls Hebrew are re-run through the fine-tune. Hebrew is a second pass, never an
   alternative.
 - **Everything is 2.9 GB** - measured file sizes, not the conservative minimum-byte floors.
-- **Sizes shown in the UI are marginal**, given what is already selected. Fixed per-row
-  numbers make the total visibly fail to add up.
+- **`Capabilities.MarginalBytes` is what the settings window and `--models` quote**, because
+  there the question really is what one more capability would add to what is already on disk.
+  **The first-run rows do not**: each is priced at its own files through
+  `Capabilities.OwnModels`, and that number never moves. A marginal figure turns into "0 MB" the
+  moment a row is ticked, so the number somebody is weighing disappears exactly when they decide
+  on it - and own files are the only pricing where the column adds up, 629 + 270 + 547 + 1549 MB
+  being the 2.93 GB on the Everything tile where the closed sets would total 4.08 GB. What the
+  whole selection costs is the summary's job: it is `TotalBytes(Close(chosen))`, so ticking Speech
+  alone shows 547 MB on the row and 818 MB along the bottom, and the bottom line is the one that
+  tells the truth about the download.
 - **A missing model is a normal state, not an error state.** Every capability degrades
   silently when its model is absent: the indexer skips that kind, content search contributes
   no candidates, and the card offers the download.
@@ -261,7 +273,13 @@ speech              ─  whisper-turbo + [e5 pair]              550 MB (+270 if 
 - **One number, in minutes, decides how long a recording is worth transcribing**, covering
   sound files and video together. Zero is off, negative is no limit, positive is minutes, five
   by default. A recording over the limit is passed over with a reason of its own, and raising
-  the limit goes back for exactly those and nothing else.
+  the limit goes back for exactly those and nothing else. **It is asked on the first-run screen
+  as well as in Settings**, appearing under the Speech row when Speech is ticked and going with
+  it: ticking Speech is what signs somebody up for transcription, and a default of five minutes
+  cuts a lecture short without saying so. `TranscribeLimit.ShortName` holds the five pill labels
+  both surfaces draw - "Off", "5 min", "30 min", "2 hr", "No limit" - because `Describe`'s "30
+  minutes" is 65.3px against a pill that holds 62.8px, and a second table of names is how the
+  two surfaces come to disagree.
 - **A file's size on disk never equals the declared size in the table.** That table is the
   spec's figure in megabytes to one decimal place; real files miss it by tens of kilobytes,
   mostly upward. `ModelStore.SizeSlack` is the only place that width is decided, and nothing

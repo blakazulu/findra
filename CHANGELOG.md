@@ -367,6 +367,21 @@ into a numbered section on the first release.
 
 ### Changed
 
+- **The size beside a capability on the first screen is that capability's download, and it
+  stays put.** It used to be the marginal figure - what the row would add to what was already
+  ticked - so ticking a row turned its number into "0 MB" and the size you were weighing
+  disappeared at the moment you decided on it. Each row is now priced at its own files, which
+  is also the only pricing where the four of them add up to the 2.93 GB quoted above them. The
+  line along the bottom is still what the whole selection costs, and it is where a shared file
+  is counted once.
+- **That line is now the headline of the first screen**, set larger and in bold rather than in
+  the same small grey as the notes above it. Since the rows stopped moving, it is the only place
+  the download as a whole is stated.
+- **The first screen asks how long a recording is worth transcribing.** Ticking Speech is what
+  signs you up for transcription, and the limit defaults to five minutes - enough for a voice
+  memo and not for a lecture. The control now appears under the Speech row the moment Speech is
+  ticked, offering the same five choices as Settings, and goes again if Speech is unticked.
+
 - **A capability you install is read in the same session you installed it.** Downloading one
   from settings used to fetch the files and then wait for the next launch before anything they
   cover was looked at again, which reads as a download that did not work. Both the first screen

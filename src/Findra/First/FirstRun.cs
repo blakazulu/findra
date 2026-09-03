@@ -9,7 +9,7 @@ using Findra.Startup;   // HelperTaskState
 
 namespace Findra;
 
-public enum FirstRunTarget { None, Preset, Row, Content, Updates, Autostart, NotNow, Go }
+public enum FirstRunTarget { None, Preset, Row, Limit, Content, Updates, Autostart, NotNow, Go }
 public enum FirstRunStage { Choosing, Downloading, Finished }
 
 public readonly record struct FirstRunHit(FirstRunTarget Target, int Index);
@@ -25,6 +25,13 @@ public sealed record FirstRunState
     public IReadOnlySet<Capability> Chosen { get; init; } = new HashSet<Capability>();
     public bool HebrewOffered { get; init; }
     public bool ContentOn { get; init; }
+
+    /// <summary>How long a recording is worth transcribing, in minutes, on the terms
+    /// <see cref="TranscribeLimit"/> sets. It is on this screen because ticking Speech is what
+    /// signs somebody up for transcription, and five minutes - the default - passes over a
+    /// lecture, an interview and most of a podcast without saying so.</summary>
+    public int TranscribeMinutes { get; init; } = TranscribeLimit.Default;
+
     public bool CheckUpdates { get; init; } = true;
     public bool StartAtLogon { get; init; } = true;
     public FirstRunStage Stage { get; init; } = FirstRunStage.Choosing;
@@ -74,12 +81,45 @@ public static class FirstRun
             bool ticked = s.Chosen.Contains(c);
             rows.Add(new FirstRunRow(
                 c, Capabilities.Title(c),
-                // MARGINAL, given what is already ticked. Nothing more to pay for a row already on.
-                Sizes.Human(ticked ? 0 : Capabilities.MarginalBytes(c, s.Chosen)),
+                // This row's OWN files, and it does not move. A marginal figure - what this row
+                // would add to what is already ticked - turns into "0 MB" the moment the row is
+                // ticked, so the number somebody is weighing disappears exactly when they decide
+                // on it. Own files also make the column add up: 629 + 270 + 547 + 1549 MB is the
+                // 2.93 GB on the Everything tile, where the closed sets would total 4.08 GB.
+                // What the whole selection costs is the summary's job, and it is closed there.
+                Sizes.Human(ModelStore.TotalBytes(Capabilities.OwnModels(c))),
                 Note(c), ticked, Indented: c == Capability.Hebrew, Free: false));
         }
 
         return rows;
+    }
+
+    /// <summary>The label beside the limit's five pills. Short because the column it sits in is
+    /// what is left of the row after them - 98.3px of it in the shipped face, against 282px.
+    /// </summary>
+    public const string LimitLabel = "Transcribe up to";
+
+    /// <summary>The five choices, in <see cref="TranscribeLimit.Presets"/> order, so an option
+    /// index is an index into that list and there is nothing to keep in step.</summary>
+    public static IReadOnlyList<string> LimitOptions { get; } =
+        [.. TranscribeLimit.Presets.Select(TranscribeLimit.ShortName)];
+
+    /// <summary>
+    /// The row the transcription limit is drawn under, or -1 where it is not drawn at all.
+    ///
+    /// <para>It appears with Speech and goes with it, because it is Speech's setting and a
+    /// control for a capability nobody took is a question with no subject. Under Speech and above
+    /// the Hebrew row: Hebrew is a second pass over the same recordings, so a limit drawn below it
+    /// would read as the fine-tune's alone.</para>
+    /// </summary>
+    public static int LimitRow(FirstRunState s)
+    {
+        ArgumentNullException.ThrowIfNull(s);
+        if (!s.Chosen.Contains(Capability.Speech)) return -1;
+        IReadOnlyList<FirstRunRow> rows = Rows(s);
+        for (int i = 0; i < rows.Count; i++)
+            if (rows[i].Capability == Capability.Speech) return i;
+        return -1;
     }
 
     public static long TotalBytes(FirstRunState s)
@@ -124,6 +164,14 @@ public static class FirstRun
                     // capability is an affirmative act with a download attached to it.
                     : s with { Chosen = Capabilities.Close([.. s.Chosen, c]), ContentOn = true };
             }
+
+            case FirstRunTarget.Limit:
+                // Bounds-checked, like the row arm above: a hit carries an index, an index can be
+                // wrong, and indexing the presets with a wrong one is an unhandled exception on a
+                // screen whose only other way out is the task manager.
+                return hit.Index < 0 || hit.Index >= TranscribeLimit.Presets.Count
+                    ? s
+                    : s with { TranscribeMinutes = TranscribeLimit.Presets[hit.Index] };
 
             case FirstRunTarget.Content: return s with { ContentOn = !s.ContentOn };
             case FirstRunTarget.Updates: return s with { CheckUpdates = !s.CheckUpdates };
@@ -197,6 +245,9 @@ public static class FirstRun
             FirstRunDone = true,
             IndexContent = s.ContentOn,
             CheckForUpdates = s.CheckUpdates,
+            // Whether or not the row was on the screen. Somebody who took no speech keeps the
+            // default they never saw, which is the same number they would have kept anyway.
+            TranscribeMinutes = s.TranscribeMinutes,
         };
     }
 

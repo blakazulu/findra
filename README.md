@@ -45,7 +45,7 @@ without throwing away anything already read.
 Everything Findra can install is 2.93 GB of model files, and that is the number if you take
 all of them. Take none and Findra still searches every name on the machine. Take one and you
 pay for one. `findra --models` prints what each capability would add given what is already
-there, which is the only honest way to quote it, because Speech and Meaning share files.
+there, which is the question that matters once some of them are.
 
 Typing has a grammar, and there is a form for the parts of it nobody remembers.
 
@@ -82,9 +82,15 @@ most likely to leave a machine broken, and it declines to do either behind your 
 ## What it costs, the first time you run it
 
 The first screen asks one question and then gets out of the way. Take a preset, take one
-capability, or take nothing at all. Every size on it is marginal, counted against what you
-have already picked, which is why Speech costs less once Meaning is ticked: they share files
-and you are never charged twice for the same download.
+capability, or take nothing at all. Each row is priced at its own download and that number
+never moves, so the four of them add up to the 2.93 GB the Everything tile quotes. The line
+along the bottom is what your selection actually costs, and it is smaller than the rows added
+together whenever two capabilities share a file: Speech is searched like a document, so taking
+it takes the document models with it, and you are never charged twice for the same download.
+
+Ticking Speech also puts the transcription limit on that screen. Five minutes is the default,
+which covers a voice memo and cuts a lecture short, so the screen that signs you up for
+transcription is the screen that asks how much of each recording is worth transcribing.
 
 ![The first-run screen, with the Recommended preset chosen](docs/shots/firstrun.png)
 
@@ -131,7 +137,7 @@ these, and every image above was drawn by the same painter the window uses.
     findra --content on               start reading inside files
     findra --uninstall --dry-run      what removing Findra would do, without doing it
 
-`findra --searchshot` draws sixteen surfaces in any of the six palettes, which is how the
+`findra --searchshot` draws seventeen surfaces in any of the six palettes, which is how the
 images on this page are made and how they are regenerated. The command under each image is
 the whole recipe.
 

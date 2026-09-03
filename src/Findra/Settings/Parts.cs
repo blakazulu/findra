@@ -78,6 +78,13 @@ public static class Parts
     /// <summary>Air between the row above and the first line of its note.</summary>
     public const float NoteTop = 4f;
 
+    /// <summary>The size a lead line is drawn at - the header's, because a surface has one
+    /// register for the things it wants read first and there is no reason for two.</summary>
+    public const float LeadSize = HeaderSize;
+    /// <summary>Air between two wrapped lines of a lead. Wider than a note's, because the lines
+    /// themselves are taller.</summary>
+    public const float LeadLeading = 6f;
+
     /// <summary>
     /// How tall a note of <paramref name="lines"/> lines is - which is how far the layout pushes
     /// every row below it. Zero lines is zero height: a row with no note must not reserve one
@@ -142,6 +149,31 @@ public static class Parts
         {
             CardText.Draw(canvas, line, r.Left, y, NoteSize, face, d.Fade(150));
             y += NoteSize + NoteLeading;
+        }
+    }
+
+    /// <summary>How tall a lead of <paramref name="lines"/> lines is, on the same terms as
+    /// <see cref="NoteHeight"/>: zero lines is zero height.</summary>
+    public static float LeadHeight(int lines) =>
+        lines <= 0 ? 0f : NoteTop + lines * (LeadSize + LeadLeading);
+
+    /// <summary>
+    /// The one sentence a surface comes down to: wrapped like a note, but in full ink, bold, and
+    /// at the header's size.
+    ///
+    /// <para>Wrapped with the PLAIN measurement, which is exact rather than approximate: bold here
+    /// is <c>SKFont.Embolden</c> on the one shipped weight, and emboldening widens the strokes
+    /// without changing a single advance - the same string measures 473.1px at 15px either way.
+    /// </para>
+    /// </summary>
+    public static void Lead(SKCanvas canvas, string text, SKRect r, Derived d, SKTypeface face)
+    {
+        ArgumentNullException.ThrowIfNull(d);
+        float y = r.Top + NoteTop + LeadSize;
+        foreach (string line in Wrap(text, face, LeadSize, r.Width))
+        {
+            CardText.Draw(canvas, line, r.Left, y, LeadSize, face, d.Ink, bold: true);
+            y += LeadSize + LeadLeading;
         }
     }
 

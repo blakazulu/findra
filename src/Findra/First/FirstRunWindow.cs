@@ -104,6 +104,12 @@ public sealed class FirstRunWindow : Window
 
         private int Rows => FirstRun.Rows(_state).Count;
 
+        /// <summary>Which row the transcription limit sits under, or -1 where Speech is not
+        /// taken. Read per event rather than stored, for the reason the row count is: ticking
+        /// Speech puts a control on the screen, and a hit test working from a stale answer would
+        /// aim at the row the pills have just pushed down.</summary>
+        private int LimitRow => FirstRun.LimitRow(_state);
+
         public void NoteFetching(IReadOnlyList<Model> models)
         {
             _fetching = models;
@@ -130,7 +136,7 @@ public sealed class FirstRunWindow : Window
         protected override void OnPointerMoved(PointerEventArgs e)
         {
             Point p = e.GetPosition(this);
-            FirstRunHit hit = FirstRunLayout.HitTest((float)p.X, (float)p.Y, Rows);
+            FirstRunHit hit = FirstRunLayout.HitTest((float)p.X, (float)p.Y, Rows, LimitRow);
             if (hit.Target == _state.HoverTarget && hit.Index == _state.HoverIndex) return;
             _state = _state with { HoverTarget = hit.Target, HoverIndex = hit.Index };
             InvalidateVisual();
@@ -146,7 +152,7 @@ public sealed class FirstRunWindow : Window
         {
             Focus();
             Point p = e.GetPosition(this);
-            FirstRunHit hit = FirstRunLayout.HitTest((float)p.X, (float)p.Y, Rows);
+            FirstRunHit hit = FirstRunLayout.HitTest((float)p.X, (float)p.Y, Rows, LimitRow);
 
             // The title strip is the only place a borderless window can be picked up by.
             if (hit.Target == FirstRunTarget.None && p.Y < FirstRunLayout.TileTop)
