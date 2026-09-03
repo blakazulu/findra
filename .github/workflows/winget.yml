@@ -25,7 +25,7 @@ jobs:
   catalogue:
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       # Every value that comes from the Actions tab reaches PowerShell through env: and never by
       # textual substitution into the script. release.yml carries the same rule for the same two
@@ -135,7 +135,7 @@ jobs:
             Write-Output "validated only - re-run with submit ticked to open the pull request"
           }
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: winget-manifests
           path: manifests
