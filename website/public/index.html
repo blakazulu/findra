@@ -7,16 +7,109 @@
 <meta name="description" content="Desktop search for Windows that answers in under a millisecond, straight from RAM. Finds files by name, by what is written inside them, by what a photo shows and by what was said out loud. Free, open source, and nothing leaves your machine.">
 <link rel="canonical" href="https://findra-search.netlify.app/">
 <meta property="og:type" content="website">
+<meta property="og:site_name" content="Findra">
+<meta property="og:locale" content="en">
 <meta property="og:url" content="https://findra-search.netlify.app/">
 <!-- The page's own first section, so a shared link says what the page opens on. There is no
      twitter:title: the Twitter card falls back to og:title, so it follows this one. -->
 <meta property="og:title" content="Findra - Windows Search. But it works.">
 <meta property="og:description" content="Names in about half a millisecond, straight from RAM. Documents, photos and speech when you ask for them. No account, no cloud, no telemetry.">
-<meta property="og:image" content="https://findra-search.netlify.app/shots/results.png">
+<!-- share/card.png is drawn by build/Make-Icon.mjs from the same geometry as the application
+     icon, at the 1.91:1 that X and Facebook crop to. It replaced a product screenshot at
+     820x626, which is 1.31:1 and so had a slice taken out of its middle. The width and height
+     are declared because WhatsApp will not fetch an image to measure it and shows no preview at
+     all rather than guess. -->
+<meta property="og:image" content="https://findra-search.netlify.app/share/card.png">
+<meta property="og:image:type" content="image/png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Findra. Windows Search, but it works. 0.50 ms to a filename, straight from RAM.">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="theme-color" content="#08090c">
 <link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="alternate" type="text/markdown" href="/index.md" title="Findra as Markdown">
 <link rel="stylesheet" href="styles.css">
+
+<!-- Structured data, so that what this page says about Findra can be read without parsing the
+     prose around it. Every value here is a fact stated somewhere else on the site: the price is
+     zero because Findra is free, the version is the one in Directory.Build.props, and the
+     screenshots are the same --searchshot renders the page displays. Nothing is claimed here
+     that a reader cannot check further down.
+
+     There is no PostalAddress and no telephone. Findra is one person and an open repository,
+     and inventing a switchboard to satisfy a schema validator would be the only dishonest thing
+     on this site. -->
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "SoftwareApplication",
+      "@id": "https://findra-search.netlify.app/#findra",
+      "name": "Findra",
+      "url": "https://findra-search.netlify.app/",
+      "description": "Desktop search for Windows that answers in under a millisecond, straight from RAM. Finds files by name, by what is written inside them, by what a photo shows and by what was said out loud. Free, open source, and nothing leaves your machine.",
+      "applicationCategory": "UtilitiesApplication",
+      "applicationSubCategory": "Desktop search",
+      "operatingSystem": "Windows 10, Windows 11",
+      "processorRequirements": "x64 or arm64",
+      "softwareVersion": "0.1.0",
+      "license": "https://www.apache.org/licenses/LICENSE-2.0",
+      "isAccessibleForFree": true,
+      "offers": {
+        "@type": "Offer",
+        "price": "0",
+        "priceCurrency": "USD",
+        "availability": "https://schema.org/PreOrder"
+      },
+      "featureList": [
+        "Filename search answered from an in-RAM index in about half a millisecond",
+        "Full-text search inside documents, off until you turn it on",
+        "Photo and video search by what the image shows",
+        "Speech search by what was said in a recording, including Hebrew",
+        "A global hotkey and a desktop capsule",
+        "No account, no cloud service, no analytics and no telemetry"
+      ],
+      "screenshot": [
+        "https://findra-search.netlify.app/shots/results.png",
+        "https://findra-search.netlify.app/shots/advanced.png",
+        "https://findra-search.netlify.app/shots/settings.png"
+      ],
+      "codeRepository": "https://github.com/blakazulu/findra",
+      "downloadUrl": "https://github.com/blakazulu/findra",
+      "privacyPolicy": "https://findra-search.netlify.app/privacy/",
+      "author": { "@id": "https://findra-search.netlify.app/#blakazulu" },
+      "publisher": { "@id": "https://findra-search.netlify.app/#blakazulu" },
+      "maintainer": { "@id": "https://findra-search.netlify.app/#blakazulu" }
+    },
+    {
+      "@type": "Person",
+      "@id": "https://findra-search.netlify.app/#blakazulu",
+      "name": "Liraz Amir",
+      "alternateName": "blakazulu",
+      "url": "https://github.com/blakazulu",
+      "email": "blakazulu@gmail.com",
+      "sameAs": ["https://github.com/blakazulu", "https://github.com/blakazulu/findra"],
+      "contactPoint": {
+        "@type": "ContactPoint",
+        "contactType": "technical support",
+        "email": "blakazulu@gmail.com",
+        "url": "https://findra-search.netlify.app/contact/",
+        "availableLanguage": ["English", "Hebrew"]
+      }
+    },
+    {
+      "@type": "WebSite",
+      "@id": "https://findra-search.netlify.app/#site",
+      "name": "Findra",
+      "url": "https://findra-search.netlify.app/",
+      "inLanguage": "en",
+      "about": { "@id": "https://findra-search.netlify.app/#findra" },
+      "publisher": { "@id": "https://findra-search.netlify.app/#blakazulu" }
+    }
+  ]
+}
+</script>
 </head>
 <body>
 
@@ -636,7 +729,9 @@
     </div>
     <div class="col">
       <strong>THE SMALL PRINT</strong>
-      <a href="https://github.com/blakazulu/findra/blob/main/PRIVACY.md" rel="noopener">Privacy</a>
+      <a href="/about/">About</a>
+      <a href="/contact/">Contact</a>
+      <a href="/privacy/">Privacy</a>
       <a href="https://github.com/blakazulu/findra/blob/main/SECURITY.md" rel="noopener">Security</a>
       <a href="https://github.com/blakazulu/findra/blob/main/LICENSE" rel="noopener">Apache-2.0</a>
       <a href="https://github.com/blakazulu/findra/blob/main/NOTICE" rel="noopener">Notice</a>

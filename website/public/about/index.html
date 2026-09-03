@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>About - Findra</title>
+<meta name="description" content="Findra is a desktop search widget for Windows built on .NET 10, Avalonia, SkiaSharp and SQLite, by one person, under Apache-2.0.">
+<link rel="canonical" href="https://findra-search.netlify.app/about/">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="Findra">
+<meta property="og:locale" content="en">
+<meta property="og:url" content="https://findra-search.netlify.app/about/">
+<meta property="og:title" content="About - Findra">
+<meta property="og:description" content="Findra is a desktop search widget for Windows built on .NET 10, Avalonia, SkiaSharp and SQLite, by one person, under Apache-2.0.">
+<meta property="og:image" content="https://findra-search.netlify.app/share/card.png">
+<meta property="og:image:type" content="image/png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Findra. Windows Search, but it works. 0.50 ms to a filename, straight from RAM.">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="theme-color" content="#08090c">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="alternate" type="text/markdown" href="/about.md" title="About - Findra as Markdown">
+<link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+
+<div class="bg" aria-hidden="true">
+  <div class="bg-blob a"></div>
+  <div class="bg-grid"></div>
+  <div class="bg-grain"></div>
+</div>
+
+<header class="nav">
+  <a class="brand" href="/">
+    <span class="brand-mark" aria-hidden="true"></span>
+    <span class="brand-name">FINDRA</span>
+  </a>
+  <nav class="nav-links">
+    <a href="/#finds">What it finds</a>
+    <a href="/#numbers">The numbers</a>
+    <a href="/#install">Install</a>
+  </nav>
+  <div class="nav-right">
+    <a class="btn btn-ghost btn-sm" href="/">Back to the front</a>
+  </div>
+</header>
+
+<main id="top">
+  <div class="wrap">
+    <section class="doc-head">
+      <span class="kicker">ABOUT</span>
+      <h1>One person, one repository, no company behind it.</h1>
+      <div class="doc-meta">
+        <span class="d">Findra 0.1.0 &middot; last reviewed 2026-09-03</span>
+        <a class="doc-chip on" href="/about.md">Read as Markdown</a>
+        <a class="doc-chip" href="https://github.com/blakazulu/findra/blob/main/website/content/about.md" rel="noopener">History on GitHub</a>
+      </div>
+    </section>
+
+    <article class="doc">
+      <p>Findra is a desktop search widget for Windows. A capsule sits on the desktop, a global hotkey brings it up from anywhere, and it unfolds into a card of results. It finds files by name, by what is written inside them, by what a photograph shows and by what somebody said out loud in a recording.</p>
+
+      <p>It was written because Windows Search rebuilds its index at three in the morning, spends six minutes at a hundred percent disk activity, and still cannot find a file saved that morning.</p>
+
+      <h2>What it is built out of</h2>
+
+      <p>.NET 10, Avalonia and SkiaSharp for a card that paints every pixel of itself, and SQLite for the parts that have to survive a restart. Quicksand is embedded in the application under the SIL Open Font License, one weight, and the same file sets the type on this page.</p>
+
+      <p>There are three processes, and the split is the whole architecture rather than an implementation detail:</p>
+
+      <ul>
+        <li>An elevated helper that opens the NTFS volume, holds the name index in RAM and does nothing else. Exactly one call in Findra needs administrator rights, and this is the process that makes it.</li>
+        <li>The interface, at normal integrity, which owns grammar, ranking, content search, settings, the card, the tray icon and the hotkey.</li>
+        <li>A content indexer, which is a child of the interface. Because it is a child, indexing stops when the application quits, by construction rather than by lifetime code.</li>
+      </ul>
+
+      <p>The decoders that read arbitrary files found on a disk - PDF, ONNX, Whisper, image codecs - run in the indexer at normal integrity and never in the elevated helper. A malformed file is the most likely thing on a computer to be exploitable, and it does not get to be exploitable with administrator rights.</p>
+
+      <h2>Who made it</h2>
+
+      <p>Liraz Amir, who publishes as blakazulu: <a href="https://github.com/blakazulu" rel="noopener">https://github.com/blakazulu</a></p>
+
+      <p>There is no company behind Findra, no funding, no team and no roadmap document. The whole thing is Apache-2.0 with a NOTICE file, which was chosen over MIT specifically because NOTICE is the mechanism that carries attribution forward to anybody who forks it, ships it somewhere else, or takes it apart and never speaks to me again.</p>
+
+      <h2>Where it is</h2>
+
+      <p>Version 0.1.0. The installer is written, the winget manifests are in the repository for both x64 and arm64, and the first release has not been tagged yet, so building from source is the route that works today. Neither the installer nor the executables are signed, and nothing in the product, the repository or on this site claims otherwise.</p>
+
+      <h2>What it will not do</h2>
+
+      <p>Findra does not have an account, a cloud service, analytics, crash reporting or telemetry. It makes one request on its own, once a day, to ask whether a newer version exists, and that request is described in full on the privacy page. It never installs an update by itself.</p>
+    </article>
+  </div>
+</main>
+
+<footer class="wrap">
+  <div class="foot">
+    <div class="col">
+      <span class="brand" style="margin-bottom:6px">
+        <span class="brand-mark" aria-hidden="true"></span>
+        <span class="brand-name">FINDRA</span>
+      </span>
+      <span>Desktop search for Windows.</span>
+      <span>Built with .NET 10, Avalonia, SkiaSharp and SQLite.</span>
+    </div>
+    <div class="col">
+      <strong>PROJECT</strong>
+      <a href="https://github.com/blakazulu/findra" rel="noopener">Source</a>
+      <a href="https://github.com/blakazulu/findra/blob/main/CHANGELOG.md" rel="noopener">Changelog</a>
+      <a href="https://github.com/blakazulu/findra/issues" rel="noopener">Issues</a>
+    </div>
+    <div class="col">
+      <strong>THE SMALL PRINT</strong>
+      <a href="/about/">About</a>
+      <a href="/contact/">Contact</a>
+      <a href="/privacy/">Privacy</a>
+      <a href="https://github.com/blakazulu/findra/blob/main/SECURITY.md" rel="noopener">Security</a>
+      <a href="https://github.com/blakazulu/findra/blob/main/LICENSE" rel="noopener">Apache-2.0</a>
+    </div>
+    <div class="col">
+      <strong>ATTRIBUTION</strong>
+      <span>Findra by blakazulu.</span>
+      <span>Quicksand under the SIL Open Font License 1.1.</span>
+      <span>&copy; <span id="year">2026</span></span>
+    </div>
+  </div>
+</footer>
+
+<script src="/app.js" defer></script>
+</body>
+</html>

@@ -363,6 +363,44 @@ into a numbered section on the first release.
   itself, no other product is named or measured against, and the page says plainly that there
   is no published release yet and that the downloads are not signed.
 
+- **Three written pages on the website: About, Contact and Privacy.** The privacy policy is
+  published at https://findra-search.netlify.app/privacy/ rather than only as a file in the
+  repository, because somebody deciding whether to install Findra should not have to go to GitHub
+  to read what it stores. `PRIVACY.md` is still the source: `build/Make-Pages.mjs` generates the
+  page from it and publishes the Markdown verbatim beside it, and the suite strips both back to
+  prose and fails if a sentence exists in one and not the other. The contact page has no form and
+  says why - Findra collects nothing about the people who use it, and a form would be the first
+  thing on the site that did. It also says out loud that there is no telephone number and no
+  postal address, and a test refuses to let either be invented.
+
+- **A share card, drawn from the same numbers as the application icon.** The link preview on
+  WhatsApp, X, Facebook, LinkedIn, Slack and Discord used a product screenshot at 820x626, which
+  is 1.31:1 against the 1.91:1 those platforms crop to, so a slice was being taken out of the
+  middle of it. `build/Make-Icon.mjs` now draws a 1200x630 card and a 1080x1080 square, in Mond's
+  own colours and set in the application's own Quicksand, and every page declares the image's
+  width, height and alt text - WhatsApp will not fetch an image to measure it and shows no
+  preview at all rather than guess. The card carries the mark, so `IconTests` holds it to the icon
+  the way it already holds the two SVGs, the favicon and the tray glyph. Instagram reads no Open
+  Graph at all and never will; the square exists to be posted by hand and nothing serves it.
+
+- **The site answers `Accept: text/markdown`.** Each of the four pages hands back the Markdown it
+  was generated from, at its own URL, with `Vary: Accept` on both variants - without which a cache
+  serves whichever one it saw first to everybody after. This is the one part of the site that is
+  not a static file, because neither a header rule nor a redirect can read an Accept header. Its
+  table of real Accept strings is a node test that runs in CI: a browser sends `*/*;q=0.8`, which
+  matches text/markdown, so a negotiator that asks "does anything match" rather than "which was
+  asked for more" hands raw Markdown to every human visitor.
+
+- **A 404 page of the site's own, structured data, and `llms.txt`.** A missing path used to serve
+  Netlify's default page, which carries a `netlify.new` referral link in its body on a site whose
+  whole argument is that nothing is reaching out anywhere. Ours lists every page and every
+  machine-readable file instead, because whoever is reading it either mistyped or guessed a URL and
+  both need the real list. The homepage carries JSON-LD naming the application, its author and its
+  licence, with the price and the version checked against `Directory.Build.props` by a test.
+  `llms.txt` says when to reach for Findra and, more usefully, when not to: it is a Windows desktop
+  application with no API, no accounts and no MCP server, and a readiness scan of this domain had
+  credited the hosting platform's own MCP server, CLI and SDKs to Findra.
+
 - **A website, deployed to https://findra-search.netlify.app on every push to `main`.** It is
   plain static files under `website/public` with no build step, and it holds itself to the same
   rule the README does: every screenshot is a real `--searchshot` render with its command printed

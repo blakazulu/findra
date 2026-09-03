@@ -60,9 +60,14 @@ pwsh -File build/Make-Shots.ps1 -Exe publish/win-x64/findra.exe   # redraw every
                                                # the website shows too. Reads the list out of the
                                                # README; keeping a second list is the bug.
 node build/Make-Icon.mjs                       # regenerate the mark - the .ico compiled into the
-                                               # exe, both SVGs, the installer's wizard image and
-                                               # the site's favicon. By hand, when the mark
-                                               # changes; nothing in the build runs it.
+                                               # exe, both SVGs, the installer's wizard image, the
+                                               # site's favicon and the two share images. By hand,
+                                               # when the mark changes; nothing in the build runs it.
+node build/Make-Pages.mjs                      # regenerate /about/, /contact/ and /privacy/ from
+                                               # their Markdown, and copy each source verbatim
+                                               # beside its page. By hand, when the prose changes.
+node netlify/edge-functions/markdown.test.mjs  # the site's Accept negotiation, as a table. The
+                                               # one thing in this repository CI runs node for.
 ```
 
 Six diagnostic modes are non-negotiable and are built from day one. They are how the app is
@@ -507,10 +512,11 @@ solid mass rather than a stroked outline, because a 21-unit stroke is 1.3 px onc
 16 px across and grey mush is what a taskbar makes of it.
 
 **`build/Make-Icon.mjs` holds the only copy of the geometry.** Everything else is emitted from it:
-`assets/icon/findra.ico`, the plated and unplated SVGs, the installer's wizard image and
-`website/public/favicon.svg`. Hand-editing an output is how one logo quietly becomes two, so
-`IconTests` decodes the shipped bytes and holds every copy to the others - the site header's data
-URI included, which is the fifth and the easiest to forget.
+`assets/icon/findra.ico`, the plated and unplated SVGs, the installer's wizard image,
+`website/public/favicon.svg` and the two share images. Hand-editing an output is how one logo
+quietly becomes two, so `IconTests` decodes the shipped bytes and holds every copy to the others -
+the site header's data URI included, which is the fifth and the easiest to forget, and the share
+card, which is the sixth and the least looked at.
 
 - **It needs node, and nothing in the build does.** `dotnet build`, `Publish.ps1`, the installer
   and all three workflows read what it produced and do not know it exists.
@@ -521,11 +527,63 @@ URI included, which is the fifth and the easiest to forget.
   entirely at 16 px, and 20 and 40 are in the set because that is what Windows picks at 125% and
   150% scaling - without them it downscales 32 and 48 and throws the hinting away. `IconTests`
   asserts the 16 px slot is ABSENT, so losing a hint fails rather than passing quietly.
+- **The share card sets type, so `Make-Icon.mjs` reads `Quicksand-Regular.ttf` itself.** Outlines
+  only - character map, advance widths and the quadratic contours - flattened to polylines and
+  rasterised through the same signed distance the handle already uses, which is also what makes
+  emboldening a subtraction. There is no second font file: only Regular ships, `Parts.Face`
+  resolves that one file, and the application's own bold is `SKFont.Embolden` on it, so the card
+  fakes bold by the same means rather than dragging a second licence along.
+- **The card is 1200x630 and the square is 1080x1080, and both are opaque.** 1.91:1 is what X and
+  Facebook crop to; the screenshot that used to be `og:image` was 1.31:1 and had a slice taken out
+  of its middle. A share image is composited onto a ground the client chose, so a transparent pixel
+  is black on Discord and white on X. The square exists only to be posted by hand - **Instagram
+  reads no Open Graph at all** and renders no link preview anywhere, so nothing serves it.
 - **The tray has no plate and its slot is a real hole.** Windows composites a tray icon onto a
   taskbar whose colour it chose: a plate is a dark square nobody asked for, and a slot filled with
   Findra's own ground looks right on a dark taskbar and like a smudge on a light one. Both are
   asserted, on three palettes, through a `Render` seam that exists because a `WindowIcon` needs a
   running Avalonia and the alternative was a test that reads its own source.
+
+## The website
+
+`website/public` is what Netlify serves, exactly as committed. The front page is written by hand;
+the three written pages are generated, and that generator is **run by hand and by nothing else**.
+No workflow runs it, so the failure this has to survive is somebody editing the Markdown, not
+running it, and shipping a page that still says the old thing.
+
+- **`PRIVACY.md` is the privacy policy and the page is emitted from it.** A second copy written out
+  as HTML would be a second policy, and the only thing worse than no privacy page is two that
+  disagree. `build/Make-Pages.mjs` generates `/privacy/` from it and copies the file verbatim to
+  `/privacy.md`; `WebsiteTests` strips both back to prose and fails when a sentence exists in one
+  and not the other, **in both directions**. It compares the SHIPPED bytes rather than reading the
+  generator, because a test that read the generator would pass on the day somebody forgot to run
+  it, which is the only day it matters.
+- **The page's headline is not the Markdown's H1.** `# Privacy` is right for somebody who opened
+  the file looking for the policy; "Nothing leaves your machine, except one request" is right for
+  somebody deciding whether to trust the product. The generator drops the H1 and the tests exclude
+  it on both sides.
+- **The reading column sits on the ground, not in a `.panel`.** A privacy policy that looks like a
+  marketing card reads as marketing, and being believed is the only job that page has.
+- **There is no contact form, no telephone number and no postal address, and the site says so.**
+  Findra collects nothing about the people who use it and a form would be the first thing here that
+  did; a switchboard nobody answers would be the only dishonest thing on the site. This looks like
+  a gap to a readiness checker, which scores an Organization node higher for carrying them, so it
+  is written down as a test that refuses rather than left to somebody's judgement later.
+- **`netlify/edge-functions/markdown.ts` is the one thing on the site that is not a file.** Accept
+  negotiation cannot be done with a header rule or a redirect, because neither reads the header.
+  Two things about it are load-bearing: `Vary: Accept` goes on **both** branches, or a cache serves
+  whichever variant it saw first to everybody after; and the q values are compared rather than
+  matched, because a browser sends `*/*;q=0.8`, which matches text/markdown, so "does anything
+  match" hands raw Markdown to every human visitor. Its table is a node test, run in CI, and it is
+  the only reason node appears in any workflow - nothing that builds or ships an artefact needs it.
+- **`llms.txt` says what Findra is NOT.** It has no API, no accounts, no server and no MCP server.
+  A readiness scan of this domain credited the hosting platform's own MCP server, CLI, SDKs and
+  OAuth endpoints to Findra and scored the product on them; saying plainly that there is nothing to
+  call is what stops the next one.
+- **The 404 page is ours and it is a map.** Netlify's default page carries a `netlify.new` referral
+  link in its body, on a site whose whole argument is that nothing is reaching out anywhere.
+  Whoever is reading a 404 either mistyped or guessed a URL, so the page lists every real one
+  rather than apologising.
 
 ## Shipping
 

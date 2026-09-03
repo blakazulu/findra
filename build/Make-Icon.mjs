@@ -23,7 +23,7 @@
 // whichever palette is in force.
 
 import { deflateSync } from 'node:zlib';
-import { writeFileSync, mkdirSync } from 'node:fs';
+import { writeFileSync, mkdirSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -255,6 +255,462 @@ function svg(plated) {
          `  <title>Findra</title>\n${body}</svg>\n`;
 }
 
+// ---------------------------------------------------------------- the face
+
+// A TrueType outline reader, because the share card has words on it and the only Quicksand in
+// this tree is the file the application embeds. Rendering the card's type from that same file is
+// the whole point: a card set in something else is a second typeface nobody signed off on, and a
+// card set in a screenshot of type is unreadable at thumbnail size.
+//
+// Outlines only. No hinting, no kerning, no shaping - the card carries about forty Latin
+// characters and a hinting engine would be several hundred lines answering a question this file
+// never asks. What it does read is enough to place a glyph correctly: the character map, the
+// advance widths, and the quadratic contours themselves.
+
+function openFont(bytes) {
+  const tables = {};
+  const count = bytes.readUInt16BE(4);
+  for (let i = 0; i < count; i++) {
+    const at = 12 + i * 16;
+    tables[bytes.toString('latin1', at, at + 4)] =
+      { off: bytes.readUInt32BE(at + 8), len: bytes.readUInt32BE(at + 12) };
+  }
+
+  const head = tables.head.off;
+  const upm = bytes.readUInt16BE(head + 18);
+  const longLoca = bytes.readInt16BE(head + 50) === 1;
+  const glyphs = bytes.readUInt16BE(tables.maxp.off + 4);
+  const metrics = bytes.readUInt16BE(tables.hhea.off + 34);
+
+  // Format 4 at (3,1) - the Windows Unicode BMP subtable, which is the one every desktop font
+  // carries and the only one this file's character set needs.
+  const cmapAt = tables.cmap.off;
+  let sub = 0;
+  for (let i = 0, n = bytes.readUInt16BE(cmapAt + 2); i < n; i++) {
+    const at = cmapAt + 4 + i * 8;
+    if (bytes.readUInt16BE(at) === 3 && bytes.readUInt16BE(at + 2) === 1) {
+      sub = cmapAt + bytes.readUInt32BE(at + 4);
+    }
+  }
+  if (!sub) throw new Error('the face carries no (3,1) character map');
+
+  const segs = bytes.readUInt16BE(sub + 6) / 2;
+  const ends = sub + 14, starts = ends + segs * 2 + 2;
+  const deltas = starts + segs * 2, ranges = deltas + segs * 2;
+
+  const glyphOf = (code) => {
+    for (let s = 0; s < segs; s++) {
+      if (bytes.readUInt16BE(ends + s * 2) < code) continue;
+      const first = bytes.readUInt16BE(starts + s * 2);
+      if (first > code) return 0;
+      const offset = bytes.readUInt16BE(ranges + s * 2);
+      if (offset === 0) return (code + bytes.readInt16BE(deltas + s * 2)) & 0xffff;
+      const at = ranges + s * 2 + offset + (code - first) * 2;
+      const g = bytes.readUInt16BE(at);
+      return g === 0 ? 0 : (g + bytes.readInt16BE(deltas + s * 2)) & 0xffff;
+    }
+    return 0;
+  };
+
+  // The last entry in hmtx repeats for every glyph past it. Quicksand happens to carry a metric
+  // per glyph, but a face that does not is normal and the reader must not walk off the table.
+  const advanceOf = (gid) => bytes.readUInt16BE(
+    tables.hmtx.off + Math.min(gid, metrics - 1) * 4);
+
+  const locaOf = (gid) => longLoca
+    ? bytes.readUInt32BE(tables.loca.off + gid * 4)
+    : bytes.readUInt16BE(tables.loca.off + gid * 2) * 2;
+
+  return { bytes, tables, upm, glyphs, glyphOf, advanceOf, locaOf };
+}
+
+// How many straight pieces a quadratic is cut into. Sixteen is comfortably past the point where
+// the error is under a tenth of a pixel at the largest size on the card, and the cost of being
+// generous is a few thousand extra distance sums on text that is drawn once, by hand.
+const CURVE_STEPS = 16;
+
+/// One glyph's contours in font units, as closed polylines. Composite glyphs are followed,
+/// because a face is entitled to build any glyph out of others and finding out that it did by
+/// getting a blank on the card is the wrong time.
+function contours(font, gid, depth = 0) {
+  const { bytes, tables } = font;
+  const from = font.locaOf(gid), to = font.locaOf(gid + 1);
+  if (to <= from) return [];                                   // a blank, and legitimately so
+
+  const at = tables.glyf.off + from;
+  const n = bytes.readInt16BE(at);
+
+  if (n < 0) {
+    if (depth > 4) throw new Error(`glyph ${gid} nests composites more than five deep`);
+    const out = [];
+    let p = at + 10;
+    for (;;) {
+      const flags = bytes.readUInt16BE(p), index = bytes.readUInt16BE(p + 2);
+      p += 4;
+      let dx, dy;
+      if (flags & 1) { dx = bytes.readInt16BE(p); dy = bytes.readInt16BE(p + 2); p += 4; }
+      else { dx = bytes.readInt8(p); dy = bytes.readInt8(p + 1); p += 2; }
+      // Scales are read past rather than applied: no glyph this card sets uses one, and silently
+      // dropping a scale would place a part correctly and size it wrong.
+      if (flags & 8) p += 2;
+      else if (flags & 0x40) p += 4;
+      else if (flags & 0x80) p += 8;
+      if ((flags & 8) || (flags & 0x40) || (flags & 0x80)) {
+        throw new Error(`glyph ${gid} scales a component, which this reader does not apply`);
+      }
+      for (const c of contours(font, index, depth + 1)) {
+        out.push(c.map((pt) => ({ x: pt.x + dx, y: pt.y + dy })));
+      }
+      if (!(flags & 0x20)) break;
+    }
+    return out;
+  }
+
+  const endsAt = at + 10;
+  const last = bytes.readUInt16BE(endsAt + (n - 1) * 2);
+  const total = last + 1;
+  let p = endsAt + n * 2;
+  p += 2 + bytes.readUInt16BE(p);                              // past the hinting instructions
+
+  const flags = new Uint8Array(total);
+  for (let i = 0; i < total;) {
+    const f = bytes[p++];
+    flags[i++] = f;
+    if (f & 8) for (let r = bytes[p++]; r > 0 && i < total; r--) flags[i++] = f;
+  }
+
+  const read = (shortBit, sameBit) => {
+    const out = new Int16Array(total);
+    let v = 0;
+    for (let i = 0; i < total; i++) {
+      const f = flags[i];
+      if (f & shortBit) v += (f & sameBit) ? bytes[p++] : -bytes[p++];
+      else if (!(f & sameBit)) { v += bytes.readInt16BE(p); p += 2; }
+      out[i] = v;
+    }
+    return out;
+  };
+  const xs = read(2, 16), ys = read(4, 32);
+
+  const out = [];
+  let start = 0;
+  for (let c = 0; c < n; c++) {
+    const end = bytes.readUInt16BE(endsAt + c * 2);
+    const pts = [];
+    for (let i = start; i <= end; i++) {
+      pts.push({ x: xs[i], y: ys[i], on: (flags[i] & 1) !== 0 });
+    }
+    start = end + 1;
+    if (pts.length) out.push(flatten(pts));
+  }
+  return out;
+}
+
+/// One contour's on- and off-curve points as a closed polyline.
+///
+/// TrueType allows two off-curve points in a row and means an on-curve point at their midpoint,
+/// so the implied points are inserted first and the contour is then a plain alternation. A
+/// contour may also begin off-curve, which is why the starting point is searched for rather than
+/// assumed to be the first one.
+function flatten(pts) {
+  const full = [];
+  for (let i = 0; i < pts.length; i++) {
+    const a = pts[i], b = pts[(i + 1) % pts.length];
+    full.push(a);
+    if (!a.on && !b.on) full.push({ x: (a.x + b.x) / 2, y: (a.y + b.y) / 2, on: true });
+  }
+
+  let first = full.findIndex((p) => p.on);
+  if (first < 0) return [];                                    // all off-curve: not a contour
+  const ring = full.slice(first).concat(full.slice(0, first));
+
+  const line = [{ x: ring[0].x, y: ring[0].y }];
+  for (let i = 1; i <= ring.length; i++) {
+    const p = ring[i % ring.length];
+    if (p.on) { line.push({ x: p.x, y: p.y }); continue; }
+    const from = line[line.length - 1];
+    const to = ring[(i + 1) % ring.length];
+    for (let s = 1; s <= CURVE_STEPS; s++) {
+      const t = s / CURVE_STEPS, u = 1 - t;
+      line.push({
+        x: u * u * from.x + 2 * u * t * p.x + t * t * to.x,
+        y: u * u * from.y + 2 * u * t * p.y + t * t * to.y,
+      });
+    }
+    i++;
+  }
+  return line;
+}
+
+// ---------------------------------------------------------------- the canvas
+
+/// A rectangular RGBA surface. The icon rasteriser above writes straight into a buffer because it
+/// draws one shape on a transparent square; the card composites half a dozen things onto an
+/// opaque ground, so it wants a blend rather than an assignment.
+function canvas(w, h) {
+  const px = Buffer.alloc(w * h * 4);
+  return {
+    w, h, px,
+    /// Source-over, with the destination known to be opaque - which it is, because the first
+    /// thing every card does is fill itself with the ground.
+    blend(x, y, [r, g, b], a) {
+      if (a <= 0 || x < 0 || y < 0 || x >= w || y >= h) return;
+      const i = (y * w + x) * 4;
+      px[i]     = Math.round(px[i]     + (r - px[i])     * a);
+      px[i + 1] = Math.round(px[i + 1] + (g - px[i + 1]) * a);
+      px[i + 2] = Math.round(px[i + 2] + (b - px[i + 2]) * a);
+      px[i + 3] = 255;
+    },
+    fill(colour) {
+      const [r, g, b] = colour;
+      for (let i = 0; i < px.length; i += 4) {
+        px[i] = r; px[i + 1] = g; px[i + 2] = b; px[i + 3] = 255;
+      }
+    },
+  };
+}
+
+/// The accent glow behind the mark. Squared falloff rather than linear, because a linear ramp
+/// bands visibly across six hundred pixels of nearly-black ground.
+function bloom(c, cx, cy, radius, strength, colour) {
+  for (let y = Math.max(0, cy - radius | 0); y < Math.min(c.h, cy + radius); y++) {
+    for (let x = Math.max(0, cx - radius | 0); x < Math.min(c.w, cx + radius); x++) {
+      const t = 1 - Math.hypot(x - cx, y - cy) / radius;
+      if (t > 0) c.blend(x, y, colour, t * t * strength);
+    }
+  }
+}
+
+/// The faint grid, fading out with distance from one corner so it reads as texture rather than
+/// as graph paper. Drawn under everything else and never over the type.
+function grid(c, step, colour, strength, fromX, fromY, reach) {
+  for (let y = 0; y < c.h; y++) {
+    for (let x = 0; x < c.w; x++) {
+      if (x % step !== 0 && y % step !== 0) continue;
+      const t = 1 - Math.hypot(x - fromX, y - fromY) / reach;
+      if (t > 0) c.blend(x, y, colour, t * t * strength);
+    }
+  }
+}
+
+function rect(c, x, y, w, h, colour, radius = 0) {
+  for (let py = Math.floor(y); py < Math.ceil(y + h); py++) {
+    for (let px = Math.floor(x); px < Math.ceil(x + w); px++) {
+      const d = sdRoundBox(px + 0.5, py + 0.5, x + w / 2, y + h / 2, w / 2, h / 2, radius);
+      c.blend(px, py, colour, Math.max(0, Math.min(1, 0.5 - d)));
+    }
+  }
+}
+
+/// The mark, at any size and anywhere, from the same numbers the icon is cut from. Unplated: on
+/// a card the ground IS the plate, and a rounded square drawn on top of it is a box round a logo
+/// that does not need one.
+function mark(c, left, top, size, colour) {
+  const g = geometry(256);
+  const k = size / 256;
+  for (let y = 0; y < size; y++) {
+    for (let x = 0; x < size; x++) {
+      // The same 1.16 enlargement about the centre that findra-flat.svg carries, for the same
+      // reason: with no plate around it there is no plate's breathing room to keep.
+      const dx = (x + 0.5) / k, dy = (y + 0.5) / k;
+      const ux = (dx - 128) / 1.16 + 128, uy = (dy - 128) / 1.16 + 128;
+      const lens = Math.max(
+        sdCircle(ux, uy, g.disc),
+        -sdRoundBox(ux, uy, g.disc.cx, g.disc.cy, g.slot.w / 2, g.slot.h / 2, g.slot.h / 2));
+      const d = Math.min(lens, sdSegment(ux, uy, g.hand)) * k * 1.16;
+      c.blend(left + x, top + y, colour, Math.max(0, Math.min(1, 0.5 - d)));
+    }
+  }
+}
+
+// ---------------------------------------------------------------- setting type
+
+const FACE = openFont(readFileSync(join(ROOT, 'assets', 'fonts', 'Quicksand-Regular.ttf')));
+
+/// How much a glyph's outline is pushed outward to stand in for a bold weight, as a fraction of
+/// the size. Only Quicksand Regular ships - `Parts.Face` resolves that one file and the
+/// application's own bold is `SKFont.Embolden` on it - so the card fakes bold by the same means
+/// rather than introducing a second font file the licence would then have to travel with.
+const EMBOLDEN = 0.022;
+
+/// The advance width of a string, in pixels, before it is drawn. Everything centred or
+/// right-aligned on either card needs this, and measuring is the only honest way to get it:
+/// guessing an average character width is how a wordmark ends up a few pixels off its own icon.
+function widthOf(text, size, tracking = 0) {
+  let w = 0;
+  for (const ch of text) {
+    w += FACE.advanceOf(FACE.glyphOf(ch.codePointAt(0))) * size / FACE.upm + tracking * size;
+  }
+  return w - (text.length ? tracking * size : 0);
+}
+
+/// A run of text, drawn glyph by glyph on its baseline.
+///
+/// Each glyph is rasterised only inside its own bounding box rather than over the whole card:
+/// the distance to every segment of every letter, for every pixel of a 1200 by 630 image, is
+/// billions of square roots and minutes of waiting. Confined to the glyph it belongs to it is a
+/// few million and imperceptible.
+function text(c, str, x, baseline, size, colour, { bold = false, tracking = 0 } = {}) {
+  const scale = size / FACE.upm;
+  const grow = bold ? size * EMBOLDEN : 0;
+  const pad = Math.ceil(grow) + 2;
+  let pen = x;
+
+  for (const ch of str) {
+    const gid = FACE.glyphOf(ch.codePointAt(0));
+    const advance = FACE.advanceOf(gid) * scale;
+
+    const segments = [];
+    let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+    for (const line of contours(FACE, gid)) {
+      for (let i = 0; i < line.length; i++) {
+        const a = line[i], b = line[(i + 1) % line.length];
+        // Font units are y-up and the canvas is y-down, which is the one transform that has to
+        // happen exactly once. It happens here.
+        const ax = pen + a.x * scale, ay = baseline - a.y * scale;
+        const bx = pen + b.x * scale, by = baseline - b.y * scale;
+        segments.push([ax, ay, bx, by]);
+        x0 = Math.min(x0, ax, bx); y0 = Math.min(y0, ay, by);
+        x1 = Math.max(x1, ax, bx); y1 = Math.max(y1, ay, by);
+      }
+    }
+
+    if (segments.length) {
+      const left = Math.floor(x0) - pad, top = Math.floor(y0) - pad;
+      const right = Math.ceil(x1) + pad, bottom = Math.ceil(y1) + pad;
+      for (let py = top; py <= bottom; py++) {
+        for (let px = left; px <= right; px++) {
+          const cx = px + 0.5, cy = py + 0.5;
+          let best = Infinity, winding = 0;
+          for (const [ax, ay, bx, by] of segments) {
+            best = Math.min(best, distanceToSegment(cx, cy, ax, ay, bx, by));
+            // Nonzero winding, which is the fill rule TrueType is defined under: a counter in a
+            // letter is a contour running the other way, and an even-odd test would fill it.
+            if ((ay <= cy) !== (by <= cy)) {
+              const t = (cy - ay) / (by - ay);
+              if (ax + t * (bx - ax) > cx) winding += by > ay ? 1 : -1;
+            }
+          }
+          const d = (winding !== 0 ? -best : best) - grow;
+          c.blend(px, py, colour, Math.max(0, Math.min(1, 0.5 - d)));
+        }
+      }
+    }
+
+    pen += advance + tracking * size;
+  }
+  return pen - x - (str.length ? tracking * size : 0);
+}
+
+function distanceToSegment(px, py, ax, ay, bx, by) {
+  const dx = bx - ax, dy = by - ay;
+  const len = dx * dx + dy * dy;
+  const t = len === 0 ? 0 : Math.max(0, Math.min(1, ((px - ax) * dx + (py - ay) * dy) / len));
+  return Math.hypot(px - ax - dx * t, py - ay - dy * t);
+}
+
+// ---------------------------------------------------------------- the share card
+
+// What WhatsApp, X, Facebook, LinkedIn, Slack and Discord show when somebody posts the link. It
+// is drawn here rather than exported from a design tool for the same reason the icon is: it
+// carries the mark, and a second copy of the mark is how one logo quietly becomes two.
+//
+// No screenshot on it. The product's own card is 820 pixels wide and full of 13px type; inside a
+// WhatsApp thumbnail that is grey mush, and a share image that cannot be read at thumbnail size
+// has failed at the only job it has.
+
+const GROUND = hex('#08090c');       // Mond's ground, as the site sets it
+const INK_BRIGHT = hex('#f8f1e4');
+const INK = hex('#ebdbc0');
+const INK_FAINT = hex('#7e786d');
+const ACCENT_RGB = hex(ACCENT);
+
+const HEADLINE = ['WINDOWS SEARCH.', 'BUT IT WORKS.'];
+const SUBLINE = ['0.50 ms to a filename, straight from RAM.', 'Nothing leaves your machine.'];
+const FINE = 'WINDOWS 10 AND 11   /   APACHE-2.0   /   FREE';
+
+/// The 1200 by 630 card: the headline on the left, the lockup on the right.
+///
+/// 1200 by 630 is not a preference. It is the size X and Facebook both crop to, and the existing
+/// og:image - a product screenshot at 820 by 626 - is 1.31:1 against their 1.91:1, so X was
+/// taking a slice out of the middle of it.
+function shareCard() {
+  const c = canvas(1200, 630);
+  c.fill(GROUND);
+  grid(c, 60, INK, 0.05, 240, 190, 900);
+  bloom(c, 985, 250, 420, 0.13, ACCENT_RGB);
+
+  const left = 88;
+  text(c, HEADLINE[0], left, 240, 64, INK_BRIGHT, { bold: true });
+  text(c, HEADLINE[1], left, 316, 64, ACCENT_RGB, { bold: true });
+  text(c, SUBLINE[0], left, 382, 25, INK);
+  text(c, SUBLINE[1], left, 418, 25, INK);
+  rect(c, left, 458, 96, 4, ACCENT_RGB, 2);
+  text(c, FINE, left, 512, 16, INK_FAINT, { bold: true, tracking: 0.1 });
+
+  // The lockup is centred on the icon rather than on the wordmark, because the icon is the part
+  // somebody recognises at thumbnail size and a wordmark hung off-centre under it reads as a
+  // mistake even when nobody can say which part moved.
+  const size = 216, centre = 985;
+  mark(c, Math.round(centre - size / 2), 168, size, ACCENT_RGB);
+  const word = 'FINDRA', track = 0.3, wide = widthOf(word, 44, track);
+  text(c, word, Math.round(centre - wide / 2), 462, 44, INK_BRIGHT, { bold: true, tracking: track });
+
+  return c;
+}
+
+/// The 1080 square, for a feed. It exists for one reason and the reason is worth writing down:
+/// Instagram reads no Open Graph at all and renders no link preview anywhere, so nothing on the
+/// site will ever serve this file. It is posted by hand or not at all.
+function shareSquare() {
+  const c = canvas(1080, 1080);
+  c.fill(GROUND);
+  grid(c, 60, INK, 0.05, 300, 300, 900);
+  bloom(c, 540, 300, 480, 0.13, ACCENT_RGB);
+
+  const size = 232, centre = 540;
+  mark(c, Math.round(centre - size / 2), 168, size, ACCENT_RGB);
+  const word = 'FINDRA', track = 0.3;
+  let wide = widthOf(word, 46, track);
+  text(c, word, Math.round(centre - wide / 2), 470, 46, INK_BRIGHT, { bold: true, tracking: track });
+
+  const middle = (str, y, px, colour, opts) =>
+    text(c, str, Math.round(centre - widthOf(str, px, opts?.tracking ?? 0) / 2), y, px, colour, opts);
+
+  middle(HEADLINE[0], 612, 68, INK_BRIGHT, { bold: true });
+  middle(HEADLINE[1], 694, 68, ACCENT_RGB, { bold: true });
+  middle(SUBLINE[0], 772, 26, INK);
+  middle(SUBLINE[1], 812, 26, INK);
+  rect(c, centre - 55, 858, 110, 4, ACCENT_RGB, 2);
+  middle(FINE, 914, 17, INK_FAINT, { bold: true, tracking: 0.1 });
+
+  return c;
+}
+
+/// A PNG from a rectangular canvas. The icon's own `png` takes one side because an icon is
+/// square by definition; a share card is not, so the two share the chunk writer and nothing else.
+function pngOf(c) {
+  const ihdr = Buffer.alloc(13);
+  ihdr.writeUInt32BE(c.w, 0);
+  ihdr.writeUInt32BE(c.h, 4);
+  ihdr[8] = 8;
+  ihdr[9] = 6;
+
+  const stride = c.w * 4 + 1;
+  const raw = Buffer.alloc(stride * c.h);
+  for (let y = 0; y < c.h; y++) {
+    raw[y * stride] = 0;
+    c.px.copy(raw, y * stride + 1, y * c.w * 4, (y + 1) * c.w * 4);
+  }
+
+  return Buffer.concat([
+    Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+    chunk('IHDR', ihdr),
+    chunk('IDAT', deflateSync(raw, { level: 9 })),
+    chunk('IEND', Buffer.alloc(0)),
+  ]);
+}
+
 // ---------------------------------------------------------------- write
 
 const images = SIZES.map((size) => ({ size, data: png(size, raster(size)) }));
@@ -276,6 +732,12 @@ put('website/public/favicon.svg', Buffer.from(svg(true), 'utf8'));
 // the .ico because Inno wants a bitmap it can scale, and 128 is the size it reads at 250% display
 // scaling - above that it is scaling up, and below it is throwing pixels away.
 put('assets/icon/findra-wizard.png', images.find((i) => i.size === 128).data);
+
+// The two share images. They are emitted from here rather than drawn somewhere else because they
+// carry the mark, and the whole reason this file exists is that there is one copy of the mark.
+mkdirSync(join(ROOT, 'website', 'public', 'share'), { recursive: true });
+put('website/public/share/card.png', pngOf(shareCard()));
+put('website/public/share/square.png', pngOf(shareSquare()));
 
 console.log(`findra.ico carries ${SIZES.join(', ')}`);
 for (const line of wrote) console.log(line);

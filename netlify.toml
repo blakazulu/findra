@@ -1,6 +1,11 @@
-# The site at https://findra-search.netlify.app is plain static files. There is no
-# build step, nothing to compile and no framework: `publish` is the whole configuration.
-# Everything under website/public is deployed exactly as it sits in the repository.
+# The site at https://findra-search.netlify.app is static files. There is no build step, nothing
+# to compile and no framework: everything under website/public is deployed exactly as it sits in
+# the repository, and the two generators that produce some of it - build/Make-Pages.mjs and
+# build/Make-Icon.mjs - are run by hand and are not known to this file or to Netlify.
+#
+# There is one exception to "static files", and it is netlify/edge-functions/markdown.ts. Serving
+# a page as Markdown to an agent that asked for it with an Accept header cannot be done with a
+# header rule or a redirect, because neither can read Accept. Everything else here is a file.
 
 [build]
   publish = "website/public"
@@ -22,6 +27,27 @@
   for = "/shots/*"
   [headers.values]
     Cache-Control = "public, max-age=604800"
+
+[[headers]]
+  for = "/share/*"
+  [headers.values]
+    Cache-Control = "public, max-age=604800"
+
+# The Markdown twins of the four pages, plus llms.txt. Served as text/markdown rather than as a
+# download, and declared as varying on Accept because these same bytes are what the edge function
+# hands back from the page URLs - a cache that does not know that will serve one variant for both.
+[[headers]]
+  for = "/*.md"
+  [headers.values]
+    Content-Type = "text/markdown; charset=utf-8"
+    Vary = "Accept, Accept-Encoding"
+    Cache-Control = "public, max-age=0, must-revalidate"
+
+[[headers]]
+  for = "/llms.txt"
+  [headers.values]
+    Content-Type = "text/markdown; charset=utf-8"
+    Cache-Control = "public, max-age=3600"
 
 [[headers]]
   for = "/*.svg"

@@ -259,4 +259,69 @@ public class IconTests
         // this method was split out of Draw to be reachable from a test at all.
         Assert.Equal(0, Tray(110f, 108f).Alpha);
     }
+
+    // ---------------------------------------------------------------- the share card
+
+    /// <summary>The mark on the share card, in the card's own pixels.</summary>
+    ///
+    /// <para>build/Make-Icon.mjs draws the card's mark unplated and enlarged 1.16 about the centre
+    /// of the design square - the same enlargement findra-flat.svg carries, and for the same
+    /// reason: with no plate around it there is no plate's breathing room to keep. This mirrors
+    /// that transform so a sample below can be written as the design coordinate it means.</para>
+    private static SKColor OnCard(SKBitmap bmp, double x, double y)
+    {
+        const int Left = 877, Top = 168, Size = 216;   // as shareCard() places it
+        double k = Size / 256.0;
+        double dx = (x - 128) * 1.16 + 128, dy = (y - 128) * 1.16 + 128;
+        return bmp.GetPixel(Left + (int)(dx * k), Top + (int)(dy * k));
+    }
+
+    /// <summary>
+    /// The share card carries the same mark as the icon, in Mond's own colours, and is opaque.
+    ///
+    /// <para>This is the sixth copy of one logo and the newest, which makes it the easiest to
+    /// change without changing the others. It is also the copy the fewest people will ever look at
+    /// closely: it is seen at thumbnail size in a WhatsApp thread, by somebody who has never seen
+    /// the product and has no idea what it is supposed to look like.</para>
+    ///
+    /// <para>Opacity is asserted because a share image is composited onto a background chosen by
+    /// whichever client is showing it. A card with a transparent pixel is a card that is black on
+    /// Discord and white on X, and nobody would find out from looking at the file.</para>
+    /// </summary>
+    [Fact]
+    public void TheShareCardDrawsTheSameLensInMondsOwnColours()
+    {
+        using SKBitmap bmp = SKBitmap.Decode(Repo.Path_("website/public/share/card.png"));
+        Assert.NotNull(bmp);
+        Assert.Equal(1200, bmp.Width);
+        Assert.Equal(630, bmp.Height);
+
+        // Mond's ground, in a corner the bloom does not reach.
+        SKColor corner = bmp.GetPixel(8, 620);
+        Assert.Equal(255, corner.Alpha);
+        Assert.Equal(new SKColor(0x08, 0x09, 0x0C), corner);
+
+        // The lens ring, in the accent. Same design coordinate the tray icon's ring is sampled at.
+        SKColor lens = OnCard(bmp, 110, 72);
+        Assert.Equal(255, lens.Alpha);
+        Assert.Equal(Accent, lens);
+
+        // And the slot is cut out of it. On a card the hole shows the card's own ground rather
+        // than transparency - there is nothing behind a share image to show through - so what is
+        // asserted is that it is NOT the accent and is dark.
+        SKColor slot = OnCard(bmp, 110, 108);
+        Assert.NotEqual(Accent, slot);
+        Assert.True(slot.Red + slot.Green + slot.Blue < 180,
+                    $"the slot in the share card's lens is filled rather than cut out: {slot}");
+
+        // Every pixel opaque. Checked over the whole image rather than at a sample, because a
+        // single transparent pixel is exactly the kind of thing a sample misses.
+        for (int y = 0; y < bmp.Height; y += 7)
+        {
+            for (int x = 0; x < bmp.Width; x += 7)
+            {
+                Assert.Equal(255, bmp.GetPixel(x, y).Alpha);
+            }
+        }
+    }
 }
