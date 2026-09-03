@@ -23,7 +23,7 @@ public static class SearchShot
     [
         "capsule", "empty", "typing", "results", "noresults", "many", "adv", "opening", "openingempty",
         "settings", "settingsopening", "settingssearches", "settingscontent", "settingsabout",
-        "firstrun", "firstrunspeech", "firstrundownloading",
+        "firstrun", "firstrunspeech", "firstrundownloading", "firstrunfinished",
     ];
 
     public static int Render(string outPath, string state, string? paletteName = null)
@@ -170,7 +170,7 @@ public static class SearchShot
     }
 
     /// <summary>
-    /// Spec §6's first screen, in all three of the shapes it takes.
+    /// Spec §6's first screen, in all four of the shapes it takes.
     ///
     /// <para>Built on the REAL numbers - every size comes through <c>FirstRun.Rows</c> and the
     /// summary through <c>FirstRun.Summary</c>, so a shot of this screen cannot quote a figure the
@@ -182,10 +182,17 @@ public static class SearchShot
     /// because the transcription limit is only on the screen when Speech is taken and the two
     /// layouts are what a review has to compare: the row appears between Speech and the Hebrew
     /// pass, and everything below it moves down by a band.</para>
+    ///
+    /// <para><c>firstrunfinished</c> is a state of its own for the same kind of reason, and it is
+    /// the one that was missing. The end of a run is a painter branch nobody had ever rendered:
+    /// its own title, its own sentence, no problem to report, and both bars full - which is
+    /// exactly the arm a defect hid in, because a download that could never finish was reported
+    /// by nothing anybody looked at.</para>
     /// </summary>
     private static SKBitmap RenderFirstRun(string state, Derived d, SKTypeface face)
     {
-        bool busy = state == "firstrundownloading";
+        bool done = state == "firstrunfinished";
+        bool busy = state == "firstrundownloading" || done;
         bool speech = state == "firstrunspeech";
         var s = new FirstRunState
         {
@@ -200,20 +207,32 @@ public static class SearchShot
             // untouched screen would put it - and shows that the control is answered rather than
             // decorative.
             TranscribeMinutes = speech ? 30 : TranscribeLimit.Default,
-            Stage = busy ? FirstRunStage.Downloading : FirstRunStage.Choosing,
-            Downloads = busy
+            Stage = done ? FirstRunStage.Finished
+                  : busy ? FirstRunStage.Downloading
+                  : FirstRunStage.Choosing,
+            Downloads = done
+                ?
+                [
+                    new CapabilityProgress(Capability.Photos, 659_000_000, 659_000_000),
+                    new CapabilityProgress(Capability.Meaning, 283_000_000, 283_000_000),
+                ]
+                : busy
                 ?
                 [
                     new CapabilityProgress(Capability.Photos, 659_000_000, 659_000_000),
                     new CapabilityProgress(Capability.Meaning, 96_000_000, 283_000_000),
                 ]
                 : [],
-            Problem = busy ? "the connection dropped" : "",
+            // The finished shot carries no problem, because "everything arrived" is the arm the
+            // summary has to be able to reach and a run with a fault never reaches it.
+            Problem = busy && !done ? "the connection dropped" : "",
             // Hovered, because a resting surface never shows what RowHover looks like beside Row -
             // the defect that let hover sit within 1.4 L* of a resting row on two palettes. The
             // speech state hovers a limit pill that is not the chosen one, which is the only place
             // a pill's hover fill is painted on this screen at all.
-            HoverTarget = busy ? FirstRunTarget.NotNow : speech ? FirstRunTarget.Limit : FirstRunTarget.Row,
+            // In the second act the way out is the only thing that answers a pointer at all, so
+            // it is the only thing a hover can be on. "Not now" is not drawn there.
+            HoverTarget = busy ? FirstRunTarget.Go : speech ? FirstRunTarget.Limit : FirstRunTarget.Row,
             // 3 is the Hebrew row on the choosing screen and the "2 hr" pill on the speech one -
             // in both cases something other than what is already chosen.
             HoverIndex = busy ? -1 : 3,

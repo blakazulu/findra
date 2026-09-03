@@ -110,6 +110,13 @@ public sealed class FirstRunWindow : Window
         /// aim at the row the pills have just pushed down.</summary>
         private int LimitRow => FirstRun.LimitRow(_state);
 
+        /// <summary>Has the screen been answered? Read per event for the same reason the row
+        /// count is, and handed to the hit test so that the tiles, the rows, the limit pills and
+        /// the switches stop answering the moment the selection leaves for the shell. The stage
+        /// check further down was a partial version of this: it stopped a click CHANGING the
+        /// selection but left every control lit, hovering and offering a hand cursor.</summary>
+        private bool Settled => _state.Stage != FirstRunStage.Choosing;
+
         public void NoteFetching(IReadOnlyList<Model> models)
         {
             _fetching = models;
@@ -136,7 +143,7 @@ public sealed class FirstRunWindow : Window
         protected override void OnPointerMoved(PointerEventArgs e)
         {
             Point p = e.GetPosition(this);
-            FirstRunHit hit = FirstRunLayout.HitTest((float)p.X, (float)p.Y, Rows, LimitRow);
+            FirstRunHit hit = FirstRunLayout.HitTest((float)p.X, (float)p.Y, Rows, LimitRow, Settled);
             if (hit.Target == _state.HoverTarget && hit.Index == _state.HoverIndex) return;
             _state = _state with { HoverTarget = hit.Target, HoverIndex = hit.Index };
             Cursor = PointerCursor.Of(Pointers.ForFirstRun(hit.Target));
@@ -154,7 +161,7 @@ public sealed class FirstRunWindow : Window
         {
             Focus();
             Point p = e.GetPosition(this);
-            FirstRunHit hit = FirstRunLayout.HitTest((float)p.X, (float)p.Y, Rows, LimitRow);
+            FirstRunHit hit = FirstRunLayout.HitTest((float)p.X, (float)p.Y, Rows, LimitRow, Settled);
 
             // The title strip is the only place a borderless window can be picked up by.
             if (hit.Target == FirstRunTarget.None && p.Y < FirstRunLayout.TileTop)

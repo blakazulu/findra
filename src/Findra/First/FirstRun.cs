@@ -99,6 +99,58 @@ public static class FirstRun
     /// </summary>
     public const string LimitLabel = "Transcribe up to";
 
+    /// <summary>
+    /// What the number actually decides, under the pills that set it.
+    ///
+    /// <para>The label says "Transcribe up to" and the row above it says Speech, so somebody
+    /// reading this screen has no way to know the number also governs every video on the disk.
+    /// The settings window has said so since it was written; the screen where a 547 MB download
+    /// is agreed to said nothing.</para>
+    ///
+    /// <para>The second half is a statement about <c>Decoders.Video</c> rather than a
+    /// reassurance: a video whose sound track is passed over for length is INDEXED with a note
+    /// rather than skipped, because its frames were read - and the frames are read only where
+    /// Photos is installed, which is why the sentence names that condition instead of promising
+    /// them unconditionally.</para>
+    /// </summary>
+    public const string LimitNote =
+        "One number for audio and video. A video past it is still found by its frames where " +
+        "Photos is ticked; only its words are skipped.";
+
+    /// <summary>
+    /// What "Look inside my files" means, under the switch that turns it on.
+    ///
+    /// <para>It was a bare label while the update check under it carried four lines - the most
+    /// consequential privacy choice on the screen explained by nothing and the least consequential
+    /// one at length. Four facts, each checked against the code or against <c>PRIVACY.md</c>
+    /// rather than written from the label: names are searchable either way, which is what makes
+    /// "Not now" a complete answer; it walks the drives and reads inside what it finds, which is
+    /// hours of work and not a switch that finishes; it happens only while Findra is open,
+    /// because the indexer is a child of the interface and there is no service; and the text it
+    /// reads is kept in an index in the user's own profile that is not encrypted, which is the
+    /// privacy page's own straight answer and must not be softer here than it is there.</para>
+    /// </summary>
+    public const string ContentNote =
+        "Names are searchable either way; this is only about what is inside files. Findra walks " +
+        "your drives and reads them, which can take hours on a full disk and happens only while " +
+        "Findra is open. The text it reads is kept in an index in your user profile, which is " +
+        "not encrypted.";
+
+    /// <summary>The label on the button that closes this window, in both halves of the second
+    /// act. It says what it does: the answer has already been given and the download belongs to
+    /// the shell, so there is nothing left to confirm.</summary>
+    public const string CloseLabel = "Close";
+
+    /// <summary>The label on the left-hand button, which exists only while the screen is still a
+    /// question.</summary>
+    public const string NotNowLabel = "Not now";
+
+    /// <summary>The right-hand button's label. One function rather than three literals in the
+    /// painter, so the test that measures every label into its pill measures what is drawn.
+    /// </summary>
+    public static string GoLabel(FirstRunStage stage) =>
+        stage == FirstRunStage.Choosing ? "Get these" : CloseLabel;
+
     /// <summary>The five choices, in <see cref="TranscribeLimit.Presets"/> order, so an option
     /// index is an index into that list and there is nothing to keep in step.</summary>
     public static IReadOnlyList<string> LimitOptions { get; } =
@@ -222,7 +274,22 @@ public static class FirstRun
                 ? " You can close this; it carries on in the tray."
                 : "";
 
-            return $"{done.ToString(Fixed)} of {s.Downloads.Count.ToString(Fixed)} done{which}.{trouble}{tail}";
+            // "2 of 4 done" could be anything, and content indexing - a different, later and far
+            // longer job - may be about to start on the same machine. The word that distinguishes
+            // them goes in front of the count while the count is still moving.
+            string doing = s.Stage == FirstRunStage.Downloading ? "Downloading model files. " : "";
+
+            // And the end of the run says it has ended, and where the way out is. A finished run
+            // that reported only its count left somebody looking at "1 of 1 done" with no reason
+            // to believe anything more was going to happen.
+            string over = s.Stage == FirstRunStage.Finished && s.Problem.Length == 0 && current is null
+                // Not "Findra is ready" - the title says that, two inches above, and a screen
+                // that says the same thing twice in two registers reads as one thing said badly.
+                ? " Everything you chose has arrived, and you can close this window."
+                : "";
+
+            return $"{doing}{done.ToString(Fixed)} of {s.Downloads.Count.ToString(Fixed)} " +
+                   $"done{which}.{trouble}{over}{tail}";
         }
 
         if (s.Chosen.Count == 0)
@@ -277,6 +344,16 @@ public static class FirstRun
     /// made of, so the bars and the summary cannot disagree. Bytes moved are clamped to them: a
     /// real file usually misses its declared size upward, and a bar past its own end is worse
     /// than one that stops at it.</para>
+    ///
+    /// <para><b>A file finished is credited its whole declared size, not the bytes that moved.
+    /// </b> The declared table is the specification's figure in megabytes to one decimal place,
+    /// and two of the seven real files are SMALLER than it - the vision tower by 42,692 bytes and the
+    /// Hebrew fine-tune by 3,521. Crediting what arrived leaves those two capabilities permanently
+    /// 0.012% short, so a complete Everything install reads "2 of 4 done" with every bar
+    /// visually full and nothing ever moving again. <see cref="ModelStore.SizeMatchesDeclared"/>
+    /// is the existing answer to "is a file this long that file", asked here for the same reason
+    /// the downloader and the report ask it; the clamp above stays for the four files that miss
+    /// upward.</para>
     /// </summary>
     public static IReadOnlyList<CapabilityProgress> Progress(
         FirstRunState s, IReadOnlyList<Model> fetching, IReadOnlyDictionary<string, long> moved)
@@ -297,9 +374,10 @@ public static class FirstRun
             foreach (Model m in Capabilities.OwnModels(c))
             {
                 total += m.Bytes;
-                got += wanted.Contains(m.File)
-                    ? Math.Min(moved.TryGetValue(m.File, out long n) ? n : 0, m.Bytes)
-                    : m.Bytes;
+                if (!wanted.Contains(m.File)) { got += m.Bytes; continue; }   // already on disk
+
+                long n = moved.TryGetValue(m.File, out long moved_) ? moved_ : 0;
+                got += ModelStore.SizeMatchesDeclared(m.Bytes, n) ? m.Bytes : Math.Min(n, m.Bytes);
             }
             if (total > 0) bars.Add(new CapabilityProgress(c, got, total));
         }
@@ -310,7 +388,10 @@ public static class FirstRun
     {
         Capability.Photos => "Find a picture by what is in it, and a video by what a frame looks like.",
         Capability.Meaning => "Find a document by what it means, not only by the words it uses.",
-        Capability.Speech => "Transcribe recordings and search what was said. Uses the document models too.",
+        // "recordings" alone is what left somebody asking whether video was included, with a row
+        // directly above called "Photos and video" making video look like somebody else's
+        // business. This is the row that introduces transcription, so it is where video is named.
+        Capability.Speech => "Transcribe what is said in recordings and videos. Uses the document models too.",
         Capability.Hebrew => "A second pass over recordings detected as Hebrew, after the general model.",
         _ => "",
     };

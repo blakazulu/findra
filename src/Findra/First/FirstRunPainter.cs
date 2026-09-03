@@ -35,7 +35,7 @@ public static class FirstRunLayout
     /// <c>TheLongestSummaryFitsTheBandTheLayoutLeavesForIt</c> hold this to both configurations
     /// and to what the longest sentence actually measures.</para>
     /// </summary>
-    public const float Height = 872f;
+    public const float Height = 928f;
     public const float Pad = RailLayout.Pad;
     public const float Radius = RailLayout.Radius;
 
@@ -54,11 +54,22 @@ public static class FirstRunLayout
     /// exactly this, and the air the band does not draw in belongs to nothing, so a click that
     /// misses a pill ticks no capability.</para>
     /// </summary>
-    public const float LimitBand = 44f;
+    public const float LimitBand = 64f;
 
     /// <summary>The part of the band that is drawn - a label and five pills, on the pill height
     /// the settings window uses, with the rest of the band as air below it.</summary>
     public const float LimitH = 34f;
+
+    /// <summary>
+    /// The note under the pills, saying what the number actually decides.
+    ///
+    /// <para>A constant rather than a measurement, for the reason <see cref="DisclosureH"/> is
+    /// one: a layout that measured the sentence would need a typeface and every hit test would
+    /// then carry a font. <c>TheLimitNoteFitsTheBandTheLayoutReservesForIt</c> is what holds the
+    /// constant to what <see cref="FirstRun.LimitNote"/> actually measures in the shipped face.
+    /// </para>
+    /// </summary>
+    public const float LimitNoteH = 20f;
 
     /// <summary>A limit pill and the air between two of them. Five pills right-aligned with the
     /// column the row sizes are right-aligned in, so the two columns read as one edge. 76px holds
@@ -109,6 +120,17 @@ public static class FirstRunLayout
     /// </summary>
     public const float DisclosureH = 52f;
 
+    /// <summary>
+    /// The band the content note is drawn in, between the first switch and the second.
+    ///
+    /// <para>The same shape as <see cref="DisclosureH"/> and there for a blunter reason: "Look
+    /// inside my files" is the most consequential choice on the screen and it was a bare label,
+    /// while the update check below it carried four lines. Two lines of prose, held to
+    /// <see cref="FirstRun.ContentNote"/>'s real measurement by
+    /// <c>TheContentNoteFitsTheBandTheLayoutReservesForIt</c>.</para>
+    /// </summary>
+    public const float ContentNoteH = 36f;
+
     public const float ButtonW = 132f;
     public const float ButtonH = 34f;
 
@@ -157,6 +179,22 @@ public static class FirstRunLayout
     /// row's title starts to where the first pill begins.</summary>
     public static float LimitLabelLeft(int limitRow) => LimitRect(limitRow).Left + TitleInset;
 
+    /// <summary>The note's own band, under the pills and inside the room the rows below already
+    /// moved down for. It starts where the label does, so it reads as this row's note rather than
+    /// as a line belonging to the list.</summary>
+    public static SKRect LimitNoteRect(int limitRow)
+    {
+        SKRect r = LimitRect(limitRow);
+        return new SKRect(LimitLabelLeft(limitRow), r.Bottom, r.Right, r.Bottom + LimitNoteH);
+    }
+
+    /// <summary>The content switch's note: under the first switch, above the second.</summary>
+    public static SKRect ContentNoteRect(int rows, int limitRow = -1)
+    {
+        SKRect s = SwitchRect(0, rows, limitRow);
+        return new SKRect(s.Left, s.Bottom + SwitchGap, s.Right, s.Bottom + SwitchGap + ContentNoteH);
+    }
+
     /// <summary>The rule drawn through the dead zone, between the list and the switches. Its own
     /// band rather than a y, because the hit test has to be able to say that nothing lives here:
     /// a rule that answered a click would be the dead zone with a target painted on it.</summary>
@@ -169,13 +207,15 @@ public static class FirstRunLayout
     }
 
     /// <summary>The three switches sit under however many rows there are, so a machine with no
-    /// Hebrew does not leave a gap where its row would have been. The third is pushed down by the
-    /// disclosure that belongs to the second, and all three by the limit row when it is there.
+    /// Hebrew does not leave a gap where its row would have been. The second and third are pushed
+    /// down by the note that belongs to the first, the third again by the disclosure that belongs
+    /// to the second, and all three by the limit row when it is there.
     /// </summary>
     public static SKRect SwitchRect(int i, int rows, int limitRow = -1)
     {
         float top = RowsTop + rows * RowH + Shift(rows, limitRow) + RowsToSwitchesGap
                   + i * (SwitchH + SwitchGap)
+                  + (i >= 1 ? ContentNoteH : 0f)
                   + (i >= 2 ? DisclosureH : 0f);
         return new SKRect(Inset, top, Width - Inset, top + SwitchH);
     }
@@ -201,14 +241,42 @@ public static class FirstRunLayout
         new(Inset, SwitchRect(2, rows, limitRow).Bottom + 12,
             Width - Inset - ButtonW * 2 - TileGap, ButtonRect(0).Top - 6);
 
+    /// <summary>
+    /// The summary's band once the screen has been answered, which is a different band and not a
+    /// different anchor inside the same one.
+    ///
+    /// <para>The second act draws no switches, so the room they took is empty and the sentence
+    /// that carries the screen would otherwise sit alone against the bottom with three hundred
+    /// pixels of nothing above it. Here it follows the list it is about, under the rule, and the
+    /// slack falls between it and the button - which is the shape of every progress dialog and
+    /// not a hole in the middle of one. Wider than the choosing band too: "Not now" is not drawn
+    /// in the second act, so the sentence has the whole card rather than the card less two
+    /// buttons.</para>
+    /// </summary>
+    public static SKRect SettledSummaryRect(int rows, int limitRow = -1) =>
+        new(Inset, RowRect(rows - 1, limitRow).Bottom + RowsToSwitchesGap,
+            Width - Inset - ButtonW - TileGap, ButtonRect(0).Top - 6);
+
     /// <summary>Tiles, rows, the transcription limit, switches, buttons, in that order, each
     /// bounded by what is actually drawn. <paramref name="rows"/> is
     /// <c>FirstRun.Rows(state).Count</c>, which is one shorter where Hebrew is not offered;
     /// <paramref name="limitRow"/> is <c>FirstRun.LimitRow(state)</c>, which is -1 where Speech is
-    /// not taken.</summary>
-    public static FirstRunHit HitTest(float x, float y, int rows, int limitRow = -1)
+    /// not taken.
+    ///
+    /// <para><paramref name="settled"/> is the second act, and it answers with the way out and
+    /// nothing else. Once the screen has been answered the selection belongs to the shell: a
+    /// tile, a row, a switch or a limit pill that still took a click would be acting on a
+    /// decision that has already been handed over, and a download that had begun would not
+    /// change with it. The painter draws the same distinction rather than leaving controls
+    /// looking live.</para></summary>
+    public static FirstRunHit HitTest(float x, float y, int rows, int limitRow = -1, bool settled = false)
     {
         if (x < 0 || x > Width || y < 0 || y > Height) return new FirstRunHit(FirstRunTarget.None, -1);
+
+        if (settled)
+            return ButtonRect(1).Contains(x, y)
+                ? new FirstRunHit(FirstRunTarget.Go, -1)
+                : new FirstRunHit(FirstRunTarget.None, -1);
 
         for (int i = 0; i < 3; i++)
             if (TileRect(i).Contains(x, y)) return new FirstRunHit(FirstRunTarget.Preset, i);
@@ -340,11 +408,24 @@ public static class FirstRunPainter
 
         int limitRow = FirstRun.LimitRow(s);
 
+        // The tiles and the rows are drawn in both acts: in the first they are the question, in
+        // the second they are the record of what was asked for and how far each part of it has
+        // got. Everything else on the screen is a SETTING, and a setting whose value has already
+        // been written and handed to the shell is not a control any more.
         Tiles(canvas, s, d, face);
         for (int i = 0; i < rows.Count; i++) Row(canvas, rows[i], i, s, d, face, busy, limitRow);
-        if (limitRow >= 0) Limit(canvas, s, limitRow, d, face);
-        Rule(canvas, FirstRunLayout.RuleRect(rows.Count, limitRow), d);
-        Switches(canvas, s, rows.Count, limitRow, d, face);
+
+        // So the second act stops drawing them. Not dimmed and not greyed: a toggle drawn faintly
+        // is still a toggle, and text faded far enough to read as disabled is text that fails the
+        // reading this screen holds every other mark to. The switches, their notes and the
+        // transcription limit go, and the rule goes with them because a parting between a list
+        // and nothing is not a parting. What is left is the download and the way out of it.
+        if (!busy)
+        {
+            if (limitRow >= 0) Limit(canvas, s, limitRow, d, face);
+            Rule(canvas, FirstRunLayout.RuleRect(rows.Count, limitRow), d);
+            Switches(canvas, s, rows.Count, limitRow, d, face);
+        }
 
         // A lead, not a note. Every row states its own download and none of them moves any more,
         // so this is the only line that says what the whole selection costs - and what is still
@@ -357,25 +438,31 @@ public static class FirstRunPainter
         // time. Against the buttons it stays where it is and the slack falls into the air above
         // it, which is the one part of the screen with nothing in it.
         string summary = FirstRun.Summary(s);
-        SKRect band = FirstRunLayout.SummaryRect(rows.Count, limitRow);
+        SKRect band = busy
+            ? FirstRunLayout.SettledSummaryRect(rows.Count, limitRow)
+            : FirstRunLayout.SummaryRect(rows.Count, limitRow);
         float need = Parts.LeadHeight(Parts.Wrap(summary, face, Parts.LeadSize, band.Width).Count);
-        Parts.Lead(canvas, summary, new SKRect(band.Left, band.Bottom - need, band.Right, band.Bottom), d, face);
+        // Against the TOP of the second act's band and the BOTTOM of the first's, because the two
+        // bands are the wrong way round from each other: in the first act the slack is above the
+        // sentence, in the second it is below it, and in both the sentence stays put.
+        Parts.Lead(canvas, summary,
+                   busy
+                       ? new SKRect(band.Left, band.Top, band.Right, band.Top + need)
+                       : new SKRect(band.Left, band.Bottom - need, band.Right, band.Bottom),
+                   d, face);
 
         // One button in the second act, not two. The answer has already been given, so "Not now"
         // has nothing left to decline and a second pill that does exactly what the first one does
         // is a choice with no difference in it.
         if (!busy)
-            Parts.Pill(canvas, FirstRunLayout.ButtonRect(0), "Not now",
+            Parts.Pill(canvas, FirstRunLayout.ButtonRect(0), FirstRun.NotNowLabel,
                        chosen: false, hovered: s.HoverTarget == FirstRunTarget.NotNow, d, face);
 
-        Parts.Pill(canvas, FirstRunLayout.ButtonRect(1),
-                   s.Stage switch
-                   {
-                       FirstRunStage.Downloading => "Close",
-                       FirstRunStage.Finished => "Done",
-                       _ => "Get these",
-                   },
-                   chosen: !busy, hovered: s.HoverTarget == FirstRunTarget.Go, d, face);
+        // Lit in the second act as well as the first. It is the only thing on the screen that
+        // still answers, and a settled chooser behind an unlit button is a screen with no way out
+        // that anybody can see.
+        Parts.Pill(canvas, FirstRunLayout.ButtonRect(1), FirstRun.GoLabel(s.Stage),
+                   chosen: true, hovered: s.HoverTarget == FirstRunTarget.Go, d, face);
     }
 
     /// <summary>The parting between what gets downloaded and how Findra behaves, drawn in the
@@ -464,6 +551,11 @@ public static class FirstRunPainter
             Parts.Pill(canvas, FirstRunLayout.LimitOptionRect(o, limitRow), FirstRun.LimitOptions[o],
                        chosen: TranscribeLimit.Presets[o] == s.TranscribeMinutes,
                        hovered: s.HoverTarget == FirstRunTarget.Limit && s.HoverIndex == o, d, face);
+
+        // What the number decides, in the band the rows above use for their own notes. Without
+        // it, "Transcribe up to" under a row called Speech says nothing about the videos it also
+        // governs - which is the question somebody asked of the shipped screen.
+        Parts.Note(canvas, FirstRun.LimitNote, FirstRunLayout.LimitNoteRect(limitRow), d, face);
     }
 
     private static CapabilityProgress? Progress(FirstRunState s, Capability c)
@@ -523,6 +615,11 @@ public static class FirstRunPainter
             Parts.Toggle(canvas, new SKRect(r.Left, r.Top, r.Right - 6, r.Bottom), switches[i].On, hovered, d);
         }
 
+        // Both notes, in the two bands the layout reserves. The content one is the more important
+        // of the pair and was the one missing: it is the choice that decides whether Findra reads
+        // the inside of every file on the machine, and it was the only switch here with nothing
+        // said about it.
+        Parts.Note(canvas, FirstRun.ContentNote, FirstRunLayout.ContentNoteRect(rows, limitRow), d, face);
         Parts.Note(canvas, FirstRun.Disclosure, FirstRunLayout.DisclosureRect(rows, limitRow), d, face);
     }
 }
