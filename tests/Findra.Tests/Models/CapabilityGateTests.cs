@@ -1,4 +1,4 @@
-using Findra;
+﻿using Findra;
 using Xunit;
 
 public class CapabilityGateTests : IDisposable
@@ -586,13 +586,38 @@ public class CapabilityGateTests : IDisposable
     }
 
     [Fact]
-    public void ThisPlanAddsNoSchemaMigration()
+    public void EverySchemaStepIsReachableAndInvalidatesLessThanEverything()
     {
-        // Written down as an assertion rather than as a sentence in a document: nothing on disk
-        // changes meaning in this plan. The vector column, the segment kinds and the queue are
-        // all exactly what Plan 4 defined; what changes is only which of them get filled in.
-        // A later plan that needs a step meets this test, and with it the three traps that go
-        // live the moment `Migrations` is non-empty.
-        Assert.Empty(ContentDb.Migrations);
+        // This replaced `Assert.Empty(ContentDb.Migrations)`, which held the place until a change
+        // needed a step. It is now the traps that went live with the first one.
+        IReadOnlyList<ContentDb.Migration> steps = ContentDb.Migrations;
+
+        // 1. A step nobody can reach. OpenSchema skips `m.To > SchemaVersion`, so a step written
+        //    for a version the build does not claim is silently never run - and the change it was
+        //    meant to invalidate ships against indexes that still hold the old rows.
+        foreach (ContentDb.Migration m in steps)
+            Assert.InRange(m.To, 2, ContentDb.SchemaVersion);
+
+        // 2. A version bumped with no step to go with it. An older index would migrate straight to
+        //    the new stamp, re-queue nothing, and keep whatever the change invalidated for ever.
+        //    The last step has to arrive at the version this build claims.
+        Assert.Equal(ContentDb.SchemaVersion, steps[^1].To);
+
+        // 3. Steps out of order, or two claiming the same version: OpenSchema runs them in list
+        //    order and compares against `from`, so either one makes which steps run depend on how
+        //    they were typed.
+        for (int i = 1; i < steps.Count; i++)
+            Assert.True(steps[i].To > steps[i - 1].To, "schema steps must be strictly increasing");
+
+        // 4. And no step may invalidate every kind there is. That is a full re-index of a finished
+        //    disk, which spec §2a calls the worst thing this product can do to somebody - and it
+        //    is the easy thing to write when a change touches something shared.
+        foreach (ContentDb.Migration m in steps)
+        {
+            Assert.NotEmpty(m.InvalidatedKinds);
+            Assert.True(m.InvalidatedKinds.Length < Enum.GetValues<ResultKind>().Length,
+                        $"'{m.Reason}' re-queues every kind, which is a full re-index");
+            Assert.NotEqual("", m.Reason);
+        }
     }
 }

@@ -1,4 +1,6 @@
-using Microsoft.Data.Sqlite;
+﻿using Microsoft.Data.Sqlite;
+using System.Globalization;
+
 using Findra;
 using Xunit;
 
@@ -128,7 +130,9 @@ public sealed class SchemaTests : IDisposable
 
         using (var db = new ContentDb(path, migrations: step))
         {
-            Assert.Equal("1", db.Get("schema"));
+            // The stamp is the BUILD's version, not the last step's: OpenSchema runs every step
+            // standing between what it found and what this build claims, then stamps its own.
+            Assert.Equal(ContentDb.SchemaVersion.ToString(CultureInfo.InvariantCulture), db.Get("schema"));
             List<(long Id, string Path)> queued = db.PendingPaths();
             (long, string) only = Assert.Single(queued);
             Assert.Equal(@"C:\a\lease.pdf", only.Item2);

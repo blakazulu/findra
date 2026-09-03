@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Runtime.Versioning;
@@ -98,9 +98,17 @@ public sealed class Decoders : IDecoders
     public const long MaxDocBytes = 200L << 20;
     public const long MaxImageBytes = 120L << 20;
 
-    /// <summary>Below this an "image" is a UI icon - a checkbox, a favicon, a spinner - and every
-    /// one of them matches every query a little, which is worse than not being there.</summary>
-    public const long MinImageBytes = 10 << 10;
+    /// <summary>
+    /// Below this a file is too small to hold a picture of anything - a 1x1 tracking pixel, a
+    /// gradient strip, a spinner frame.
+    ///
+    /// <para>It was 10 KB, on the reasoning that anything smaller is a UI icon. That is true of a
+    /// checkbox and false of a great many real pictures: an 8.6 KB PNG of a pair of headphones is
+    /// a picture of headphones, and a machine whose images are mostly application assets had 890
+    /// of its 1,086 images thrown away by this line alone. The floor is there to skip the
+    /// degenerate, not to judge what counts as a photograph.</para>
+    /// </summary>
+    public const long MinImageBytes = 2 << 10;
 
     /// <summary>Recorded against a file whose KIND needs a model this machine has not got. It is
     /// a normal, re-queueable outcome and never a failure: the capability that arrives later
@@ -121,7 +129,10 @@ public sealed class Decoders : IDecoders
     /// re-queues exactly these rows.</summary>
     public const string NoFormatReader = "no decoder for this format yet";
 
-    public const string AnIcon = "an icon, not a picture";
+    /// <summary>Too small to be a picture of anything. Deliberately not "an icon, not a picture",
+    /// which was the old wording and the old rule: an icon IS an image, and this reason now means
+    /// only what it says.</summary>
+    public const string TooSmall = "too small to be a picture";
 
     /// <summary>Recorded against a recording longer than the transcription limit. It is its OWN
     /// reason, distinct from <see cref="TooLarge"/>, because it is the only one on this list a
@@ -246,7 +257,7 @@ public sealed class Decoders : IDecoders
     public static string? SizeGate(ResultKind kind, long bytes) => kind switch
     {
         ResultKind.Photo when bytes > MaxImageBytes => TooLarge,
-        ResultKind.Photo when bytes < MinImageBytes => AnIcon,
+        ResultKind.Photo when bytes < MinImageBytes => TooSmall,
         ResultKind.Document when bytes > MaxDocBytes => TooLarge,
         ResultKind.Video when bytes > MaxVideoBytes => TooLarge,
         _ => null,
@@ -341,17 +352,23 @@ public sealed class Decoders : IDecoders
 
         // The words INSIDE the picture: most of a real image library is screenshots, and the words
         // are what anybody remembers of a screenshot. Reading them needs no model at all, so it
-        // runs whenever a photo is being opened anyway; only the embedding is Meaning's.
+        // runs whenever a photo is being opened anyway.
+        //
+        // THE WORDS ONLY, and never a meaning vector. Recognised text is not prose: it is UI
+        // chrome, timestamps, phone numbers, half of a menu, and whatever the recogniser made of a
+        // language it was not sure about. Embedded with e5 as though it were writing, that soup
+        // sits just inside the "unrelated text" band for almost any query - so searching for
+        // "headphones" returned eleven screenshots explaining that they said something like it,
+        // above the one picture that actually looked like it. Every false hit a real machine
+        // produced for that query came through this line.
+        //
+        // The chunk is still stored and still full-text indexed, which is the half that works:
+        // "the screenshot with the invoice number in it" is a real thing to want, and it is a
+        // question about WORDS. A vector answer to it was never asked for.
         string ocr = ImageText.Read(path);
         if (ocr.Length >= 12)
-        {
-            bool meaning = Installed.Has(Capability.Meaning);
             foreach (string chunk in DocText.Chunk(ocr, max: 8))
-            {
-                long trow = meaning ? Append(E5().EncodePassage(E5Encoder.Passage(path, chunk)), ContentDb.SegText) : -1;
-                segs.Add(new ContentDb.Segment(ContentDb.SegText, -1, -1, trow, chunk));
-            }
-        }
+                segs.Add(new ContentDb.Segment(ContentDb.SegText, -1, -1, -1, chunk));
         return new KindResult(segs, null);
     }
 
