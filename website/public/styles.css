@@ -644,3 +644,81 @@ td.no { color: var(--ink-faint); }
   .crawl-fill { width: 38%; }
   .reveal { opacity: 1; transform: none; }
 }
+
+/* ---------- written pages: /about/, /contact/, /privacy/ ----------------
+   Treatment: prose directly on the ground, in a reading column, with a
+   hairline above every section. Deliberately NOT the front page's .panel -
+   a privacy policy that looks like a marketing card reads as marketing, and
+   being believed is the only job that page has.
+   ---------------------------------------------------------------------- */
+
+.doc-head { padding-bottom: 0; max-width: 900px; display: flex; flex-direction: column; gap: 16px; }
+.doc-head h1 { font-size: clamp(30px, 4vw, 48px); line-height: 1.08; }
+.doc-meta { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-top: 6px; }
+.doc-meta .d { font-family: var(--mono); font-size: 12.5px; color: var(--ink-faint); }
+
+.doc-chip {
+  display: inline-flex; align-items: center; border: 1px solid var(--line);
+  border-radius: 999px; padding: 6px 15px; font-size: 13px; font-weight: 600;
+  color: var(--ink-dim); transition: border-color 0.18s, color 0.18s;
+}
+.doc-chip:hover { border-color: var(--accent-line); color: var(--ink-bright); }
+.doc-chip.on { border-color: var(--accent-line); color: var(--accent); }
+.doc-chip.on:hover { color: var(--accent-hi); }
+
+/* 68ch keeps the measure near sixty-five characters at this size, which is
+   where long prose stops being work to read. */
+.doc { max-width: 68ch; padding: 34px 0 clamp(64px, 8vw, 104px); }
+.doc > :first-child { font-size: 18.5px; line-height: 1.62; color: var(--ink-bright); }
+.doc h2 {
+  font-size: clamp(21px, 2.4vw, 25px); margin-top: 46px; padding-top: 24px;
+  border-top: 1px solid var(--line-soft);
+}
+.doc h3 { font-size: 17.5px; font-weight: 600; color: var(--ink); margin-top: 32px; }
+.doc p { margin-top: 15px; font-size: 16px; line-height: 1.74; }
+.doc strong { color: var(--ink-bright); font-weight: 600; }
+.doc a { border-bottom: 1px solid var(--accent-line); word-break: break-word; }
+.doc a:hover { border-bottom-color: var(--accent-hi); }
+.doc code {
+  font-family: var(--mono); font-size: 13.6px; color: var(--ink-dim);
+  background: rgba(235, 219, 192, 0.05); padding: 1px 6px; border-radius: 5px;
+  word-break: break-word;
+}
+
+.doc ul { margin: 16px 0 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 11px; }
+.doc li { position: relative; padding-left: 22px; font-size: 15.6px; line-height: 1.66; }
+.doc li::before {
+  content: ''; position: absolute; left: 2px; top: 0.66em; width: 6px; height: 6px;
+  border-radius: 50%; background: var(--accent); opacity: 0.75;
+}
+
+.doc pre {
+  margin: 18px 0 0; background: var(--ground-2); border: 1px solid var(--line-soft);
+  border-radius: var(--r-sm); padding: 16px 18px; overflow-x: auto;
+}
+.doc pre code { background: none; padding: 0; font-size: 13.4px; color: var(--ink); line-height: 1.7; }
+
+/* The table is the one block on these pages that must not be squeezed into
+   the reading column, and the one that must never make the body scroll
+   sideways - so it gets its own scroller. */
+.doc-table { margin-top: 20px; overflow-x: auto; }
+.doc-table table { width: 100%; border-collapse: collapse; font-size: 14.5px; }
+.doc-table th {
+  text-align: left; font-family: var(--mono); font-size: 10.5px; letter-spacing: 0.14em;
+  text-transform: uppercase; color: var(--ink-faint); font-weight: 500;
+  padding: 0 16px 10px 0; border-bottom: 1px solid var(--line); white-space: nowrap;
+}
+.doc-table td {
+  padding: 12px 16px 12px 0; border-bottom: 1px solid var(--line-soft);
+  color: var(--ink-dim); vertical-align: top;
+}
+.doc-table td:first-child { color: var(--ink); }
+/* A path is one token. Breaking `%LOCALAPPDATA%\Findra\models\` after the last slash puts a
+   lone backslash on its own line, which reads as a typo rather than as a wrap. The table has its
+   own horizontal scroller precisely so that it does not have to break one. */
+.doc-table td code, .doc-table th code { white-space: nowrap; word-break: normal; }
+
+@media (max-width: 620px) {
+  .doc { padding-top: 26px; }
+  .doc-meta { gap: 9px; }
+}

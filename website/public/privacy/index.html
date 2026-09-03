@@ -1,0 +1,172 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Privacy - Findra</title>
+<meta name="description" content="What Findra stores, where it stores it, and the single anonymous request it makes on its own. No account, no cloud, no analytics, no telemetry.">
+<link rel="canonical" href="https://findra-search.netlify.app/privacy/">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="Findra">
+<meta property="og:locale" content="en">
+<meta property="og:url" content="https://findra-search.netlify.app/privacy/">
+<meta property="og:title" content="Privacy - Findra">
+<meta property="og:description" content="What Findra stores, where it stores it, and the single anonymous request it makes on its own. No account, no cloud, no analytics, no telemetry.">
+<meta property="og:image" content="https://findra-search.netlify.app/share/card.png">
+<meta property="og:image:type" content="image/png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Findra. Windows Search, but it works. 0.50 ms to a filename, straight from RAM.">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="theme-color" content="#08090c">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="alternate" type="text/markdown" href="/privacy.md" title="Privacy - Findra as Markdown">
+<link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+
+<div class="bg" aria-hidden="true">
+  <div class="bg-blob a"></div>
+  <div class="bg-grid"></div>
+  <div class="bg-grain"></div>
+</div>
+
+<header class="nav">
+  <a class="brand" href="/">
+    <span class="brand-mark" aria-hidden="true"></span>
+    <span class="brand-name">FINDRA</span>
+  </a>
+  <nav class="nav-links">
+    <a href="/#finds">What it finds</a>
+    <a href="/#numbers">The numbers</a>
+    <a href="/#install">Install</a>
+  </nav>
+  <div class="nav-right">
+    <a class="btn btn-ghost btn-sm" href="/">Back to the front</a>
+  </div>
+</header>
+
+<main id="top">
+  <div class="wrap">
+    <section class="doc-head">
+      <span class="kicker">PRIVACY</span>
+      <h1>Nothing leaves your machine, except one request.</h1>
+      <div class="doc-meta">
+        <span class="d">Findra 0.1.0 &middot; last reviewed 2026-09-03</span>
+        <a class="doc-chip on" href="/privacy.md">Read as Markdown</a>
+        <a class="doc-chip" href="https://github.com/blakazulu/findra/blob/main/PRIVACY.md" rel="noopener">History on GitHub</a>
+      </div>
+    </section>
+
+    <article class="doc">
+      <p>Findra is a search tool that runs on your computer. Your files, their names, their contents and your searches stay on that computer. There is no account, no cloud service, no analytics, no crash reporting and no telemetry of any kind.</p>
+
+      <p>This page says exactly what Findra stores, where it stores it, and the single thing it sends anywhere.</p>
+
+      <h2>The one request Findra makes on its own</h2>
+
+      <p>Findra checks whether a newer version has been released. That is the only time Findra reaches the network without being asked. The one other time it goes out at all is when you choose a capability and tell it to download the models, which is described further down.</p>
+
+      <ul>
+        <li>It is an anonymous HTTPS GET to the GitHub releases API.</li>
+        <li>It happens at most once every 24 hours, on startup, in the background.</li>
+        <li>It carries no query parameters, no machine identifier, no install identifier, and nothing about your files or your searches.</li>
+        <li>It never blocks anything. A failure is a line in the log, not a dialog.</li>
+        <li>It is disclosed on the first-run screen and can be switched off, and off means the request is not made at all.</li>
+      </ul>
+
+      <p>Findra never downloads or installs an update by itself. It tells you a newer version exists and leaves the decision to you.</p>
+
+      <p>Downloading a capability's model files is the other time Findra uses the network, and it happens only when you choose a capability and ask for it. Those requests fetch model files and send nothing about you. If you never choose a capability, they never happen.</p>
+
+      <h2>What Findra stores, and where</h2>
+
+      <div class="doc-table">
+      <table>
+      <thead>
+      <tr><th scope="col">Location</th><th scope="col">What is in it</th></tr>
+      </thead>
+      <tbody>
+      <tr><td><code>%APPDATA%\Findra\</code></td><td>Your settings and any palettes you added. No file data.</td></tr>
+      <tr><td><code>%LOCALAPPDATA%\Findra\index\</code></td><td>The search index. See below, because this one matters.</td></tr>
+      <tr><td><code>%LOCALAPPDATA%\Findra\models\</code></td><td>Model files you chose to download. Nothing personal.</td></tr>
+      <tr><td><code>%LOCALAPPDATA%\Findra\logs\</code></td><td>Daily log files. See below.</td></tr>
+      </tbody>
+      </table>
+      </div>
+
+      <p>One more file sits in Findra's own program folder rather than in either of those. The installer writes a single word there - <code>winget</code> or <code>installer</code> - so that when a newer version exists the advice matches the way you actually installed Findra. A copy built from source has no such file, which is itself the answer. It records nothing else, and nothing about you.</p>
+
+      <h3>The index deserves a straight answer</h3>
+
+      <p>If you turn on content indexing, the index contains the <strong>text of the documents you indexed</strong>, not merely their names. That is how searching inside files works. It also holds the full path of every file it knows about. Later, if you enable those capabilities, it holds numeric representations of what your photos look like and the transcripts of your recordings.</p>
+
+      <p>That file is stored in your own user profile and is protected by the same Windows permissions as everything else there. It is <strong>not encrypted</strong>. If someone can read your user profile, they can read your index. Anyone using full-disk encryption already covers this; anyone who shares a computer should know it before turning content indexing on.</p>
+
+      <p>Content indexing is off until you turn it on, for this reason among others.</p>
+
+      <h3>What the logs contain</h3>
+
+      <p>The logs record what Findra did, so that a problem can be diagnosed. They include the names of files you opened from Findra, the name of a file the indexer was working on when it was slow or failed, and error messages. They do not contain the contents of your files, and they do not contain your search queries.</p>
+
+      <p>Logs stay on your machine. Findra never uploads them. If you send one to report a problem, you are choosing to share whatever it contains, so it is worth reading first.</p>
+
+      <h2>Deleting it</h2>
+
+      <p>Uninstalling Findra removes the application, the scheduled task it registered and any autostart entry.</p>
+
+      <p>It keeps your index, your downloaded models and your settings by default, because re-downloading gigabytes and re-indexing a disk is expensive and most people who uninstall are reinstalling. Deleting them is a checkbox in the uninstaller and a flag on the command line, and <code>findra.exe --uninstall --purge</code> removes everything.</p>
+
+      <p>You can also just delete <code>%LOCALAPPDATA%\Findra\</code> and <code>%APPDATA%\Findra\</code> yourself, which removes everything Findra stored. Two things live outside those folders, and deleting the folders by hand does not remove them: the scheduled task that starts the name helper at sign-in, and the start-at-sign-in entry if you turned it on. Run <code>findra.exe --uninstall</code> to remove those, or use the uninstaller. Nothing else on your machine is touched.</p>
+
+      <h2>Children</h2>
+
+      <p>Findra is a general-purpose tool and is not directed at children. It collects nothing about anybody.</p>
+
+      <h2>Changes to this page</h2>
+
+      <p>Findra is open source. Any change to this page is a commit in the public repository, with its history visible to anyone.</p>
+
+      <h2>Contact</h2>
+
+      <p>Questions or a problem: <a href="https://github.com/blakazulu/findra/issues" rel="noopener">https://github.com/blakazulu/findra/issues</a></p>
+    </article>
+  </div>
+</main>
+
+<footer class="wrap">
+  <div class="foot">
+    <div class="col">
+      <span class="brand" style="margin-bottom:6px">
+        <span class="brand-mark" aria-hidden="true"></span>
+        <span class="brand-name">FINDRA</span>
+      </span>
+      <span>Desktop search for Windows.</span>
+      <span>Built with .NET 10, Avalonia, SkiaSharp and SQLite.</span>
+    </div>
+    <div class="col">
+      <strong>PROJECT</strong>
+      <a href="https://github.com/blakazulu/findra" rel="noopener">Source</a>
+      <a href="https://github.com/blakazulu/findra/blob/main/CHANGELOG.md" rel="noopener">Changelog</a>
+      <a href="https://github.com/blakazulu/findra/issues" rel="noopener">Issues</a>
+    </div>
+    <div class="col">
+      <strong>THE SMALL PRINT</strong>
+      <a href="/about/">About</a>
+      <a href="/contact/">Contact</a>
+      <a href="/privacy/">Privacy</a>
+      <a href="https://github.com/blakazulu/findra/blob/main/SECURITY.md" rel="noopener">Security</a>
+      <a href="https://github.com/blakazulu/findra/blob/main/LICENSE" rel="noopener">Apache-2.0</a>
+    </div>
+    <div class="col">
+      <strong>ATTRIBUTION</strong>
+      <span>Findra by blakazulu.</span>
+      <span>Quicksand under the SIL Open Font License 1.1.</span>
+      <span>&copy; <span id="year">2026</span></span>
+    </div>
+  </div>
+</footer>
+
+<script src="/app.js" defer></script>
+</body>
+</html>
