@@ -539,6 +539,13 @@ into a numbered section on the first release.
   while gigabytes of models were still downloading over the same disk, and the indexing rate fell
   from 57 files a minute to 9 while the two competed.
 
+- **The capsule has its own progress pill.** What is being read, a track, and how far it has got -
+  "indexing photos, 6,680 of 10,800" - in a smaller pill under the search bar. It used to be a bare
+  track and a line of text floating under the capsule with nothing around them, the only thing in
+  the product drawn without a container. The bar is wider too, and the placeholder it draws is now
+  the one the product actually uses: the window said "Search files, photos, words..." and every
+  screenshot ever taken said "Search 1.5M files", so no render had shown the real one.
+
 - **The Content pill stops offering while there is nothing behind it.** With reading on and the
   first file not yet finished, pressing it used to open the settings window over the card you had
   just opened, to say that reading was already on. There is nothing to search, nothing to turn on

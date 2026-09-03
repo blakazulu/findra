@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Globalization;
@@ -176,12 +176,16 @@ public sealed class Indexer
     // Namespaced: `state` and `pending` in a table that also holds `schema` and `usn:C` is a
     // collision waiting for a third writer. `indexer:` is what this process writes; `index:` is
     // what the interface writes and this process reads.
-    private void Status(string state, string current = "")
+    private void Status(string state, string current = "", ResultKind? kind = null)
     {
         try
         {
             _db.Set("indexer:state", state);
             _db.Set("indexer:current", current);
+            // What the capsule's pill names on its left - "indexing photos" rather than a file
+            // name, because the file changes several times a second and the kind does not. Written
+            // with the file rather than beside it, so the two cannot describe different work.
+            _db.Set("indexer:kind", kind?.ToString() ?? "");
             _db.Set("indexer:done", _done.ToString(CultureInfo.InvariantCulture));
             _db.Set("indexer:failed", _failed.ToString(CultureInfo.InvariantCulture));
             _db.Set("indexer:rate", _rate);
@@ -241,7 +245,7 @@ public sealed class Indexer
                 Log.Once($"index|stuck|{item.Id.ToString(CultureInfo.InvariantCulture)}", "WARN", "index",
                     $"the queue could not be advanced past {Path.GetFileName(item.Path)} - retrying it slowly");
                 lastState = "stuck";
-                Status("stuck", Path.GetFileName(item.Path));
+                Status("stuck", Path.GetFileName(item.Path), item.Kind);
                 stuck = -1;
                 Thread.Sleep(2000);
                 continue;
@@ -252,7 +256,7 @@ public sealed class Indexer
             _ = Handle(item);
             stuck = item.Id;
             busy.Stop();
-            if (lastStatus.ElapsedMilliseconds > 1500) { Status("indexing", Path.GetFileName(item.Path)); lastStatus.Restart(); UpdateRate(); }
+            if (lastStatus.ElapsedMilliseconds > 1500) { Status("indexing", Path.GetFileName(item.Path), item.Kind); lastStatus.Restart(); UpdateRate(); }
             // The power setting is a duty cycle: at 50% the indexer rests as long as it worked, at
             // 25% three times as long. The rest is between files, where nothing is running, so it
             // shapes every part of the machine equally.

@@ -1,101 +1,100 @@
+﻿using System.Globalization;
+
 using Findra;
 using SkiaSharp;
 using Xunit;
 
+/// <summary>
+/// The capsule's two bands: the bar somebody clicks, and the progress pill under it.
+/// </summary>
 public class CapsuleTests
 {
-    private static SKBitmap Render(Palette p, string progress = "", float fraction = 0)
-    {
-        var info = new SKImageInfo((int)CapsuleLayout.Width, (int)CapsuleLayout.Height,
-                                   SKColorType.Bgra8888, SKAlphaType.Premul);
-        using var surface = SKSurface.Create(info);
-        CapsulePainter.Paint(surface.Canvas, "Search 1.5M files", progress, fraction,
-                             Derived.From(p), SKTypeface.Default);
-        surface.Canvas.Flush();
-        var bmp = new SKBitmap(info);
-        surface.ReadPixels(info, bmp.GetPixels(), info.RowBytes, 0, 0);
-        return bmp;
-    }
-
     [Fact]
-    public void ItPaintsSomethingInEveryPalette()
+    public void ThePlaceholderFitsTheBarItIsDrawnIn()
     {
-        foreach (Palette p in Palette.BuiltIn)
-        {
-            using SKBitmap bmp = Render(p);
-            SKColor centre = bmp.GetPixel(bmp.Width / 2, bmp.Height / 2);
-            Assert.True(centre.Alpha > 0, $"{p.Name}: the capsule's middle is transparent");
-        }
-    }
-
-    [Fact]
-    public void TheGroundIsTheGround()
-    {
-        // The capsule paints its own ground rather than borrowing the wallpaper's.
-        foreach (Palette p in Palette.BuiltIn)
-        {
-            using SKBitmap bmp = Render(p);
-            SKColor centre = bmp.GetPixel(bmp.Width / 2, bmp.Height / 2);
-            Assert.True(Derived.Contrast(centre, p.Ground) < 1.6,
-                $"{p.Name}: the capsule's interior does not read as its own ground");
-        }
-    }
-
-    [Fact]
-    public void TheCornersAreTransparentBecauseItIsARoundedCapsule()
-    {
-        using SKBitmap bmp = Render(Palette.Mond);
-        Assert.Equal(0, bmp.GetPixel(0, 0).Alpha);
-        Assert.Equal(0, bmp.GetPixel(bmp.Width - 1, bmp.Height - 1).Alpha);
-    }
-
-    [Fact]
-    public void TheProgressLineOnlyExistsWhenThereIsSomethingToSay()
-    {
-        // At rest the capsule is just the capsule; a permanently visible empty progress bar
-        // is the thing that makes a widget feel busy when it is idle.
-        using SKBitmap idle = Render(Palette.Mond);
-        using SKBitmap busy = Render(Palette.Mond, "indexing 4,120 to go", 0.62f);
-
-        // Compare the two renders pixel by pixel in the band where the progress line lives.
+        // Nothing ellipsises this string - CapsulePainter draws it straight - so a placeholder
+        // wider than the bar runs off the end of the capsule and is clipped by the window.
         //
-        // Two earlier versions of this assertion were wrong, both for the same reason - they
-        // measured an absolute property of one image instead of the difference between two.
-        // The first hashed 1024 bytes, which is part of row 0, transparent in both. The second
-        // counted opaque pixels below the bar, but the halo's 10px blur is still fully opaque
-        // across every column down to row 111, so idle and busy both counted 7623 and the
-        // metric was saturated before the progress line was even drawn.
-        //
-        // Differencing cancels the glow: it is identical in both renders, so anything that
-        // differs in this band is the progress line and nothing else.
-        int differing = 0;
-        int from = (int)((CapsuleLayout.Height + CapsuleLayout.BarH) / 2f) + 8;
-        for (int y = from; y < idle.Height; y++)
-            for (int x = 0; x < idle.Width; x++)
-                if (idle.GetPixel(x, y) != busy.GetPixel(x, y)) differing++;
+        // It went unseen because the shot drew a DIFFERENT string: the window had
+        // "Search files, photos, words..." and --searchshot had "Search 1.5M files", so every
+        // render ever reviewed showed a placeholder the product does not use. One constant now.
+        SKTypeface face = Parts.Face;
+        float budget = CapsuleLayout.Width - (CapsuleLayout.Pad + 34f) - CapsuleLayout.Pad;
+        float w = CardText.Measure(CapsulePainter.Placeholder, face, CapsuleLayout.TextSize);
 
-        // The track alone is 260x3; a real line clears this comfortably, and nothing else
-        // in this band changes between the two renders.
-        Assert.True(differing > 200,
-            $"the progress line was not drawn below the bar ({differing} pixels differ)");
-
-        // That proves the band responds to the progress arguments. It does NOT yet prove the
-        // guard, because idle and busy differ in fraction as well as text - deleting the
-        // guard only drops the count, it does not collapse it. This third render isolates it:
-        // a fraction is supplied but there is nothing to say, so a working guard draws
-        // nothing and the band must be pixel-identical to idle. Without the guard, the
-        // fraction alone paints a 62% track and this fails.
-        using SKBitmap nothingToSay = Render(Palette.Mond, "", 0.62f);
-        Assert.Equal(0, DifferBelowTheBar(idle, nothingToSay));
+        Assert.True(w <= budget,
+            $"'{CapsulePainter.Placeholder}' is {w:0.0}px against a bar that holds {budget:0.0}px");
     }
 
-    /// <summary>Pixels that differ between two renders in the band where progress is drawn.</summary>
-    private static int DifferBelowTheBar(SKBitmap a, SKBitmap b)
+    [Fact]
+    public void TheProgressPillFitsInsideTheCapsuleWithAirUnderIt()
     {
-        int n = 0, from = (int)((CapsuleLayout.Height + CapsuleLayout.BarH) / 2f) + 8;
-        for (int y = from; y < a.Height; y++)
-            for (int x = 0; x < a.Width; x++)
-                if (a.GetPixel(x, y) != b.GetPixel(x, y)) n++;
-        return n;
+        // It is drawn into the same bitmap the bar is, so a pill that reached the bottom edge
+        // would be clipped by the window rather than merely tight. At 128 it ended 4px from the
+        // bottom, which reads as cut off.
+        SKRect pill = CapsuleLayout.PillRect();
+
+        Assert.True(pill.Top >= CapsuleLayout.BarRect().Bottom, "the pill overlaps the bar");
+        Assert.True(pill.Bottom + 8f <= CapsuleLayout.Height,
+            $"the pill ends {CapsuleLayout.Height - pill.Bottom:0.0}px from the bottom");
+        Assert.True(pill.Left > 0 && pill.Right < CapsuleLayout.Width);
+    }
+
+    [Fact]
+    public void TheWidestLabelAndCountStillLeaveATrackBetweenThem()
+    {
+        // The painter measures both ends and lays the track in what is left, so this is what stops
+        // that room going to nothing: "indexing recordings" is the longest label, and a machine
+        // with a million files to read is the longest count. Below 24px the painter draws no track
+        // at all, which is honest but is not the design.
+        SKTypeface face = Parts.Face;
+        string label = IndexStatus.Doing("Audio");
+        string count = IndexStatus.Pill(true, "Audio", 1_000_000, 999_999, true).Count;
+
+        float room = CapsuleLayout.PillW - CapsuleLayout.PillPad * 2 - CapsuleLayout.PillGap * 2
+                   - CardText.Measure(label, face, CapsuleLayout.PillTextSize)
+                   - CardText.Measure(count, face, CapsuleLayout.PillTextSize);
+
+        Assert.True(room >= 24f, $"only {room:0.0}px left for the track between '{label}' and '{count}'");
+    }
+
+    [Fact]
+    public void ThePillSaysNothingWhenThereIsNothingToSay()
+    {
+        // A permanently visible progress pill makes an idle widget feel busy, which is the thing
+        // spec 3 says the capsule must not do. Three states, one answer.
+        Assert.False(IndexStatus.Pill(contentEnabled: false, "Doc", 1_000, 10, alive: true).Show);
+        Assert.False(IndexStatus.Pill(contentEnabled: true, "Doc", 1_000, 10, alive: false).Show);
+        Assert.False(IndexStatus.Pill(contentEnabled: true, "Doc", 0, 4_000, alive: true).Show);
+
+        Assert.True(IndexStatus.Pill(contentEnabled: true, "Doc", 1_000, 10, alive: true).Show);
+    }
+
+    [Fact]
+    public void TheLabelIsAWordAndNeverAnEnumName()
+    {
+        // The kind arrives as the ResultKind's own ToString off the queue row, and printing that
+        // would put an identifier on the desktop.
+        Assert.Equal("indexing photos", IndexStatus.Doing("Photo"));
+        Assert.Equal("indexing recordings", IndexStatus.Doing("Audio"));
+        Assert.Equal("indexing documents", IndexStatus.Doing("Doc"));
+        Assert.Equal("indexing video", IndexStatus.Doing("Video"));
+
+        // A kind the pill has no word for, and the row read mid-write, both fall back to the verb
+        // rather than to a guess.
+        Assert.Equal("indexing", IndexStatus.Doing(""));
+        Assert.Equal("indexing", IndexStatus.Doing("Folder"));
+    }
+
+    [Fact]
+    public void TheCountsReadTheSameOnEveryMachine()
+    {
+        CultureInfo was = CultureInfo.CurrentCulture;
+        try
+        {
+            CultureInfo.CurrentCulture = new CultureInfo("de-DE");
+            Assert.Equal("6,680 of 10,800", IndexStatus.Pill(true, "Photo", 4_120, 6_680, true).Count);
+        }
+        finally { CultureInfo.CurrentCulture = was; }
     }
 }

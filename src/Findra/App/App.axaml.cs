@@ -1114,7 +1114,7 @@ internal sealed class Shell : ISettingsHost
     // seconds and this loop comes round every second, so three of every four posts would repaint
     // the desktop widget to say exactly what it already says.
     private string _capsuleLine = "";
-    private float _capsuleFraction = -1;
+    private IndexProgress _capsulePill;
 
     /// <summary>
     /// Put the content index's one-line status under the capsule's bar.
@@ -1155,13 +1155,15 @@ internal sealed class Shell : ISettingsHost
         // do nothing. Refresh compares before it repaints, so an unchanged answer costs nothing.
         if (SettingsWindow.Open is { } panel)
             Dispatcher.UIThread.Post(() => panel.UseIndexState(indexed > 0, alive, pending, indexed));
-        // Zero rather than a full bar when there is nothing waiting: "up to date" is a sentence,
-        // not a completed job, and a bar sitting at 100% invites the reader to wait for something.
-        float fraction = pending == 0 ? 0f : (float)(indexed / (double)(indexed + pending));
+        // The capsule's pill: the same facts as the line, laid out for a label / track / count
+        // rather than a sentence. Nothing to show is `default`, which draws no pill at all - not a
+        // bar at zero, which is what makes an idle widget feel busy.
+        IndexProgress pill = IndexStatus.Pill(_config.IndexContent, db.Get("indexer:kind") ?? "",
+                                              pending, indexed, alive);
 
-        if (line == _capsuleLine && Math.Abs(fraction - _capsuleFraction) < 0.001f) return;
+        if (line == _capsuleLine && pill == _capsulePill) return;
         _capsuleLine = line;
-        _capsuleFraction = fraction;
+        _capsulePill = pill;
 
         Dispatcher.UIThread.Post(() =>
         {
@@ -1171,8 +1173,7 @@ internal sealed class Shell : ISettingsHost
             RefreshTooltip();
             CapsuleWindow? capsule = _capsule;
             if (capsule is null) return;
-            capsule.Progress = line;
-            capsule.ProgressFraction = fraction;
+            capsule.Progress = pill;
         });
     }
 
@@ -1221,8 +1222,7 @@ internal sealed class Shell : ISettingsHost
         var capsule = new CapsuleWindow(_palette, Zoom)
         {
             Position = at,
-            Progress = _capsuleLine,
-            ProgressFraction = Math.Max(_capsuleFraction, 0f),
+            Progress = _capsulePill,
         };
         capsule.Clicked += OpenFromCapsule;
         capsule.Moved += SaveCapsulePosition;

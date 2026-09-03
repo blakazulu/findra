@@ -1,12 +1,21 @@
-using System;
+﻿using System;
 using System.Globalization;
 
 namespace Findra;
 
+/// <summary>What the capsule's progress pill draws: a label on the left, a track across the
+/// middle, and a count on the right. <c>Show</c> false is "draw nothing at all", which is not the
+/// same as a bar sitting at zero.</summary>
+public readonly record struct IndexProgress(string Label, string Count, float Fraction, bool Show)
+{
+    public string Label { get; init; } = Label ?? "";
+    public string Count { get; init; } = Count ?? "";
+}
+
 /// <summary>
-/// One line about the content index, or nothing at all. Drawn by the card's footer and by the
-/// capsule, which paints its progress line only when this is non-empty - a permanently visible
-/// empty bar is what makes an idle widget feel busy.
+/// What the content index is doing, in the two shapes the product needs: one sentence for the
+/// card's footer and the tray's tooltip, and the same facts split for the capsule's progress pill.
+/// Both live here so no two surfaces can disagree about it.
 /// </summary>
 public static class IndexStatus
 {
@@ -14,6 +23,49 @@ public static class IndexStatus
     // {n:N0} renders "9.000" on a German machine, and this line is compared in tests and read by
     // users on machines set to any locale.
     private static readonly CultureInfo Fixed = CultureInfo.InvariantCulture;
+
+    /// <summary>
+    /// The capsule's progress pill, split into the three things it draws.
+    ///
+    /// <para><see cref="Line"/> is one sentence for a footer and a tooltip; this is the same facts
+    /// laid out as label, track and count, because the pill puts them at opposite ends of itself
+    /// and a sentence cannot be cut in half. Both come from this file so the capsule and the card
+    /// cannot disagree about what the index is doing.</para>
+    ///
+    /// <para><see cref="IndexProgress.Show"/> is false wherever the answer would be a bar with
+    /// nothing behind it: reading off, no live indexer, or an empty queue. A permanently visible
+    /// progress pill makes an idle widget feel busy, which is the thing spec §3 says the capsule
+    /// must not do.</para>
+    /// </summary>
+    public static IndexProgress Pill(bool contentEnabled, string kind, long pending, long indexed, bool alive)
+    {
+        if (!contentEnabled || !alive || pending <= 0) return default;
+
+        long total = indexed + pending;
+        return new IndexProgress(
+            Doing(kind),
+            indexed.ToString("N0", Fixed) + " of " + total.ToString("N0", Fixed),
+            total <= 0 ? 0f : (float)(indexed / (double)total),
+            Show: true);
+    }
+
+    /// <summary>
+    /// "indexing photos" and not "indexing Photo". The kind comes off the queue row the indexer is
+    /// working, and an enum name is a token rather than a word - it would be the only place in the
+    /// product where an identifier reached the screen.
+    ///
+    /// <para>An unknown or absent kind falls back to the bare verb rather than to a guess: the row
+    /// is written by the child a second at a time, and a capsule that read it mid-write would
+    /// otherwise name the wrong thing with complete confidence.</para>
+    /// </summary>
+    public static string Doing(string kind) => "indexing" + (kind switch
+    {
+        "Photo" => " photos",
+        "Video" => " video",
+        "Audio" => " recordings",
+        "Doc" => " documents",
+        _ => "",
+    });
 
     /// <summary>
     /// <paramref name="contentEnabled"/> is whether anybody has asked for the inside of files to
