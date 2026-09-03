@@ -96,7 +96,7 @@ public class WingetManifestTests
         Assert.Equal(2, found.Length);
         Assert.Contains("x64", found);
         Assert.Contains("arm64", found);
-        Assert.Equal(1, Regex.Matches(Installer, @"(?m)^PackageVersion:").Count);
+        Assert.Single(Regex.Matches(Installer, @"(?m)^PackageVersion:"));
     }
 
     [Fact]

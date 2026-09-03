@@ -317,7 +317,32 @@ moment rather than an elevation prompt at every launch.
     reviews. Nothing in this repository can do either of those, and nothing in it ever starts this
     workflow on its own.
 
+39. **Regenerate the README's numbers from a published Release build.** The fragment in `README.md`
+    was measured through `dotnet run --project src/Findra`, which is a Debug, framework-dependent
+    build, on a machine whose content index held ten documents. Every number in it is real and
+    every one of them is a floor. Once step 36 has produced a self-contained Release
+    build, and on a machine that has actually let Findra read inside its files for a while, run
+
+        findra --searchbench readme-bench.md 10000
+
+    and replace everything from `## Findra benchmark` to the corpus note with what it prints, whole.
+    `TheBenchmarkFragmentIsTheWholeOneAndNotTheFlatteringHalfOfIt` fails if any section is dropped
+    on the way, and `TheThroughputFigureCameFromARunLargeEnoughToReproduce` fails if the default
+    corpus is used. Adjust the two sentences above the fragment, which describe that run and no
+    other, in the same commit.
+
+40. **Read the README on GitHub, once the repository has been pushed for the first time.** Every
+    image is a repository-relative path, so nothing on the page can be checked against a rendered
+    view until there is one. Look for six images that load, six commands underneath them that a
+    reader could paste, and tables that do not run off the side of the column on a phone.
+
+41. **Replace the install section's first paragraph the day the catalogue accepts the package.**
+    It currently opens by saying there is no published release and nothing has been submitted to
+    winget, which is true and is the reason `winget install blakazulu.Findra` is written as the
+    command for when that release exists rather than as an instruction. When step 38 succeeds, that
+    paragraph is the thing that becomes false first.
+
 ## Notes
 
-Steps 1 to 4, 9 to 13 and 29 to 38 are the ones that have never executed in any form. Steps 5 to 8
+Steps 1 to 4, 9 to 13 and 29 to 41 are the ones that have never executed in any form. Steps 5 to 8
 have been verified by log line and by inspection, but not by eye.

@@ -337,6 +337,18 @@ into a numbered section on the first release.
   submitting anything. A copy installed this way knows it, so a newer version is one
   `winget upgrade` rather than a file to go and find.
 
+- **A front page made out of real renders and real measurements.** Every screenshot on the
+  README is the actual card, the actual first-run screen and the actual settings window, drawn
+  by the painter the application uses, with the command that produced it printed underneath so
+  anybody can draw it again. Every number is a measurement from `findra --searchbench`, pasted
+  whole rather than picked from, with the machine that produced it named in the same block: a
+  million and a half file names enumerated in under three seconds, name queries answered in
+  half a millisecond to four, and document extraction measured over ten thousand generated
+  files rather than the smaller default, because a rate from a run of a second or two does not
+  reproduce. Nothing on the page is a claim you cannot check with a command from the page
+  itself, no other product is named or measured against, and the page says plainly that there
+  is no published release yet and that the downloads are not signed.
+
 ### Changed
 
 - **A capability you install is read in the same session you installed it.** Downloading one
