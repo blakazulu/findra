@@ -207,6 +207,28 @@ if (Test-Path -LiteralPath $standardDir) {
         "nothing at $standardDir. Run sheet phase 1 is where that changes."
 }
 
+# Windows 11's Settings > Apps prefers QuietUninstallString over UninstallString, and Inno Setup
+# registers one on its own. While it was there, removing Findra from Settings started the
+# uninstaller with /SILENT: UninstallSilent() was true, InitializeUninstall returned before it had
+# built anything, and the checkbox that asks about the models, the index and the settings was never
+# shown, so all of it was kept. The installer deletes the value after installing, and an installed
+# machine is the only place that can be seen. Found by DisplayName, so this holds no second copy of
+# the AppId the installer declares.
+$askedFirst = 'the uninstaller can still ask before it keeps or deletes your data'
+$entry = Get-ChildItem -LiteralPath 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall' -ErrorAction SilentlyContinue |
+    ForEach-Object { Get-ItemProperty -LiteralPath $_.PSPath -ErrorAction SilentlyContinue } |
+    Where-Object { $_.DisplayName -eq 'Findra' } |
+    Select-Object -First 1
+if (-not $entry) {
+    Row 'not yet' $askedFirst `
+        'no Findra entry under HKLM ... CurrentVersion\Uninstall. Only the installer writes one, so a source build has none.'
+} elseif ($entry.PSObject.Properties.Name -contains 'QuietUninstallString') {
+    Row FAIL $askedFirst `
+        "QuietUninstallString is still registered:`n$($entry.QuietUninstallString)`nWindows Settings prefers it and removes Findra without asking about your data."
+} else {
+    Row ok $askedFirst 'no QuietUninstallString, so Settings runs the uninstaller that asks'
+}
+
 # =============================================================================================
 Section 'the modes, and the exit code each one owes'
 # =============================================================================================

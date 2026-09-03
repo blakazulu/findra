@@ -73,6 +73,9 @@ public class UninstallTests : IDisposable
         public IReadOnlyList<int>? Spared { get; private set; }
         public IReadOnlyList<DataSize>? Deleted { get; private set; }
 
+        /// <summary>The one line the log gets before anything happens, or null if it never came.</summary>
+        public string? Said { get; private set; }
+
         /// <summary>What HelperTask.Unregister answered - false is a task still registered.</summary>
         public bool TaskGone { get; init; } = true;
 
@@ -92,6 +95,7 @@ public class UninstallTests : IDisposable
                     ? new Removal(d.Label, d.Path, false, "the file is in use")
                     : new Removal(d.Label, d.Path, true, null))];
             },
+            announce: line => { Calls.Add("say"); Said = line; },
             // Never the real check. Unelevated, Run would raise a UAC prompt and relaunch itself.
             elevated: () => true);
     }
@@ -106,7 +110,9 @@ public class UninstallTests : IDisposable
         var run = new Recorder();
         run.Run("--uninstall", "--purge", "--quiet");
 
-        Assert.Equal(["stop", "task", "autostart", "delete"], run.Calls);
+        // The line saying which way it went comes before all four, because a run that fails half
+        // way through still has to have said what it was doing.
+        Assert.Equal(["say", "stop", "task", "autostart", "delete"], run.Calls);
     }
 
     [Theory]
@@ -256,6 +262,70 @@ public class UninstallTests : IDisposable
         Assert.Contains("palettes", text, StringComparison.OrdinalIgnoreCase);
     }
 
+    // ---- which way it went ---------------------------------------------------------------------
+
+    [Fact]
+    public void TheLogSaysWhichWayTheUninstallWentBeforeAnythingIsStopped()
+    {
+        // A real uninstall kept 2.93 GB of models, an index and a settings folder, and the log
+        // recorded the task removal and the stopped processes and nothing at all about the choice
+        // that produced them. Ten minutes went on working out which of the two runs had happened.
+        // First, because a run that dies half way through still has to have said what it was
+        // trying to do.
+        var run = new Recorder();
+        run.Run("--uninstall", "--quiet");
+
+        Assert.Equal("say", run.Calls[0]);
+        Assert.StartsWith("keeping", run.Said, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void APurgeSaysItIsDeletingRatherThanKeeping()
+    {
+        var run = new Recorder();
+        run.Run("--uninstall", "--purge", "--quiet");
+
+        Assert.Equal("say", run.Calls[0]);
+        Assert.StartsWith("deleting", run.Said, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ADryRunSaysNothing()
+    {
+        // It changes nothing and it runs FIRST - the installer takes the measurement before it
+        // asks the question. A line here would put "keeping" in the log ahead of the purge that
+        // the person went on to ask for, which is the same confusion in a new place.
+        var run = new Recorder();
+        run.Run("--uninstall", "--dry-run", "--quiet");
+
+        Assert.Empty(run.Calls);
+        Assert.Null(run.Said);
+    }
+
+    [Fact]
+    public void TheLineNamesEveryFolderAndTheSizeThatWasMeasured()
+    {
+        // The measurement is the plan's own. A second walk of the disk here would be a second
+        // number, and the two would disagree the moment anything was being written.
+        string line = Uninstall.Announce(Uninstall.Plan(purge: false, Measured), purge: false);
+
+        Assert.Contains("models", line, StringComparison.Ordinal);
+        Assert.Contains("index", line, StringComparison.Ordinal);
+        Assert.Contains("logs", line, StringComparison.Ordinal);
+        Assert.Contains("settings", line, StringComparison.Ordinal);
+        Assert.Contains(Sizes.Human(Measured.Sum(m => m.Bytes)), line, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ThePurgeLineCarriesTheSameSizeItIsAboutToFree()
+    {
+        UninstallPlan plan = Uninstall.Plan(purge: true, Measured);
+        string line = Uninstall.Announce(plan, purge: true);
+
+        Assert.Contains(Sizes.Human(plan.FreedBytes), line, StringComparison.Ordinal);
+        Assert.DoesNotContain("keeping", line, StringComparison.Ordinal);
+    }
+
     // ---- the process list ---------------------------------------------------------------------
 
     [Fact]
@@ -301,6 +371,35 @@ public class UninstallTests : IDisposable
         // person cannot act on.
         var running = new Running(Interface: null, Helper: null, Others: [400]);
         Assert.Contains(400, Uninstall.StopOrder(running, spare: [999]));
+    }
+
+    [Fact]
+    public void WorkingOutWhoIsRunningNeverAsksTheHelperOverThePipe()
+    {
+        // The uninstaller used to ask the helper for its own process id on the name pipe. It can
+        // never get an answer: the client connects with CurrentUserOnly, which compares the pipe's
+        // OWNER against the client's token owner, the helper owns the pipe as the user SID so the
+        // normal-integrity interface can connect, and an elevated process's token owner is
+        // BUILTIN\Administrators. The uninstaller is elevated on every route that reaches this
+        // (Decide sends the rest through a UAC relaunch or refuses), so the ask cost two seconds
+        // and left "the helper did not answer" in the log of every successful uninstall.
+        Running running = Uninstall.Discover(ui: 200, findra: [200, 300, 400]);
+
+        Assert.Equal(200, running.Interface);
+        Assert.Null(running.Helper);
+        Assert.Equal([300, 400], running.Others);
+    }
+
+    [Fact]
+    public void AHelperNothingCouldNameIsStoppedAllTheSame()
+    {
+        // The property that makes the line above safe to remove. Nothing is stopped because it was
+        // identified; everything called findra is stopped, and identifying the interface only
+        // decides what goes first.
+        IReadOnlyList<int> order = Uninstall.StopOrder(Uninstall.Discover(ui: 200, findra: [200, 300]), spare: [999]);
+
+        Assert.Equal(200, order[0]);
+        Assert.Contains(300, order);
     }
 
     // ---- elevation ------------------------------------------------------------------------------

@@ -1,6 +1,6 @@
 ; Findra's installer.
 ;
-; Three rules here are load-bearing and each has a test in
+; Four rules here are load-bearing and each has a test in
 ; tests/Findra.Tests/Build/InstallerScriptTests.cs:
 ;
 ;   1. The install directory carries no version. The scheduled task stores an absolute path to
@@ -10,6 +10,9 @@
 ;   3. Uninstalling runs findra --uninstall, which is what removes the HighestAvailable scheduled
 ;      task. An uninstaller that only deletes files leaves an elevated logon task pointing at a
 ;      binary that is gone, which the specification calls a defect.
+;   4. QuietUninstallString is deleted after the install. Inno registers it automatically and
+;      Windows 11's Settings prefers it, which runs the uninstaller silently and skips the
+;      checkbox that asks about gigabytes of somebody's data.
 
 #ifndef AppVersion
   #error AppVersion must be passed in: iscc /DAppVersion=<major.minor.patch> /DPublishDir=..\publish\win-x64 findra.iss
@@ -132,9 +135,58 @@ begin
   SaveStringToFile(ExpandConstant('{app}\installed-by.txt'), source, False);
 end;
 
+/// The Add/Remove Programs key Inno registers for this application. The GUID is read from the
+/// AppId directive above at compile time rather than typed a second time - two copies of a GUID in
+/// one file is how they come to differ, and a key built from the wrong one deletes nothing, says
+/// nothing, and is only ever noticed on somebody else's machine. ExpandConstant turns Inno's
+/// doubled leading brace back into the single one the key name carries.
+function UninstallKey(): String;
+begin
+  Result := 'Software\Microsoft\Windows\CurrentVersion\Uninstall\' +
+            ExpandConstant('{#SetupSetting("AppId")}') + '_is1';
+end;
+
+/// Inno registers QuietUninstallString beside UninstallString on its own, and Windows 11's
+/// Settings > Apps prefers it. The uninstaller then starts with /SILENT, UninstallSilent() is
+/// true, and InitializeUninstall returns before it has built anything - so the checkbox is never
+/// shown, Purge stays False, and the models, the index and the settings are all kept from
+/// somebody who believed they had asked for Findra to be gone. That is the route nearly everybody
+/// takes, and it is what made "a checkbox in the uninstaller" untrue in practice.
+///
+/// Removing the value costs nothing that was worth having: a scripted removal that really wants
+/// no questions still has findra.exe --uninstall --purge --quiet, which says what it will do on
+/// the command line instead of guessing at it.
+procedure ForgetTheQuietUninstall();
+var
+  key: String;
+  gone: Boolean;
+begin
+  key := UninstallKey();
+  // Named views rather than the unsuffixed constant. Inno writes the key in the 64-bit view
+  // because this install runs in 64-bit mode, and a value deleted from the other hive is a silent
+  // no-op with no symptom until an uninstall months later asks nothing and keeps everything.
+  if Is64BitInstallMode() then
+    gone := RegDeleteValue(HKLM64, key, 'QuietUninstallString')
+  else
+    gone := RegDeleteValue(HKLM32, key, 'QuietUninstallString');
+  // Not finding it is not a failure - a repair install runs this again - but which of the two
+  // happened is the answer to "why did Settings not ask", and that answer took ten minutes to
+  // work out the first time because nothing anywhere had written it down.
+  if gone then
+    Log('QuietUninstallString removed from ' + key)
+  else
+    Log('no QuietUninstallString under ' + key + ', nothing to remove');
+end;
+
 procedure CurStepChanged(CurStep: TSetupStep);
 begin
-  if CurStep = ssPostInstall then RecordInstallSource();
+  if CurStep = ssPostInstall then
+  begin
+    RecordInstallSource();
+    // After the install rather than during it: Inno writes the uninstall key as part of the
+    // install, so a deletion from ssInstall removes a value that is then written again.
+    ForgetTheQuietUninstall();
+  end;
 end;
 
 /// Everything between "It will keep:" and the blank line that ends it, with its column

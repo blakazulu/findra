@@ -320,6 +320,58 @@ public class InstallerScriptTests
     }
 
     [Fact]
+    public void TheInstallerRemovesTheQuietUninstallStringSoTheQuestionGetsAsked()
+    {
+        // Inno registers QuietUninstallString on its own, and Windows 11's Settings > Apps prefers
+        // it: the uninstaller then runs with /SILENT, UninstallSilent() is true, InitializeUninstall
+        // returns before it builds anything, and the checkbox nobody saw leaves 2.93 GB of models
+        // and a whole index on the disk of somebody who believed they had asked for them gone.
+        // That is the route nearly everybody takes, and it made PRIVACY.md's "a checkbox in the
+        // uninstaller" untrue in practice. Deleting the value is what puts the question back.
+        //
+        // Scoped to the routine, not the file: the value's name also appears in the comment above
+        // the call, so a whole-script search is answered by the prose explaining the code it is
+        // meant to be checking.
+        string body = Body("ForgetTheQuietUninstall");
+        Assert.Contains("RegDeleteValue", body, StringComparison.Ordinal);
+        Assert.Contains("'QuietUninstallString'", body, StringComparison.Ordinal);
+
+        // And it has to happen AFTER the install, because Inno writes that key as part of it.
+        // ssPostInstall is the only step that is late enough; doing it in ssInstall deletes a
+        // value Inno then writes, which looks identical in review and does nothing at all.
+        string step = Body("CurStepChanged");
+        Assert.Contains("ForgetTheQuietUninstall", step, StringComparison.Ordinal);
+        Assert.Contains("ssPostInstall", step, StringComparison.Ordinal);
+
+        // The scripted quiet uninstall is not lost with it, and the reason the value can go is
+        // that there is still one: findra.exe --uninstall --purge --quiet.
+        Assert.Contains("--uninstall --purge --quiet", Script, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void TheKeyTheInstallerEditsIsTheOneAppIdNames()
+    {
+        // Two copies of a GUID in one file is exactly how they come to differ, and a key built
+        // from the wrong one deletes nothing, reports nothing, and fails only on a stranger's
+        // machine months later. So the script may hold the GUID once - in AppId - and the routine
+        // that builds the uninstall key must read it from there.
+        string id = Setting("AppId");
+        string guid = Regex.Match(id, @"[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}").Value;
+        Assert.NotEqual("", guid);
+        Assert.Single(Regex.Matches(Script, Regex.Escape(guid), RegexOptions.IgnoreCase));
+
+        string body = Body("UninstallKey");
+        Assert.Contains("SetupSetting(\"AppId\")", body, StringComparison.Ordinal);
+        Assert.Contains(@"Software\Microsoft\Windows\CurrentVersion\Uninstall\", body, StringComparison.Ordinal);
+        Assert.Contains("_is1", body, StringComparison.Ordinal);
+
+        // Inno writes that key in the 64-bit view, because the install runs in 64-bit mode. The
+        // unsuffixed constant would follow the install mode too, but naming the view is the
+        // difference between a silent no-op and a deletion nobody has to reason about.
+        Assert.Matches(@"HKLM(?:64|32)", Body("ForgetTheQuietUninstall"));
+    }
+
+    [Fact]
     public void EveryFileTheScriptWritesItselfIsAlsoRemovedByHand()
     {
         // Inno removes what it recorded in its own uninstall log, which is the [Files] section and

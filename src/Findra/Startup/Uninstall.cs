@@ -66,8 +66,10 @@ public static class Uninstall
         // whatever is left in Others afterwards is a stray from a crash rather than a live child.
         Add(running.Interface);
         foreach (int p in running.Others ?? []) Add(p);
-        // Last, because it holds an elevated volume handle and because the scheduled task would
-        // restart it if the task were removed first.
+        // Last, WHEN IT IS KNOWN AT ALL, because it holds an elevated volume handle. Null is an
+        // ordinary answer here rather than a missing one: an uninstall cannot name the helper (see
+        // Discover), and it then arrives in Others and is stopped in there. Nothing depends on this
+        // line for the helper to be stopped - only for where in the order it comes.
         Add(running.Helper);
         return order;
     }
@@ -183,6 +185,35 @@ public static class Uninstall
         catch (Exception ex) { return ex.Message; }
     }
 
+    /// <summary>
+    /// The one line the log gets before anything is stopped or removed, and the only place the
+    /// answer to the only question an uninstall asks is written down.
+    ///
+    /// <para>A run that kept 2.93 GB of models and a run that deleted them left identical logs -
+    /// the task removal, the stopped processes, and nothing at all saying which of the two had
+    /// been asked for. The size is the plan's own measurement and never a second walk of the
+    /// disk: two numbers for one uninstall is how a prompt and a log come to disagree about what
+    /// happened.</para>
+    /// </summary>
+    public static string Announce(UninstallPlan plan, bool purge)
+    {
+        ArgumentNullException.ThrowIfNull(plan);
+        IReadOnlyList<DataSize> rows = purge ? plan.Deletes : plan.Keeps;
+        return (purge ? "deleting " : "keeping ") + Listed(rows) +
+               $" ({Sizes.Human(rows.Sum(r => r.Bytes))})";
+    }
+
+    private static string Listed(IReadOnlyList<DataSize> rows)
+    {
+        string[] names = [.. rows.Select(r => r.Label)];
+        return names.Length switch
+        {
+            0 => "nothing",
+            1 => names[0],
+            _ => string.Join(", ", names[..^1]) + " and " + names[^1],
+        };
+    }
+
     /// <summary>What the person is told before anything happens. Every size in it is measured, not
     /// declared (spec §2a).</summary>
     public static string Describe(UninstallPlan plan, string appFolder, bool purge)
@@ -256,7 +287,7 @@ public static class Uninstall
     public static int Run(string[] args, Func<bool> unregisterTask, Action clearAutostart,
                           Action<IReadOnlyList<int>> stop,
                           Func<IReadOnlyList<DataSize>, IReadOnlyList<Removal>> delete,
-                          Func<bool>? elevated = null)
+                          Func<bool>? elevated = null, Action<string>? announce = null)
     {
         ArgumentNullException.ThrowIfNull(args);
         ArgumentNullException.ThrowIfNull(unregisterTask);
@@ -264,6 +295,7 @@ public static class Uninstall
         ArgumentNullException.ThrowIfNull(stop);
         ArgumentNullException.ThrowIfNull(delete);
         elevated ??= IsElevated;
+        announce ??= line => Log.Info("uninstall", line);
 
         bool purge = args.Contains("--purge", StringComparer.OrdinalIgnoreCase);
         bool quiet = args.Contains("--quiet", StringComparer.OrdinalIgnoreCase);
@@ -291,6 +323,11 @@ public static class Uninstall
                                         "and the elevated run did not get them. Nothing was changed.");
                 return 2;
         }
+
+        // Before anything is stopped or removed, and before the report, which a quiet run does
+        // not print at all: an uninstall that leaves no record of which way it went is one nobody
+        // can answer questions about afterwards.
+        announce(Announce(plan, purge));
 
         if (!quiet) Console.Write(report);
 
@@ -390,44 +427,41 @@ public static class Uninstall
         return 0;
     }
 
-    /// <summary>Who is running. The interface says so in ui.json; the helper's pid comes back on
-    /// the pipe's status reply, which is the same number --searchprobe prints. Everything else
-    /// called findra is a stray.</summary>
-    private static Running Discover()
+    /// <summary>
+    /// Who is running, out of what an uninstall can actually see. The interface names itself in
+    /// ui.json; everything else called findra is a process to stop.
+    ///
+    /// <para>THE HELPER IS NOT NAMED HERE, and that is the answer rather than a gap. It used to be
+    /// asked for its own process id over the name pipe, and from an uninstall that ask can never
+    /// succeed: the client connects with <c>PipeOptions.CurrentUserOnly</c>, which compares the
+    /// pipe's OWNER against the connecting token's owner; the helper owns the pipe as the user SID
+    /// so the normal-integrity interface can connect at all, and an elevated process's token owner
+    /// is BUILTIN\Administrators. Every route that reaches an uninstall is elevated - the rest go
+    /// through a UAC relaunch or are refused - so the round trip spent two seconds failing and left
+    /// "the helper did not answer" in the log of every successful uninstall, above the line saying
+    /// the helper had been stopped anyway.</para>
+    ///
+    /// <para>Nothing is given up with it. Knowing which process is the helper only decides where it
+    /// comes in <see cref="StopOrder"/>; every findra process is stopped either way, which is the
+    /// property that makes not knowing safe.</para>
+    /// </summary>
+    public static Running Discover(int? ui, IReadOnlyList<int> findra)
     {
-        int? ui = UiStatus.Read()?.Pid;
-        int? helper = HelperPid();
-        var others = new List<int>();
+        ArgumentNullException.ThrowIfNull(findra);
+        return new Running(ui, Helper: null, Others: [.. findra.Where(p => p != ui)]);
+    }
+
+    private static Running Discover() => Discover(UiStatus.Read()?.Pid, FindraProcesses());
+
+    private static IReadOnlyList<int> FindraProcesses()
+    {
+        var pids = new List<int>();
         try
         {
             foreach (Process p in Process.GetProcessesByName(UiStatus.ProcessName))
-            {
-                using (p)
-                    if (p.Id != ui && p.Id != helper) others.Add(p.Id);
-            }
+                using (p) pids.Add(p.Id);
         }
         catch (Exception ex) { Log.Warn("uninstall", "could not list processes: " + ex.Message); }
-        return new Running(ui, helper, others);
-    }
-
-    /// <summary>The helper is asked over the pipe rather than looked for by name: the interface and
-    /// the helper are both called findra, so a name check cannot tell them apart. The reply's
-    /// <see cref="Pipe.StatusReply.ProcessId"/> is the same number --searchprobe prints.</summary>
-    private static int? HelperPid()
-    {
-        try
-        {
-            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(2));
-            return AskHelperAsync(cts.Token).GetAwaiter().GetResult();
-        }
-        catch (Exception ex) { Log.Warn("uninstall", "the helper did not answer: " + ex.Message); return null; }
-    }
-
-    private static async Task<int?> AskHelperAsync(CancellationToken ct)
-    {
-        await using Pipe.NameClient client =
-            await Pipe.NameClient.ConnectAsync(TimeSpan.FromSeconds(2), ct).ConfigureAwait(false);
-        Pipe.StatusReply status = await client.StatusAsync(ct).ConfigureAwait(false);
-        return status.ProcessId;
+        return pids;
     }
 }

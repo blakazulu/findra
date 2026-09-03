@@ -247,6 +247,11 @@ moment rather than an elevation prompt at every launch.
     been on. The wizard shows the licence, offers "Start Findra", and installs into
     `C:\Program Files\Findra` with no version anywhere in the path. Then, from Apps & features:
 
+    - `reg query "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall" /s /v
+      QuietUninstallString | findstr /i findra` prints nothing. Inno registers that value on its
+      own and Windows 11's Settings prefers it, which starts the uninstaller with `/SILENT` and
+      skips every bullet below this one without asking anything. The installer deletes it after
+      installing, and only a real install can show that it did;
     - the removal prompt lists the four measured sizes and the total it would free, and the
       numbers match what `findra --uninstall --dry-run` prints on that machine. A prompt that
       says "this may free a large amount of space" is the vague warning the specification
