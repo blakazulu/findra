@@ -1,69 +1,241 @@
 # Findra
 
 Desktop search for Windows. A capsule sits on your desktop; click it, or press a global
-hotkey, and it unfolds into a results card.
+hotkey, and it unfolds into a results card. It finds files by name the second it starts, and
+it can be taught to find them by what is written inside them, by what a photo shows, and by
+what was said in a recording.
 
-**Findra is being built in the open and is not ready to install yet.** This page describes
-what runs today, and nothing else. When the product is finished this file gets its real
-front page: screenshots produced by `findra --searchshot`, and every number produced by
-`findra --searchbench` on a named machine. Until then it promises nothing it cannot show.
+Everything happens on your machine. There is no account, no cloud and no telemetry.
 
-## What works today
+![The Findra capsule, waiting on the desktop](docs/shots/capsule.png)
 
-- **Search by name, across NTFS volumes.** An elevated helper reads the Master File Table
-  and the change journal and holds the name index in RAM. The interface runs unelevated and
-  asks over a local pipe.
-- **The card and the capsule**, drawn directly with Skia in six palettes, three dark and
-  three light, following the Windows light/dark setting or pinned to either.
-- **A global hotkey** with a fallback chain, because the first combination is taken on some
-  machines. Findra tells you which one it registered.
-- **A tray icon**, a settings file, and a version check.
+`findra --searchshot docs/shots/capsule.png capsule Mond`
 
-Not built yet: searching *inside* files. Words in documents, what a photo shows, and what
-was said in a recording are the next plans.
+## Free, and yours to keep
 
-## Build it
+Findra is licensed under Apache-2.0. You may use it, clone it, change it and ship your
+changes. The one condition is attribution, and it travels with the code: keep the `NOTICE`
+file, which credits blakazulu and points at https://github.com/blakazulu/findra, and keep it
+in anything you build on top. That is the whole deal.
 
-Requires the .NET 10 SDK.
+The Quicksand typeface ships inside the application under the SIL Open Font License 1.1,
+reproduced in `assets/fonts/OFL.txt`. It is not covered by Findra's own licence.
+
+## What it finds
+
+![Nine results for "sunset", with a photo previewed beside them](docs/shots/results.png)
+
+`findra --searchshot docs/shots/results.png results Mond`
+
+| What you can search for | Needs a model | On by default |
+|---|---|---|
+| Names of files and folders, across every NTFS volume | no | yes, from the moment Findra starts |
+| Words in documents, and the text inside pictures | no | no, until you turn content indexing on |
+| Photos and video, by what is in the frame | yes | no |
+| Documents by what they mean, not only the words they use | yes | no |
+| Speech in recordings, including a second pass for Hebrew | yes | no |
+
+Names are free because a name index costs seconds to build and about 73 MB of RAM for a
+million and a half files. Reading inside files walks every drive and can run for hours, so it
+never starts on its own. `findra --content on` starts it and `findra --content off` stops it
+without throwing away anything already read.
+
+Everything Findra can install is 2.93 GB of model files, and that is the number if you take
+all of them. Take none and Findra still searches every name on the machine. Take one and you
+pay for one. `findra --models` prints what each capability would add given what is already
+there, which is the only honest way to quote it, because Speech and Meaning share files.
+
+Typing has a grammar, and there is a form for the parts of it nobody remembers.
+
+![The advanced search form, with a query built up from its fields](docs/shots/advanced.png)
+
+`findra --searchshot docs/shots/advanced.png adv Mond`
+
+## Install
+
+**There is no published release yet, and nothing has been submitted to the winget catalogue.**
+Building from source is the route that works today. It needs the .NET 10 SDK and nothing else.
 
     git clone https://github.com/blakazulu/findra
     cd findra
     dotnet build
     dotnet test
+    dotnet publish src/Findra -c Release --self-contained
 
-Run the interface with `dotnet run --project src/Findra`. Name search needs the helper,
-which needs administrator rights exactly once, to open the volume:
+Run the interface with `dotnet run --project src/Findra`. Name search needs the helper, which
+needs administrator rights exactly once, to open the volume:
 
     dotnet run --project src/Findra -- --names
 
+The first release will ship an installer built by `installer/findra.iss` for x64 and arm64,
+and a winget package whose manifests are already in `packaging/winget/`. Once that release
+exists, `winget install blakazulu.Findra` is the command. Neither the installer nor the
+executables are signed yet, so Windows will warn about an unknown publisher until that
+changes; `docs/code-signing-policy.md` says where that stands.
+
+Findra never installs anything by itself. It checks whether a newer version exists and tells
+you; replacing a running executable and re-registering an elevated task are the two things
+most likely to leave a machine broken, and it declines to do either behind your back.
+
+## What it costs, the first time you run it
+
+The first screen asks one question and then gets out of the way. Take a preset, take one
+capability, or take nothing at all. Every size on it is marginal, counted against what you
+have already picked, which is why Speech costs less once Meaning is ticked: they share files
+and you are never charged twice for the same download.
+
+![The first-run screen, with the Recommended preset chosen](docs/shots/firstrun.png)
+
+`findra --searchshot docs/shots/firstrun.png firstrun Paper`
+
+Nothing on that screen is permanent. Everything on it is in Settings afterwards, and a
+capability taken later re-reads only the files it covers rather than starting again.
+
+![The Content section of Settings](docs/shots/settings.png)
+
+`findra --searchshot docs/shots/settings.png settingscontent Paper`
+
+A global hotkey opens the card from anywhere, over whatever you were doing. If the
+combination you asked for is already taken, Findra walks a fallback chain, takes the first
+that registers, and tells you which one it landed on rather than failing quietly.
+
+Six palettes ship, three dark and three light. Pick one of each and Findra follows the
+Windows setting, or pin it to either. `%APPDATA%\Findra\palettes.json` takes your own.
+
+![The same results card in the Blueprint palette](docs/shots/light.png)
+
+`findra --searchshot docs/shots/light.png results Blueprint`
+
 ## Check it yourself
 
-Findra is built to be verified without a screen. These four run today:
+Findra is built to be verified without a screen. Every number on this page came out of one of
+these, and every image above was drawn by the same painter the window uses.
 
-    findra --version                     which build this is, and where its logs are
-    findra --searchtest                  engine self-check
-    findra --searchprobe sunset          the whole query path, end to end
-    findra --searchshot out.png results  render a surface to a PNG, no screen required
+    findra --version                  which build this is, and where its logs are
+    findra --searchtest               engine self-check
+    findra --searchprobe sunset       the whole query path, end to end: which process
+                                      answered, the generation counter, the round trip
+    findra --searchindex q:invoice    what is indexed and what is queued; given paths
+                                      instead, it queues them and drains the queue
+    findra --searchmodels             which models are on disk, whether they load, whether
+                                      they agree, and which execution provider answered
+    findra --searchshot out.png results Mond   render any surface to a PNG
+    findra --searchbench out.md 10000 measured numbers, as Markdown fit to paste
+    findra --models install recommended        take a capability from the command line
+    findra --content on               start reading inside files
+    findra --uninstall --dry-run      what removing Findra would do, without doing it
 
-Three more arrive with the work they report on, and exit with an error until then:
-`--searchindex` for what is indexed and what is queued, `--searchmodels` for which models
-are present and which accelerator they chose, and `--searchbench` for measured numbers.
+`findra --searchshot` draws sixteen surfaces in any of the six palettes, which is how the
+images on this page are made and how they are regenerated. The command under each image is
+the whole recipe.
+
+## The numbers
+
+What follows was produced by `findra --searchbench readme-bench.md 10000` and pasted without
+editing. Ten thousand rather than the default 2,500, because a run of a second or two
+disagrees with itself by more than a published rate deserves.
+
+Two things to read honestly. The content index on this machine held ten documents at the time,
+so the full-text table measures the query path rather than a large corpus, and its hit counts
+say so. And the extraction row is measured over files the benchmark generates and then deletes,
+which is what makes it reproducible on your machine rather than a fact about this one.
+
+## Findra benchmark
+
+Produced by `findra --searchbench`. Every number below was measured on the machine
+named here, by this build, and re-running that command reproduces the whole page.
+
+### Machine
+
+| Part | Value |
+|---|---|
+| CPU | AMD Ryzen 9 9900X3D 12-Core Processor |
+| Architecture | X64 |
+| RAM | 47.1 GB |
+| Disk | NVMe SSD |
+| Windows | Windows 11 Pro 10.0.26200.9168 |
+| Accelerator | ONNX: DirectML · Whisper: not loaded |
+| Findra | 0.1.0 |
+
+### Volumes
+
+| Volume | Names | Name index resident | Cold-start enumeration | Journal position |
+|---|---|---|---|---|
+| C: | 1,573,675 | 73.1 MB | 2,769 ms | 29,755,440,672 |
+
+### Name query latency
+
+| Query | Round trip p50 | Round trip p95 | Index scan p50 | Pipe share p50 | Worst | Hits | Samples |
+|---|---|---|---|---|---|---|---|
+| report | 0.54 ms | 0.61 ms | 0.16 ms | 0.38 ms | 1.31 ms | 50 | n=50 |
+| invoice | 2.53 ms | 5.04 ms | 2.13 ms | 0.40 ms | 5.42 ms | 45 | n=50 |
+| sunset | 3.99 ms | 4.43 ms | 3.55 ms | 0.44 ms | 5.20 ms | 35 | n=50 |
+| readme | 1.00 ms | 1.06 ms | 0.51 ms | 0.49 ms | 1.33 ms | 50 | n=50 |
+| config | 0.50 ms | 0.54 ms | 0.06 ms | 0.45 ms | 0.56 ms | 50 | n=50 |
+
+### Full-text query latency
+
+| Query | p50 | p95 | Worst | Hits | Samples |
+|---|---|---|---|---|---|
+| lease | 0.31 ms | 0.41 ms | 0.79 ms | 3 | n=50 |
+| agreement | 0.20 ms | 0.22 ms | 0.26 ms | 4 | n=50 |
+| invoice | 0.18 ms | 0.20 ms | 0.23 ms | 3 | n=50 |
+| total | 0.35 ms | 0.45 ms | 0.79 ms | 5 | n=50 |
+| report | 0.69 ms | 0.91 ms | 0.95 ms | 8 | n=50 |
+
+### Document extraction
+
+| Kind | Files | Seconds | files/min | MB/s |
+|---|---|---|---|---|
+| Doc | 11,000 | 11.49 | 57,464 | 6.89 |
+
+### Stores
+
+| Store | Path | Size |
+|---|---|---|
+| search.db | %LOCALAPPDATA%\Findra\index\search.db | 1.8 MB |
+| search.db-wal | %LOCALAPPDATA%\Findra\index\search.db-wal | 0 B |
+| search.db-shm | %LOCALAPPDATA%\Findra\index\search.db-shm | 32.0 KB |
+
+Indexed items: 10. Text segments: 924.
+
+Corpus for the extraction row: 10,000 generated .txt of 8 KB and 1,000 generated .docx of 1 KB, indexed into a throwaway database with no model loaded, and deleted.
 
 ## What leaves your machine
 
-Your files, their names, their contents and your searches never leave your machine. There
-is no account, no cloud and no telemetry.
+Your files, their names, their contents and your searches never leave your machine. There is
+no account, no cloud service, no analytics, no crash reporting and no telemetry.
 
-There is exactly one outbound request, and it is written down rather than buried: an
-anonymous HTTPS GET to the GitHub releases API, at most once every 24 hours, in the
-background, to learn whether a newer version exists. It sends no query parameters, no
-machine or install identifier, and nothing about your files or searches. It never blocks
-anything, and a failure is a line in the log rather than a dialog. It can be switched off,
-and off means the request is not made. Findra never installs anything by itself.
+There is exactly one outbound request, and it is written down here rather than buried: an
+anonymous HTTPS GET to the GitHub releases API, at most once every 24 hours, on startup, in
+the background, to learn whether a newer version exists. It carries no query parameters, no
+machine identifier, no install identifier, and nothing about your files or your searches. It
+never blocks anything, and a failure is a line in the log rather than a dialog. It is
+disclosed on the first-run screen and can be switched off, and off means the request is not
+made at all.
+
+Downloading a capability's model files is a separate thing, and it happens only when you
+choose a capability and ask for it.
 
 Full detail, including what the index contains and what the logs record, is in
 [PRIVACY.md](PRIVACY.md).
 
+## Removing it
+
+    findra --uninstall              stop everything, remove the elevated logon task, the
+                                    autostart entry and the program files
+    findra --uninstall --purge      also delete the models, the index and the settings
+
+Uninstalling always removes the `HighestAvailable` scheduled task, because an elevated logon
+task pointing at a binary that is no longer there is a defect and not an inconvenience. It
+keeps your models, your index and your settings by default; deleting them is a checkbox in
+the installer's uninstaller and `--purge` on the command line, and either way you are told
+the measured size it would free before it happens.
+
+`findra --uninstall --dry-run` prints the whole plan and changes nothing.
+
 ## Licence
 
-Apache-2.0. Free to use, clone and modify. See `NOTICE` for the attribution you must keep.
+Apache-2.0. Free to use, clone and modify, with attribution to blakazulu and
+https://github.com/blakazulu/findra that travels with the code. See `LICENSE` for the terms
+and `NOTICE` for the attribution you must keep.
