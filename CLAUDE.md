@@ -66,7 +66,7 @@ node build/Make-Icon.mjs                       # regenerate the mark - the .ico 
 node build/Make-Pages.mjs                      # regenerate /about/, /contact/ and /privacy/ from
                                                # their Markdown, and copy each source verbatim
                                                # beside its page. By hand, when the prose changes.
-node netlify/edge-functions/markdown.test.mjs  # the site's Accept negotiation, as a table. The
+node tests/edge/markdown.test.mjs               # the site's Accept negotiation, as a table. The
                                                # one thing in this repository CI runs node for.
 ```
 
@@ -569,6 +569,12 @@ running it, and shipping a page that still says the old thing.
   did; a switchboard nobody answers would be the only dishonest thing on the site. This looks like
   a gap to a readiness checker, which scores an Organization node higher for carrying them, so it
   is written down as a test that refuses rather than left to somebody's judgement later.
+- **Nothing but a real edge function goes in `netlify/edge-functions/`.** Netlify deploys every
+  top-level file there AS one, and one with no default export fails the whole build - and a failed
+  build does not break the site, it just never replaces it, so the previous commit goes on being
+  served and nothing anywhere says the push did not land. A node test placed beside the function it
+  tested did exactly that. `WebsiteTests` now reads every deployable file in that folder for a
+  default export; the node test lives in `tests/edge/`.
 - **`netlify/edge-functions/markdown.ts` is the one thing on the site that is not a file.** Accept
   negotiation cannot be done with a header rule or a redirect, because neither reads the header.
   Two things about it are load-bearing: `Vary: Accept` goes on **both** branches, or a cache serves

@@ -1,7 +1,7 @@
 // The one decision in markdown.ts that can silently ruin the site for everybody who is not an
 // agent, run as a table.
 //
-//     node netlify/edge-functions/markdown.test.mjs
+//     node tests/edge/markdown.test.mjs
 //
 // A browser sends `text/html,...,*/*;q=0.8`, and `*/*` matches text/markdown. A negotiator that
 // asks "does anything here match" rather than "which did the caller ask for more" therefore hands
@@ -12,11 +12,16 @@
 // on Deno at Netlify's edge, and the C# suite cannot execute it. It runs in CI as its own step;
 // WorkflowTests asserts that step is still there, because a test nothing runs is not a test.
 //
+// It lives HERE, and not beside the function it tests, because Netlify deploys every top-level
+// file in the edge functions directory AS an edge function. Put here, this file was bundled as
+// one, and an edge function with no default export fails the build - so the site stopped deploying
+// entirely and went on serving the previous commit. Only real edge functions go in that folder.
+//
 // It imports the real module rather than a copy. Node strips the type annotations, and the only
 // import in markdown.ts is `import type`, which erases to nothing - so what runs here is the file
 // that deploys, not a transcription of it.
 
-import { prefersMarkdown } from './markdown.ts';
+import { prefersMarkdown } from '../../netlify/edge-functions/markdown.ts';
 
 const CASES = [
   // What a real browser sends. Every one of these must get HTML.

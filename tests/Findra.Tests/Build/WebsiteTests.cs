@@ -374,6 +374,46 @@ public class WebsiteTests
         Assert.Contains("markdown > html", edge, StringComparison.Ordinal);
     }
 
+    /// <summary>
+    /// Nothing lives in the edge functions directory except edge functions.
+    ///
+    /// <para>Netlify deploys every top-level file in <c>netlify/edge-functions/</c> AS an edge
+    /// function - .js, .ts, .jsx, .tsx and .mjs alike - and an edge function with no default export
+    /// fails the build. This is written down as a test because of what that failure looks like from
+    /// outside: the deploy does not half-work and the site does not break. It simply never happens,
+    /// and the previous commit goes on being served, so everything looks fine until somebody
+    /// notices that a change pushed some time ago is not live.</para>
+    ///
+    /// <para>That is exactly what a test file placed next to the function it tests did here. Helper
+    /// files can live in a SUBDIRECTORY of that folder, which Netlify does not deploy; the node
+    /// test lives in <c>tests/edge/</c> with the rest of the tests.</para>
+    /// </summary>
+    [Fact]
+    public void TheEdgeFunctionsDirectoryHoldsNothingButEdgeFunctions()
+    {
+        string[] deployed = Directory.GetFiles(Repo.Path_("netlify/edge-functions"))
+            .Where(f => new[] { ".js", ".ts", ".jsx", ".tsx", ".mjs" }
+                .Contains(Path.GetExtension(f), StringComparer.OrdinalIgnoreCase))
+            .ToArray();
+
+        Assert.NotEmpty(deployed);
+
+        foreach (string file in deployed)
+        {
+            string source = File.ReadAllText(file);
+            Assert.True(
+                source.Contains("export default", StringComparison.Ordinal),
+                $"netlify/edge-functions/{Path.GetFileName(file)} has no default export, so Netlify " +
+                "will fail the whole deploy trying to bundle it as an edge function - and a deploy " +
+                "that never happens leaves the previous commit live with nothing to show it went " +
+                "wrong. Only real edge functions belong in that directory.");
+
+            // A file Netlify runs on Deno cannot use node's globals. `process.exit` in one is the
+            // same mistake in a different disguise.
+            Assert.DoesNotContain("process.exit", source, StringComparison.Ordinal);
+        }
+    }
+
     /// <summary>The site makes no comparative claim against a named competitor - the same rule the
     /// README and the winget listing are held to, applied to three new pages of prose.</summary>
     [Fact]

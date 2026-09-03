@@ -287,8 +287,8 @@ public class WorkflowTests
     public void TheMarkdownNegotiationIsCheckedOnEveryPush()
     {
         Assert.Contains("actions/setup-node", Ci, StringComparison.Ordinal);
-        Assert.Contains("node netlify/edge-functions/markdown.test.mjs", Ci, StringComparison.Ordinal);
-        Assert.True(Repo.Exists("netlify/edge-functions/markdown.test.mjs"),
+        Assert.Contains("node tests/edge/markdown.test.mjs", Ci, StringComparison.Ordinal);
+        Assert.True(Repo.Exists("tests/edge/markdown.test.mjs"),
                     "the CI step runs a file that is not in the repository");
 
         // Nothing that produces a shippable artefact may need node. The mark and the written pages
