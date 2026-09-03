@@ -512,6 +512,11 @@ into a numbered section on the first release.
 
 ### Fixed
 
+- **Clicking a palette applies it.** Choosing a light palette while the dark side was on
+  screen wrote the setting and changed nothing you could see, so you had to find the mode
+  row and switch that too. Picking a palette from the side you are not looking at now moves
+  to that side as well.
+
 - **Name search survives the first person who uses it.** The elevated helper read the disk,
   answered one connection and could then never listen again: every pipe instance after the
   first is access-checked against the descriptor the first one carries, and that descriptor

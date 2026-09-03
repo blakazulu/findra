@@ -105,6 +105,21 @@ public sealed record SettingsState(Config Config)
     public bool IndexerAlive { get; init; }
     public IReadOnlyList<string> Drives { get; init; } = [];
 
+    /// <summary>What Windows' own light/dark setting says right now. Only used to work out which
+    /// of the two palette rows is the one actually on screen, so that picking from the other one
+    /// can be made to show. Not a setting and never written.</summary>
+    public bool WindowsIsLight { get; init; }
+
+    /// <summary>Is the light side the one being drawn? The same three-way test
+    /// <see cref="Theme.Resolve"/> makes, and it lives here so the model can tell whether a
+    /// palette click will be visible or silent.</summary>
+    public bool ShowingLight => Config.Mode switch
+    {
+        ThemeMode.AlwaysDark => false,
+        ThemeMode.AlwaysLight => true,
+        _ => WindowsIsLight,
+    };
+
     /// <summary>True between clicking the hotkey row and the next key press. The window routes
     /// keys through <see cref="SettingsModel.ChordFrom"/> while it holds, and every path out of
     /// the section clears it - a capture mode nothing cancels is one the person is stuck in.
@@ -404,10 +419,31 @@ public static class SettingsModel
         {
             ControlId.Mode when hit.Target == PanelTarget.Option =>
                 SettingsOutcome.Changed(s with { Config = c with { Mode = (ThemeMode)hit.Option } }),
+            // Picking a palette from the side that is NOT on screen switches to that side as well
+            // as recording it. Without this the click writes a slot nobody can see and the window
+            // does not change, which reads as a broken control - the user's words were that they
+            // had to go up and change the mode before anything happened, and that is not what a
+            // swatch looks like it does. Mode is a visible row, so it moves in front of them
+            // rather than changing behind their back, and picking the side already on screen
+            // leaves Follow Windows alone, because that click was never silent.
             ControlId.DarkPalette when hit.Target == PanelTarget.Option =>
-                SettingsOutcome.Changed(s with { Config = c with { DarkPalette = row.Options[hit.Option] } }),
+                SettingsOutcome.Changed(s with
+                {
+                    Config = c with
+                    {
+                        DarkPalette = row.Options[hit.Option],
+                        Mode = s.ShowingLight ? ThemeMode.AlwaysDark : c.Mode,
+                    },
+                }),
             ControlId.LightPalette when hit.Target == PanelTarget.Option =>
-                SettingsOutcome.Changed(s with { Config = c with { LightPalette = row.Options[hit.Option] } }),
+                SettingsOutcome.Changed(s with
+                {
+                    Config = c with
+                    {
+                        LightPalette = row.Options[hit.Option],
+                        Mode = s.ShowingLight ? c.Mode : ThemeMode.AlwaysLight,
+                    },
+                }),
             ControlId.PalettesFile =>
                 SettingsOutcome.Ask(s, SettingsAction.OpenPalettesFile, Paths.PalettesFile),
 
