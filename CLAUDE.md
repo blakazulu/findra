@@ -219,6 +219,14 @@ index silently not existing.
   `AfterTheScreenIsAnswered()`: the answer registers the scheduled task and starts the helper
   itself, immediately, because names are the half of Findra that works with nobody's models and
   nobody should wait on a 1.5 GB download for their filenames.
+- **The screen is pinned to the front only long enough to ARRIVE.** `Topmost` is set at
+  construction, because Windows will not reliably let a still-starting process take the
+  foreground and a welcome screen opening behind the desktop reads as an installer that did
+  nothing - and it is released in `Opened`, the moment the window is really on the display.
+  Keeping it set was the first attempt and only a real install showed why it is wrong: this is a
+  screen somebody reads, thinks about and then leaves running while 2.9 GB arrives, and for all of
+  that it stood over every other window on the machine. **What makes it the only door into Findra
+  is the gate in `App.TheWelcomeScreenIsInTheWay`**, not a flag that outranks the whole desktop.
 - **`_firstRunIsUp` is set AFTER `Show()`.** A screen that threw on its way up must leave a
   launch that carries on; `WhenTheScreenCouldNotBeShown()` is that path and it is real, because
   every stage is wrapped.
