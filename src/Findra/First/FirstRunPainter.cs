@@ -227,12 +227,38 @@ public static class FirstRunLayout
         return new SKRect(s.Left, s.Bottom + SwitchGap, s.Right, s.Bottom + SwitchGap + DisclosureH);
     }
 
-    public static SKRect ButtonRect(int i)
+    public static SKRect ButtonRect(int i) => ButtonRect(i, Height);
+
+    /// <summary>The buttons, against a given bottom edge. The second act is a shorter window than
+    /// the first, so the height cannot be the constant here.</summary>
+    public static SKRect ButtonRect(int i, float height)
     {
         float right = Width - Inset;
         float x = right - (2 - i) * (ButtonW + TileGap) + TileGap;
-        return new SKRect(x, Height - ButtonH - 20, x + ButtonW, Height - 20);
+        return new SKRect(x, height - ButtonH - 20, x + ButtonW, height - 20);
     }
+
+    /// <summary>
+    /// How tall the window is once the question has been answered.
+    ///
+    /// <para>The choosing height is sized for the tallest configuration on purpose, so that
+    /// ticking Speech cannot resize the window under the pointer that ticked it. Once the answer
+    /// is given none of that applies: the tiles, the switches, the limit row and the notes all
+    /// stop being drawn, and the fixed height left roughly 350 pixels of nothing between the
+    /// summary and the bottom - which reads as a hole rather than as room.
+    ///
+    /// <para>Measured from what the second act actually draws: the last row, the gap, the summary
+    /// band and the button. The one resize happens on a deliberate click on a button that then
+    /// stops existing, which is the moment nothing is under the pointer waiting to be hit.</para>
+    /// </summary>
+    public static float SettledHeight(int rows, int limitRow = -1) =>
+        RowRect(rows - 1, limitRow).Bottom + RowsToSwitchesGap + SettledSummaryH + ButtonH + 40f;
+
+    /// <summary>Room for the second act's sentence. Two lines at the summary's own leading, which
+    /// is what the longest of them needs - a dropped connection names the host, and 44 was two
+    /// pixels short of it. TheSecondActsSummaryFollowsItsListAndClearsTheWayOut measures the
+    /// longest reachable sentence in the shipped face rather than trusting this number.</summary>
+    public const float SettledSummaryH = 48f;
 
     /// <summary>Between the last switch and the buttons: at least two lines of room, because
     /// <see cref="FirstRun.Summary"/> is a sentence rather than a number and its longest form
@@ -253,9 +279,11 @@ public static class FirstRunLayout
     /// in the second act, so the sentence has the whole card rather than the card less two
     /// buttons.</para>
     /// </summary>
-    public static SKRect SettledSummaryRect(int rows, int limitRow = -1) =>
-        new(Inset, RowRect(rows - 1, limitRow).Bottom + RowsToSwitchesGap,
-            Width - Inset - ButtonW - TileGap, ButtonRect(0).Top - 6);
+    public static SKRect SettledSummaryRect(int rows, int limitRow = -1)
+    {
+        float top = RowRect(rows - 1, limitRow).Bottom + RowsToSwitchesGap;
+        return new SKRect(Inset, top, Width - Inset - ButtonW - TileGap, top + SettledSummaryH);
+    }
 
     /// <summary>Tiles, rows, the transcription limit, switches, buttons, in that order, each
     /// bounded by what is actually drawn. <paramref name="rows"/> is
@@ -272,7 +300,11 @@ public static class FirstRunLayout
     public static FirstRunHit HitTest(
         float x, float y, int rows, int limitRow = -1, bool settled = false, bool finished = false)
     {
-        if (x < 0 || x > Width || y < 0 || y > Height) return new FirstRunHit(FirstRunTarget.None, -1);
+        // Against the height THIS act has. The settled window is shorter than the choosing one,
+        // and a bound taken from the choosing constant would accept a click below its own bottom
+        // edge - which is off the window entirely.
+        float bottom = settled ? SettledHeight(rows, limitRow) : Height;
+        if (x < 0 || x > Width || y < 0 || y > bottom) return new FirstRunHit(FirstRunTarget.None, -1);
 
         // While the download runs this screen answers NOTHING. It is a status screen and the
         // chooser behind it is settled, so a control that still took a click would be answering a
@@ -282,7 +314,7 @@ public static class FirstRunLayout
         // safeguard. Only when it has finished does a button appear, because only then is there
         // something for it to mean.
         if (settled)
-            return finished && ButtonRect(1).Contains(x, y)
+            return finished && ButtonRect(1, SettledHeight(rows, limitRow)).Contains(x, y)
                 ? new FirstRunHit(FirstRunTarget.Go, -1)
                 : new FirstRunHit(FirstRunTarget.None, -1);
 
@@ -471,7 +503,10 @@ public static class FirstRunPainter
         // absent, because absent is honest. It arrives with the last byte, which is also the
         // moment its label stops being a guess about what the person wants to do next.
         if (s.Stage != FirstRunStage.Downloading)
-            Parts.Pill(canvas, FirstRunLayout.ButtonRect(1), FirstRun.GoLabel(s.Stage),
+            Parts.Pill(canvas,
+                       busy ? FirstRunLayout.ButtonRect(1, FirstRunLayout.SettledHeight(rows.Count, limitRow))
+                            : FirstRunLayout.ButtonRect(1),
+                       FirstRun.GoLabel(s.Stage),
                        chosen: true, hovered: s.HoverTarget == FirstRunTarget.Go, d, face);
     }
 

@@ -238,7 +238,13 @@ public static class SearchShot
             HoverIndex = busy ? -1 : 3,
         };
 
-        int w = (int)Math.Ceiling(FirstRunLayout.Width), h = (int)Math.Ceiling(FirstRunLayout.Height);
+        // The second act is a shorter window than the first, and the shot has to be the size the
+        // window really is or the review render carries an empty band the product does not have.
+        int rows = FirstRun.Rows(s).Count;
+        int limitRow = FirstRun.LimitRow(s);
+        float tall = busy ? FirstRunLayout.SettledHeight(rows, limitRow) : FirstRunLayout.Height;
+
+        int w = (int)Math.Ceiling(FirstRunLayout.Width), h = (int)Math.Ceiling(tall);
         var info = new SKImageInfo(w, h, SKColorType.Bgra8888, SKAlphaType.Premul);
         using SKSurface surface = SKSurface.Create(info);
         FirstRunPainter.Paint(surface.Canvas, s, d, face);
