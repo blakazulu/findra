@@ -269,6 +269,10 @@ internal sealed class Shell : ISettingsHost
     /// first is a launch that must carry on, the second a launch that must not.</summary>
     private bool _firstRunIsUp;
 
+    /// <summary>The welcome screen, for as long as one is on the display. Null before it is built
+    /// and again the moment it closes - see <see cref="TheWelcomeScreenIsInTheWay"/>.</summary>
+    private FirstRunWindow? _firstRun;
+
     /// <summary>What was held back has been built. The answer can only arrive once - the screen
     /// guards that itself - but a second call here would be a second tray icon over one process.
     /// </summary>
@@ -448,6 +452,12 @@ internal sealed class Shell : ISettingsHost
 
         var window = new FirstRunWindow(state, _palette);
         window.Answered += answer => OnFirstRunAnswered(window, answer);
+        // Held, and let go when it closes, because until then it is the only door into Findra.
+        // The rest of the product IS built from the answer - names are searchable seconds later
+        // and nobody should wait on 2.9 GB for their filenames - but a card opened over a running
+        // download is a second Findra in front of the one that is still setting itself up.
+        _firstRun = window;
+        window.Closed += (_, _) => { _firstRun = null; _firstRunIsUp = false; };
         window.Show();
         // AFTER Show, because this is what tells Start that the screen really is on the display
         // and the rest of the launch may wait for an answer. Set before it, a window that threw on
@@ -1234,6 +1244,7 @@ internal sealed class Shell : ISettingsHost
     /// field lands exactly where the capsule's bar was.</summary>
     private void OpenFromCapsule()
     {
+        if (TheWelcomeScreenIsInTheWay()) return;
         // A click on the capsule deactivated the card BEFORE this handler ran, so without this a
         // click that dismissed the card would immediately reopen it.
         if (CardWindow.JustClosed) return;
@@ -1261,8 +1272,37 @@ internal sealed class Shell : ISettingsHost
     /// guard a click that dismissed the card would immediately open a fresh one. WM_HOTKEY moves
     /// no focus and closes nothing, so the hotkey does not take the guard and keeps its plain
     /// toggle: pressed while the card is open, it closes it.</summary>
+    /// <summary>
+    /// Is the welcome screen still up, and therefore still the only door into Findra?
+    ///
+    /// <para>Every route that would put another Findra surface on the display asks this first.
+    /// There are THREE of them, not two: <see cref="OpenCentred"/> takes the hotkey, the tray icon
+    /// and the tray's Search item; <see cref="OpenSettings(Section)"/> takes the tray's Settings
+    /// item; and <see cref="OpenFromCapsule"/> is its own path, because opening from the capsule
+    /// dims the capsule's monitor and unfolds the card over the capsule's bar rather than centring
+    /// it under the cursor. Two open paths, two dim behaviours - and the second one is easy to
+    /// miss from the first. The card's own Settings pill and Content pill need nothing, because a
+    /// card that cannot be opened cannot ask.</para>
+    ///
+    /// <para>It RAISES the screen rather than doing nothing at all. A hotkey that silently
+    /// refuses is the same defect as a button that does nothing - it leaves somebody pressing it
+    /// again - and the honest answer to "why will Findra not open" is the window that is still
+    /// asking them something, put back in front where they can see it.</para>
+    ///
+    /// <para>Nothing here can be run in a test: it is two window methods on a window no test can
+    /// build. It is step 8.5 of the run sheet instead.</para>
+    /// </summary>
+    private bool TheWelcomeScreenIsInTheWay()
+    {
+        if (_firstRun is not { } welcome) return false;
+        try { welcome.Activate(); }
+        catch (Exception ex) { Log.Warn("app", "the welcome screen would not come forward: " + ex.Message); }
+        return true;
+    }
+
     private void OpenCentred(bool fromClick)
     {
+        if (TheWelcomeScreenIsInTheWay()) return;
         if (fromClick && CardWindow.JustClosed) return;
         if (_card is not null) { CloseCard(); return; }
 
@@ -1404,6 +1444,7 @@ internal sealed class Shell : ISettingsHost
 
     private void OpenSettings(Section section)
     {
+        if (TheWelcomeScreenIsInTheWay()) return;
         try
         {
             // Already open: bring it forward AND take it to the section that was asked for. A

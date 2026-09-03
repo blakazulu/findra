@@ -1,4 +1,4 @@
-# End-to-end run sheet
+﻿# End-to-end run sheet
 
 `docs/end-to-end-checklist.md` is the catalogue: every item that needs a UAC prompt, a screen, a
 real disk, a sign-out or a public tag, written down as each plan discovered it. It is ordered by
@@ -853,7 +853,7 @@ so in `CHANGELOG.md`.
 
 # Phase 8 - Uninstall
 
-Four items. **Everything above is destroyed here. Nothing below phase 8 can be re-run without
+Five items. **Everything above is destroyed here. Nothing below phase 8 can be re-run without
 starting from phase 1.**
 
 ### 8.1 (catalogue 33, second half, and 25) Keep by default - admin, destructive
@@ -938,6 +938,31 @@ unrelated: names come back empty because the name index lives in the helper the 
 content queue is fed from the USN journal through that same helper, so nothing is ever queued; and
 "Start now" then starts an indexer that drains an empty queue and goes idle within a second, which
 reads as a button that does nothing. If any one of the three fails here, check the task first.
+
+### 8.5 The welcome screen is the only door while it is up
+
+Nothing here can be run in a test - it is window methods on a window no test can build - so it is
+checked by hand, like the console window in step 50 of the catalogue.
+
+With the welcome screen still downloading, try every route into Findra:
+
+- the global hotkey;
+- a left click on the tray icon;
+- the tray menu's **Search**;
+- the tray menu's **Settings**;
+- a click on the capsule on the desktop.
+
+**Pass:** none of the five opens a card or a settings window. Each one brings the welcome screen
+back to the front instead. Raising it, rather than doing nothing, is the point: a hotkey that
+silently refuses leaves somebody pressing it again, and the honest answer to "why will Findra not
+open" is the window that is still asking them something.
+
+There are three code paths behind those five routes and the third is easy to miss - opening from
+the capsule dims the capsule's monitor and unfolds the card over the capsule's bar, so it does not
+share the hotkey's path. Try the capsule specifically.
+
+**Then close the welcome screen and try all five again.** Every one of them must work. A gate that
+does not lift is worse than no gate.
 
 ---
 
