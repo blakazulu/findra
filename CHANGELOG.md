@@ -556,12 +556,13 @@ into a numbered section on the first release.
   is closed. Setting up continues behind it: names are searchable within seconds of answering, so
   nothing waits on the download.
 
-- **The welcome screen stops standing over everything once you have answered it.** It is pinned
-  in front while the question is on it, on purpose - a first screen that opened behind whatever
-  was already on the desktop would read as an install that did nothing. It kept the pin through
-  the download, so choosing everything left a progress bar sitting over every other application
-  on the machine for as long as 2.9 GB takes to arrive. The question owns the display; the
-  progress report does not.
+- **The welcome screen no longer sits over every other window.** It was pinned to the front for
+  as long as it was open, so a screen you read, think about, and leave running while gigabytes
+  arrive stood in front of everything else on the machine with no way to put it behind anything.
+  It is now pinned only long enough to arrive - Windows will not reliably let a starting process
+  take the foreground, and a first screen that opened behind the desktop would read as an install
+  that did nothing - and released the moment it is on screen. Nothing else opens while it is up
+  regardless: the hotkey, the tray, the capsule and Settings all bring it forward instead.
 
 - **`--purge` no longer leaves the folder it said it had deleted.** `ui.json`, which records the
   running interface's process id and hotkey, sits directly in `%LOCALAPPDATA%\Findra` rather than

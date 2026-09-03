@@ -364,23 +364,6 @@ public static class FirstRun
         };
     }
 
-    /// <summary>
-    /// Whether the screen is still holding the display in front of everything else.
-    ///
-    /// <para>Only while the question is on it. "When the first screen is needed, it owns the
-    /// display until it is answered" is about the question: a welcome screen that opened behind
-    /// whatever was already on the desktop reads as an install that did nothing, and there is no
-    /// other route into content indexing or the capability list.</para>
-    ///
-    /// <para>The download is the other side of that sentence and used to inherit the same pin.
-    /// Answering "Get these" starts up to 2.9 GB, which is tens of minutes on an ordinary line,
-    /// and for all of it the window sat over every other application on the machine - not busy,
-    /// not modal, just permanently in front of whatever somebody moved to while they waited. The
-    /// answer has been given by then and the screen is a progress report, so it takes its place in
-    /// the ordinary window order like any other. It keeps its taskbar button and its title
-    /// throughout, which is how it is found again.</para>
-    /// </summary>
-    public static bool OwnsTheDisplay(FirstRunStage stage) => stage == FirstRunStage.Choosing;
 
     /// <summary>Unknown counts as "not there". HelperTask.Query is three-valued precisely so a
     /// locked-down machine is distinguishable from a fresh one, and registering a task that is

@@ -61,16 +61,26 @@ public sealed class FirstRunWindow : Window
         Width = FirstRunLayout.Width;
         Height = FirstRunLayout.Height;
         WindowStartupLocation = WindowStartupLocation.CenterScreen;
-        // Topmost, unlike settings: this is the first thing a new install shows and it is the
-        // only route into content indexing and the capability list. A screen that opened behind
-        // whatever was already on the desktop would look like nothing happened.
+        // Pinned to ARRIVE, and only to arrive. Windows will not reliably let a process that is
+        // still starting take the foreground, so a window that merely called Activate() can open
+        // behind whatever was already on the desktop - which on the first screen of a fresh
+        // install reads as an installer that did nothing.
         //
-        // Through FirstRun.OwnsTheDisplay and not a bare `true`, because the same question is
-        // asked again the moment the screen is answered and the two answers have to come from one
-        // rule. See that method for why the download does not keep the pin.
-        Topmost = FirstRun.OwnsTheDisplay(state.Stage);
+        // It is released in Opened, below, the moment it is actually on the display. Keeping it
+        // set was the first attempt and it was wrong in a way only a real install showed: this is
+        // a screen somebody reads, thinks about, and then leaves running while 2.9 GB arrives, and
+        // for all of that it sat over every other window on the machine with no way to put it
+        // behind anything. What makes it the only door into Findra is the gate in App - the
+        // hotkey, the tray, the capsule and settings all raise this window instead of opening -
+        // and not a flag that outranks the whole desktop.
+        Topmost = true;
 
-        Opened += (_, _) => { Activate(); _canvas.Focus(); };
+        Opened += (_, _) =>
+        {
+            Activate();
+            _canvas.Focus();
+            Topmost = false;
+        };
         _canvas.Answered += s => Answered?.Invoke(s);
         _canvas.StartReadingRequested += () => StartReadingRequested?.Invoke();
     }
@@ -239,10 +249,6 @@ public sealed class FirstRunWindow : Window
                 // Here is the safe moment: a deliberate click on a button that then stops
                 // existing, with nothing left under the pointer to be hit.
                 _owner.Height = FirstRunLayout.SettledHeight(Rows, LimitRow, FirstRun.Asks(_state));
-                // And it stops standing over everything else. The question is answered; what is
-                // left is a progress bar that can run for tens of minutes, and a progress bar
-                // pinned in front of every other window is not a courtesy.
-                _owner.Topmost = FirstRun.OwnsTheDisplay(_state.Stage);
                 InvalidateVisual();
 
                 Answered?.Invoke(answer);
