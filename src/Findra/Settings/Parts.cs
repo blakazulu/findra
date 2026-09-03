@@ -8,7 +8,8 @@ namespace Findra;
 /// <see cref="Derived"/>, so a palette is still four constants.
 ///
 /// <para>This is where <see cref="Derived.Tile"/> and <see cref="Derived.Chip"/> stop being
-/// reserved and start being painted - both of their doc comments say so.</para>
+/// reserved and start being painted, which is why both join the legibility check in
+/// <c>--searchtest</c>.</para>
 /// </summary>
 public static class Parts
 {
@@ -25,7 +26,8 @@ public static class Parts
     /// a typeface per measurement.</para>
     ///
     /// <para>Quicksand is bundled under the SIL Open Font License 1.1; see
-    /// <c>assets/fonts/OFL.txt</c>, which ships beside the executable, and <c>NOTICE</c>.</para>
+    /// <c>assets/fonts/OFL.txt</c>, which ships beside the executable as
+    /// <c>OFL-Quicksand.txt</c>, and <c>NOTICE</c>.</para>
     /// </summary>
     public static SKTypeface Face { get; } =
         Resolve(typeof(Parts).Assembly.GetManifestResourceStream("Findra.Quicksand-Regular.ttf"));

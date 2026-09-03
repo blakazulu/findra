@@ -93,7 +93,7 @@ public static class NameServer
     private const int MaxEnumerateRestarts = 3;
 
     /// <summary>
-    /// The shape Plan 1 shipped, kept so its tests and any caller with nothing but indexes
+    /// The older shape, kept so its tests and any caller with nothing but indexes
     /// still compile and still mean what they meant. Each index is wrapped in a zeroed view: no
     /// journal, no push channel, no gap replay - exactly the behaviour those callers had.
     /// </summary>

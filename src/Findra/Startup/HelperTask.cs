@@ -31,7 +31,7 @@ $"""
 <?xml version="1.0" encoding="UTF-16"?>
 <Task version="1.4" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">
   <RegistrationInfo>
-    <Description>Keeps the Findra file-name index live. Findra does not work without it.</Description>
+    <Description>Keeps the Findra file-name index live. Without it Findra still runs, with no file names to search.</Description>
   </RegistrationInfo>
   <Triggers>
     <LogonTrigger>

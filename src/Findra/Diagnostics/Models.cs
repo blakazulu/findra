@@ -235,7 +235,7 @@ public static class ModelsCommand
 
         // Every file is here, so the index owes the capability its backlog. This process owns its
         // own connection and runs no content loop, which is why the gate can be called here at
-        // all - there is no second flow to take the writer from (Task 11 Step 5).
+        // all - there is no second flow to take the writer from.
         try
         {
             using ContentDb db = ContentDb.OpenOrRebuild();

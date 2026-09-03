@@ -32,8 +32,8 @@ public readonly record struct KindResult(List<ContentDb.Segment> Segments, strin
 /// never asked" stops being an assertion anybody can make, because the fake that would prove it
 /// has to reimplement the rule and then the test tests the fake.</para>
 ///
-/// <para>This is an interface for one reason: the gate is the behaviour this plan CHANGES, and
-/// it has to be provable without a 2.9 GB download.</para>
+/// <para>This is an interface for one reason: the per-capability gate has to be provable without
+/// a 2.9 GB download.</para>
 /// </summary>
 public interface IDecoders : IDisposable
 {

@@ -35,34 +35,82 @@ public class UninstallTests : IDisposable
     // ---- what is always removed ------------------------------------------------------------
 
     [Fact]
-    public void TheScheduledTaskIsRemovedEvenWhenEveryByteOfDataIsKept()
+    public void KeepingEveryByteOfDataChangesNothingButWhatIsDeleted()
     {
-        // The plausible wrong shape is "purge removes the extra things", which puts the task in
-        // the purge branch. Then the ordinary uninstall - the one nearly everybody runs - leaves
-        // an elevated logon task pointing at a binary that no longer exists.
-        UninstallPlan plan = Uninstall.Plan(purge: false, Measured);
+        // The plausible wrong shape is "purge removes the extra things", which puts the scheduled
+        // task in the purge branch. Then the ordinary uninstall - the one nearly everybody runs -
+        // leaves an elevated logon task pointing at a binary that no longer exists.
+        //
+        // The plan cannot express that any more: it carries deletes and keeps and nothing else, so
+        // there is no field a task removal could be made conditional on. What purge decides is
+        // asserted here; that the task goes regardless is asserted by the test below, which reads
+        // the code that removes it.
+        UninstallPlan keep = Uninstall.Plan(purge: false, Measured);
+        UninstallPlan purge = Uninstall.Plan(purge: true, Measured);
 
-        Assert.Contains(UninstallStep.RemoveScheduledTask, plan.Steps);
-        Assert.Contains(UninstallStep.RemoveAutostart, plan.Steps);
-        Assert.Empty(plan.Deletes);
+        Assert.Empty(keep.Deletes);
+        Assert.Equal(Measured, keep.Keeps);
+        Assert.Equal(Measured, purge.Deletes);
+        Assert.Empty(purge.Keeps);
+    }
+
+    /// <summary>
+    /// The source of <see cref="Uninstall.Run"/>, from its signature to the end of the file.
+    ///
+    /// <para>Reading the source is not the assertion anybody would pick first. It is the one
+    /// available: <c>Run</c> stops real processes, calls <c>schtasks</c>, writes the registry and
+    /// deletes folders, so nothing can execute it here, and the version of these two tests that
+    /// asserted over a plan's step list was green with the task removal deleted from <c>Run</c>
+    /// outright - which is the defect spec §2a calls out by name.</para>
+    /// </summary>
+    private static string RunSource
+    {
+        get
+        {
+            string src = Repo.Read("src/Findra/Startup/Uninstall.cs");
+            int at = src.IndexOf("public static int Run(string[] args)", StringComparison.Ordinal);
+            Assert.True(at >= 0, "Uninstall.Run is not where this test expects it");
+            return src[at..];
+        }
     }
 
     [Fact]
-    public void EverythingIsStoppedBeforeAnythingIsRemoved()
+    public void TheTaskAndTheAutostartEntryGoBeforeAnyDataIsDeleted()
     {
         // A helper holding a volume handle and an indexer holding the index file are both live
-        // while files are being deleted, if the order is wrong. The interface goes first because
-        // the indexer is in its kill-on-close job and dies with it.
-        UninstallPlan plan = Uninstall.Plan(purge: true, Measured);
-        var steps = plan.Steps.ToList();
-        int stopUi = steps.IndexOf(UninstallStep.StopInterface);
-        int stopHelper = steps.IndexOf(UninstallStep.StopHelper);
-        int task = steps.IndexOf(UninstallStep.RemoveScheduledTask);
-        int data = steps.IndexOf(UninstallStep.DeleteData);
+        // while files are being deleted, if the order is wrong. And the task must be gone before
+        // the delete loop, so a folder that will not go still leaves a machine with no orphaned
+        // elevated task.
+        string run = RunSource;
+        int stop = run.IndexOf("StopAll(", StringComparison.Ordinal);
+        int task = run.IndexOf("HelperTask.Unregister()", StringComparison.Ordinal);
+        int autostart = run.IndexOf("Autostart.Clear()", StringComparison.Ordinal);
+        int data = run.IndexOf("Delete(plan.Deletes", StringComparison.Ordinal);
 
-        Assert.True(stopUi >= 0 && stopHelper > stopUi, "the interface is not stopped before the helper");
-        Assert.True(task > stopHelper, "the task is removed before the helper it starts is stopped");
-        Assert.True(data > task, "data is deleted before the processes holding it are gone");
+        Assert.True(stop >= 0, "Run stops nothing");
+        Assert.True(task >= 0, "Run never removes the scheduled task - spec 2a calls that a defect");
+        Assert.True(autostart >= 0, "Run never removes the autostart entry");
+        Assert.True(data >= 0, "Run never deletes the data it measured");
+
+        Assert.True(task > stop, "the task is removed before the helper it starts is stopped");
+        Assert.True(data > task, "data is deleted before the scheduled task is gone");
+        Assert.True(data > autostart, "data is deleted before the autostart entry is gone");
+    }
+
+    [Fact]
+    public void RemovingTheTaskIsNotConditionalOnAnythingRunAsked()
+    {
+        // Unregister() sits on its own statement, unguarded. An `if (purge)`, an `if (taskThere)`
+        // or a `Query() == Registered` in front of it is the orphan surviving - Query is
+        // three-valued precisely so a locked-down machine is distinguishable from a fresh one, and
+        // both still need the task gone.
+        string run = RunSource;
+        int task = run.IndexOf("HelperTask.Unregister()", StringComparison.Ordinal);
+        string before = run[..task];
+        string statement = before[(before.LastIndexOf('\n') + 1)..];
+
+        Assert.Equal("bool taskGone = ", statement.TrimStart());
+        Assert.DoesNotContain("HelperTask.Query", run, StringComparison.Ordinal);
     }
 
     // ---- what is kept, and what it says ------------------------------------------------------

@@ -55,7 +55,7 @@ public enum SettingsAction
 }
 
 /// <summary>What the painter draws. It switches on this and on nothing else.</summary>
-public enum ControlKind { Note, Choice, Swatch, Toggle, Chord, Text, Button, List }
+public enum ControlKind { Note, Choice, Swatch, Toggle, Chord, Text, Button }
 
 /// <summary>
 /// One row of the pane. <see cref="Options"/> and <see cref="OptionOn"/> are always the same
@@ -259,7 +259,7 @@ public static class SettingsModel
 
     // ---- Content ----------------------------------------------------------------------------
 
-    /// <summary>Three states, three sentences (Plan 5's one-switch rule). "Paused" is the wrong
+    /// <summary>Three states, three sentences, and one switch for all of them. "Paused" is the wrong
     /// word for two of them: one has never been asked for, the other was turned off.</summary>
     public static string ContentSentence(Config config, bool everIndexed, bool indexerAlive)
     {
@@ -299,8 +299,8 @@ public static class SettingsModel
     {
         // SHORT forms for the pills, and TranscribeLimit.Describe for the value beside the label.
         // Five options give each pill 74.8px and Parts.Pill ellipsises to 62.8, which "30 minutes"
-        // (65.3) does not fit. Describe() itself is Plan 5's and is what --content prints and
-        // parses, so it is not the thing to shorten; this is.
+        // (65.3) does not fit. Describe() is what --content prints and parses, so it is not the
+        // thing to shorten; this is.
         string[] presets = [.. TranscribeLimit.Presets.Select(Short)];
         var rows = new List<Control>
         {

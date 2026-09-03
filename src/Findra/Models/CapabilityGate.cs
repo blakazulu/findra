@@ -30,14 +30,14 @@ public readonly record struct Requeue(Capability Capability, int[] Kinds, string
 /// </summary>
 public static class CapabilityGate
 {
-    /// <summary>The meta prefix this plan owns. `indexer:` is the child's, `index:` the content
+    /// <summary>This gate's own meta prefix. `indexer:` is the child's, `index:` the content
     /// loop's, and the bare keys the queue feeder's; reusing any of them is a collision nothing
     /// would report. The key is `models:cap:photos`, `models:cap:meaning`, and so on.</summary>
     public const string StampPrefix = "models:cap:";
 
     /// <summary>The version of each embedding space. Bumped when the MODEL changes, so every
     /// vector already stored points somewhere that no longer exists - not when this code
-    /// changes. Nothing in this plan bumps either.</summary>
+    /// changes. Nothing has bumped either yet.</summary>
     public static string CurrentVersion(string family) => family switch
     {
         "siglip" => "1",
@@ -96,7 +96,7 @@ public static class CapabilityGate
         {
             // Indexer.Recheck, and nothing else. A friendlier sentence here is dequeued untouched
             // by Indexer.cs:298-300 for every row that is already indexed, which is every
-            // document Plan 4 read and every transcript Speech wrote - the log would say twelve
+            // document already extracted and every transcript Speech wrote - the log would say twelve
             // thousand files queued and not one embedding would be written. r.Why is for the log,
             // where a sentence belongs.
             //

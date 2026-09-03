@@ -49,8 +49,8 @@ public static class Program
     /// sentence being shared that makes the console and the card impossible to disagree.
     ///
     /// <para>It is done for every mode rather than for the console ones, because the failure is
-    /// silent and per-command: <c>--content</c> carried this line alone and <c>--searchmodels</c>
-    /// printed question marks for a year of nobody noticing. Some hosts refuse the change, and a
+    /// silent and per-command: a mode that forgets the line prints question marks and nothing
+    /// anywhere says so. Some hosts refuse the change, and a
     /// window with no console attached refuses it too - a mangled separator is not worth failing
     /// a diagnostic over, and it is certainly not worth failing to start.</para>
     /// </summary>

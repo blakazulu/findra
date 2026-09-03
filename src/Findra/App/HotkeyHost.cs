@@ -157,7 +157,7 @@ public sealed class HotkeyHost : IDisposable
     /// the control that would fix it sits behind a card the hotkey no longer opens.</para>
     ///
     /// <para>The restore path cannot be exercised headlessly - it needs a real window handle and a
-    /// combination another application already owns - so it is end-to-end checklist step 28 and
+    /// combination another application already owns - so it is on the end-to-end checklist and
     /// nothing else. No test covers it.</para>
     /// </summary>
     public bool Rebind(string chord)

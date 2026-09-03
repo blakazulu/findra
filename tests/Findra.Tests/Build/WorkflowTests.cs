@@ -93,6 +93,22 @@ public class WorkflowTests
     /// This suite has now been bitten by that shape three times; twice it was the explanation
     /// that kept the test green.
     /// </summary>
+    /// <summary>
+    /// A workflow or a build script with its prose taken out: PowerShell's <c>&lt;# ... #&gt;</c>
+    /// blocks, and every line whose first non-space character is a hash.
+    ///
+    /// <para>Needed because the rules in this class are about what CI RUNS. Check-Diagnostics.ps1
+    /// explains in its own synopsis why <c>--uninstall</c> only ever appears in its dry-run form,
+    /// and a scan that reads that sentence is failing on the explanation rather than on the
+    /// command.</para>
+    /// </summary>
+    private static string Uncommented(string text)
+    {
+        string body = Regex.Replace(text, @"<#.*?#>", "", RegexOptions.Singleline);
+        return string.Join('\n', body.Replace("\r\n", "\n", StringComparison.Ordinal).Split('\n')
+                                     .Where(l => !l.TrimStart().StartsWith('#')));
+    }
+
     private static string WithoutComments(string yaml) =>
         string.Join("\n", yaml.Replace("\r\n", "\n", StringComparison.Ordinal).Split('\n')
                               .Where(l => !l.TrimStart().StartsWith('#')));
@@ -207,8 +223,18 @@ public class WorkflowTests
             string text = File.ReadAllText(path);
             bool script = path.EndsWith(".ps1", StringComparison.OrdinalIgnoreCase);
 
-            // For a workflow, only the run: blocks; for a .ps1, the whole file.
+            // For a workflow, the run: blocks AND every single-line run:; for a .ps1, the file.
+            //
+            // The single-line ones are half the point and were missed. ci.yml carries no `run: |`
+            // at all, so this loop ran zero blocks for it and the count guard below degenerated to
+            // `0 == 0`: every command that runs on every push - the publish, the diagnostics - went
+            // unparsed, and an unbalanced quote in any of them was green here and a failure on the
+            // first push.
             string[] blocks = script ? [text] : RunBlocks(text);
+            string[] lines = script
+                ? []
+                : [.. Regex.Matches(text, @"(?m)^\s*run:[ \t]+(?![|>])(?<cmd>.+?)\s*$")
+                           .Select(m => m.Groups["cmd"].Value)];
 
             // A parser handed nothing reports no errors, so an extraction that quietly matched
             // none of a workflow's blocks would pass while checking nothing. Counting the block
@@ -217,11 +243,18 @@ public class WorkflowTests
             int scalars = script ? 1 : Regex.Matches(text, @"(?m)^\s*run:\s*\|").Count;
             Assert.True(scalars == blocks.Length,
                 $"{Path.GetFileName(path)}: {scalars} run: | block(s) written, {blocks.Length} read");
+            Assert.True(blocks.Length + lines.Length > 0,
+                $"{Path.GetFileName(path)}: nothing was extracted, so nothing was parsed");
 
-            foreach (string block in blocks)
+            foreach (string block in blocks.Concat(lines))
             {
+                // GitHub's own ${{ ... }} expressions are substituted by the runner before any
+                // shell sees them, and PowerShell rejects `${{` outright. Standing them in for a
+                // bare word is what lets the rest of the line be parsed at all.
+                string source = Regex.Replace(block, @"\$\{\{[^}]*\}\}", "SUBSTITUTED");
+
                 System.Management.Automation.Language.Parser.ParseInput(
-                    block, out _, out System.Management.Automation.Language.ParseError[] errors);
+                    source, out _, out System.Management.Automation.Language.ParseError[] errors);
                 Assert.True(errors.Length == 0,
                     $"{Path.GetFileName(path)}: {(errors.Length > 0 ? errors[0].Message : "")}");
             }
@@ -288,13 +321,24 @@ public class WorkflowTests
     {
         // A real --uninstall on a runner is harmless; a real --uninstall in a workflow somebody
         // later copies onto a self-hosted machine is not. The dry run prints the same report and
-        // touches nothing, so there is never a reason for the other one to be in a workflow.
-        foreach (string path in AllWorkflows())
+        // touches nothing, so there is never a reason for the other one to be in CI.
+        //
+        // The build scripts are in scope, and they were the whole rule: no workflow says
+        // --uninstall at all, so scanning only the three .yml files matched nothing and asserted
+        // nothing, while the one place CI really does invoke it - Check-Diagnostics.ps1 - went
+        // unchecked. The count is what stops that happening again silently.
+        int seen = 0;
+        foreach (string path in AllWorkflows().Concat(Directory.GetFiles(Repo.Path_("build"), "*.ps1")))
         {
-            string text = File.ReadAllText(path);
+            string text = Uncommented(File.ReadAllText(path));
             foreach (Match m in Regex.Matches(text, @"--uninstall(?<rest>[^\r\n]*)"))
+            {
                 Assert.Contains("--dry-run", m.Groups["rest"].Value, StringComparison.Ordinal);
+                seen++;
+            }
         }
+
+        Assert.True(seen > 0, "nothing in CI runs --uninstall at all, so this rule asserted nothing");
     }
 
     // ---- the release -----------------------------------------------------------------------
@@ -390,9 +434,16 @@ public class WorkflowTests
         // The step exists so that arranging signing later is a change to one step rather than a
         // reshuffle of the artefact flow. It says what it is, because a step called sign that
         // silently does nothing is worse than no step at all.
-        Match sign = Regex.Match(Release, @"(?im)^\s*-\s*name:.*sign.*$(?<body>(\n(?!\s*-\s*name:).*)*)");
+        //
+        // Asserted on the BODY, not on the whole match. The step is called "sign the installer
+        // (not yet arranged)", so a check over the match value was answered by the step's own name:
+        // it stayed green with a real signtool call underneath. And the body now stops at the next
+        // list item at any indent rather than at the next `- name:`, because this is the last step
+        // in the file and the looser pattern ran to end of file.
+        Match sign = Regex.Match(Release, @"(?im)^[ \t]*-[ \t]*name:.*sign.*$(?<body>(\n(?![ \t]*-[ \t]).*)*)");
         Assert.True(sign.Success, "the release workflow has no signing step");
-        Assert.Contains("not yet", sign.Value, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("not yet", sign.Groups["body"].Value, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("signtool", sign.Groups["body"].Value, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
@@ -408,7 +459,16 @@ public class WorkflowTests
     [Fact]
     public void NothingInTheReleaseClaimsTheArtefactsAreSigned()
     {
-        Assert.DoesNotContain("digitally signed", Release, StringComparison.OrdinalIgnoreCase);
+        // The same set the README, the installer and the winget listing are held to. Forbidding
+        // only "digitally signed" left `echo "the installer is signed"` legal in the release body,
+        // which is the sentence a reader would actually believe.
+        string body = WithoutComments(Release);
+        Assert.DoesNotContain("digitally signed", body, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("code signed", body, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("code-signed", body, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("signing certificate", body, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("is signed", body, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("are signed", body, StringComparison.OrdinalIgnoreCase);
     }
 
     // ---- the catalogue ----------------------------------------------------------------------

@@ -17,8 +17,8 @@ public static class FirstRunLayout
     public const float Width = RailLayout.Width;      // the same object, seen once
 
     /// <summary>Taller than the settings window, and the number is arithmetic rather than taste:
-    /// a title and a sentence, three preset tiles, five rows where Hebrew is offered, a full row's
-    /// worth of dead air, three switches with the update disclosure wrapped between the second and
+    /// a title and a sentence, three preset tiles, five rows where Hebrew is offered, a row's
+    /// worth of dead air and then some, three switches with the update disclosure wrapped between the second and
     /// the third, a summary line, and two buttons.</summary>
     public const float Height = 820f;
     public const float Pad = RailLayout.Pad;
@@ -32,7 +32,8 @@ public static class FirstRunLayout
     public const float RowH = 48f;
 
     /// <summary>
-    /// The air between the last row and the first switch, and it is a whole row height on purpose.
+    /// The air between the last row and the first switch, and it is more than a whole row height
+    /// on purpose.
     ///
     /// <para>At 14px the notional next row band and the first switch band interleaved: a click one
     /// row past the end of the list landed on the content toggle, because the switch spans the same
@@ -98,7 +99,7 @@ public static class FirstRunLayout
         return new SKRect(x, Height - ButtonH - 20, x + ButtonW, Height - 20);
     }
 
-    /// <summary>Between the last switch and the buttons: two lines of room, because
+    /// <summary>Between the last switch and the buttons: at least two lines of room, because
     /// <see cref="FirstRun.Summary"/> is a sentence rather than a number and its longest form
     /// carries a failure message as well.</summary>
     public static SKRect SummaryRect(int rows) =>
@@ -130,7 +131,8 @@ public static class FirstRunLayout
 }
 
 /// <summary>
-/// Draws spec §6's first screen on Task 2's parts, so it and the settings window read as one
+/// Draws spec §6's first screen on the shared parts in <see cref="Parts"/>, so it and the
+/// settings window read as one
 /// object seen twice: the same width, the same card edge, the same pills, toggles and notes.
 ///
 /// <para>Knows no policy. Every string it draws comes out of <see cref="FirstRun"/>, so a change
@@ -327,8 +329,10 @@ public static class FirstRunPainter
             canvas.DrawRoundRect(rr, edge);
         if (!on) return;
 
-        // Drawn rather than typed. A tick glyph would be a character the bundled face may not
-        // carry, and CardText's fallback would silently switch typefaces for one mark.
+        // Drawn rather than typed. A tick is one of the glyphs a text face is least likely to
+        // carry, and CardText's fallback would silently switch typefaces for one mark. The
+        // exclusions list's remove cross is typed, because a multiplication sign is Latin-1 and
+        // every face that carries the alphabet carries it too.
         using var stroke = new SKPaint
         {
             Color = mark,

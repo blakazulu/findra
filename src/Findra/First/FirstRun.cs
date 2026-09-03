@@ -275,8 +275,8 @@ public static class FirstRun
 /// an <see cref="InvalidOperationException"/> inside a handler nobody is watching. The shell
 /// passes <c>afterInstall</c>, which posts onto the content loop.</para>
 ///
-/// <para><b>This is a deliberate divergence from Plan 5 and it is written down here because both
-/// halves have to be findable from each other.</b> <c>ModelDownloader.GetAllAsync</c> documents
+/// <para><b>This diverges from the model downloader deliberately, and it is written down here
+/// because both halves have to be findable from each other.</b> <c>GetAllAsync</c> documents
 /// itself as stopping at the first failure - "a set half fetched is resumable, and pressing on
 /// after a network fault only turns one failed file into six" - which is right for
 /// <c>findra --models install</c>, a command somebody is watching in a terminal. This screen is
@@ -285,8 +285,8 @@ public static class FirstRun
 /// defensible policies, and the difference is stated rather than discovered.</para>
 ///
 /// <para>It therefore loops <see cref="ModelDownloader.GetAsync"/> itself rather than calling
-/// <c>GetAllAsync</c>, because it owns a policy Plan 5's downloader does not have: <b>a fetch that
-/// throws becomes a reported outcome, and the set carries on</b>. Plan 5 catches
+/// <c>GetAllAsync</c>, because it owns a policy the downloader does not have: <b>a fetch that
+/// throws becomes a reported outcome, and the set carries on</b>. <c>GetAllAsync</c> catches
 /// <c>RangeRefusedException</c> and <c>IOException</c> only, so a dropped network raises an
 /// <see cref="System.Net.Http.HttpRequestException"/> that would escape the download, the screen,
 /// and an unobserved background task - leaving a progress bar that simply stops. Spec §6 requires

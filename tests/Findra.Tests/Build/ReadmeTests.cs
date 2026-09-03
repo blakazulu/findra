@@ -289,8 +289,21 @@ public class ReadmeTests
     public void TheReadmeDoesNotStillSayFindraIsNotReadyToInstall()
     {
         // The placeholder promised nothing it could not show, which was right at the time. Leaving
-        // it beside a winget listing and a signed-off release is a different kind of wrong.
+        // it beside a winget listing and a published release is a different kind of wrong.
+        //
+        // The two phrases below were never in this file and never would be, so the test could not
+        // fail. What it is really about is the install section's opening paragraph, and the honest
+        // signal for whether that paragraph is still true is the manifest: while the installer
+        // manifest carries its placeholder hashes, nothing has shipped and the paragraph must say
+        // so; once real hashes go in, the paragraph is the first thing that becomes false.
         Assert.DoesNotContain("not ready to install", Readme, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("being built in the open", Readme, StringComparison.OrdinalIgnoreCase);
+
+        bool nothingHasShippedYet = Repo.Read("packaging/winget/blakazulu.Findra.installer.yaml")
+                                        .Contains(new string('0', 64), StringComparison.Ordinal);
+        if (nothingHasShippedYet)
+            Assert.Contains("no published release yet", Readme, StringComparison.OrdinalIgnoreCase);
+        else
+            Assert.DoesNotContain("no published release yet", Readme, StringComparison.OrdinalIgnoreCase);
     }
 }

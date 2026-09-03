@@ -1,3 +1,5 @@
+using System.Text.RegularExpressions;
+
 using Findra.Startup;
 using Xunit;
 
@@ -24,9 +26,20 @@ public class AutostartTests
     {
         // A machine-wide Run entry starts Findra for every account on the computer, including ones
         // that never installed it - and the uninstaller, running as one user, cannot remove the
-        // others' capsules. This is a constant-pinning test: it fires when somebody moves the key
-        // to HKLM "so it works for everyone", which is a plausible edit with a bad blast radius.
+        // others' capsules.
+        //
+        // The subkey path is the same under either hive, so pinning it said nothing about the one
+        // thing this test is named for: the edit it claimed to catch is CurrentUser becoming
+        // LocalMachine at the three call sites, and that left every assertion here green. The hive
+        // is not a value this test can reach - Set, Clear and IsSet each open it themselves and
+        // need a real registry - so it is read out of the source, which is the same shape
+        // TypefaceTests uses for "only one place in the tree resolves a typeface".
         Assert.Equal(@"Software\Microsoft\Windows\CurrentVersion\Run", Autostart.KeyPath);
         Assert.Equal("Findra", Autostart.ValueName);
+
+        string source = Repo.Read("src/Findra/Startup/Autostart.cs");
+        Assert.DoesNotContain("Registry.LocalMachine", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("HKEY_LOCAL_MACHINE", source, StringComparison.Ordinal);
+        Assert.Equal(3, Regex.Matches(source, @"Registry\.CurrentUser").Count);
     }
 }
