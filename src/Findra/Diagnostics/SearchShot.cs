@@ -24,7 +24,8 @@ public static class SearchShot
         "capsule", "empty", "contentwaiting", "typing", "results", "noresults", "many", "adv",
         "opening", "openingempty",
         "settings", "settingsopening", "settingssearches", "settingscontent", "settingsabout",
-        "firstrun", "firstrunspeech", "firstrundownloading", "firstrunfinished", "firstrunready",
+        "firstrun", "firstruninstalled", "firstrunspeech", "firstrundownloading", "firstrunfinished",
+        "firstrunready",
     ];
 
     public static int Render(string outPath, string state, string? paletteName = null)
@@ -207,6 +208,11 @@ public static class SearchShot
         bool done = state == "firstrunfinished" || ready;
         bool busy = state == "firstrundownloading" || done;
         bool speech = state == "firstrunspeech";
+        // A reinstall over kept models, which is what an uninstall leaves behind unless the purge
+        // box was ticked. Every row says "installed", every tile costs 0 MB and the summary is a
+        // sentence rather than a number - a branch of this painter that no other state reaches,
+        // and the one this screen was wrong about for its whole life.
+        bool installed = state == "firstruninstalled";
         var s = new FirstRunState
         {
             Chosen = speech
@@ -214,6 +220,9 @@ public static class SearchShot
                 : Capabilities.Close([Capability.Photos, Capability.Meaning]),
             HebrewOffered = true,
             ContentOn = !ready,
+            OnDisk = installed
+                ? new HashSet<string>(ModelStore.All.Select(m => m.File), StringComparer.OrdinalIgnoreCase)
+                : new HashSet<string>(StringComparer.OrdinalIgnoreCase),
             CheckUpdates = true,
             StartAtLogon = true,
             // Not the default, so the shot shows a chosen pill somewhere other than where an

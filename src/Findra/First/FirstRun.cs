@@ -32,6 +32,21 @@ public sealed record FirstRunState
     /// lecture, an interview and most of a podcast without saying so.</summary>
     public int TranscribeMinutes { get; init; } = TranscribeLimit.Default;
 
+    /// <summary>
+    /// The model files already on this machine, by name.
+    ///
+    /// <para>Without it this screen priced a download that was never going to happen. Every row
+    /// printed its capability's full size and the summary printed the whole closed selection,
+    /// while <see cref="FirstRun.Wanted"/> - which is what actually fetches - asked the disk and
+    /// skipped what was there. So somebody who kept their models through an uninstall was offered
+    /// 2.93 GB, pressed the button, and watched every bar fill at once.</para>
+    ///
+    /// <para>By FILE and not by capability, because a half-present capability is an ordinary state:
+    /// a resumed download, or Speech on a machine that already took Meaning and so already has the
+    /// e5 pair. Priced per capability it would say 547 MB where 270 MB of it is already here.</para>
+    /// </summary>
+    public IReadOnlySet<string> OnDisk { get; init; } = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
     public bool CheckUpdates { get; init; } = true;
     public bool StartAtLogon { get; init; } = true;
     public FirstRunStage Stage { get; init; } = FirstRunStage.Choosing;
@@ -53,12 +68,17 @@ public static class FirstRun
 
     public static IReadOnlyList<string> PresetTitles => ["Just names", "Recommended", "Everything"];
 
-    public static string PresetSize(Preset p) => Sizes.Human(Capabilities.TotalBytes(p switch
-    {
-        Preset.Recommended => Presets.Recommended,
-        Preset.Everything => Presets.Everything,
-        _ => Presets.JustNames,
-    }));
+    /// <summary>What a preset would still cost on THIS machine. A tile that says 2.93 GB over a
+    /// folder that already holds all of it is the same lie the rows told.</summary>
+    public static string PresetSize(Preset p, IReadOnlySet<string>? onDisk = null) =>
+        Sizes.Human(ModelStore.TotalBytes(NotHereYet(
+            Capabilities.ModelsFor(p switch
+            {
+                Preset.Recommended => Presets.Recommended,
+                Preset.Everything => Presets.Everything,
+                _ => Presets.JustNames,
+            }),
+            onDisk ?? new HashSet<string>(StringComparer.OrdinalIgnoreCase))));
 
     /// <summary>
     /// The list under the presets. The free documents row comes first because it is what makes
@@ -87,7 +107,9 @@ public static class FirstRun
                 // on it. Own files also make the column add up: 629 + 270 + 547 + 1549 MB is the
                 // 2.93 GB on the Everything tile, where the closed sets would total 4.08 GB.
                 // What the whole selection costs is the summary's job, and it is closed there.
-                Sizes.Human(ModelStore.TotalBytes(Capabilities.OwnModels(c))),
+                AlreadyHere(c, s.OnDisk)
+                    ? InstalledLabel
+                    : Sizes.Human(ModelStore.TotalBytes(NotHereYet(Capabilities.OwnModels(c), s.OnDisk))),
                 Note(c), ticked, Indented: c == Capability.Hebrew, Free: false));
         }
 
@@ -151,10 +173,26 @@ public static class FirstRun
     public static string GoLabel(FirstRunStage stage) =>
         stage == FirstRunStage.Choosing ? "Get these" : CloseLabel;
 
-    /// <summary>The same, for a screen that is asking the last question rather than reporting.
+    /// <summary>
+    /// The same, for a screen that knows what it is actually going to do.
+    ///
+    /// <para>"Get these" over a machine that already has every file, or over a selection of
+    /// nothing, promises a download that will not happen - which is the same defect as the sizes
+    /// beside it, on the one control somebody presses to agree to it.</para>
     /// </summary>
-    public static string GoLabel(FirstRunState s) =>
-        Asks(s) ? StartReadingLabel : GoLabel(s.Stage);
+    public static string GoLabel(FirstRunState s)
+    {
+        ArgumentNullException.ThrowIfNull(s);
+        if (Asks(s)) return StartReadingLabel;
+        if (s.Stage != FirstRunStage.Choosing) return CloseLabel;
+        return TotalBytes(s) == 0 ? ContinueLabel : GoLabel(s.Stage);
+    }
+
+    /// <summary>What the right-hand button says when there is nothing to fetch: everything chosen
+    /// is already here, or nothing was chosen at all. The press still means something - it is what
+    /// writes the settings and registers the scheduled task - so it is not disabled, it is
+    /// honest.</summary>
+    public const string ContinueLabel = "Continue";
 
     /// <summary>The left-hand button when the last question is on the screen. It is about TIMING
     /// and not about the preference: "Look inside my files" was answered on the first act and is
@@ -219,10 +257,35 @@ public static class FirstRun
     public static long TotalBytes(FirstRunState s)
     {
         ArgumentNullException.ThrowIfNull(s);
-        // The CLOSED set, summed once. Summing each capability's own total counts the e5 pair
-        // twice for anybody who takes Speech and Meaning together.
-        return Capabilities.TotalBytes(Capabilities.Close(s.Chosen));
+        // The CLOSED set, summed once, MINUS whatever is already here. Summing each capability's
+        // own total counts the e5 pair twice for anybody who takes Speech and Meaning together;
+        // ignoring the disk quotes a download that will not happen.
+        return ModelStore.TotalBytes(NotHereYet(Capabilities.ModelsFor(s.Chosen), s.OnDisk));
     }
+
+    /// <summary>The files of a set that still have to be fetched. One rule, used by the rows, the
+    /// preset tiles and the summary, so the three cannot quote different downloads.</summary>
+    public static IReadOnlyList<Model> NotHereYet(IEnumerable<Model> set, IReadOnlySet<string> onDisk)
+    {
+        ArgumentNullException.ThrowIfNull(set);
+        ArgumentNullException.ThrowIfNull(onDisk);
+        return [.. set.Where(m => !onDisk.Contains(m.File))];
+    }
+
+    /// <summary>Is every file this capability owns already on the disk? Its OWN files, on the same
+    /// terms the row's size is priced at - a capability whose shared dependency is present but
+    /// whose own model is not has something left to fetch and says so.</summary>
+    public static bool AlreadyHere(Capability c, IReadOnlySet<string> onDisk)
+    {
+        ArgumentNullException.ThrowIfNull(onDisk);
+        IReadOnlyList<Model> own = Capabilities.OwnModels(c);
+        return own.Count > 0 && own.All(m => onDisk.Contains(m.File));
+    }
+
+    /// <summary>What the size column says instead of a size. The same word the settings window
+    /// uses for the same fact, so the two surfaces describe an installed capability identically.
+    /// </summary>
+    public const string InstalledLabel = "installed";
 
     public static FirstRunState Apply(FirstRunState s, FirstRunHit hit)
     {
@@ -340,6 +403,15 @@ public static class FirstRun
 
         if (s.Chosen.Count == 0)
             return "Names are searchable straight away. You can add any of this later in Settings.";
+
+        // Chosen, and every file of it already here - a reinstall over kept models, which is the
+        // ordinary case for anybody who uninstalled without ticking the purge box. "0 MB to
+        // download" is arithmetically true and reads as a fault.
+        if (TotalBytes(s) == 0)
+            return s.ContentOn
+                ? "Everything you have chosen is already on this machine. Nothing to download."
+                : "Everything you have chosen is already on this machine. Nothing to download, and " +
+                  "nothing will be read until you turn “Look inside my files” on.";
 
         return s.ContentOn
             ? $"{Sizes.Human(TotalBytes(s))} to download. Findra will read inside your files once it is there."

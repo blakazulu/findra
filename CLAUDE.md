@@ -81,7 +81,7 @@ findra.exe --searchmodels             # are models present, do they load, do the
                                       # which execution provider answered for each runtime
 findra.exe --searchindex [file|folder|q:query]...   # what is indexed, what is queued; given
                                       # paths it queues and drains them, given q: it queries
-findra.exe --searchshot out.png <state> [palette]   # twenty states, listed below
+findra.exe --searchshot out.png <state> [palette]   # twenty-one states, listed below
 findra.exe --searchtest               # engine self-check
 findra.exe --searchbench [out.md] [corpus]   # measured numbers, as a pasteable Markdown
                                       # fragment; `corpus` is how many files it generates
@@ -89,12 +89,13 @@ findra.exe --version                  # print the version and log location, then
 ```
 
 The `--searchshot` states are `SearchShot.States`, and that list is the only definition of them.
-Ten draw the card, five the settings window and five the first-run screen:
+Ten draw the card, five the settings window and six the first-run screen:
 
 ```
 capsule  empty  contentwaiting  typing  results  noresults  many  adv  opening  openingempty
 settings  settingsopening  settingssearches  settingscontent  settingsabout
-firstrun  firstrunspeech  firstrundownloading  firstrunfinished  firstrunready
+firstrun  firstruninstalled  firstrunspeech  firstrundownloading
+firstrunfinished  firstrunready
 ```
 
 `contentwaiting` is the Content pill drawn NOT offering - reading is on and the first pass has not
@@ -494,6 +495,17 @@ speech              ─  whisper-turbo + [e5 pair]              550 MB (+270 if 
   both surfaces draw - "Off", "5 min", "30 min", "2 hr", "No limit" - because `Describe`'s "30
   minutes" is 65.3px against a pill that holds 62.8px, and a second table of names is how the
   two surfaces come to disagree.
+- **The first-run screen prices what is STILL TO FETCH, not what a capability costs.**
+  `FirstRunState.OnDisk` carries the model files already present, by file and not by capability,
+  and the rows, the preset tiles, the summary and the button's own label all read it through
+  `FirstRun.NotHereYet`. Without it the screen quoted a download that was never going to happen:
+  an uninstall keeps the models unless the purge box is ticked, so a reinstall met a full folder,
+  was offered 2.93 GB, and filled every bar the instant it was pressed. A capability whose own
+  files are all present reads `installed` - the same word Settings uses for the same fact - and a
+  half-present one is priced at the half that is missing, because a resumed download and Speech
+  over an existing e5 pair are ordinary states rather than edge cases. **The number still never
+  moves when a row is ticked**, which is the rule the own-files pricing was written under: what is
+  on the disk does not depend on what is chosen.
 - **A file's size on disk never equals the declared size in the table.** That table is the
   spec's figure in megabytes to one decimal place; real files miss it by tens of kilobytes,
   mostly upward. `ModelStore.SizeSlack` is the only place that width is decided, and nothing
