@@ -197,6 +197,49 @@ main, header, footer { position: relative; z-index: 1; }
 .btn-ghost:hover { border-color: var(--accent-line); color: var(--ink-bright); }
 .btn-sm { padding: 10px 20px; border-radius: 999px; font-size: 14px; }
 
+/* ---------- the lede ---------------------------------------------------- */
+
+/* Full-bleed on purpose. The left column lines up with .wrap's content edge - the calc is
+   that edge worked out from the viewport - while the card runs off the right of the screen
+   instead of stopping at a gutter. A screenshot cropped by the window implies there is more
+   of it; the same screenshot boxed inside a column implies that is all there is. The price is
+   that the card's right-hand preview panel goes over the edge on narrow desktops, which is why
+   the picture is the one where the preview is not the only evidence: every row in the list is
+   a content match too. */
+.lede {
+  display: grid;
+  grid-template-columns: minmax(0, 620px) minmax(0, 1fr);
+  gap: 40px; align-items: center; overflow: hidden;
+  padding-block: clamp(40px, 5.5vw, 74px);
+  padding-left: max(var(--pad), calc((100% - 1320px) / 2 + var(--pad)));
+}
+.lede-copy { display: flex; flex-direction: column; gap: 24px; }
+
+.lede-lockup { display: flex; align-items: center; gap: 16px; align-self: flex-start; }
+.lede-lockup .brand-mark {
+  width: 56px; height: 56px;
+  /* The nav's mark is already pulsing. Two of them on one screen is a tic, not a detail. */
+  animation: none;
+}
+.lede-lockup .brand-name { font-size: 34px; }
+
+.lede h1 { font-size: clamp(36px, 4.7vw, 58px); line-height: 1.02; }
+.lede h1 .accent { color: var(--accent); }
+
+.lede-shot { position: relative; margin: 0; }
+/* The glow is a blurred plate behind the image rather than a box-shadow, so the light comes
+   off the card's own footprint and survives the rotation with it. */
+.lede-shot::before {
+  content: ""; position: absolute; inset: 6% 8%;
+  background: rgba(250, 126, 0, 0.16); filter: blur(58px); border-radius: 40px;
+}
+.lede-shot img {
+  position: relative; display: block; width: min(880px, 132%); height: auto;
+  border-radius: var(--r-md); border: 1px solid var(--line);
+  box-shadow: 0 40px 90px rgba(0, 0, 0, 0.66);
+  transform: rotate(-1.5deg);
+}
+
 /* ---------- hero -------------------------------------------------------- */
 
 .hero {
@@ -213,8 +256,11 @@ main, header, footer { position: relative; z-index: 1; }
 }
 .eyebrow .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--accent); }
 
-.hero h1 { font-size: clamp(38px, 5.2vw, 64px); line-height: 1.02; letter-spacing: -0.03em; }
-.hero h1 .accent { color: var(--accent); }
+/* With the lede above it this section is no longer the page's opening statement, so its
+   heading is an h2 and steps down to match. Left at hero size it read as a second first
+   thing, and the page appeared to start twice. Nothing else in the section changed. */
+.hero h2 { font-size: clamp(32px, 4vw, 50px); line-height: 1.04; letter-spacing: -0.03em; }
+.hero h2 .accent { color: var(--accent); }
 
 .hero-sub { font-size: clamp(16.5px, 1.35vw, 18.5px); line-height: 1.62; color: var(--ink-dim); max-width: 560px; }
 .hero-sub.bright { color: #d6cdbd; }
@@ -545,6 +591,12 @@ td.no { color: var(--ink-faint); }
 }
 
 @media (max-width: 960px) {
+  /* The bleed is a desktop gesture. Below this the card would be cropped past the point where
+     the list is readable, so it stops overflowing, straightens up and sits under the copy. */
+  .lede { grid-template-columns: minmax(0, 1fr); gap: 40px; padding-inline: var(--pad); }
+  .lede-shot img { width: 100%; transform: none; }
+  .lede-lockup .brand-mark { width: 44px; height: 44px; }
+  .lede-lockup .brand-name { font-size: 27px; }
   .hero { grid-template-columns: minmax(0, 1fr); gap: 44px; }
   .stack { min-height: 640px; max-width: 560px; }
   .privacy, .install { grid-template-columns: minmax(0, 1fr); }

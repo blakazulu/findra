@@ -371,6 +371,17 @@ into a numbered section on the first release.
   rather than offering a download that does not exist yet. A page that sells "nothing leaves your
   machine" should not itself be reaching out, so a content security policy permits the two font
   hosts and nothing else - no analytics, no beacons, and no way for one to arrive by accident.
+  The page opens on the mark, the name and the results card, with the card running off the right
+  of the screen rather than stopping at a gutter; the ticket that used to open it now follows it.
+
+- **The results card previews the photograph it found.** The stage's picture - the centre-crop
+  that shows you the file you are standing on - had never been rendered by any `--searchshot`
+  state: every one of them left the image unset and took the no-picture tile instead, so the one
+  surface whose whole job is showing you the file was only ever reviewed in its fallback. The
+  `results` and `opening` states now carry a picture and `many` keeps the tile, which puts both
+  branches on screen. The picture is drawn rather than photographed, like every other thing about
+  that state: the file names, the drive letters, the scores and the Hebrew tenancy agreement are
+  all invented, and what a shot has always promised is that the PAINTER is real.
 
 - **Settings is on the card.** A Settings button sits under Advanced, in the same column as
   the Content pill, so the capability list, the transcription limit, the indexing power and the
