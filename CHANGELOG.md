@@ -1,4 +1,4 @@
-# Changelog
+﻿# Changelog
 
 All notable changes to Findra are documented here.
 
@@ -524,6 +524,13 @@ into a numbered section on the first release.
   that started reading and stopped again a moment later because there was nothing in the
   queue. Three unrelated-looking faults, one missing task. Uninstalling now marks the welcome
   screen unanswered, whether or not you keep the rest.
+
+- **`--purge` no longer leaves the folder it said it had deleted.** `ui.json`, which records the
+  running interface's process id and hotkey, sits directly in `%LOCALAPPDATA%\Findra` rather than
+  in `models`, `index` or `logs`, so none of the four things the prompt prices covered it - and
+  the only code that removes it is the interface's own shutdown, which an uninstall never reaches
+  because it stops the process outright. A purge that had just offered to free 2.99 GB left the
+  folder standing with a stale process id in it.
 
 - **The uninstaller's "also delete my index, my settings and the models" checkbox now does
   it.** The tick was read correctly and then had nowhere to go: the two commands it chose

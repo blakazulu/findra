@@ -1,4 +1,4 @@
-using Findra;
+﻿using Findra;
 using Findra.Startup;
 using Xunit;
 
@@ -134,6 +134,41 @@ public class UninstallTests : IDisposable
         run.Run(args);
 
         Assert.Contains("welcome", run.Calls);
+    }
+
+    [Fact]
+    public void APurgeTakesTheFilesLyingLooseInTheRootsAndNotOnlyTheFourFoldersItPriced()
+    {
+        // ui.json lives in %LOCALAPPDATA%\Findra itself, beside models, index and logs, so no row
+        // of the report reaches it - and the interface, which is the only thing that deletes it,
+        // is KILLED by the uninstall rather than closed. A purge that had just said it would free
+        // 2.99 GB left the folder standing with a stale pid in it.
+        string root = Path.Combine(Path.GetTempPath(), "findra-sweep-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(Path.Combine(root, "logs"));
+        File.WriteAllText(Path.Combine(root, "ui.json"), "{}");
+        File.WriteAllText(Path.Combine(root, "logs", "findra-20260903.log"), "in use");
+        try
+        {
+            IReadOnlyList<Removal> swept = Uninstall.SweepLooseFiles([root]);
+
+            Assert.Equal(["ui.json"], swept.Select(r => r.Label));
+            Assert.All(swept, r => Assert.True(r.Removed));
+            Assert.False(File.Exists(Path.Combine(root, "ui.json")));
+            // Directories are left alone. logs is in use - the uninstall is writing into it as it
+            // runs - so reaching for it would fail on every purge and report a clean run as a
+            // failed one.
+            Assert.True(File.Exists(Path.Combine(root, "logs", "findra-20260903.log")));
+        }
+        finally { Directory.Delete(root, recursive: true); }
+    }
+
+    [Fact]
+    public void ARootThatIsNotThereIsNothingToSweepRatherThanAThrow()
+    {
+        // The ordinary case on a machine that never wrote a roaming folder. A throw here would
+        // abort the purge half way through its deletions.
+        Assert.Empty(Uninstall.SweepLooseFiles(
+            [Path.Combine(Path.GetTempPath(), "findra-absent-" + Guid.NewGuid().ToString("N"))]));
     }
 
     [Fact]

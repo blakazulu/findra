@@ -264,8 +264,63 @@ public static class Uninstall
 
     public static int Run(string[] args) =>
         Run(args, HelperTask.Unregister, Autostart.Clear,
-            spare => StopAll(spare), deletes => Delete(deletes, Roots()),
+            spare => StopAll(spare),
+            deletes =>
+            {
+                IReadOnlyList<Removal> removed = Delete(deletes, Roots());
+                SweepLooseFiles(Roots());
+                return removed;
+            },
             forgetTheWelcomeScreen: ForgetTheWelcomeScreen);
+
+    /// <summary>
+    /// The files sitting LOOSE in Findra's two data folders, beside the four directories the
+    /// report prices. Purge only - a keep run keeps them, which is what keep means.
+    ///
+    /// <para><c>ui.json</c> is the one there is today. It is written into
+    /// <c>%LOCALAPPDATA%\Findra</c> itself rather than into <c>models</c>, <c>index</c> or
+    /// <c>logs</c>, so not one row of the plan covers it, and the only code that removes it is the
+    /// interface's own shutdown - which an uninstall never reaches, because it KILLS the interface
+    /// rather than asking it to close. So a purge that priced 2.99 GB and said it would take the
+    /// settings with it left the folder standing, holding a stale pid and a hotkey. Same shape as
+    /// <c>installed-by.txt</c> surviving the installer's uninstall: one small file nobody listed,
+    /// keeping a whole directory alive.</para>
+    ///
+    /// <para>Files, and only at the top level. <c>logs</c> is a directory and it is in use - this
+    /// very removal is being written into it - so anything reaching for the root itself would fail
+    /// on every purge and report a clean uninstall as a failed one.</para>
+    /// </summary>
+    public static IReadOnlyList<Removal> SweepLooseFiles(
+        IReadOnlyList<string> roots, Func<string, string?>? remove = null)
+    {
+        ArgumentNullException.ThrowIfNull(roots);
+        remove ??= RemoveFile;
+
+        var report = new List<Removal>();
+        foreach (string root in roots)
+        {
+            string[] loose;
+            try { loose = Directory.Exists(root) ? Directory.GetFiles(root) : []; }
+            catch (Exception ex) { Log.Warn("uninstall", $"could not read {root}: {ex.Message}"); continue; }
+
+            foreach (string file in loose)
+            {
+                string name = Path.GetFileName(file);
+                string? problem = remove(file);
+                report.Add(new Removal(name, file, problem is null, problem));
+                Log.Info("uninstall", problem is null
+                    ? $"removed {name}"
+                    : $"could not remove {name}: {problem}");
+            }
+        }
+        return report;
+    }
+
+    private static string? RemoveFile(string path)
+    {
+        try { File.Delete(path); return null; }
+        catch (Exception ex) { return ex.Message; }
+    }
 
     /// <summary>
     /// Put <c>FirstRunDone</c> back to false in the settings this uninstall is KEEPING.
