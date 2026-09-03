@@ -55,6 +55,10 @@ pwsh -File build/Check-E2E.ps1 -Exe publish/win-x64/findra.exe   # every part of
                                                # anything. Three outcomes, not two - "not yet"
                                                # is a machine that has not got there yet, and is
                                                # not counted as a failure.
+pwsh -File build/Make-Shots.ps1 -Exe publish/win-x64/findra.exe   # redraw every screenshot the
+                                               # README shows, into docs/shots, and copy each one
+                                               # the website shows too. Reads the list out of the
+                                               # README; keeping a second list is the bug.
 node build/Make-Icon.mjs                       # regenerate the mark - the .ico compiled into the
                                                # exe, both SVGs, the installer's wizard image and
                                                # the site's favicon. By hand, when the mark
@@ -275,13 +279,17 @@ It carries the README's two rules, and it says so on the page: the shots section
 "Every picture below is the product". So a hand-edited image does not just mislead, it makes the
 page lie about itself.
 
-- **`docs/shots` and `website/public/shots` are two copies of the same renders and are
-  regenerated together.** They are separate files with no test between them, and they had
-  silently drifted: the site served an `adv`, a `firstrun` and a `settingscontent` from an older
-  build while printing the command that produces the current ones. Its Settings picture was
-  missing "Start reading now" and "Indexing power" - two controls the product had gained - so
-  the page was advertising a smaller product than the one it was selling. When a surface
-  changes, regenerate **both** directories, and `cmp` them.
+- **`docs/shots` and `website/public/shots` are two copies of the same renders.** They have to
+  be two: `website/public` is published exactly as it sits and nothing under it can reach into
+  `docs/`. Nothing kept them together and they drifted - the site served an `adv`, a `firstrun`
+  and a `settingscontent` from an older build while printing the command that produces the
+  current ones, and its Settings picture was missing "Start reading now" and "Indexing power",
+  two controls the product had gained. **`build/Make-Shots.ps1` is how you regenerate them**: it
+  reads the list of images out of the README rather than keeping a third copy of it, renders
+  each into `docs/shots`, and copies every one the site also carries. `SiteShotTests` fails if
+  the two ever disagree again, and fails again if the two pages print different commands for the
+  same picture - identical bytes under contradictory commands is the same lie in a different
+  place.
 - **Every number is a `--searchbench` measurement** beside the machine that produced it, as in
   the README.
 
@@ -309,10 +317,11 @@ of the window on purpose; the ticket section below it is an `h2` and steps down 
 at hero size the page appeared to start twice. The `<title>` and `og:title` say what that first
 section says. There is no `twitter:title` - the card falls back to `og:title` and follows it.
 
-**Almost none of this is tested.** No test in the suite reads `website/`. The one exception is
-the mark: `IconTests` fails if `favicon.svg` drifts from `assets/icon/findra.svg`, or if the
-header's data URI stops carrying the generated path. Everything else here holds because somebody
-read it, which is why the shots drifted for as long as they did.
+**Most of this is not tested.** Two things are. `IconTests` fails if `favicon.svg` drifts from
+`assets/icon/findra.svg` or if the header's data URI stops carrying the generated path, and
+`SiteShotTests` fails on a shot or a printed command that disagrees with the README's. Everything
+else above holds because somebody read it - which is exactly why the shots drifted for as long as
+they did, and why the two guards that exist are on the two things that had already gone wrong.
 
 ## Architecture
 
