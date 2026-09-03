@@ -144,7 +144,7 @@ public static class SelfTest
                 // because the check is worth more when it exercises that, and the limit is the
                 // default because what it drains is a .txt.
                 using var vectors = new VectorStore(Path.Combine(dir, "vectors.bin"), writer: true);
-                using var decoders = new Decoders(CapabilitySet.Installed(), vectors);
+                using var decoders = new Decoders(() => CapabilitySet.Installed(), vectors);
                 Indexer.DrainOnce(db, _ => { }, decoders);
                 if (db.PendingCount() != 0) return "the queue did not drain";
                 if (db.Fts("deposit", 5).Count != 1) return "the indexed word was not found again";

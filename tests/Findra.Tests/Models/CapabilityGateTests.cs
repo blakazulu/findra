@@ -244,6 +244,87 @@ public class CapabilityGateTests : IDisposable
     }
 
     [Fact]
+    public void ACapabilityWhoseBacklogWasQueuedAndNeverReadStillOwesItAtTheNextStart()
+    {
+        // The debt is recorded the moment the backlog is QUEUED, and the queue is drained by an
+        // indexer child that read what was installed when it started. Install a capability while
+        // Findra is open and that child records every one of those files skipped again, for want
+        // of a model sitting on the disk it has not looked at - and the stamp then says the debt
+        // is paid, so nothing ever queues them again. Every photo on the machine stays unread
+        // until somebody edits it.
+        //
+        // Whether the backlog is cleared is a fact the index holds - files this capability covers
+        // that nothing has read and nothing is going to read - and not the stamp on its own.
+        using ContentDb db = Open();
+        string photo = File_("a.jpg");
+        Item(db, 1, ResultKind.Photo, ContentDb.StateSkipped, Decoders.NoModel, photo,
+             mtime: new FileInfo(photo).LastWriteTimeUtc.Ticks);
+
+        CapabilitySet have = Set(Capability.Photos);
+        Assert.Equal(1, CapabilityGate.Apply(db, CapabilityGate.Plan(have, CapabilityGate.StampsIn(db))));
+
+        // and the child that drains it cannot read them
+        var stale = new AskRecordingDecoders(CapabilitySet.None);
+        Indexer.DrainOnce(db, _ => { }, stale);
+
+        Assert.Empty(stale.Asked);
+        Assert.Equal(0, db.PendingCount());
+        Assert.Equal(ContentDb.StateSkipped, db.StateOf("C", 1));
+
+        Requeue owed = Assert.Single(CapabilityGate.Plan(have, CapabilityGate.StampsIn(db)));
+        Assert.Equal(Capability.Photos, owed.Capability);
+        Assert.Equal(1, CapabilityGate.Apply(db, CapabilityGate.Plan(have, CapabilityGate.StampsIn(db))));
+        Assert.Equal(1, db.PendingCount());
+    }
+
+    [Fact]
+    public void QueuedAndNotYetReadIsNotTheSameAsNeverRead()
+    {
+        // The control for the pair above, and the one that stops the recovery becoming a loop:
+        // the backlog is owed again only when nothing is going to look at those files. Between
+        // the re-queue and the drain they are skipped AND pending, which is work in hand rather
+        // than work lost - counting those as unpaid re-queues the whole backlog on every launch
+        // and on every install.
+        using ContentDb db = Open();
+        Item(db, 1, ResultKind.Photo, ContentDb.StateSkipped, Decoders.NoModel, File_("a.jpg"));
+
+        CapabilitySet have = Set(Capability.Photos);
+        Assert.Equal(1, CapabilityGate.Apply(db, CapabilityGate.Plan(have, CapabilityGate.StampsIn(db))));
+
+        Assert.Equal(1, db.PendingCount());
+        Assert.Empty(CapabilityGate.Plan(have, CapabilityGate.StampsIn(db)));
+    }
+
+    [Fact]
+    public void TheSecondAttemptQueuesOnlyTheFilesThatWereNeverRead()
+    {
+        // The recovery is the NARROW re-queue and not the first one over again. Speech covers
+        // audio and video together, and a machine with photos has already read every video for
+        // its frames; re-queueing those to recover one unheard sound file is hours of somebody's
+        // machine for rows the index already holds.
+        using ContentDb db = Open();
+        string clip = File_("film.mp4");
+        Item(db, 1, ResultKind.Video, ContentDb.StateIndexed, null, clip,
+             mtime: new FileInfo(clip).LastWriteTimeUtc.Ticks);
+        string voice = File_("voice.m4a");
+        Item(db, 2, ResultKind.Audio, ContentDb.StateSkipped, Decoders.NoModel, voice,
+             mtime: new FileInfo(voice).LastWriteTimeUtc.Ticks);
+        Stamped(db, Capability.Meaning);
+        Stamped(db, Capability.Speech);
+
+        int queued = CapabilityGate.Apply(db, CapabilityGate.Plan(
+            Set(Capability.Meaning, Capability.Speech), CapabilityGate.StampsIn(db)));
+
+        Assert.Equal(1, queued);
+        Assert.Equal(voice, Assert.Single(db.PendingRows()).Path);
+    }
+
+    /// <summary>Write the stamp that says this capability's backlog was cleared, the way
+    /// <see cref="CapabilityGate.Apply"/> writes it.</summary>
+    private static void Stamped(ContentDb db, Capability c)
+        => db.Set(CapabilityGate.StampPrefix + c.ToString().ToLowerInvariant(), CapabilityGate.StampFor(c));
+
+    [Fact]
     public void ApplyingThePlanTouchesNoOtherProcessesMetaRows()
     {
         // The meta table has four writers with four prefixes, and reusing one is a collision
@@ -418,6 +499,61 @@ public class CapabilityGateTests : IDisposable
 
         Assert.Equal(1, CapabilityGate.ApplyLimit(db, 120));
         Assert.Equal(0, CapabilityGate.ApplyLimit(db, 120));
+    }
+
+    [Fact]
+    public void ReconcilingTheLimitTellsTheIndexerWhatTheLimitIs()
+    {
+        // Raising the limit queues the recordings it newly covers and records the new limit, both
+        // at once. The child that hears them reads the length from the index before each
+        // recording, so unless that row moves with it the child passes over exactly the files
+        // just queued for it, records them too long again, and the recorded limit then says
+        // there is nothing left to hear - for ever.
+        using ContentDb db = Open();
+        Item(db, 1, ResultKind.Audio, ContentDb.StateSkipped, Decoders.TooLong, File_("long.m4a"));
+
+        Assert.Equal(1, CapabilityGate.ApplyLimit(db, 120));
+
+        Assert.Equal(120, Indexer.TranscribeMinutes(db));
+    }
+
+    [Fact]
+    public void ARecordingQueuedByARaisedLimitIsHeardRatherThanPassedOverAgain()
+    {
+        // The same fact from the other end, through the drain. The decoders here are wired the
+        // way `findra --index` wires the real ones: the limit is a delegate read per recording,
+        // never a value captured when the child started.
+        using ContentDb db = Open();
+        string rec = File_("long.m4a");
+        Item(db, 1, ResultKind.Audio, ContentDb.StateSkipped, Decoders.TooLong, rec,
+             mtime: new FileInfo(rec).LastWriteTimeUtc.Ticks);
+        db.Set(CapabilityGate.LimitKey, "5");
+        db.Set(Indexer.TranscribeMinutesKey, "5");
+
+        Assert.Equal(1, CapabilityGate.ApplyLimit(db, 120));
+
+        var d = new LimitReadingDecoders(Set(Capability.Meaning, Capability.Speech),
+                                         () => Indexer.TranscribeMinutes(db));
+        Indexer.DrainOnce(db, _ => { }, d);
+
+        Assert.Equal(ContentDb.StateIndexed, db.StateOf("C", 1));
+        Assert.Empty(db.RecentSkips(10));
+    }
+
+    /// <summary>The sound arm of the real decoders, standing in for an hour and a half of audio:
+    /// the length is fixed, and the limit it is measured against is read per recording through
+    /// the delegate the child hands in.</summary>
+    private sealed class LimitReadingDecoders(CapabilitySet installed, Func<int> minutes) : IDecoders
+    {
+        public CapabilitySet Installed { get; } = installed;
+        public bool CanRead(ResultKind kind) => Decoders.Covers(kind, Installed);
+        public KindResult Decode(ResultKind kind, string path, long bytes)
+            => TranscribeLimit.Covers(minutes(), 90 * 60)
+               ? new KindResult([new ContentDb.Segment(ContentDb.SegSpeech, 0, 5, -1, "what was said")], null)
+               : new KindResult([], Decoders.TooLong);
+        public void Flush() { }
+        public void Release(IReadOnlyList<long> rows) { }
+        public void Dispose() { }
     }
 
     [Fact]

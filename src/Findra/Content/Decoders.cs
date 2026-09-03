@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Runtime.Versioning;
 using SkiaSharp;
 using Whisper.net;
@@ -37,13 +38,19 @@ public readonly record struct KindResult(List<ContentDb.Segment> Segments, strin
 /// </summary>
 public interface IDecoders : IDisposable
 {
-    /// <summary>What is on disk right now. Read once when the child starts: a model that arrives
-    /// mid-session is picked up by the next child, and the interface starts one.</summary>
+    /// <summary>What is on disk, as at the last time <see cref="CanRead"/> was asked. It is a
+    /// snapshot rather than a constant: a model that arrives while the child is running has to
+    /// reach the very files the interface has just queued for it, and the child is started
+    /// once.</summary>
     CapabilitySet Installed { get; }
 
     /// <summary>Is there any point opening this kind of file at all? Asked before
-    /// <see cref="Decode"/>, and a false answer is a Skipped row with
-    /// <see cref="Decoders.NoModel"/> - never a Failed one.</summary>
+    /// <see cref="Decode"/>, once per queued file, and a false answer is a Skipped row with
+    /// <see cref="Decoders.NoModel"/> - never a Failed one.
+    ///
+    /// <para>It is also where <see cref="Installed"/> is taken, which is why it is asked per file
+    /// rather than per child: one snapshot for the whole of one file's decoding, and a fresh one
+    /// for the next.</para></summary>
     bool CanRead(ResultKind kind);
 
     KindResult Decode(ResultKind kind, string path, long bytes);
@@ -127,27 +134,33 @@ public sealed class Decoders : IDecoders
     private readonly string? _dir;
     private readonly bool _ownsVectors;
     private readonly Func<int> _transcribeMinutes;
+    private readonly Func<CapabilitySet> _installed;
     private ClipImageEncoder? _vision;
     private E5Encoder? _e5;
     private WhisperFactory? _whisper, _whisperHe;
     private bool _dirty;
 
-    public CapabilitySet Installed { get; }
+    public CapabilitySet Installed { get; private set; }
 
     /// <summary><paramref name="ownsVectors"/> is false by default and that is the safe
     /// direction: a store the caller opened stays the caller's, and a type that guesses closes a
     /// test's store under it. Only <see cref="ForThisMachine"/> passes true, because only it
     /// opened one.
     ///
-    /// <para><paramref name="transcribeMinutes"/> is a delegate rather than a value because it is
-    /// a SETTING and it can change while the child runs - the interface writes it to
-    /// <c>index:transcribeminutes</c> and the child reads it the same way it reads
-    /// <c>index:power</c>. A captured value would mean a change to the limit did nothing until the
-    /// child was restarted, with no message anywhere saying so.</para></summary>
-    public Decoders(CapabilitySet installed, VectorStore vectors, Func<int>? transcribeMinutes = null,
+    /// <para><paramref name="installed"/> and <paramref name="transcribeMinutes"/> are both
+    /// delegates rather than values, for one reason: each of them can change while the child is
+    /// running, and the child is started once. The limit is a setting the interface writes to
+    /// <c>index:transcribeminutes</c>; what is installed is seven files that arrive on disk
+    /// whenever somebody accepts a download. Captured, either one means the change does nothing
+    /// until the child is restarted, with no message anywhere saying so - and for the models that
+    /// is worse than a delay, because the interface queues the files the moment they land and the
+    /// child records every one of them unreadable.</para></summary>
+    public Decoders(Func<CapabilitySet> installed, VectorStore vectors, Func<int>? transcribeMinutes = null,
                     string? modelDir = null, bool ownsVectors = false)
     {
-        Installed = installed;
+        ArgumentNullException.ThrowIfNull(installed);
+        _installed = installed;
+        Installed = installed();
         _vectors = vectors;
         _transcribeMinutes = transcribeMinutes ?? (() => TranscribeLimit.Default);
         _dir = modelDir;
@@ -159,8 +172,42 @@ public sealed class Decoders : IDecoders
     /// the running child already holds, and appends rows to a store its throwaway database will
     /// never reference.</summary>
     public static Decoders ForThisMachine(Func<int> transcribeMinutes, string? modelDir = null)
-        => new(CapabilitySet.Installed(modelDir), new VectorStore(writer: true), transcribeMinutes,
+        => new(() => CapabilitySet.Installed(modelDir), new VectorStore(writer: true), transcribeMinutes,
                modelDir, ownsVectors: true);
+
+    /// <summary>
+    /// Look at the disk again, and take the new set if it has moved.
+    ///
+    /// <para>Seven <c>File.Exists</c> calls, once per queued file, beside opening that file and
+    /// the three transactions the queue already costs for it. Rebuilding a session is what would
+    /// be expensive, and nothing here does: the encoders are opened lazily and only for a
+    /// capability that is installed, so one that ARRIVES needs nothing rebuilt at all - the first
+    /// file that needs it opens it.</para>
+    ///
+    /// <para>One that GOES is the case with a handle in it. Its session is dropped here, between
+    /// two files, where nothing is mid-decode and no vector row is half written: the whole of
+    /// this type runs on the one flow that drains the queue. The vector store is never touched -
+    /// it is the writer this process holds for its whole life, and closing it under a running
+    /// drain is exactly the stranded handle this must not create.</para>
+    /// </summary>
+    private void Refresh()
+    {
+        CapabilitySet now = _installed();
+        bool same = true;
+        foreach (Capability c in Capabilities.All) if (now.Has(c) != Installed.Has(c)) { same = false; break; }
+        if (same) return;
+
+        Installed = now;
+        if (!now.Has(Capability.Photos)) { _vision?.Dispose(); _vision = null; }
+        if (!now.Has(Capability.Meaning)) { _e5?.Dispose(); _e5 = null; }
+        if (!now.Has(Capability.Speech)) { _whisper?.Dispose(); _whisper = null; }
+        if (!now.Has(Capability.Hebrew)) { _whisperHe?.Dispose(); _whisperHe = null; }
+
+        Log.Info("index", "what Findra can read inside a file has changed while the indexer was running: "
+                          + (now.Have is null || now.Have.Count == 0
+                             ? "nothing beyond words in documents"
+                             : string.Join(", ", Capabilities.All.Where(now.Has).Select(Capabilities.Title))));
+    }
 
     /// <summary>
     /// Whether a kind is worth opening at all, given what is installed. Static and pure, so the
@@ -184,7 +231,15 @@ public sealed class Decoders : IDecoders
         _ => false,
     };
 
-    public bool CanRead(ResultKind kind) => Covers(kind, Installed);
+    /// <summary>The gate, and the one moment in a file's life where what is installed is looked
+    /// up again. Per file rather than per child, so a capability that arrives reaches the backlog
+    /// queued for it; and once per file rather than at each mention of <see cref="Installed"/>,
+    /// so the arms below cannot see a set change halfway through one video.</summary>
+    public bool CanRead(ResultKind kind)
+    {
+        Refresh();
+        return Covers(kind, Installed);
+    }
 
     /// <summary>The size rules, in one place, asked by the arms rather than repeated inside them.
     /// Null means "go ahead"; anything else is the skip reason.</summary>

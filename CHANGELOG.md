@@ -371,6 +371,21 @@ into a numbered section on the first release.
 
 ### Fixed
 
+- **Installing a capability while Findra is open no longer loses everything it was going
+  to read.** The files a new model covers were queued straight away, but the part of
+  Findra that reads inside files had looked at what was installed only once, when it
+  started, so it passed over every one of them and Findra recorded the work as done.
+  Nothing queued them again: photos, recordings or documents stayed unread until each
+  file was edited. Reading inside files now begins within seconds of a model arriving,
+  with no restart, and anything an earlier version wrote off is picked up the next time
+  Findra starts.
+
+- **Raising the transcription limit from the command line now reaches a running Findra.**
+  `findra --content limit 30` queued the recordings the longer limit newly covers and
+  then passed over every one of them at the old length, once, permanently. The length is
+  now read before each recording, so the recordings it queues are the recordings it
+  hears.
+
 - **No black console window comes with Findra any more.** Starting it from the installer,
   the Start menu, a double-click, or the start-at-sign-in entry opened an empty console
   window that stayed for as long as Findra ran and took Findra with it when closed, and

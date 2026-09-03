@@ -537,7 +537,7 @@ public static class SearchBench
                 // and writing into the real vector store would leave rows behind that the
                 // database referencing them is about to be deleted.
                 using var benchVectors = new VectorStore(Path.Combine(dir, "vectors.bin"), writer: true);
-                using var benchDecoders = new Decoders(CapabilitySet.None, benchVectors,
+                using var benchDecoders = new Decoders(() => CapabilitySet.None, benchVectors,
                                                        () => TranscribeLimit.Off);
                 var sw = Stopwatch.StartNew();
                 Indexer.DrainOnce(bench, _ => { }, benchDecoders);
