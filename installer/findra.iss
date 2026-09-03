@@ -159,10 +159,13 @@ begin
 
   // A CHECKBOX, not a message box. Spec 2a and PRIVACY.md both promise a checkbox in the
   // uninstaller, and an Inno uninstaller has no wizard pages - so it is a custom form.
-  Form := CreateCustomForm();
+  // CreateCustomForm takes the client size and two sizing flags; it is not a zero-argument
+  // call, and the size cannot be set afterwards through ClientWidth/ClientHeight. Both
+  // sizing flags are False because every control below is placed at a fixed offset, so a
+  // resizable form would leave them stranded in a corner. Inno's own Examples\CodeClasses.iss
+  // is the reference for this signature.
+  Form := CreateCustomForm(ScaleX(520), ScaleY(300), False, False);
   Form.Caption := 'Remove Findra';
-  Form.ClientWidth := ScaleX(520);
-  Form.ClientHeight := ScaleY(300);
   Form.Position := poScreenCenter;
 
   Body := TNewStaticText.Create(Form);
@@ -206,7 +209,7 @@ begin
 
   Form.ActiveControl := OkButton;
   if Form.ShowModal() = mrOk then Purge := Box.Checked else Result := False;
-  Form.Free();
+  Form.Free;
 end;
 
 function PurgeWanted(): Boolean;

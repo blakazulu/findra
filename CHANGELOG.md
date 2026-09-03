@@ -387,6 +387,10 @@ into a numbered section on the first release.
 
 ### Fixed
 
+- **The installer builds.** Its uninstall prompt called a Windows function with the wrong
+  arguments, which no test could see and which would have failed the first release after
+  the tag was already public. Both the Intel and Arm installers now compile.
+
 - **The privacy page says exactly what it means about the network.** It claimed the update
   check was the only request Findra ever makes, and then described model downloads three
   paragraphs later. Findra makes one request on its own; the other time it uses the network
