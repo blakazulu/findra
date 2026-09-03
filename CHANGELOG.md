@@ -531,6 +531,14 @@ into a numbered section on the first release.
   that was already reading, pressing it changed nothing on screen and read as a dead button. The
   button now reports "Indexing 640/1,973" and refuses the press until there is something to start.
 
+- **Findra asks before it starts reading your files, and waits until you answer.** The welcome
+  screen's last page now asks whether to begin, says plainly that a first pass walks every drive
+  and can take a few hours, and offers Later beside Start reading. Both close the window; Later
+  changes no setting, so the next launch begins without asking again. Nothing reads while the
+  question is on the screen - reading used to start ten seconds after the first page was answered,
+  while gigabytes of models were still downloading over the same disk, and the indexing rate fell
+  from 57 files a minute to 9 while the two competed.
+
 - **The Content pill stops offering while there is nothing behind it.** With reading on and the
   first file not yet finished, pressing it used to open the settings window over the card you had
   just opened, to say that reading was already on. There is nothing to search, nothing to turn on

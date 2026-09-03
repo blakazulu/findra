@@ -271,6 +271,21 @@ internal sealed class Shell : ISettingsHost
     /// first is a launch that must carry on, the second a launch that must not.</summary>
     private bool _firstRunIsUp;
 
+    /// <summary>
+    /// Nothing reads inside files while the welcome screen is on the display.
+    ///
+    /// <para>The preference from the first act is saved the moment it is answered, and the content
+    /// loop used to act on it ten seconds later - so the indexer was reading and embedding files
+    /// while 2.9 GB of models was still coming down the wire, over the same disk. On a real install
+    /// the rate fell from 57 files a minute to 9 as the download ran.</para>
+    ///
+    /// <para>So it waits, and the last act asks. "Start reading" clears this; "Later" leaves it set
+    /// for the rest of the session, and the preference still says yes, so the next launch reads
+    /// without asking again. Anything that explicitly starts reading clears it too - the settings
+    /// button and the card's Content pill are both a person saying "now".</para>
+    /// </summary>
+    private volatile bool _holdReading;
+
     /// <summary>The welcome screen, for as long as one is on the display. Null before it is built
     /// and again the moment it closes - see <see cref="TheWelcomeScreenIsInTheWay"/>.</summary>
     private FirstRunWindow? _firstRun;
@@ -454,6 +469,15 @@ internal sealed class Shell : ISettingsHost
 
         var window = new FirstRunWindow(state, _palette);
         window.Answered += answer => OnFirstRunAnswered(window, answer);
+        // Nothing reads until the last question is answered - see _holdReading. Set BEFORE the
+        // answer can arrive, because the content loop is built from that answer and would
+        // otherwise read the flag before it was written.
+        _holdReading = true;
+        window.StartReadingRequested += () =>
+        {
+            Log.Info("index", "the welcome screen was answered with \"Start reading\"; the first pass begins now");
+            _holdReading = false;
+        };
         // Held, and let go when it closes, because until then it is the only door into Findra.
         // The rest of the product IS built from the answer - names are searchable seconds later
         // and nobody should wait on 2.9 GB for their filenames - but a card opened over a running
@@ -769,7 +793,7 @@ internal sealed class Shell : ISettingsHost
         // rather than the config it has no access to.
         try
         {
-            writer.Set("index:paused", _config.IndexContent ? "0" : "1");
+            writer.Set("index:paused", _config.IndexContent && !_holdReading ? "0" : "1");
             writer.Set(Indexer.TranscribeMinutesKey, _config.TranscribeMinutes.ToString(CultureInfo.InvariantCulture));
         }
         catch (Exception ex) { Log.Warn("index", "the indexer's control rows could not be written :: " + ex.Message); }
@@ -1060,7 +1084,8 @@ internal sealed class Shell : ISettingsHost
         // One bit, one row. IndexContent false means the queue does not move, which is the same
         // mechanism the pause switch already used - so the child, IndexStatus and --searchindex
         // need no new concept.
-        string paused = cfg.IndexContent ? "0" : "1";
+        bool reading = cfg.IndexContent && !_holdReading;
+        string paused = reading ? "0" : "1";
         string power = cfg.IndexPower.ToString(CultureInfo.InvariantCulture);
         string minutes = cfg.TranscribeMinutes.ToString(CultureInfo.InvariantCulture);
         try
@@ -1074,7 +1099,7 @@ internal sealed class Shell : ISettingsHost
             // The child is started, never stopped, by this: it watches this process's id and dies
             // with it. That is the whole of the "indexing stops when the app quits" rule, and
             // there is no other lifetime code anywhere.
-            if (cfg.IndexContent && db.PendingCount() > 0) host.EnsureRunning();
+            if (reading && db.PendingCount() > 0) host.EnsureRunning();
 
             ShowOnCapsule(db);
         }
@@ -1232,6 +1257,7 @@ internal sealed class Shell : ISettingsHost
         // stale view that would write it back off on its owner's next click.
         card.ContentReadingRequested += () =>
         {
+            _holdReading = false;
             if (_config.IndexContent) return;
             Log.Info("index", "the card asked for reading inside files to be turned back on");
             ApplyConfig(_config with { IndexContent = true });
@@ -1688,6 +1714,10 @@ internal sealed class Shell : ISettingsHost
     void ISettingsHost.StartIndexing()
     {
         Log.Info("index", "reading inside files was started from settings");
+        // A person saying "now" outranks the welcome screen's hold, whether or not that screen was
+        // ever answered - somebody who chose "Later" and changed their mind two minutes later ends
+        // up here, and a hold nothing could clear would make this the dead button all over again.
+        _holdReading = false;
         Waiting(ControlId.StartIndexing, true);
         Task<int> asked = OnContentLoopAsync(db =>
         {

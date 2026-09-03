@@ -1277,4 +1277,121 @@ public class FirstRunDownloadTests : IDisposable
         // window that stands in front of the whole desktop for as long as it is open.
         Assert.Equal(3, Enum.GetValues<FirstRunStage>().Length);
     }
+
+    // ---- the last question ----------------------------------------------------------------
+
+    private static FirstRunState Finished(bool contentOn) => new()
+    {
+        Chosen = Capabilities.Close([Capability.Photos]),
+        HebrewOffered = true,
+        ContentOn = contentOn,
+        Stage = FirstRunStage.Finished,
+    };
+
+    [Fact]
+    public void TheLastActAsksAboutReadingOnlyWhenReadingWasChosen()
+    {
+        // The first act asks what Findra should be able to UNDERSTAND and has no room for the one
+        // warning this question needs - that a first pass walks every drive and can run for hours.
+        // The last act has the room and is the moment: the download is done, nothing is competing
+        // for the disk, and the person is still here.
+        Assert.True(FirstRun.Asks(Finished(contentOn: true)));
+
+        // Reading was declined on the first act, so there is nothing to ask and nothing to start.
+        Assert.False(FirstRun.Asks(Finished(contentOn: false)));
+
+        // And never before the end. While files are still arriving the screen answers nothing at
+        // all, and the question would be about work that would compete with the download.
+        Assert.False(FirstRun.Asks(Finished(contentOn: true) with { Stage = FirstRunStage.Downloading }));
+        Assert.False(FirstRun.Asks(Finished(contentOn: true) with { Stage = FirstRunStage.Choosing }));
+    }
+
+    [Fact]
+    public void TheQuestionBringsBackTheSecondButtonAndBothOfThemAnswerIt()
+    {
+        // Two buttons, and they mean different things - which is the whole reason the second one
+        // comes back. Everywhere else in the second act there is one way out, because a second
+        // pill doing exactly what the first does is a choice with no difference in it.
+        FirstRunState asking = Finished(contentOn: true);
+        int rows = FirstRun.Rows(asking).Count;
+        int limitRow = FirstRun.LimitRow(asking);
+        float h = FirstRunLayout.SettledHeight(rows, limitRow, asking: true);
+
+        SKRect later = FirstRunLayout.ButtonRect(0, h);
+        SKRect start = FirstRunLayout.ButtonRect(1, h);
+
+        Assert.Equal(FirstRunTarget.NotNow,
+            FirstRunLayout.HitTest(later.MidX, later.MidY, rows, limitRow, settled: true, finished: true, asking: true).Target);
+        Assert.Equal(FirstRunTarget.Go,
+            FirstRunLayout.HitTest(start.MidX, start.MidY, rows, limitRow, settled: true, finished: true, asking: true).Target);
+
+        // Without the question that left-hand pill is not drawn, so nothing may answer a click
+        // there - a hit test that still reported NotNow would be a control nobody can see.
+        float plain = FirstRunLayout.SettledHeight(rows, limitRow, asking: false);
+        Assert.Equal(FirstRunTarget.None,
+            FirstRunLayout.HitTest(FirstRunLayout.ButtonRect(0, plain).MidX, FirstRunLayout.ButtonRect(0, plain).MidY,
+                                   rows, limitRow, settled: true, finished: true, asking: false).Target);
+    }
+
+    [Fact]
+    public void TheWindowMakesRoomForTheQuestionAndGivesItBackWhenThereIsNone()
+    {
+        FirstRunState asking = Finished(contentOn: true);
+        int rows = FirstRun.Rows(asking).Count;
+        int limitRow = FirstRun.LimitRow(asking);
+
+        float withQuestion = FirstRunLayout.SettledHeight(rows, limitRow, asking: true);
+        float without = FirstRunLayout.SettledHeight(rows, limitRow, asking: false);
+
+        Assert.True(withQuestion > without, "the question needs room the plain finished screen does not");
+        Assert.Equal(FirstRunLayout.AskH, withQuestion - without);
+    }
+
+    [Fact]
+    public void TheLastQuestionFitsTheRoomTheWindowMakesForIt()
+    {
+        // Measured in the shipped face, on the terms every other band on this screen is held to.
+        // AskH is a constant and the two strings are prose; a copy-edit that adds a line is what
+        // this catches, and the fix is to shorten the sentence or raise the constant deliberately.
+        SKTypeface face = Parts.Face;
+        FirstRunState asking = Finished(contentOn: true);
+        SKRect ask = FirstRunLayout.AskRect(FirstRun.Rows(asking).Count, FirstRun.LimitRow(asking));
+
+        // The rule and the title sit in the first 40px; the note has the rest.
+        float need = 40f + Parts.NoteHeight(Parts.Wrap(FirstRun.AskNote, face, Parts.NoteSize, ask.Width).Count);
+        Assert.True(need <= FirstRunLayout.AskH,
+            $"the question needs {need:0.0}px and AskH is {FirstRunLayout.AskH:0.0}px");
+
+        // And the title fits on one line, because a wrapped question reads as two questions.
+        Assert.True(CardText.Measure(FirstRun.AskTitle, face, Parts.LeadSize) <= ask.Width,
+            "the question wraps; shorten it rather than widening the card");
+    }
+
+    [Fact]
+    public void NothingOnTheAskingScreenTellsSomebodyToLeaveIt()
+    {
+        // Both of these used to. "Findra is in the tray. Settings can add any of the rest later."
+        // and "...and you can close this window." are right when closing is the only thing left,
+        // and wrong six lines above the one thing on the screen still worth answering.
+        string summary = FirstRun.Summary(Finished(contentOn: true) with
+        {
+            Downloads = [new CapabilityProgress(Capability.Photos, 659_000_000, 659_000_000)],
+        });
+
+        Assert.DoesNotContain("close this window", summary, StringComparison.OrdinalIgnoreCase);
+
+        // The screen that is NOT asking still says it, because there it is the whole truth.
+        string done = FirstRun.Summary(Finished(contentOn: false) with
+        {
+            Downloads = [new CapabilityProgress(Capability.Photos, 659_000_000, 659_000_000)],
+        });
+        Assert.Contains("close this window", done, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void TheRightHandButtonSaysWhatItStartsRatherThanClose()
+    {
+        Assert.Equal(FirstRun.StartReadingLabel, FirstRun.GoLabel(Finished(contentOn: true)));
+        Assert.Equal(FirstRun.CloseLabel, FirstRun.GoLabel(Finished(contentOn: false)));
+    }
 }

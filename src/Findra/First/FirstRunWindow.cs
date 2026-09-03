@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Runtime.Versioning;
 using Avalonia;
@@ -36,6 +36,11 @@ public sealed class FirstRunWindow : Window
     /// chosen; <c>FirstRun.Outcome</c> turns it into a configuration.</summary>
     public event Action<FirstRunState>? Answered;
 
+    /// <summary>Raised when the last question is answered with "Start reading". Nothing reads
+    /// until it is: <c>FirstRun.Asks</c> says why, and the shell holds the indexer until this
+    /// arrives or the window closes without it.</summary>
+    public event Action? StartReadingRequested;
+
     public FirstRunWindow(FirstRunState state, Palette palette)
     {
         ArgumentNullException.ThrowIfNull(state);
@@ -67,6 +72,7 @@ public sealed class FirstRunWindow : Window
 
         Opened += (_, _) => { Activate(); _canvas.Focus(); };
         _canvas.Answered += s => Answered?.Invoke(s);
+        _canvas.StartReadingRequested += () => StartReadingRequested?.Invoke();
     }
 
     /// <summary>What the shell is actually fetching. Everything a chosen capability needs that is
@@ -100,6 +106,7 @@ public sealed class FirstRunWindow : Window
         private bool _answered;
 
         public event Action<FirstRunState>? Answered;
+        public event Action? StartReadingRequested;
 
         public FirstRunCanvas(FirstRunState state, Palette palette, Window owner)
         {
@@ -129,6 +136,11 @@ public sealed class FirstRunWindow : Window
         /// nothing at all and the way out is the window's own close, which is never disabled.</summary>
         private bool Finished => _state.Stage == FirstRunStage.Finished;
 
+        /// <summary>Is the last question on the screen? Two buttons instead of one, a taller
+        /// window to hold the question, and a "Start reading" that means something rather than
+        /// a second way to close.</summary>
+        private bool Asking => FirstRun.Asks(_state);
+
         public void NoteFetching(IReadOnlyList<Model> models)
         {
             _fetching = models;
@@ -149,13 +161,17 @@ public sealed class FirstRunWindow : Window
         public void NoteFinished(string problem)
         {
             _state = _state with { Problem = problem, Stage = FirstRunStage.Finished };
+            // The last question needs room that the download screen did not, so the window grows
+            // here. Safe for the same reason the shrink was: no button is drawn while a download
+            // runs, so there is nothing under the pointer for a resize to move out from under.
+            _owner.Height = FirstRunLayout.SettledHeight(Rows, LimitRow, Asking);
             InvalidateVisual();
         }
 
         protected override void OnPointerMoved(PointerEventArgs e)
         {
             Point p = e.GetPosition(this);
-            FirstRunHit hit = FirstRunLayout.HitTest((float)p.X, (float)p.Y, Rows, LimitRow, Settled, Finished);
+            FirstRunHit hit = FirstRunLayout.HitTest((float)p.X, (float)p.Y, Rows, LimitRow, Settled, Finished, Asking);
             if (hit.Target == _state.HoverTarget && hit.Index == _state.HoverIndex) return;
             _state = _state with { HoverTarget = hit.Target, HoverIndex = hit.Index };
             Cursor = PointerCursor.Of(Pointers.ForFirstRun(hit.Target));
@@ -173,7 +189,7 @@ public sealed class FirstRunWindow : Window
         {
             Focus();
             Point p = e.GetPosition(this);
-            FirstRunHit hit = FirstRunLayout.HitTest((float)p.X, (float)p.Y, Rows, LimitRow, Settled, Finished);
+            FirstRunHit hit = FirstRunLayout.HitTest((float)p.X, (float)p.Y, Rows, LimitRow, Settled, Finished, Asking);
 
             // The title strip is the only place a borderless window can be picked up by.
             if (hit.Target == FirstRunTarget.None && p.Y < FirstRunLayout.TileTop)
@@ -187,7 +203,17 @@ public sealed class FirstRunWindow : Window
             {
                 // The second act keeps the same window: "Close" and "Done" both just close it,
                 // because the answer has already been given and the download is the shell's.
-                if (_state.Stage != FirstRunStage.Choosing) { _owner.Close(); return; }
+                //
+                // Unless the last question is still on it, in which case the right-hand button is
+                // the answer to that question and the left one declines it. Both close - the
+                // difference is whether anything starts reading, which is what "Later" is for: the
+                // preference from the first act is saved either way and this is only about now.
+                if (_state.Stage != FirstRunStage.Choosing)
+                {
+                    if (Asking && hit.Target == FirstRunTarget.Go) StartReadingRequested?.Invoke();
+                    _owner.Close();
+                    return;
+                }
 
                 // Once. A second press while the shell is still starting the download would run
                 // the whole hand-off twice - two registrations, two download runs over one
@@ -212,7 +238,7 @@ public sealed class FirstRunWindow : Window
                 // and no notes, and the fixed height left a large empty band under the summary.
                 // Here is the safe moment: a deliberate click on a button that then stops
                 // existing, with nothing left under the pointer to be hit.
-                _owner.Height = FirstRunLayout.SettledHeight(Rows, LimitRow);
+                _owner.Height = FirstRunLayout.SettledHeight(Rows, LimitRow, FirstRun.Asks(_state));
                 // And it stops standing over everything else. The question is answered; what is
                 // left is a progress bar that can run for tens of minutes, and a progress bar
                 // pinned in front of every other window is not a courtesy.
@@ -221,8 +247,11 @@ public sealed class FirstRunWindow : Window
 
                 Answered?.Invoke(answer);
                 // Nothing to wait for when nothing was chosen, so the screen goes rather than
-                // sitting there saying "0 of 0 done".
-                if (answer.Chosen.Count == 0) _owner.Close();
+                // sitting there saying "0 of 0 done" - unless it has a question left to ask, which
+                // is the case for anybody who took no models and still turned reading on. Closing
+                // there would ask nothing and start nothing, which is the one outcome that loses
+                // the answer.
+                if (answer.Chosen.Count == 0 && !FirstRun.Asks(_state)) _owner.Close();
                 return;
             }
 
