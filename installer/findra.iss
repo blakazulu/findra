@@ -80,6 +80,14 @@ Filename: "{app}\findra.exe"; Description: "Start Findra"; Flags: nowait postins
 Filename: "{app}\findra.exe"; Parameters: "--uninstall --quiet"; Flags: runhidden; RunOnceId: "findra-uninstall"; Check: KeepWanted
 Filename: "{app}\findra.exe"; Parameters: "--uninstall --purge --quiet"; Flags: runhidden; RunOnceId: "findra-purge"; Check: PurgeWanted
 
+[UninstallDelete]
+; installed-by.txt is written by RecordInstallSource below, from [Code], with SaveStringToFile.
+; Inno only removes what it recorded in its own uninstall log, and a file written by a script is
+; not in it - so without this line the file survives every uninstall, the {app} directory is not
+; empty, and Inno leaves the directory behind too. A real uninstall on a real machine left
+; "C:\Program Files\Findra" holding one nine-byte file.
+Type: files; Name: "{app}\installed-by.txt"
+
 [Code]
 var
   Purge: Boolean;
@@ -120,6 +128,52 @@ begin
   if CurStep = ssPostInstall then RecordInstallSource();
 end;
 
+/// Everything between "It will keep:" and the blank line that ends it, with its column
+/// alignment intact. The report goes on to say "Run findra --uninstall --purge to delete those
+/// too", which is right in a terminal and wrong here, where a checkbox does that job and would be
+/// contradicted by the sentence above it.
+function KeepBlock(const report: String): String;
+var
+  head, tail: Integer;
+  rest: String;
+begin
+  Result := report;
+  head := Pos('It will keep:', report);
+  if head = 0 then Exit;
+  rest := Copy(report, head + Length('It will keep:'), Length(report));
+  // The block ends at the first blank line after it. Two line endings in a row, so this survives
+  // a report written with either CRLF or LF.
+  tail := Pos(#10#10, rest);
+  if tail = 0 then tail := Pos(#13#10#13#10, rest);
+  if tail > 0 then rest := Copy(rest, 1, tail - 1);
+  Result := Trim(rest);
+end;
+
+/// " and free 908 MB", or an empty string when the report does not say. Never computed here: the
+/// measured size is the product's own and there is exactly one measurement behind every surface
+/// that quotes it, which is the whole reason the installer runs --dry-run instead of adding up
+/// folders itself.
+function Freed(const report: String): String;
+var
+  at, stop: Integer;
+  size: String;
+begin
+  Result := '';
+  at := Pos('freeing ', report);
+  if at = 0 then Exit;
+  size := Copy(report, at + Length('freeing '), 24);
+  // Cut at the LINE END and then drop a trailing full stop, never at the first '.' - the figure
+  // is "1.42 GB." as often as "908 MB.", and cutting at the first dot turns the first of those
+  // into "1". Checked against the file the product actually writes, not against the format it
+  // was assumed to have.
+  stop := Pos(#13, size);
+  if stop = 0 then stop := Pos(#10, size);
+  if stop > 0 then size := Copy(size, 1, stop - 1);
+  size := Trim(size);
+  while (size <> '') and (size[Length(size)] = '.') do size := Copy(size, 1, Length(size) - 1);
+  if size <> '' then Result := ' and free ' + size;
+end;
+
 function InitializeUninstall(): Boolean;
 var
   app, reportPath: String;
@@ -131,7 +185,7 @@ var
   report: AnsiString;
   code: Integer;
   Form: TSetupForm;
-  Body: TNewStaticText;
+  Head, Intro, Kept, Body, Warn: TNewStaticText;
   Box: TNewCheckBox;
   OkButton, CancelButton: TNewButton;
 begin
@@ -159,49 +213,100 @@ begin
 
   // A CHECKBOX, not a message box. Spec 2a and PRIVACY.md both promise a checkbox in the
   // uninstaller, and an Inno uninstaller has no wizard pages - so it is a custom form.
-  // CreateCustomForm takes the client size and two sizing flags; it is not a zero-argument
-  // call, and the size cannot be set afterwards through ClientWidth/ClientHeight. Both
-  // sizing flags are False because every control below is placed at a fixed offset, so a
-  // resizable form would leave them stranded in a corner. Inno's own Examples\CodeClasses.iss
+  //
+  // The report is written for a TERMINAL. Wrapping it into a label destroyed the column the sizes
+  // are aligned in, and it ends with "Run findra --uninstall --purge to delete those too", which
+  // is a command-line instruction sitting directly above a checkbox that does that very thing.
+  // KeepBlock takes the part a person needs here and Freed takes the total for the checkbox. The
+  // numbers are still the product's own measurement, read out of the file it wrote, and are never
+  // estimated here.
+  //
+  // CreateCustomForm takes the client size and two sizing flags; it is not a zero-argument call,
+  // and the size cannot be set afterwards through ClientWidth/ClientHeight. Both sizing flags are
+  // False because every control below sits at a fixed offset. Inno's own Examples\CodeClasses.iss
   // is the reference for this signature.
-  Form := CreateCustomForm(ScaleX(520), ScaleY(300), False, False);
+  Form := CreateCustomForm(ScaleX(560), ScaleY(374), False, False);
   Form.Caption := 'Remove Findra';
   Form.Position := poScreenCenter;
+  Form.Font.Name := 'Segoe UI';
+  Form.Font.Size := 9;
+
+  Head := TNewStaticText.Create(Form);
+  Head.Parent := Form;
+  Head.Left := ScaleX(20);
+  Head.Top := ScaleY(18);
+  Head.Font.Name := 'Segoe UI';
+  Head.Font.Size := 14;
+  Head.Caption := 'Remove Findra';
+
+  Intro := TNewStaticText.Create(Form);
+  Intro.Parent := Form;
+  Intro.Left := ScaleX(20);
+  Intro.Top := ScaleY(54);
+  Intro.Width := Form.ClientWidth - ScaleX(40);
+  Intro.Height := ScaleY(36);
+  Intro.WordWrap := True;
+  Intro.Caption := 'Findra will stop, remove the scheduled task that starts it at sign-in, and ' +
+                   'delete its program files.';
+
+  Kept := TNewStaticText.Create(Form);
+  Kept.Parent := Form;
+  Kept.Left := ScaleX(20);
+  Kept.Top := ScaleY(100);
+  Kept.Caption := 'It keeps these, unless you say otherwise:';
 
   Body := TNewStaticText.Create(Form);
   Body.Parent := Form;
-  Body.Left := ScaleX(16);
-  Body.Top := ScaleY(16);
-  Body.Width := Form.ClientWidth - ScaleX(32);
-  Body.Height := ScaleY(200);
-  Body.WordWrap := True;
-  Body.Caption := String(report);
+  Body.Left := ScaleX(20);
+  Body.Top := ScaleY(124);
+  Body.Width := Form.ClientWidth - ScaleX(40);
+  Body.Height := ScaleY(92);
+  // Fixed width, and NOT wrapped. The sizes were aligned into columns by the process that
+  // measured them, and a proportional wrapped label throws that alignment away - which is most of
+  // why this dialog read as an afterthought.
+  Body.Font.Name := 'Consolas';
+  Body.Font.Size := 9;
+  Body.WordWrap := False;
+  Body.Caption := KeepBlock(String(report));
 
   Box := TNewCheckBox.Create(Form);
   Box.Parent := Form;
-  Box.Left := ScaleX(16);
-  Box.Top := ScaleY(224);
-  Box.Width := Form.ClientWidth - ScaleX(32);
-  Box.Caption := 'Also delete the downloaded models, the index and my settings';
+  Box.Left := ScaleX(20);
+  Box.Top := ScaleY(240);
+  Box.Width := Form.ClientWidth - ScaleX(40);
+  Box.Height := ScaleY(22);
+  // One line: TNewCheckBox has no WordWrap, so a caption longer than the box is simply clipped.
+  // The consequence goes in the note under it, where there is room to say it properly.
+  Box.Caption := 'Also delete my index, my settings and the models' + Freed(String(report));
   // Unticked. Keeping is the default because reinstalling is common and re-downloading gigabytes
   // is expensive; a box that starts ticked is the same as no box for anyone who clicks through.
   Box.Checked := False;
 
+  Warn := TNewStaticText.Create(Form);
+  Warn.Parent := Form;
+  Warn.Left := ScaleX(40);
+  Warn.Top := ScaleY(266);
+  Warn.Width := Form.ClientWidth - ScaleX(60);
+  Warn.Height := ScaleY(34);
+  Warn.WordWrap := True;
+  Warn.Caption := 'Leave this unticked if you may reinstall. Downloading the models again can ' +
+                  'take a long time, and a finished index does not have to be built twice.';
+
   OkButton := TNewButton.Create(Form);
   OkButton.Parent := Form;
-  OkButton.Width := ScaleX(90);
-  OkButton.Height := ScaleY(26);
-  OkButton.Left := Form.ClientWidth - ScaleX(196);
-  OkButton.Top := Form.ClientHeight - ScaleY(42);
+  OkButton.Width := ScaleX(104);
+  OkButton.Height := ScaleY(30);
+  OkButton.Left := Form.ClientWidth - ScaleX(236);
+  OkButton.Top := Form.ClientHeight - ScaleY(52);
   OkButton.Caption := 'Remove';
   OkButton.ModalResult := mrOk;
   OkButton.Default := True;
 
   CancelButton := TNewButton.Create(Form);
   CancelButton.Parent := Form;
-  CancelButton.Width := ScaleX(90);
-  CancelButton.Height := ScaleY(26);
-  CancelButton.Left := Form.ClientWidth - ScaleX(100);
+  CancelButton.Width := ScaleX(104);
+  CancelButton.Height := ScaleY(30);
+  CancelButton.Left := Form.ClientWidth - ScaleX(124);
   CancelButton.Top := OkButton.Top;
   CancelButton.Caption := 'Cancel';
   CancelButton.ModalResult := mrCancel;
