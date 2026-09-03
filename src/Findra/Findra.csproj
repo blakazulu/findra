@@ -1,6 +1,11 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
-    <OutputType>Exe</OutputType>
+    <!-- WinExe, not Exe. Exe produces a console-subsystem binary, and Windows opens a console
+         window for one every time it starts without a terminal - the installer's run step, the
+         Start-menu shortcut, an Explorer double-click, the autostart entry at every sign-in, and
+         the elevated logon task, which adds a second window. The diagnostic modes still print:
+         Program.Main joins the caller's console before the mode switch (see ParentConsole). -->
+    <OutputType>WinExe</OutputType>
     <TargetFramework>net10.0-windows10.0.19041.0</TargetFramework>
     <RootNamespace>Findra</RootNamespace>
     <AssemblyName>findra</AssemblyName>

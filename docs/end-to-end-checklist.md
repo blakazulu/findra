@@ -387,6 +387,25 @@ person makes by looking; two are destructive and belong last.
     gone and nothing beside them has been touched. Step 33 checks the installer's route; this is
     the one somebody who built from source takes.
 
+## From the review
+
+50. **No black window comes with the widget, on any of the five launches that open one.** Findra is
+    a windows-subsystem binary now, and a console window is what a console-subsystem one was given
+    every time it started without a terminal. Check all five, because they are five different
+    callers and only two of them are the same code path: the installer's "run Findra now" tick, the
+    Start-menu shortcut, an Explorer double-click on `findra.exe`, a sign-in with start-at-sign-in
+    ticked, and a sign-in with the scheduled task registered - the last of which starts
+    `findra.exe --names` elevated and would have opened a **second** window. Nothing may flash
+    either: a console that appears and closes is still a console.
+51. **The diagnostics still print when a person runs them by hand.** In a real terminal, run
+    `findra --version`, `findra --searchmodels` and `findra --searchprob`, each on its own. Every
+    one must put its text in that terminal, `--searchmodels` must show the Hebrew probe line and
+    the card's middle dot rather than replacement characters, and the mistyped one must print the
+    list of modes. Then run them again with the output redirected to a file and confirm the file
+    holds the same text and the terminal holds none of it. A windows-subsystem process is not
+    waited for by the shell, so expect the prompt to come back before the text does; that is the
+    one visible cost of step 50 and it is worth confirming it is only cosmetic.
+
 ## What could not be verified in this project at all
 
 Written down so they are known gaps rather than assumed passes. Every one of them is a step above.
@@ -405,8 +424,14 @@ Written down so they are known gaps rather than assumed passes. Every one of the
   Findra surface has been looked at by a person in Quicksand (steps 43 and 47).
 - **Whether every control does something when a person clicks it** is the other judgement, and it
   is the one an earlier draft of the settings window failed with five dead controls (step 27a).
+- **No launch that a stranger makes has ever happened here.** Every run in this project came from a
+  terminal, which attaches to a console that already exists and therefore shows nothing new, or
+  from `--searchshot`, which has no window at all. That is exactly why the console window went
+  unnoticed for the whole project, and it is why step 50 is by eye: the subsystem in the PE header
+  is asserted and the diagnostics are proven to reach a terminal, but the absence of the window on
+  a double-click, a sign-in and an elevated logon task is not something this machine can show.
 
 ## Notes
 
-Steps 1 to 4, 9 to 13 and 29 to 49 are the ones that have never executed in any form. Steps 5 to 8
+Steps 1 to 4, 9 to 13 and 29 to 51 are the ones that have never executed in any form. Steps 5 to 8
 have been verified by log line and by inspection, but not by eye.

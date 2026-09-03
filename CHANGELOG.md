@@ -371,6 +371,13 @@ into a numbered section on the first release.
 
 ### Fixed
 
+- **No black console window comes with Findra any more.** Starting it from the installer,
+  the Start menu, a double-click, or the start-at-sign-in entry opened an empty console
+  window that stayed for as long as Findra ran and took Findra with it when closed, and
+  the elevated name helper opened a second one at every sign-in. The diagnostic commands
+  still print into the terminal you type them at, and still write to a file when you
+  redirect them there.
+
 - **The installer script's architecture and its uninstall prompt are checked by tests**,
   so neither can quietly go back to a form that fails to build.
 
