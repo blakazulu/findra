@@ -258,6 +258,11 @@ Each pass needs the config renamed again:
 With no `config.json`, launch Findra. Work the first-run screen to the end and answer **No** to
 the UAC prompt it raises.
 
+**Before answering it**, check catalogue step 55 while you are here: the welcome screen must be the
+only thing on the display. No capsule on the desktop, no tray icon, and the hotkey does nothing.
+They arrive when the screen is answered and not before, which is what stops a download somebody
+just asked to watch reading as a window in front of a product that is already running.
+
 **Pass:**
 - Findra keeps running: the capsule is on the desktop and the tray icon is there;
 - the log says the helper is **not registered**, in those words, rather than going quiet;

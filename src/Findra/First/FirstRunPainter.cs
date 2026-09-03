@@ -27,13 +27,15 @@ public static class FirstRunLayout
     /// is already open when Speech is ticked, so the limit row appears into room that was already
     /// reserved; a height that reflowed with it would resize the window under the pointer that
     /// clicked. Where the row is not shown the slack falls between the last switch and the
-    /// summary, which is the one band on the screen with nothing in it.</para>
+    /// summary, which is the one band on the screen with nothing in it - and the summary is drawn
+    /// against the bottom of that band, so it stays put rather than jumping when Speech is
+    /// ticked.</para>
     ///
     /// <para><c>EverythingFitsTheScreenWithHebrewOffered</c> and
     /// <c>TheLongestSummaryFitsTheBandTheLayoutLeavesForIt</c> hold this to both configurations
     /// and to what the longest sentence actually measures.</para>
     /// </summary>
-    public const float Height = 880f;
+    public const float Height = 872f;
     public const float Pad = RailLayout.Pad;
     public const float Radius = RailLayout.Radius;
 
@@ -76,14 +78,20 @@ public static class FirstRunLayout
     private const float TitleInset = 6f + RowIndent + TickBox + 12f;
 
     /// <summary>
-    /// The air between the last row and the first switch, and it is more than a whole row height
-    /// on purpose.
+    /// The air between the last row and the first switch, which is a whole row height and no more.
     ///
-    /// <para>At 14px the notional next row band and the first switch band interleaved: a click one
-    /// row past the end of the list landed on the content toggle, because the switch spans the same
-    /// y as the row that is not there. A dead zone shorter than a row is not a dead zone.</para>
+    /// <para>It cannot be closed. At 14px the notional next row band and the first switch band
+    /// interleaved: a click one row past the end of the list landed on the content toggle, because
+    /// the switch spans the same y as the row that is not there. A dead zone shorter than a row is
+    /// not a dead zone.</para>
+    ///
+    /// <para>It also cannot be sixty pixels of nothing, which is what it was: the two halves of
+    /// this screen stopped reading as a list and a set of switches and started reading as a list
+    /// with a hole under it. So the band is exactly one row, and <see cref="RuleRect"/> gives it
+    /// something to be - it is a parting between what gets downloaded and how Findra behaves,
+    /// drawn rather than merely left empty.</para>
     /// </summary>
-    public const float RowsToSwitchesGap = 56f;
+    public const float RowsToSwitchesGap = 48f;
 
     public const float SwitchH = 34f;
     public const float SwitchGap = 10f;
@@ -148,6 +156,17 @@ public static class FirstRunLayout
     /// <summary>The label column the limit row's own label has to fit: from where an indented
     /// row's title starts to where the first pill begins.</summary>
     public static float LimitLabelLeft(int limitRow) => LimitRect(limitRow).Left + TitleInset;
+
+    /// <summary>The rule drawn through the dead zone, between the list and the switches. Its own
+    /// band rather than a y, because the hit test has to be able to say that nothing lives here:
+    /// a rule that answered a click would be the dead zone with a target painted on it.</summary>
+    public static SKRect RuleRect(int rows, int limitRow = -1)
+    {
+        SKRect above = RowRect(rows - 1, limitRow);
+        SKRect below = SwitchRect(0, rows, limitRow);
+        float mid = (above.Bottom + below.Top) / 2f;
+        return new SKRect(Inset, mid - 1f, Width - Inset, mid + 1f);
+    }
 
     /// <summary>The three switches sit under however many rows there are, so a machine with no
     /// Hebrew does not leave a gap where its row would have been. The third is pushed down by the
@@ -324,6 +343,7 @@ public static class FirstRunPainter
         Tiles(canvas, s, d, face);
         for (int i = 0; i < rows.Count; i++) Row(canvas, rows[i], i, s, d, face, busy, limitRow);
         if (limitRow >= 0) Limit(canvas, s, limitRow, d, face);
+        Rule(canvas, FirstRunLayout.RuleRect(rows.Count, limitRow), d);
         Switches(canvas, s, rows.Count, limitRow, d, face);
 
         // A lead, not a note. Every row states its own download and none of them moves any more,
@@ -356,6 +376,15 @@ public static class FirstRunPainter
                        _ => "Get these",
                    },
                    chosen: !busy, hovered: s.HoverTarget == FirstRunTarget.Go, d, face);
+    }
+
+    /// <summary>The parting between what gets downloaded and how Findra behaves, drawn in the
+    /// same edge colour and at the same weight as the card's own rules, so the two surfaces divide
+    /// their sections the same way.</summary>
+    private static void Rule(SKCanvas canvas, SKRect r, Derived d)
+    {
+        using var p = new SKPaint { Color = d.Edge, IsAntialias = false, StrokeWidth = 1 };
+        canvas.DrawLine(r.Left, r.MidY, r.Right, r.MidY, p);
     }
 
     private static void Tiles(SKCanvas canvas, FirstRunState s, Derived d, SKTypeface face)

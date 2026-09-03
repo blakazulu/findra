@@ -755,6 +755,40 @@ public class FirstRunTests
                 FirstRunLayout.HitTest(FirstRunLayout.RowRect(0).MidX, y, rows, limit).Target);
     }
 
+    [Theory]
+    [InlineData(4, -1)]
+    [InlineData(5, -1)]
+    [InlineData(5, 3)]
+    public void TheDeadZoneIsNoWiderThanItHasToBe(int rows, int limit)
+    {
+        // The other direction of the pair above, and the two of them are what keeps this band
+        // honest: the floor stops a click one row past the list landing on the content toggle,
+        // and this stops the answer to that being sixty-odd pixels of nothing in the middle of
+        // the screen. Satisfying either one alone is trivial - widen it, or close it - and both
+        // together is what leaves a dead zone that reads as a parting rather than as a hole.
+        float air = FirstRunLayout.SwitchRect(0, rows, limit).Top - FirstRunLayout.RowRect(rows - 1, limit).Bottom;
+        Assert.True(air <= FirstRunLayout.RowH + 8,
+            $"{air}px of dead air between the last row and the first switch reads as a hole");
+    }
+
+    [Theory]
+    [InlineData(4, -1)]
+    [InlineData(5, -1)]
+    [InlineData(5, 3)]
+    public void TheDeadZoneCarriesARuleSoItReadsAsAPartingAndNotAsAHole(int rows, int limit)
+    {
+        // A band that cannot be closed - the click one row past the end has to land on nothing -
+        // is given something to be instead. It is drawn between the two things it separates and
+        // touches neither, and it answers no click of its own: a rule that took clicks would be
+        // the dead zone with a target painted on it.
+        SKRect rule = FirstRunLayout.RuleRect(rows, limit);
+
+        Assert.True(rule.Top > FirstRunLayout.RowRect(rows - 1, limit).Bottom, "the rule touches the last row");
+        Assert.True(rule.Bottom < FirstRunLayout.SwitchRect(0, rows, limit).Top, "the rule touches the first switch");
+        Assert.Equal(FirstRunTarget.None,
+            FirstRunLayout.HitTest(rule.MidX, rule.MidY, rows, limit).Target);
+    }
+
     [Fact]
     public void NoRowIsDrawnWhereTheLimitRowIsAndNoClickThereLandsOnOne()
     {

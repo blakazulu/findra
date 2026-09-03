@@ -462,6 +462,36 @@ person makes by looking; two are destructive and belong last.
     maintainer account and confirm the form is there. Until it is, the page sends people to a
     door that is not open, which is worse than sending them to the issue tracker.
 
+## From the interface pass
+
+55. **The welcome screen is the only thing on the display until it is answered.** Rename
+    `%APPDATA%\Findra\config.json` and launch Findra. While the screen is up there must be no
+    capsule on the desktop, no tray icon, and the hotkey must do nothing. Press "Get these" with a
+    capability ticked: the capsule, the tray icon and the hotkey appear then, and the download
+    carries on in front of you rather than behind a product that is already running. Closing the
+    screen mid-download must leave the download running and Findra in the tray, which is what the
+    screen itself promises. `StartupOrderTests` asserts which stages a launch takes and in what
+    order; that they are the stages a person sees is this step.
+56. **Names work while the screen is still up.** In the same launch, before answering, the
+    scheduled task does not exist yet - that is the point of the consent moment. Immediately after
+    answering, and without waiting for any download, `findra --searchprobe` must report the helper
+    registered and a name query must answer. Nobody waits on a 1.5 GB file for their filenames.
+57. **The pointer says what each surface is.** Move over the capsule: a four-way move cursor, and
+    dragging really does move it, which is the thing nothing on screen ever said. Over the card:
+    an I-beam in the field, a hand over every pill, chip, row and action, and the plain arrow in
+    between. The same hand over every row and pill of Settings and of the welcome screen. This is
+    by eye because a cursor is a platform object with no pixels of its own in any render.
+58. **Settings can be reached from the card.** Open the card and press Settings under Advanced: the
+    settings window opens and the card gets out of the way. Then press Content with nothing
+    indexed - it must open Settings at the Content section rather than emptying the card. Turn
+    reading on, let something be read, turn it off again, and press Content: this time it turns
+    reading back on in place and answers the query.
+59. **The two new Content rows do what they say.** Press "Start now" and watch the sentence above
+    it change and the capsule's line begin to move. Move "Indexing power" to 25 and to 100 and
+    confirm `findra --searchindex` reports the rate changing with it - the setting has been
+    honoured by the indexer since it was written and until now there was no way to change it
+    without hand-editing `config.json`.
+
 ## What could not be verified in this project at all
 
 Written down so they are known gaps rather than assumed passes. Every one of them is a step above.
@@ -492,7 +522,7 @@ Written down so they are known gaps rather than assumed passes. Every one of the
 
 ## Notes
 
-Steps 1 to 4, 9 to 13 and 29 to 54 are the ones that have never executed in any form, except 32,
+Steps 1 to 4, 9 to 13 and 29 to 59 are the ones that have never executed in any form, except 32,
 which is done, and 35, which has run and needs reading. Steps 5 to 8 have been verified by log
 line and by inspection, but not by eye.
 
