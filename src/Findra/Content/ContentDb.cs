@@ -58,7 +58,12 @@ public sealed class ContentDb : IDisposable
     /// <summary>One schema step. <c>InvalidatedKinds</c> is what that step made stale - and
     /// nothing else is re-queued. Re-indexing a finished disk because an upgrade did not look
     /// first is the worst thing this product can do to someone (spec §2a).</summary>
-    public readonly record struct Migration(int To, int[] InvalidatedKinds, string Reason);
+    /// <param name="ReWalk">Forget every volume's journal position, so the next start owes a full
+    /// pass. For a step that changed WHICH FILES are eligible rather than what is stored about the
+    /// ones already known: a re-queue moves rows that exist, and a file that was never queued at
+    /// all has no row to move. Nothing else can reach it - the journal only reports what changes,
+    /// and a folder of finished work never changes again.</param>
+    public readonly record struct Migration(int To, int[] InvalidatedKinds, string Reason, bool ReWalk = false);
 
     /// <summary>
     /// A schema change appends the step that invalidates whatever it invalidated, and NOTHING
@@ -75,7 +80,12 @@ public sealed class ContentDb : IDisposable
     public static readonly IReadOnlyList<Migration> Migrations =
     [
         new(To: 2, InvalidatedKinds: [(int)ResultKind.Photo],
-            Reason: "images: a lower size floor, more formats, and recognised text is no longer embedded as meaning"),
+            Reason: "images read differently, and folders are skipped only when asked",
+            // Both halves are needed and they do different work. The re-queue picks up images
+            // already known - the ones recorded "an icon, not a picture" under the old floor. The
+            // re-walk is for files that were never offered at all: a checkout's contents were
+            // refused outright, so nothing about them is in the index to re-queue.
+            ReWalk: true),
     ];
 
     private readonly SqliteConnection _c;
@@ -210,6 +220,7 @@ CREATE TABLE IF NOT EXISTS opened(path TEXT PRIMARY KEY, count INTEGER NOT NULL,
         {
             if (m.To <= from || m.To > SchemaVersion) continue;
             _migrationsRun.Add(m.Reason);
+            if (m.ReWalk) ClearAllUsnPositions();
             int n = RequeueKinds(m.InvalidatedKinds, m.Reason);
             Log.Info("index", $"schema {from} -> {m.To}: {m.Reason}, {n.ToString("N0", CultureInfo.InvariantCulture)} file(s) re-queued");
         }
@@ -497,6 +508,16 @@ CREATE TABLE IF NOT EXISTS opened(path TEXT PRIMARY KEY, count INTEGER NOT NULL,
     /// a real position at the head of a journal, and a volume that has no position must also stop
     /// appearing in <see cref="KnownVolumes"/> and in the cursors handed to the helper, or the
     /// next subscribe resumes from a place the journal threw away.</summary>
+    /// <summary>Forget every volume's position, which is how a migration says "what is eligible
+    /// has changed, so look at the whole disk again". <c>JournalTail.ResumeFrom</c> reads an absent
+    /// cursor as a full pass owed, which is exactly the answer wanted.</summary>
+    public void ClearAllUsnPositions()
+    {
+        using var cmd = _c.CreateCommand();
+        cmd.CommandText = "DELETE FROM meta WHERE key LIKE 'usn:%'";
+        cmd.ExecuteNonQuery();
+    }
+
     public void ClearUsnPosition(char volume, SqliteTransaction? tx = null)
     {
         using var claim = Enter();

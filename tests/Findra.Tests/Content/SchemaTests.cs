@@ -301,4 +301,48 @@ public sealed class SchemaTests : IDisposable
         Assert.False(older.SuffixSetOutOfDate('C', [".pdf", ".txt"]));
         Assert.True(older.SuffixSetOutOfDate('D', [".pdf", ".txt"]));
     }
+
+    [Fact]
+    public void AStepThatChangesWhatIsEligibleAsksForTheWholeDiskAgain()
+    {
+        // A re-queue moves rows that already exist. A file that was never offered to the queue at
+        // all - everything inside a checkout, under the rule that refused them outright - has no
+        // row to move, and nothing else will ever reach it: the journal reports what CHANGES, and
+        // a folder of finished work never changes again. Forgetting the volume position is the
+        // only thing that says "look at the whole disk".
+        string path = Db();
+        var step = new[] { new ContentDb.Migration(2, [(int)ResultKind.Photo], "eligibility", ReWalk: true) };
+
+        using (var db = new ContentDb(path))
+        {
+            db.SetUsnPosition('C', journalId: 0xABCDEF, usn: 90210);
+            db.SetUsnPosition('D', journalId: 0x123456, usn: 4242);
+            db.Set("schema", "1");
+        }
+
+        using (var db = new ContentDb(path, migrations: step))
+        {
+            Assert.Null(db.UsnPosition('C'));
+            Assert.Null(db.UsnPosition('D'));
+        }
+    }
+
+    [Fact]
+    public void AStepThatOnlyChangesWhatIsStoredLeavesThePositionAlone()
+    {
+        // The other half, and the one that matters more: re-walking a finished disk for a change
+        // that only affects rows already in the index is the expensive mistake. ReWalk is opt-in
+        // per step for exactly that reason.
+        string path = Db();
+        var step = new[] { new ContentDb.Migration(2, [(int)ResultKind.Document], "stored differently") };
+
+        using (var db = new ContentDb(path))
+        {
+            db.SetUsnPosition('C', journalId: 0xABCDEF, usn: 90210);
+            db.Set("schema", "1");
+        }
+
+        using (var db = new ContentDb(path, migrations: step))
+            Assert.Equal((0xABCDEFUL, 90210L), db.UsnPosition('C'));
+    }
 }

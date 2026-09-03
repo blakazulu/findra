@@ -505,6 +505,23 @@ speech              ─  whisper-turbo + [e5 pair]              550 MB (+270 if 
   starts it, `--content off` stops it without discarding anything already read, and the setting
   survives a restart. An index nobody has asked for and a finished index have identical counts,
   so every surface says which one it is looking at rather than printing "up to date".
+- **What Findra skips is what somebody asked it to skip, and nothing else.** `QueueFeeder.Eligible`
+  is a content kind and the exclusion list; there is no second rule. There WAS one: any folder
+  holding a `.git` was discovered by walking the disk for the marker and its contents were never
+  read, on the reasoning that a checkout is mostly other people's files. It is a defensible guess
+  and it was wrong about the first machine it met - 21 roots, all of them that person's own work,
+  with the pictures they were searching for inside. It was also unseeable: nothing in the interface
+  named it, and the only folder control there ADDS refusals, so it could be neither found nor
+  overruled. **An "always read" list is the wrong fix** and was written and thrown away: a second
+  list whose only job is arguing with a rule nobody asked for. What a checkout really buries an
+  index with is already in `FileKinds.DefaultExclusions` - `node_modules`, `.git`, `bin`, `obj`,
+  `packages`, `site-packages` - where each is a line the person it belongs to can read and delete.
+- **A migration that changes WHICH FILES are eligible sets `ReWalk`.** `RequeueKinds` moves rows
+  that exist; a file that was never offered to the queue has no row to move, and nothing else will
+  reach it - the journal reports what changes, and a folder of finished work never changes again.
+  `ReWalk` forgets every volume's journal position, which `JournalTail.ResumeFrom` reads as a full
+  pass owed. It is opt-in per step because re-walking a finished disk for a change that only
+  affects rows already held is the expensive mistake spec §2a names.
 - **`IndexPowerLevels` is the one list of duty-cycle levels**, on exactly the terms
   `TranscribeLimit.ShortName` sets: the numbers and their labels come out of one table, every
   level offered is inside the clamp `Config.Load` applies, and the row writes the NUMBER at the

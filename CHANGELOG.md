@@ -582,6 +582,14 @@ into a numbered section on the first release.
   like it. The words inside a picture are still searchable as words; they are no longer searchable
   as meaning.
 
+- **Findra reads inside your code projects.** Any folder containing a `.git` had its contents
+  skipped automatically - a guess that a checkout is mostly other people's files. On a machine
+  where the work lives in repositories that was wrong about all 21 of them, and it was invisible:
+  nothing named the rule and the only folder control adds more skipping, so it could not be seen
+  or turned off. Skipping is something you ask for now. What a checkout actually buries an index
+  with - `node_modules`, `.git`, `bin`, `obj`, `packages` - is already in the list of folders
+  Findra will not open, where you can read it and remove any line you disagree with.
+
 - **Small images are indexed.** The floor was 10 KB, on the reasoning that anything smaller is a
   user-interface icon - which threw away 890 of one machine's 1,086 images, including an 8.6 KB
   picture of the thing being searched for. It is 2 KB now, and means only "too small to be a
