@@ -868,10 +868,27 @@ internal sealed class Shell : ISettingsHost
             return;
         }
 
+        // Everything below this line can run for minutes, and this is the flow that owns the
+        // writer connection: the settings window's "Start reading now" posts work here, the
+        // capsule's line is written here, and the indexer child is started here. All of that used
+        // to happen only BETWEEN sessions, so a first pass over a fresh disk - which is the one
+        // session everybody's first hour is spent inside - starved every one of them. Pressing
+        // the button did nothing, said nothing and left no line in the log.
+        //
+        // Throttled here rather than in the walk, beside the interval the loop itself keeps, so
+        // there is one answer to how often this flow comes round.
+        long pumpedAt = 0;
+        void Pump()
+        {
+            if (pumpedAt != 0 && Stopwatch.GetElapsedTime(pumpedAt) < PumpEvery) return;
+            pumpedAt = Stopwatch.GetTimestamp();
+            PumpIndexer(db);
+        }
+
         // Learned before anything is judged, because a repository root changes what is eligible.
         // Reconciled again afterwards: the pass at startup ran before the helper was reachable and
         // therefore before any root was known.
-        await LearnRepoRootsAsync(client, feeder, drives, ct).ConfigureAwait(false);
+        await LearnRepoRootsAsync(client, feeder, drives, Pump, ct).ConfigureAwait(false);
         feeder.Reconcile();
 
         // The pushed events go into this queue as they arrive, so nothing about the writing side
@@ -897,7 +914,7 @@ internal sealed class Shell : ISettingsHost
         }, CancellationToken.None);
 
         var walkedAt = new Dictionary<char, long>();
-        await CatchUpAsync(client, feeder, drives, walkedAt, first: true, ct).ConfigureAwait(false);
+        await CatchUpAsync(client, feeder, drives, walkedAt, first: true, Pump, ct).ConfigureAwait(false);
 
         while (!ct.IsCancellationRequested && !reader.IsCompleted)
         {
@@ -915,7 +932,7 @@ internal sealed class Shell : ISettingsHost
             // marker or from this process stalling under its own interface, and a debt inspected
             // only at launch is a debt nobody collects. It is one small read of the meta table.
             feeder.NoteClientDrops(client.JournalDropped);
-            await CatchUpAsync(client, feeder, drives, walkedAt, first: false, ct).ConfigureAwait(false);
+            await CatchUpAsync(client, feeder, drives, walkedAt, first: false, Pump, ct).ConfigureAwait(false);
 
             PumpIndexer(db);
         }
@@ -929,7 +946,8 @@ internal sealed class Shell : ISettingsHost
     /// cheaply and acted on rarely.
     /// </summary>
     private static async Task CatchUpAsync(NameClient client, QueueFeeder feeder, IReadOnlyList<char> drives,
-                                           Dictionary<char, long> walkedAt, bool first, CancellationToken ct)
+                                           Dictionary<char, long> walkedAt, bool first, Action pump,
+                                           CancellationToken ct)
     {
         var owed = new List<char>();
         foreach (char v in drives)
@@ -959,46 +977,13 @@ internal sealed class Shell : ISettingsHost
             if (first && !at.NeedsFullPass && !feeder.NeedsFreshWalk(v)) continue;
 
             walkedAt[v] = System.Diagnostics.Stopwatch.GetTimestamp();
-            await WalkAsync(client, feeder, v, at, ct).ConfigureAwait(false);
+            await FirstPass.WalkAsync(client, feeder, v, at, EnumerateBatch, pump, ct).ConfigureAwait(false);
         }
     }
 
-    /// <summary>
-    /// One first pass: ask the helper for every file whose suffix this build cares about, and hand
-    /// the whole answer to the feeder.
-    ///
-    /// The stream is collected before it is written, and that is a deliberate bound rather than an
-    /// oversight: the suffix filter runs in the helper, so what comes back is the machine's
-    /// documents, photos, audio and video, not its every file - a tenth to a twentieth of the
-    /// rows, which is the whole reason enumerate takes a suffix list instead of streaming a
-    /// snapshot. One transaction for the pass is also what makes the consumed position, the suffix
-    /// stamp and the discharged debt land together or not at all.
-    /// </summary>
-    private static async Task WalkAsync(NameClient client, QueueFeeder feeder, char volume,
-                                        VolumeResume at, CancellationToken ct)
-    {
-        Log.Info("index", string.Create(CultureInfo.InvariantCulture,
-            $"{volume}: walking the disk for the first time this index has seen it ({at.Note})"));
-
-        feeder.NoteWalkStarted(volume);
-        var found = new List<EnumeratedFile>();
-        await foreach (EnumeratedFile f in client
-                           .EnumerateAsync(volume, QueueFeeder.ContentSuffixes(), EnumerateBatch, ct)
-                           .ConfigureAwait(false))
-            found.Add(f);
-
-        // Only a stream that reached its Done frame gets here - EnumerateAsync throws otherwise -
-        // so a truncated walk can never stamp a position or clear the debt it did not discharge.
-        //
-        // The walk above takes minutes on a real disk, and events lost while it ran are past the
-        // position it is about to stamp. FillFrom re-reads this session's dropped-event counter
-        // itself before it decides whether to discharge anything, which is why nothing has to be
-        // reported here: a call on this line is a call the next refactor deletes without noticing.
-        feeder.FillFrom(volume, at.JournalId, at.Usn, found);
-    }
-
     private static async Task LearnRepoRootsAsync(NameClient client, QueueFeeder feeder,
-                                                  IReadOnlyList<char> drives, CancellationToken ct)
+                                                  IReadOnlyList<char> drives, Action pump,
+                                                  CancellationToken ct)
     {
         var roots = new List<string>();
         foreach (char v in drives)
@@ -1007,6 +992,7 @@ internal sealed class Shell : ISettingsHost
                                .EnumerateAsync(v, RepoMarkerSuffix, EnumerateBatch, ct)
                                .ConfigureAwait(false))
             {
+                pump();
                 if (!f.Path.EndsWith(RepoMarkerTail, StringComparison.OrdinalIgnoreCase)) continue;
                 roots.Add(f.Path[..^RepoMarkerTail.Length]);
             }
@@ -1595,15 +1581,41 @@ internal sealed class Shell : ISettingsHost
     void ISettingsHost.StartIndexing()
     {
         Log.Info("index", "reading inside files was started from settings");
-        _ = OnContentLoopAsync(db =>
+        Task<int> asked = OnContentLoopAsync(db =>
         {
             // The same two rows the pump writes, so nothing waits a second to agree with the
             // setting, and the same EnsureRunning - there is one way to start this child.
             db.Set("index:paused", "0");
             _indexerPaused = "0";
-            _indexer?.EnsureRunning();
+
+            IndexerHost? host = _indexer;
+            if (host is null)
+            {
+                Log.Warn("index", "the content index is not open in this session, so nothing " +
+                                  "will be read inside files until Findra is started again");
+                return 0;
+            }
+
+            host.EnsureRunning();
+            // The request and its outcome, in that order and both in the log. A button that
+            // writes a setting and reports nothing about the thing it asked for is how a child
+            // that never started went unnoticed through a whole session.
+            Log.Info("index", host.Running
+                ? "the indexer is running"
+                : "the indexer did not start; it is waiting out the backoff after an earlier exit");
             return 1;
         });
+
+        // Observed rather than discarded. This is posted to another flow, so a fault or a
+        // shutdown mid-request is otherwise an unobserved task exception nobody ever sees.
+        _ = asked.ContinueWith(static t =>
+        {
+            if (t.Exception is { } failed)
+                Log.Error("index", "starting to read inside files did not reach the content index",
+                          failed.GetBaseException());
+            else if (t.IsCanceled)
+                Log.Warn("index", "starting to read inside files was cut short by Findra closing");
+        }, CancellationToken.None, TaskContinuationOptions.ExecuteSynchronously, TaskScheduler.Default);
     }
 
     /// <summary>The system folder dialog, deliberately: spec §12 accepts that these two surfaces

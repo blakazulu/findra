@@ -512,6 +512,37 @@ into a numbered section on the first release.
 
 ### Fixed
 
+- **Name search survives the first person who uses it.** The elevated helper read the disk,
+  answered one connection and could then never listen again: every pipe instance after the
+  first is access-checked against the descriptor the first one carries, and that descriptor
+  allowed reading and writing but not the creation of another instance. The helper spent its
+  five attempts, gave up, and the card reported that the helper was not running while a
+  perfectly healthy one sat there holding 1.5 million names. The pipe is still reachable by
+  one account and no other.
+
+- **A first pass over a busy disk finishes instead of stopping silently.** When the drive is
+  being written to faster than it can be read, the walk restarts, and after a few restarts it
+  reads the whole volume under one lock so that it always terminates. It used to send its
+  results from inside that lock - and a lock belongs to the thread that took it, so releasing
+  it after a network-style wait failed on whatever thread the reply came back on. The walk
+  ended with no completion frame, and everything waiting on it waited for ever: the queue, the
+  progress line under the capsule, and the reading of files itself. The rows are now read under
+  the lock and sent after it.
+
+- **A fault while answering is no longer reported as a badly formed message.** Every failure
+  inside the helper's request handling was logged as an undecodable body, which sent whoever
+  read the log looking at the wire format for a fault that was nowhere near it. A message that
+  cannot be read still says so and the connection carries on; a failure while answering one now
+  says what actually broke and ends that connection, so the caller stops waiting and tries
+  again rather than hanging until Findra is closed.
+
+- **"Start reading now" works during the first pass over a disk.** The first walk of a fresh
+  install takes minutes, and everything the same flow owes - the button in Settings, the line
+  under the capsule, starting the process that reads inside files - could only happen between
+  walks. Pressing the button during one did nothing, said nothing and left no trace. The walk
+  now yields to that work as it goes, and the button reports whether the reader actually
+  started.
+
 - **A completed download no longer reports itself unfinished for ever.** Choosing Everything
   and waiting for all of it left the welcome screen saying "2 of 4 done" with every bar
   visually full, and nothing would ever move again. Two of the seven model files are a few

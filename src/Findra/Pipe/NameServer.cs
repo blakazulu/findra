@@ -335,52 +335,73 @@ public static class NameServer
 
             for (int attempt = 0; ; attempt++)
             {
-                // The last attempt gives up on batching and holds the read lock for the whole
-                // walk, so the enumeration always terminates. See MaxEnumerateRestarts.
-                bool holdThroughout = attempt >= MaxEnumerateRestarts;
+                // The last attempt gives up on batching and reads the whole volume under a single
+                // hold, so the enumeration always terminates. See MaxEnumerateRestarts.
+                //
+                // WALK FIRST, WRITE AFTER, and that order is the whole of it. A read hold belongs
+                // to the thread that entered it, and every frame leaves through an await: a hold
+                // spanning one is released on whatever thread the write came back on, which
+                // throws and ends the enumeration with no Done frame at all - the caller then
+                // waits for the rest of a pass that is never coming, and on a fresh install that
+                // pass is the one everything else is queued behind. Reading under the lock and
+                // writing outside it is also strictly less time under the lock than holding
+                // across the pipe was. What it costs is the volume's matching rows in memory at
+                // once, on the one attempt reached only by a disk being rewritten faster than it
+                // can be read.
+                if (attempt >= MaxEnumerateRestarts)
+                {
+                    List<EnumeratedFile> all = WalkUnderOneHold(ix, gate, letter, suffixes);
+                    for (int sent = 0; sent < all.Count; sent += batch)
+                        await SendAsync(Envelope.KindEnumerateReply,
+                            new EnumerateReply(req.Id, letter,
+                                all.GetRange(sent, Math.Min(batch, all.Count - sent)), false), ect)
+                            .ConfigureAwait(false);
+
+                    await SendAsync(Envelope.KindEnumerateReply,
+                        new EnumerateReply(req.Id, letter, [], true), ect).ConfigureAwait(false);
+                    return;
+                }
+
                 long epoch = gate?.Epoch(letter) ?? 0;
                 bool moved = false;
                 int record = 0;
                 var buf = new List<EnumeratedFile>(batch);
 
-                using (IDisposable? whole = holdThroughout ? gate?.Read(letter) : null)
+                int capacity = int.MaxValue;
+                while (record < capacity)
                 {
-                    int capacity = int.MaxValue;
-                    while (record < capacity)
+                    buf.Clear();
+
+                    // ONE BATCH PER HOLD. Walking 1.5M records under a single read lock is
+                    // seconds of PathOf calls, and ReaderWriterLockSlim gives a waiting writer
+                    // priority over new readers - so one journal batch queued behind the walk
+                    // blocks every AnswerQuery after it and the card is dead for the length of
+                    // the enumeration. That is the first pass, on every fresh install, which
+                    // is exactly when somebody is watching.
+                    using (gate?.Read(letter))
                     {
-                        buf.Clear();
-
-                        // ONE BATCH PER HOLD. Walking 1.5M records under a single read lock is
-                        // seconds of PathOf calls, and ReaderWriterLockSlim gives a waiting writer
-                        // priority over new readers - so one journal batch queued behind the walk
-                        // blocks every AnswerQuery after it and the card is dead for the length of
-                        // the enumeration. That is the first pass, on every fresh install, which
-                        // is exactly when somebody is watching.
-                        using (holdThroughout ? null : gate?.Read(letter))
+                        capacity = ix.Capacity;
+                        while (record < capacity && buf.Count < batch)
                         {
-                            capacity = ix.Capacity;
-                            while (record < capacity && buf.Count < batch)
-                            {
-                                int r = record++;
-                                if (!ix.IsAlive(r) || ix.IsDirectory(r)) continue;
-                                string name = ix.Name(r);
-                                if (!EndsWithAny(name, suffixes)) continue;
-                                string? path = ix.PathOf(r);
-                                if (path is null) continue;
-                                buf.Add(new EnumeratedFile(ix.Frn(r), path, LastWriteTicks(path)));
-                            }
+                            int r = record++;
+                            if (!ix.IsAlive(r) || ix.IsDirectory(r)) continue;
+                            string name = ix.Name(r);
+                            if (!EndsWithAny(name, suffixes)) continue;
+                            string? path = ix.PathOf(r);
+                            if (path is null) continue;
+                            buf.Add(new EnumeratedFile(ix.Frn(r), path, LastWriteTicks(path)));
                         }
-
-                        // Checked BEFORE the frame goes out, so nothing read across a rehash is
-                        // ever sent. A restarted walk costs a second; a skipped or duplicated
-                        // record costs a wrong index, and FillFrom's diff makes the duplicates a
-                        // restart produces free.
-                        if (!holdThroughout && gate is not null && gate.Epoch(letter) != epoch) { moved = true; break; }
-
-                        if (buf.Count > 0)
-                            await SendAsync(Envelope.KindEnumerateReply,
-                                new EnumerateReply(req.Id, letter, buf.ToArray(), false), ect).ConfigureAwait(false);
                     }
+
+                    // Checked BEFORE the frame goes out, so nothing read across a rehash is
+                    // ever sent. A restarted walk costs a second; a skipped or duplicated
+                    // record costs a wrong index, and FillFrom's diff makes the duplicates a
+                    // restart produces free.
+                    if (gate is not null && gate.Epoch(letter) != epoch) { moved = true; break; }
+
+                    if (buf.Count > 0)
+                        await SendAsync(Envelope.KindEnumerateReply,
+                            new EnumerateReply(req.Id, letter, buf.ToArray(), false), ect).ConfigureAwait(false);
                 }
 
                 if (moved)
@@ -408,37 +429,69 @@ public static class NameServer
                 try { e = Envelope.Unpack(payload); }
                 catch (Exception ex) { Log.Warn("pipe", "undecodable frame: " + ex.Message); continue; }
 
+                // READING THE BODY AND ANSWERING IT ARE TWO DIFFERENT FAULTS and they are caught
+                // separately, because one is the peer's doing and the other is ours. Wrapping
+                // both together said "undecodable body" for a bug in this process - which sent
+                // whoever read the log looking at the wire format for a fault that was a lock
+                // released on the wrong thread, several files away.
+                object? body;
                 try
-                {
-                    switch (e.Kind)
-                    {
-                        case Envelope.KindQuery:
-                            await SendAsync(Envelope.KindQueryReply,
-                                AnswerQuery(e.Body<QueryRequest>(), views, gate, hits), ct).ConfigureAwait(false);
-                            break;
-                        case Envelope.KindStatus:
-                            await SendAsync(Envelope.KindStatusReply,
-                                AnswerStatus(views, gate, dropped), ct).ConfigureAwait(false);
-                            break;
-                        case Envelope.KindSubscribe:
-                            await AnswerSubscribeAsync(e.Body<SubscribeRequest>(), ct).ConfigureAwait(false);
-                            break;
-                        case Envelope.KindEnumerate:
-                            await AnswerEnumerateAsync(e.Body<EnumerateRequest>(), ct).ConfigureAwait(false);
-                            break;
-                        default:
-                            Log.Info("pipe", $"ignoring unknown kind '{e.Kind}'");
-                            break;
-                    }
-                }
-                catch (Exception ex)
                 {
                     // Not just JsonException. Body<T> throws InvalidDataException for a body
                     // that decodes to null - the literal `null` in the Json field - and a
                     // JsonException-only guard lets that one shape through to end the session.
                     // Match the Unpack guard above: nothing a peer can put in a frame may
                     // decide whether this loop keeps running.
+                    body = e.Kind switch
+                    {
+                        Envelope.KindQuery => e.Body<QueryRequest>(),
+                        Envelope.KindSubscribe => e.Body<SubscribeRequest>(),
+                        Envelope.KindEnumerate => e.Body<EnumerateRequest>(),
+                        _ => null,                       // status carries none, and neither does a kind we do not know
+                    };
+                }
+                catch (Exception ex)
+                {
                     Log.Warn("pipe", $"undecodable body for '{e.Kind}': {ex.Message}");
+                    continue;
+                }
+
+                try
+                {
+                    switch (e.Kind)
+                    {
+                        case Envelope.KindQuery:
+                            await SendAsync(Envelope.KindQueryReply,
+                                AnswerQuery((QueryRequest)body!, views, gate, hits), ct).ConfigureAwait(false);
+                            break;
+                        case Envelope.KindStatus:
+                            await SendAsync(Envelope.KindStatusReply,
+                                AnswerStatus(views, gate, dropped), ct).ConfigureAwait(false);
+                            break;
+                        case Envelope.KindSubscribe:
+                            await AnswerSubscribeAsync((SubscribeRequest)body!, ct).ConfigureAwait(false);
+                            break;
+                        case Envelope.KindEnumerate:
+                            await AnswerEnumerateAsync((EnumerateRequest)body!, ct).ConfigureAwait(false);
+                            break;
+                        default:
+                            Log.Info("pipe", $"ignoring unknown kind '{e.Kind}'");
+                            break;
+                    }
+                }
+                catch (OperationCanceledException) { throw; }
+                catch (Exception ex)
+                {
+                    // A fault while answering leaves a caller waiting on a reply that will now
+                    // never come, and an enumerate stream waiting on a Done frame is a first pass
+                    // that never finishes - which is the whole content index, the capsule's line
+                    // and the indexer child, all stopped behind one exception nobody could see.
+                    // So the session ends rather than carrying on quietly: the caller reads the
+                    // end of the stream, fails its walk, keeps the debt it has not discharged and
+                    // comes back. It is the log that says what actually happened.
+                    Log.Error("pipe", $"answering '{e.Kind}' failed, so this session is ending " +
+                                      "rather than leaving the caller waiting for a reply", ex);
+                    return;
                 }
             }
         }
@@ -457,6 +510,36 @@ public static class NameServer
             // is not: SemaphoreSlim.Dispose neither resumes nor faults a queued async waiter, so
             // disposing it under one hangs that caller silently and throws out of its finally.
         }
+    }
+
+    /// <summary>
+    /// Every matching file on one volume, read under a single hold of that volume's read lock.
+    ///
+    /// <para>SYNCHRONOUS, AND THAT IS THE POINT. A <c>ReaderWriterLockSlim</c> hold belongs to
+    /// the thread that took it, so nothing that spans an await may hold one: the release lands on
+    /// whatever thread the continuation resumed on and throws. A method with no await in it
+    /// cannot acquire that shape by accident, and a later edit that tries has to change the
+    /// signature to do it - which is the only guard that survives somebody adding a line in the
+    /// middle of the loop.</para>
+    /// </summary>
+    private static List<EnumeratedFile> WalkUnderOneHold(NameIndex ix, IndexLock? gate, char letter,
+                                                         List<string> suffixes)
+    {
+        var all = new List<EnumeratedFile>();
+        using (gate?.Read(letter))
+        {
+            int capacity = ix.Capacity;
+            for (int r = 0; r < capacity; r++)
+            {
+                if (!ix.IsAlive(r) || ix.IsDirectory(r)) continue;
+                string name = ix.Name(r);
+                if (!EndsWithAny(name, suffixes)) continue;
+                string? path = ix.PathOf(r);
+                if (path is null) continue;
+                all.Add(new EnumeratedFile(ix.Frn(r), path, LastWriteTicks(path)));
+            }
+        }
+        return all;
     }
 
     /// <summary>The whole of the helper's opinion about which files matter: none. It compares a
@@ -853,11 +936,35 @@ public static class NameServer
     /// <paramref name="first"/> adds FirstPipeInstance, which belongs on the creation that
     /// claims the name and on no other.
     /// </summary>
-    private static NamedPipeServerStream Create(bool first)
+    private static NamedPipeServerStream Create(bool first) => CreateInstance(PipeName, first);
+
+    /// <summary>
+    /// The same creation, against a name the caller chooses. Public and named rather than
+    /// private, because what the descriptor allows can only be established by asking the kernel
+    /// for a second instance of a real pipe, and a test that did that against
+    /// <see cref="PipeName"/> would collide with a helper running on the same machine.
+    /// </summary>
+    public static NamedPipeServerStream CreateInstance(string name, bool first)
     {
         var security = new PipeSecurity();
         var me = WindowsIdentity.GetCurrent().User!;
-        security.AddAccessRule(new PipeAccessRule(me, PipeAccessRights.ReadWrite, AccessControlType.Allow));
+
+        // CreateNewInstance is beside ReadWrite because a named pipe with more than one instance
+        // is created more than once, and every creation after the first is ACCESS-CHECKED against
+        // the descriptor the first one carries. ReadWrite alone therefore lets the helper serve
+        // exactly one client: the listener hands its instance to a session, asks for the next one
+        // and is refused with UnauthorizedAccessException for the rest of the logon. It looks like
+        // a squatter on the name and it is this line.
+        //
+        // It is safe because of what did NOT change. The rule names one account - the one the
+        // helper is running as - and no other; there is no Everyone, no Users, no Administrators,
+        // and no anonymous access. Nobody who could not already reach the pipe can reach it now.
+        // What the extra right allows is a process of that SAME user adding an instance, and a
+        // process running as the user can already do everything the user can, so it crosses no
+        // boundary; the boundary this pipe defends is the one between that user and everybody
+        // else, and it is exactly where it was.
+        security.AddAccessRule(new PipeAccessRule(
+            me, PipeAccessRights.ReadWrite | PipeAccessRights.CreateNewInstance, AccessControlType.Allow));
 
         // SetOwner is not decoration. The client connects with CurrentUserOnly, and
         // that flag compares the pipe's OWNER against the client's token owner - not
@@ -878,7 +985,7 @@ public static class NameServer
                               (first ? PipeOptions.FirstPipeInstance : PipeOptions.None);
 
         return NamedPipeServerStreamAcl.Create(
-            PipeName, PipeDirection.InOut, MaxPipeInstances, PipeTransmissionMode.Byte,
+            name, PipeDirection.InOut, MaxPipeInstances, PipeTransmissionMode.Byte,
             options, 0, 0, security);
     }
 }

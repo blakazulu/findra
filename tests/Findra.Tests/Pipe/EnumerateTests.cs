@@ -223,6 +223,81 @@ public class EnumerateTests
         await cts.CancelAsync();
     }
 
+    /// <summary>
+    /// A transport that does to the enumerate handler what a real machine does to it, and what an
+    /// in-process stream pair cannot.
+    ///
+    /// <para>It moves the volume on every frame the handler sends, which drives the walk through
+    /// its restart budget deterministically instead of hoping a churning background thread lands
+    /// in the right gap; the epoch is checked BEFORE a frame goes out, so a bump made during the
+    /// write is seen by the next batch, every time.</para>
+    ///
+    /// <para>And it finishes the write on a thread of its own, so whatever the handler does after
+    /// the await runs somewhere else. A named pipe does that as a matter of course - the
+    /// continuation resumes on whichever pool thread the completion lands on - and a
+    /// <c>System.IO.Pipelines</c> pair usually resumes inline, which is why nothing in this suite
+    /// had ever exercised the one path that holds a lock across an await.</para>
+    /// </summary>
+    private sealed class MovesTheVolumeAndResumesElsewhere(Stream inner, IndexLock gate, char volume) : Stream
+    {
+        public override bool CanRead => true;
+        public override bool CanSeek => false;
+        public override bool CanWrite => true;
+        public override long Length => throw new NotSupportedException();
+        public override long Position { get => throw new NotSupportedException(); set => throw new NotSupportedException(); }
+        public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
+        public override void SetLength(long value) => throw new NotSupportedException();
+        public override int Read(byte[] buffer, int offset, int count) => inner.Read(buffer, offset, count);
+        public override void Write(byte[] buffer, int offset, int count) => inner.Write(buffer, offset, count);
+        public override void Flush() => inner.Flush();
+        public override Task FlushAsync(CancellationToken ct) => inner.FlushAsync(ct);
+        public override ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken ct)
+            => inner.ReadAsync(buffer, ct);
+        protected override void Dispose(bool disposing) { if (disposing) inner.Dispose(); base.Dispose(disposing); }
+
+        public override async ValueTask WriteAsync(ReadOnlyMemory<byte> buffer, CancellationToken ct)
+        {
+            gate.Bump(volume);
+            await OnAThreadOfItsOwn().ConfigureAwait(false);
+            await inner.WriteAsync(buffer, ct).ConfigureAwait(false);
+        }
+
+        // No RunContinuationsAsynchronously: the point is that the awaiting code resumes on the
+        // brand new thread that completed this, which is never the thread it entered on.
+        private static Task OnAThreadOfItsOwn()
+        {
+            var done = new TaskCompletionSource();
+            new Thread(done.SetResult) { IsBackground = true }.Start();
+            return done.Task;
+        }
+    }
+
+    [Fact]
+    public async Task AVolumeThatKeepsMovingIsStillWalkedToADoneFrame()
+    {
+        // The walk restarts when the index is rewritten under it, and after a few restarts it
+        // stops batching and takes one hold for the whole pass, so that a volume under constant
+        // churn still terminates. That last pass used to write its frames from inside the hold -
+        // and a ReaderWriterLockSlim belongs to the thread that entered it, so releasing it after
+        // an await threw SynchronizationLockException on whatever thread the write came back on.
+        // The enumeration then ended with no Done frame at all: on the machine this was found on,
+        // the interface waited for the rest of a first pass that was never coming, and the queue
+        // feeder, the capsule's line and the indexer child all stopped with it.
+        var gate = new IndexLock();
+        var (server, client) = NameServerTests.PairForTests();
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(20));
+        _ = NameServer.Serve(new MovesTheVolumeAndResumesElsewhere(server, gate, 'C'),
+                             One(), gate, new JournalBroadcast(), null, cts.Token);
+
+        List<EnumerateReply> replies = await Ask(client, new EnumerateRequest(9, 'C', [".pdf", ".txt", ".jpg"], 1), cts.Token);
+
+        Assert.True(replies[^1].Done);
+        Assert.Single(replies, r => r.Done);
+        string[] paths = replies.SelectMany(r => r.Files).Select(f => f.Path).Distinct().Order().ToArray();
+        Assert.Equal([@"C:\Papers\lease.pdf", @"C:\Papers\notes.txt", @"C:\Papers\sunset.jpg"], paths);
+        await cts.CancelAsync();
+    }
+
     [Fact]
     public void TheContentSuffixListFitsInOneEnumerateRequest()
     {
