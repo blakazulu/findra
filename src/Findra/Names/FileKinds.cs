@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 
 namespace Findra;
@@ -9,8 +9,13 @@ public enum ResultKind { File, Folder, Photo, Video, Document, Audio }
 // name search, the card's result rows and their chips, and the indexer's queue all agree on it.
 public static class FileKinds
 {
+    // Every image this build can decode, not every image somebody would call a photograph. An
+    // application icon is an image of something and is searched the same way; `ico` and `avif` are
+    // here because Skia reads them, and `svg` is not because Skia does not - a vector file has no
+    // pixels to embed and would be queued only to be recorded unreadable.
     private static readonly HashSet<string> Photo = new(StringComparer.OrdinalIgnoreCase)
         { "jpg", "jpeg", "png", "heic", "heif", "webp", "bmp", "gif", "tif", "tiff", "jfif",
+          "ico", "avif",
           "cr2", "cr3", "nef", "arw", "dng", "orf", "rw2", "raf" };
     private static readonly HashSet<string> Video = new(StringComparer.OrdinalIgnoreCase)
         { "mp4", "mov", "mkv", "avi", "webm", "m4v", "wmv", "mts", "m2ts" };

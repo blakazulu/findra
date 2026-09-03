@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
@@ -53,16 +53,30 @@ public sealed class ContentDb : IDisposable
 
     /// <summary>The relational shape of this database. Bumped only when a change makes rows
     /// already on disk mean something different.</summary>
-    public const int SchemaVersion = 1;
+    public const int SchemaVersion = 2;
 
     /// <summary>One schema step. <c>InvalidatedKinds</c> is what that step made stale - and
     /// nothing else is re-queued. Re-indexing a finished disk because an upgrade did not look
     /// first is the worst thing this product can do to someone (spec §2a).</summary>
     public readonly record struct Migration(int To, int[] InvalidatedKinds, string Reason);
 
-    /// <summary>Empty at version 1: there is nothing before it to migrate from. A schema change
-    /// appends the step that invalidates whatever it invalidated.</summary>
-    public static readonly IReadOnlyList<Migration> Migrations = [];
+    /// <summary>
+    /// A schema change appends the step that invalidates whatever it invalidated, and NOTHING
+    /// else is re-queued - re-indexing a finished disk because an upgrade did not look first is
+    /// the worst thing this product can do to somebody (spec §2a).
+    ///
+    /// <para>Step 2 invalidates images and only images. Three things changed about them at once
+    /// and all three are about which pictures exist and what is stored for them: the size floor
+    /// fell from 10 KB to 2 KB, so images previously recorded "an icon, not a picture" are real
+    /// candidates; `ico` and `avif` joined the kinds this build reads; and the words recognised
+    /// inside a picture stopped being embedded as prose. Documents, recordings and video are
+    /// untouched by every one of those, so they are not in this list and are not read again.</para>
+    /// </summary>
+    public static readonly IReadOnlyList<Migration> Migrations =
+    [
+        new(To: 2, InvalidatedKinds: [(int)ResultKind.Photo],
+            Reason: "images: a lower size floor, more formats, and recognised text is no longer embedded as meaning"),
+    ];
 
     private readonly SqliteConnection _c;
 

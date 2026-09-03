@@ -1,4 +1,4 @@
-using System.Reflection;
+﻿using System.Reflection;
 using Findra;
 using Xunit;
 
@@ -472,7 +472,7 @@ public class DecoderGateTests : IDisposable
         Assert.NotEqual(Decoders.NoModel, Decoders.TooLong);
         Assert.NotEqual(Decoders.NoText, Decoders.TooLong);
         Assert.NotEqual(Decoders.NoFormatReader, Decoders.TooLong);
-        Assert.NotEqual(Decoders.AnIcon, Decoders.TooLong);
+        Assert.NotEqual(Decoders.TooSmall, Decoders.TooLong);
         Assert.Contains("long", Decoders.TooLong, StringComparison.OrdinalIgnoreCase);
     }
 
@@ -497,9 +497,14 @@ public class DecoderGateTests : IDisposable
     // ---- the size gates, applied ----
 
     [Theory]
-    [InlineData(ResultKind.Photo, 1_000, "an icon, not a picture")]
+    [InlineData(ResultKind.Photo, 1_000, "too small to be a picture")]
     [InlineData(ResultKind.Photo, 200L << 20, "too large")]
     [InlineData(ResultKind.Photo, 2L << 20, null)]
+    // 8,644 bytes: the size of a real application icon of a real object, on a real machine. It
+    // was thrown away by the old 10 KB floor along with 890 of that machine's 1,086 images, and
+    // the rule it was thrown away under - "smaller than this is a UI icon" - was a guess about
+    // what an image is FOR made from how many bytes it takes.
+    [InlineData(ResultKind.Photo, 8_644, null)]
     [InlineData(ResultKind.Document, 300L << 20, "too large")]
     [InlineData(ResultKind.Document, 4_000, null)]
     [InlineData(ResultKind.Video, 10L << 30, "too large")]
@@ -508,8 +513,9 @@ public class DecoderGateTests : IDisposable
     {
         // Asserting the constants against each other only proves arithmetic between four
         // literals in one file, and a port that keeps the constants and stops USING them passes
-        // it. This asks the function the decode arms actually call. Below the icon floor every
-        // favicon on the disk matches every query a little, which is worse than not being there.
+        // it. This asks the function the decode arms actually call. The floor is there to skip
+        // what is too small to be a picture of anything - a tracking pixel, a gradient strip -
+        // and not to decide which images are worth having.
         Assert.Equal(skip, Decoders.SizeGate(kind, bytes));
     }
 }

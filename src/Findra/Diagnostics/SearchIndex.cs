@@ -1,4 +1,4 @@
-using System.Globalization;
+﻿using System.Globalization;
 using System.Runtime.InteropServices;
 using System.Text;
 using Microsoft.Win32.SafeHandles;
@@ -260,9 +260,23 @@ public static class SearchIndex
 
         if (queries.Count > 0)
         {
+            // WITH the model-backed half, which this had been running without. Search takes
+            // `semantic` and `installed` and both were left at their defaults, so `q:` ran the
+            // full-text branch alone - it could not see a photo, a video frame or a transcript,
+            // which is to say it could not test the half of content search that needs a model at
+            // all. "It found nothing that looked like headphones" had no headless answer, and the
+            // one command for asking silently agreed with the wrong half of the engine.
+            CapabilitySet installed = CapabilitySet.Installed();
+            using Semantic? semantic = Semantic.Open(installed);
+            Console.WriteLine(semantic is null
+                ? "  (no query encoder on this machine - words only)"
+                : "  encoders: " + (semantic.Text is null ? "" : "meaning ") +
+                  (semantic.Image is null ? "" : "pictures"));
+
             foreach (string q in queries)
             {
-                SearchResults results = ContentBranch.Search(db, q, 20);
+                SearchResults results = ContentBranch.Search(db, q, 20, SearchSort.Best,
+                                                             semantic: semantic, installed: installed);
                 Console.WriteLine($"'{q}': {results.Rows.Count.ToString(CultureInfo.InvariantCulture)} hit(s) in {results.ContentMs.ToString("0", CultureInfo.InvariantCulture)} ms");
                 foreach (SearchResult r in results.Rows)
                     Console.WriteLine($"  {r.Score.ToString("0.00", CultureInfo.InvariantCulture),5}  {FileKinds.Label(r.Kind),-6} {r.Why,-20} {r.Name}  {r.Excerpt}");

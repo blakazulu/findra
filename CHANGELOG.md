@@ -574,6 +574,23 @@ into a numbered section on the first release.
   field that holds 580.6px, and the field silently ellipsises, so it stopped mid-word on every
   empty card in that mode. It is shorter now, and measured.
 
+- **Searching pictures by what is in them stops returning screenshots that merely mention
+  something.** The words recognised inside a picture were embedded as though they were prose, and
+  recognised text is not prose - it is menu chrome, timestamps, phone numbers and whatever the
+  recogniser made of a language it was unsure of. Searching for "headphones" returned eleven
+  screenshots saying they "said something like it", above the one picture that actually looked
+  like it. The words inside a picture are still searchable as words; they are no longer searchable
+  as meaning.
+
+- **Small images are indexed.** The floor was 10 KB, on the reasoning that anything smaller is a
+  user-interface icon - which threw away 890 of one machine's 1,086 images, including an 8.6 KB
+  picture of the thing being searched for. It is 2 KB now, and means only "too small to be a
+  picture of anything". `.ico` and `.avif` are read too.
+
+- **`--searchindex q:` tests the whole of content search.** It ran the word index alone, so photos,
+  video frames and transcripts - every part that needs a model - could not be tested without a
+  screen at all. It now runs the same path the card runs and prints what each hit scored and why.
+
 - **The card shows how far the index has got, under the search field.** A pill with a dial, what
   is being read, the count and the percentage - and the pill itself is the bar, filling left to
   right underneath the words. It is always there when the card is open: reading, paused, off, or
