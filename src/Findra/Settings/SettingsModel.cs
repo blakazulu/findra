@@ -1,4 +1,4 @@
-using System.Globalization;
+﻿using System.Globalization;
 
 using Findra.Startup;   // HelperTaskState
 using SkiaSharp;        // SKTypeface, for measuring a note before the layout places the next row
@@ -103,6 +103,11 @@ public sealed record SettingsState(Config Config)
     public bool StartsAtLogon { get; init; }
     public bool EverIndexed { get; init; }
     public bool IndexerAlive { get; init; }
+
+    /// <summary><see cref="IndexStatus.Line"/>, as the card's footer and the capsule already show
+    /// it, or empty before the first reading has arrived. The Content sentence says this rather
+    /// than inventing a fifth answer to a question four surfaces already agree on.</summary>
+    public string Progress { get; init; } = "";
     public IReadOnlyList<string> Drives { get; init; } = [];
 
     /// <summary>What Windows' own light/dark setting says right now. Only used to work out which
@@ -317,7 +322,27 @@ public static class SettingsModel
 
     /// <summary>Three states, three sentences, and one switch for all of them. "Paused" is the wrong
     /// word for two of them: one has never been asked for, the other was turned off.</summary>
-    public static string ContentSentence(Config config, bool everIndexed, bool indexerAlive)
+    /// <summary>
+    /// What the Content section says above its switch.
+    ///
+    /// <para>Off is Settings' own wording, because the question there is not "how far has it got"
+    /// but "why is this not on", and the answer - names work already, looking inside walks every
+    /// drive - is the reason somebody is standing in front of the switch at all.</para>
+    ///
+    /// <para>On is <see cref="IndexStatus.Line"/> and nothing else, which is the sentence the
+    /// card's footer, the capsule, <c>--searchprobe</c> and <c>--searchindex</c> all give. This
+    /// surface used to answer from two booleans, so "On. Findra reads inside files while it is
+    /// running." was the whole report whether the indexer was idle on a finished disk or grinding
+    /// through 1,773 files. Nothing on the screen could change, so pressing "Start now" on a
+    /// machine that was ALREADY reading looked exactly like a dead button - and it was pressed
+    /// three times in a row by somebody watching a sentence that could not move. The button was
+    /// doing its job; this sentence was the part with nothing to say.</para>
+    ///
+    /// <para><paramref name="progress"/> is empty until the first reading arrives, which is the
+    /// second between the window opening and the status pump coming round. The two booleans still
+    /// answer that gap rather than leaving the row blank.</para>
+    /// </summary>
+    public static string ContentSentence(Config config, bool everIndexed, bool indexerAlive, string progress = "")
     {
         ArgumentNullException.ThrowIfNull(config);
         if (!config.IndexContent)
@@ -325,11 +350,19 @@ public static class SettingsModel
                 ? "Turned off. What was already read stays searchable; nothing new is being read."
                 : "Off. Searching by name works now; looking inside files walks every drive, so Findra waits to be asked.")
                 + IndexIsInTheClear;
-        return (indexerAlive
-            ? "On. Findra reads inside files while it is running."
-            : "On, but nothing is being read - indexing only happens while Findra is open.")
+
+        return (Sentence(progress)
+            ?? (indexerAlive
+                ? "On. Findra reads inside files while it is running."
+                : "On, but nothing is being read - indexing only happens while Findra is open."))
             + IndexIsInTheClear;
     }
+
+    /// <summary>IndexStatus.Line is written for a footer - lower case, no stop - and this row is
+    /// prose with another sentence after it. Null for an empty line, so the caller's own wording
+    /// answers instead of a bare full stop.</summary>
+    private static string? Sentence(string line) =>
+        string.IsNullOrWhiteSpace(line) ? null : char.ToUpperInvariant(line[0]) + line[1..] + ".";
 
     private static IReadOnlyList<Control> Content(SettingsState s)
     {
@@ -346,7 +379,7 @@ public static class SettingsModel
         var rows = new List<Control>
         {
             new(ControlId.IndexContent, ControlKind.Toggle, "Look inside my files", "", s.Config.IndexContent, [], [],
-                ContentSentence(s.Config, s.EverIndexed, s.IndexerAlive), 0),
+                ContentSentence(s.Config, s.EverIndexed, s.IndexerAlive, s.Progress), 0),
             // A toggle states a preference. This says begin, and the sentence above it changes the
             // moment it is pressed - which is the half that was missing rather than the switch.
             Control.Plain(ControlId.StartIndexing, ControlKind.Button, "Start reading now",

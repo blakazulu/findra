@@ -1,4 +1,4 @@
-using System.Globalization;
+﻿using System.Globalization;
 
 using Findra;
 using Findra.Startup;   // HelperTaskState
@@ -865,5 +865,50 @@ public class SettingsModelTests
 
         Assert.NotEqual(was, now);
         Assert.NotEqual("", now);
+    }
+
+    [Fact]
+    public void TheContentSentenceReportsHowFarTheIndexHasGotAndNotJustThatItIsOn()
+    {
+        // The half the two booleans could not say. With reading on and a live indexer, the note
+        // was "On. Findra reads inside files while it is running." whether the queue held 1,773
+        // files or nothing at all - one string for every state a working indexer can be in.
+        //
+        // So on a machine that was ALREADY reading, pressing "Start now" could not change anything
+        // on the screen, and it was pressed three times by somebody watching a sentence that had
+        // nowhere to move. The button was doing its job. This sentence was the part with nothing
+        // to say, and it is the same question the card's footer, the capsule, --searchprobe and
+        // --searchindex all answer from IndexStatus.Line - so it says that, rather than being a
+        // fifth answer.
+        SettingsState on = State(Config.Default with { IndexContent = true }, Section.Content)
+            with { EverIndexed = true, IndexerAlive = true };
+
+        string busy = Row(on with { Progress = IndexStatus.Line(true, "indexing", 1_773, 200, true, false) },
+                          ControlId.IndexContent).Note;
+        string done = Row(on with { Progress = IndexStatus.Line(true, "idle", 0, 1_973, true, false) },
+                          ControlId.IndexContent).Note;
+
+        Assert.NotEqual(busy, done);
+        Assert.Contains("1,773", busy, StringComparison.Ordinal);
+        Assert.Contains("200", busy, StringComparison.Ordinal);
+        Assert.Contains("1,973", done, StringComparison.Ordinal);
+
+        // Still prose: a capital to open on and a stop before the sentence about the index staying
+        // on this machine, which follows it in the same note.
+        Assert.StartsWith("Indexing", busy, StringComparison.Ordinal);
+        Assert.Contains("done.", busy, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ASettingsWindowOpenedBetweenTwoReadingsStillSaysSomething()
+    {
+        // Progress is empty for the second between the window opening and the status pump coming
+        // round, and a row that went blank there would be a worse version of the defect above.
+        string gap = Row(State(Config.Default with { IndexContent = true }, Section.Content)
+                         with { EverIndexed = true, IndexerAlive = true, Progress = "" },
+                         ControlId.IndexContent).Note;
+
+        Assert.NotEqual("", gap);
+        Assert.DoesNotContain("..", gap, StringComparison.Ordinal);
     }
 }
