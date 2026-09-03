@@ -111,11 +111,11 @@ public sealed class SettingsWindow : Window
     /// it. The shell already reads both once a second for the capsule; this is the same answer
     /// arriving here too.</para>
     /// </summary>
-    public void UseIndexState(bool everIndexed, bool indexerAlive, string progress) =>
+    public void UseIndexState(bool everIndexed, bool indexerAlive, long pending, long indexed) =>
         _canvas.Refresh(s => s.EverIndexed == everIndexed && s.IndexerAlive == indexerAlive
-                             && string.Equals(s.Progress, progress, StringComparison.Ordinal)
+                             && s.Pending == pending && s.Indexed == indexed
             ? s
-            : s with { EverIndexed = everIndexed, IndexerAlive = indexerAlive, Progress = progress });
+            : s with { EverIndexed = everIndexed, IndexerAlive = indexerAlive, Pending = pending, Indexed = indexed });
 
     /// <summary>
     /// Mark a row as waiting on its own work, or as finished with it.

@@ -104,10 +104,12 @@ public sealed record SettingsState(Config Config)
     public bool EverIndexed { get; init; }
     public bool IndexerAlive { get; init; }
 
-    /// <summary><see cref="IndexStatus.Line"/>, as the card's footer and the capsule already show
-    /// it, or empty before the first reading has arrived. The Content sentence says this rather
-    /// than inventing a fifth answer to a question four surfaces already agree on.</summary>
-    public string Progress { get; init; } = "";
+    /// <summary>How many files are waiting and how many have been read, pushed while the window is
+    /// open. The "Start reading now" button reports them: a button that says "Start now" over a
+    /// machine that is ALREADY reading is a button whose only possible effect is nothing, and it
+    /// was pressed three times by somebody who could see no evidence either way.</summary>
+    public long Pending { get; init; }
+    public long Indexed { get; init; }
     public IReadOnlyList<string> Drives { get; init; } = [];
 
     /// <summary>What Windows' own light/dark setting says right now. Only used to work out which
@@ -329,20 +331,15 @@ public static class SettingsModel
     /// but "why is this not on", and the answer - names work already, looking inside walks every
     /// drive - is the reason somebody is standing in front of the switch at all.</para>
     ///
-    /// <para>On is <see cref="IndexStatus.Line"/> and nothing else, which is the sentence the
-    /// card's footer, the capsule, <c>--searchprobe</c> and <c>--searchindex</c> all give. This
-    /// surface used to answer from two booleans, so "On. Findra reads inside files while it is
-    /// running." was the whole report whether the indexer was idle on a finished disk or grinding
-    /// through 1,773 files. Nothing on the screen could change, so pressing "Start now" on a
-    /// machine that was ALREADY reading looked exactly like a dead button - and it was pressed
-    /// three times in a row by somebody watching a sentence that could not move. The button was
-    /// doing its job; this sentence was the part with nothing to say.</para>
-    ///
-    /// <para><paramref name="progress"/> is empty until the first reading arrives, which is the
-    /// second between the window opening and the status pump coming round. The two booleans still
-    /// answer that gap rather than leaving the row blank.</para>
+    /// <para>On explains; it does not count. The counting is the button's job below it, so that
+    /// the one control somebody presses is the one that reports - this row used to answer from two
+    /// booleans, so "On. Findra reads inside files while it is running." was the whole report
+    /// whether the indexer was idle on a finished disk or grinding through 1,773 files, and
+    /// pressing "Start now" over a machine that was ALREADY reading changed nothing on the screen.
+    /// It was pressed three times. Putting the numbers here as well as on the button would print
+    /// them twice in four lines.</para>
     /// </summary>
-    public static string ContentSentence(Config config, bool everIndexed, bool indexerAlive, string progress = "")
+    public static string ContentSentence(Config config, bool everIndexed, bool indexerAlive)
     {
         ArgumentNullException.ThrowIfNull(config);
         if (!config.IndexContent)
@@ -351,18 +348,43 @@ public static class SettingsModel
                 : "Off. Searching by name works now; looking inside files walks every drive, so Findra waits to be asked.")
                 + IndexIsInTheClear;
 
-        return (Sentence(progress)
-            ?? (indexerAlive
-                ? "On. Findra reads inside files while it is running."
-                : "On, but nothing is being read - indexing only happens while Findra is open."))
+        return (indexerAlive
+            ? "On. Findra is reading inside your files now."
+            : "On, but nothing is being read - indexing only happens while Findra is open.")
             + IndexIsInTheClear;
     }
 
-    /// <summary>IndexStatus.Line is written for a footer - lower case, no stop - and this row is
-    /// prose with another sentence after it. Null for an empty line, so the caller's own wording
-    /// answers instead of a bare full stop.</summary>
-    private static string? Sentence(string line) =>
-        string.IsNullOrWhiteSpace(line) ? null : char.ToUpperInvariant(line[0]) + line[1..] + ".";
+    /// <summary>
+    /// What the "Start reading now" button says.
+    ///
+    /// <para>"Start now" is an offer, and an offer that cannot do anything is the defect this whole
+    /// row keeps producing. While the indexer is alive with a backlog there is nothing to start, so
+    /// it stops offering and reports instead - and <see cref="Apply"/> refuses the press, because a
+    /// control that still answers a click is a control somebody will click.</para>
+    ///
+    /// <para>Indexed of the TOTAL rather than "640 done, 1,333 to go": a fraction of a whole is
+    /// read at a glance and two counts have to be added up. The total moves as the walk finds more,
+    /// which is honest - it is a total that is genuinely still being discovered.</para>
+    ///
+    /// <para>A SLASH, not " of ". The pill is 176px and ellipsises at 164, and this label has to
+    /// hold at counts nobody will reach: "Indexing 999,999 of 1,999,999" measures 171.6px and would
+    /// be drawn with a dot-dot-dot through the only number on the row, while the slash form is
+    /// 159.0px. Shortening the label is the move here, never widening the pill - that width is
+    /// shared with the hotkey chord and every capability row beside it.</para>
+    ///
+    /// <para>Invariant, like every other number Findra shows: <c>{n:N0}</c> renders "1.973" in
+    /// German, and this string is compared in tests and read out in bug reports.</para>
+    /// </summary>
+    public static string StartReadingLabel(bool indexerAlive, long pending, long indexed) =>
+        Reading(indexerAlive, pending)
+            ? "Indexing " + indexed.ToString("N0", CultureInfo.InvariantCulture) + "/" +
+              (indexed + pending).ToString("N0", CultureInfo.InvariantCulture)
+            : "Start now";
+
+    /// <summary>Is there an indexer alive with work in hand? The one place that decides it, so the
+    /// label and the refusal cannot disagree about whether there is anything left to start.
+    /// </summary>
+    public static bool Reading(bool indexerAlive, long pending) => indexerAlive && pending > 0;
 
     private static IReadOnlyList<Control> Content(SettingsState s)
     {
@@ -379,11 +401,13 @@ public static class SettingsModel
         var rows = new List<Control>
         {
             new(ControlId.IndexContent, ControlKind.Toggle, "Look inside my files", "", s.Config.IndexContent, [], [],
-                ContentSentence(s.Config, s.EverIndexed, s.IndexerAlive, s.Progress), 0),
-            // A toggle states a preference. This says begin, and the sentence above it changes the
-            // moment it is pressed - which is the half that was missing rather than the switch.
+                ContentSentence(s.Config, s.EverIndexed, s.IndexerAlive), 0),
+            // A toggle states a preference. This says begin - and while there is nothing left to
+            // begin, it reports instead of offering.
             Control.Plain(ControlId.StartIndexing, ControlKind.Button, "Start reading now",
-                          s.Waiting(ControlId.StartIndexing) ? "Starting..." : "Start now"),
+                          s.Waiting(ControlId.StartIndexing)
+                              ? "Starting..."
+                              : StartReadingLabel(s.IndexerAlive, s.Pending, s.Indexed)),
             new(ControlId.IndexPower, ControlKind.Choice, "Indexing power",
                 IndexPowerLevels.ShortName(s.Config.IndexPower), false, powers,
                 [.. IndexPowerLevels.Presets.Select(p => p == s.Config.IndexPower)],
@@ -538,6 +562,11 @@ public static class SettingsModel
             // survives a restart, the action is what happens in front of the person who pressed it.
             // Asked for even when the switch is already on - Findra reads only while it is open,
             // so "start" over an idle session is a real request rather than a no-op.
+            // Nothing to start while a live indexer still has a backlog, and the button says so
+            // rather than offering. Refused HERE as well as relabelled, because a pill that still
+            // answers a click is a pill somebody clicks - which is exactly what happened, three
+            // times, on a machine that had been reading since before the settings window opened.
+            ControlId.StartIndexing when Reading(s.IndexerAlive, s.Pending) => SettingsOutcome.Nothing(s),
             ControlId.StartIndexing =>
                 SettingsOutcome.Ask(s with { Config = c with { IndexContent = true } }, SettingsAction.StartIndexing),
             // The NUMBER at that index, never the index itself: writing the option number here

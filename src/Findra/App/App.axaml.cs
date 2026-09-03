@@ -175,10 +175,12 @@ internal sealed class Shell : ISettingsHost
     private volatile bool _everIndexed;
     private volatile bool _indexerAlive;
 
-    /// <summary>The last IndexStatus.Line the status pump produced, so a settings window opening
-    /// between two pumps starts with the sentence the capsule is already showing rather than with
-    /// a second of the two-boolean fallback.</summary>
+    /// <summary>The last IndexStatus.Line the status pump produced. The tray's tooltip is built
+    /// from it, and a settings window opening between two pumps starts from the counts beside it
+    /// rather than from zeroes.</summary>
     private volatile string _indexLine = "";
+    private long _indexPending;
+    private long _indexIndexed;
     private IReadOnlyList<string> _drives = [];
 
     // ---- the content index ----
@@ -1119,13 +1121,15 @@ internal sealed class Shell : ISettingsHost
         _everIndexed = indexed > 0;
         _indexerAlive = alive;
         _indexLine = line;
+        Interlocked.Exchange(ref _indexPending, pending);
+        Interlocked.Exchange(ref _indexIndexed, indexed);
 
         // And to the settings window if one is open. It reads both for its Content sentence and
         // took them when it opened, so without this the sentence describes the moment somebody
         // arrived rather than the one they are looking at - which is why "Start now" appeared to
         // do nothing. Refresh compares before it repaints, so an unchanged answer costs nothing.
         if (SettingsWindow.Open is { } panel)
-            Dispatcher.UIThread.Post(() => panel.UseIndexState(indexed > 0, alive, line));
+            Dispatcher.UIThread.Post(() => panel.UseIndexState(indexed > 0, alive, pending, indexed));
         // Zero rather than a full bar when there is nothing waiting: "up to date" is a sentence,
         // not a completed job, and a bar sitting at 100% invites the reader to wait for something.
         float fraction = pending == 0 ? 0f : (float)(indexed / (double)(indexed + pending));
@@ -1136,6 +1140,10 @@ internal sealed class Shell : ISettingsHost
 
         Dispatcher.UIThread.Post(() =>
         {
+            // The tray says the same thing as the capsule, and it is refreshed HERE rather than on
+            // a timer of its own: this is the one place that knows the line changed, and the guard
+            // above means an unchanged answer costs nothing.
+            RefreshTooltip();
             CapsuleWindow? capsule = _capsule;
             if (capsule is null) return;
             capsule.Progress = line;
@@ -1364,7 +1372,10 @@ internal sealed class Shell : ISettingsHost
         Log.Info("app", "the tray icon is up");
     }
 
-    private string Tooltip() => TrayText.Tooltip(Log.Version, _hotkey?.Landed, _update, _latest);
+    /// <summary>The tray's tooltip, including what the index is doing. The line is the one the
+    /// capsule is already showing, so hovering the tray and glancing at the capsule cannot
+    /// disagree.</summary>
+    private string Tooltip() => TrayText.Tooltip(Log.Version, _hotkey?.Landed, _update, _latest, _indexLine);
 
     private void RefreshTooltip()
     {
@@ -1461,7 +1472,8 @@ internal sealed class Shell : ISettingsHost
                 StartsAtLogon = Autostart.IsSet(),
                 EverIndexed = _everIndexed,
                 IndexerAlive = _indexerAlive,
-                Progress = _indexLine,
+                Pending = _indexPending,
+                Indexed = _indexIndexed,
                 Drives = _drives,
                 WindowsIsLight = Theme.WindowsIsLight(),
                 Version = BuildInfo.Version,

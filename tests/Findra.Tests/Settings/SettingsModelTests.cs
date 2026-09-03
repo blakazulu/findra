@@ -2,6 +2,7 @@
 
 using Findra;
 using Findra.Startup;   // HelperTaskState
+using SkiaSharp;        // measuring a label into the pill it is drawn in
 using Xunit;
 
 /// <summary>
@@ -867,48 +868,105 @@ public class SettingsModelTests
         Assert.NotEqual("", now);
     }
 
+    /// <summary>Reading is on, the indexer is alive, and 640 of 1,973 files have been read - the
+    /// state a fresh install spends its first few hours in, and the one this row could not
+    /// describe.</summary>
+    private static SettingsState Reading() =>
+        State(Config.Default with { IndexContent = true }, Section.Content)
+        with { EverIndexed = true, IndexerAlive = true, Indexed = 640, Pending = 1_333 };
+
     [Fact]
-    public void TheContentSentenceReportsHowFarTheIndexHasGotAndNotJustThatItIsOn()
+    public void TheStartButtonReportsProgressRatherThanOfferingToStartWhatIsAlreadyRunning()
     {
-        // The half the two booleans could not say. With reading on and a live indexer, the note
-        // was "On. Findra reads inside files while it is running." whether the queue held 1,773
-        // files or nothing at all - one string for every state a working indexer can be in.
+        // "Start now" was the label whether the indexer was idle on a finished disk or grinding
+        // through 1,973 files, so pressing it on a machine that was ALREADY reading changed
+        // nothing anybody could see. It was pressed three times.
         //
-        // So on a machine that was ALREADY reading, pressing "Start now" could not change anything
-        // on the screen, and it was pressed three times by somebody watching a sentence that had
-        // nowhere to move. The button was doing its job. This sentence was the part with nothing
-        // to say, and it is the same question the card's footer, the capsule, --searchprobe and
-        // --searchindex all answer from IndexStatus.Line - so it says that, rather than being a
-        // fifth answer.
-        SettingsState on = State(Config.Default with { IndexContent = true }, Section.Content)
-            with { EverIndexed = true, IndexerAlive = true };
+        // Indexed of the TOTAL, not "640 done, 1,333 to go": a fraction is read at a glance and
+        // two counts have to be added up.
+        Assert.Equal("Indexing 640/1,973", Row(Reading(), ControlId.StartIndexing).Value);
 
-        string busy = Row(on with { Progress = IndexStatus.Line(true, "indexing", 1_773, 200, true, false) },
-                          ControlId.IndexContent).Note;
-        string done = Row(on with { Progress = IndexStatus.Line(true, "idle", 0, 1_973, true, false) },
-                          ControlId.IndexContent).Note;
-
-        Assert.NotEqual(busy, done);
-        Assert.Contains("1,773", busy, StringComparison.Ordinal);
-        Assert.Contains("200", busy, StringComparison.Ordinal);
-        Assert.Contains("1,973", done, StringComparison.Ordinal);
-
-        // Still prose: a capital to open on and a stop before the sentence about the index staying
-        // on this machine, which follows it in the same note.
-        Assert.StartsWith("Indexing", busy, StringComparison.Ordinal);
-        Assert.Contains("done.", busy, StringComparison.Ordinal);
+        // And it goes back to offering the moment there is something to offer.
+        Assert.Equal("Start now", Row(Reading() with { Pending = 0 }, ControlId.StartIndexing).Value);
+        Assert.Equal("Start now", Row(Reading() with { IndexerAlive = false }, ControlId.StartIndexing).Value);
     }
 
     [Fact]
-    public void ASettingsWindowOpenedBetweenTwoReadingsStillSaysSomething()
+    public void TheStartButtonRefusesThePressItIsNoLongerOffering()
     {
-        // Progress is empty for the second between the window opening and the status pump coming
-        // round, and a row that went blank there would be a worse version of the defect above.
-        string gap = Row(State(Config.Default with { IndexContent = true }, Section.Content)
-                         with { EverIndexed = true, IndexerAlive = true, Progress = "" },
-                         ControlId.IndexContent).Note;
+        // Relabelling is not enough. A pill that still answers a click is a pill somebody clicks,
+        // and this one would have written the config and woken a child that was already awake.
+        SettingsState busy = Reading();
+        SettingsOutcome ignored = SettingsModel.Apply(
+            busy, new PanelHit(PanelTarget.Control, RowOf(busy, ControlId.StartIndexing), -1));
+        Assert.Equal(SettingsAction.None, ignored.Action);
 
-        Assert.NotEqual("", gap);
-        Assert.DoesNotContain("..", gap, StringComparison.Ordinal);
+        // But it is a real request whenever it is really offered - including over a switch that is
+        // already on, because Findra reads only while it is open.
+        SettingsState idle = Reading() with { Pending = 0 };
+        SettingsOutcome asked = SettingsModel.Apply(
+            idle, new PanelHit(PanelTarget.Control, RowOf(idle, ControlId.StartIndexing), -1));
+        Assert.Equal(SettingsAction.StartIndexing, asked.Action);
+    }
+
+    [Fact]
+    public void TheNumbersOnTheStartButtonReadTheSameOnEveryMachine()
+    {
+        // InvariantGlobalization is off, so a bare {n:N0} renders "1.973" in German - and this
+        // string is compared above and read out in bug reports.
+        CultureInfo was = CultureInfo.CurrentCulture;
+        try
+        {
+            CultureInfo.CurrentCulture = new CultureInfo("de-DE");
+            Assert.Equal("Indexing 640/1,973", SettingsModel.StartReadingLabel(true, 1_333, 640));
+        }
+        finally { CultureInfo.CurrentCulture = was; }
+    }
+
+    [Fact]
+    public void TheStartButtonsLabelFitsThePillItIsDrawnIn()
+    {
+        // SettingsPainter draws a Button row's value through Parts.Pill in a rect 176 wide, and
+        // Parts.Pill ellipsises to width - 12. A label wider than that is drawn with a dot-dot-dot
+        // through the middle of the only number on the row.
+        //
+        // The rule when this fails is to SHORTEN THE LABEL, never to widen the pill: the pill's
+        // width is shared with the hotkey chord row and the capability rows beside it.
+        // The slash is here for this reason and not for brevity's sake. Measured on this typeface
+        // at this size: "Indexing 999,999 of 1,999,999" is 171.6px and "Indexing 999,999/1,999,999"
+        // is 159.0px, so " of " is what does not fit rather than the counts.
+        // NOT `using`. Parts.Face is a static, shared, process-wide typeface - the one place in
+        // src/Findra that resolves one - so disposing it here takes the face out from under every
+        // painter and measurement that runs after this test. It does not fail: the test host dies
+        // mid-run and the console prints "Passed!" for whatever had finished before it went, with
+        // "Test Run Aborted." underneath. That is a false green with a body count of 240 tests.
+        SKTypeface face = Parts.Face;
+        const float budget = 176f - 12f;
+
+        foreach (string label in new[]
+                 {
+                     SettingsModel.StartReadingLabel(true, 1_333, 640),
+                     // Far past anything a real content index reaches, because the label has to
+                     // hold at the widest number it can ever be handed rather than at a typical one.
+                     SettingsModel.StartReadingLabel(true, 1_000_000, 999_999),
+                     "Starting...",
+                     "Start now",
+                 })
+        {
+            float w = CardText.Measure(label, face, Parts.LabelSize);
+            Assert.True(w <= budget, $"'{label}' is {w:0.0}px against a pill that holds {budget:0.0}px");
+        }
+    }
+
+    [Fact]
+    public void TheContentNoteExplainsAndLeavesTheCountingToTheButton()
+    {
+        // Both saying the number would print it twice in four lines. The note says which of the
+        // three states this is; the button says how far it has got.
+        string note = Row(Reading(), ControlId.IndexContent).Note;
+
+        Assert.DoesNotContain("640", note, StringComparison.Ordinal);
+        Assert.DoesNotContain("1,973", note, StringComparison.Ordinal);
+        Assert.NotEqual(note, Row(Reading() with { IndexerAlive = false }, ControlId.IndexContent).Note);
     }
 }
