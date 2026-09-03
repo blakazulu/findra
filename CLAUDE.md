@@ -17,7 +17,9 @@ the model store and the per-capability gates, the settings window and the first-
 `--uninstall`, an Inno Setup installer, three GitHub Actions workflows, the winget manifests and
 a README written out of real renders and real measurements. What is left is not a plan but
 `docs/end-to-end-checklist.md`: everything that needs a UAC prompt, a sign-out, a real installer
-or a public tag, none of which has ever run here.
+or a public tag. The checklist is the catalogue, ordered by which plan found each item and so not
+runnable top to bottom; **`docs/e2e-run-sheet.md` is the same items in ten phases somebody can
+work through in one session**, and `build/Check-E2E.ps1` answers every part of it a script can.
 
 Two adversarial reviews have landed since the last plan. What they found is written down below
 rather than left in a commit message: the console, the seams, the capability refresh, the download
@@ -34,6 +36,13 @@ dotnet publish -c Release --self-contained     # self-contained is required, not
 pwsh -File build/Publish.ps1 -Rid win-x64      # the publish the installer and CI both use
 pwsh -File build/Check-Diagnostics.ps1 -Exe publish/win-x64/findra.exe   # every headless mode
 pwsh -File build/Check-Release.ps1 -Tag v0.1.0 # may this tag be released, and what are its notes
+pwsh -File build/Check-E2E.ps1 -Exe publish/win-x64/findra.exe   # every part of the end-to-end
+                                               # run sheet a script can answer. Reads only: it
+                                               # never uninstalls, purges, registers or
+                                               # unregisters a task, kills a process or deletes
+                                               # anything. Three outcomes, not two - "not yet"
+                                               # is a machine that has not got there yet, and is
+                                               # not counted as a failure.
 ```
 
 Six diagnostic modes are non-negotiable and are built from day one. They are how the app is

@@ -4,6 +4,19 @@ Everything here needs an elevated terminal, a screen, or a real disk, so no auto
 in this project has ever executed it. It accumulates as plans land, and is worked through
 once on a real installed build.
 
+**This is the catalogue, not the running order.** It is ordered by which plan discovered each
+item, which means it cannot be worked through top to bottom: item 1 wants the helper already
+running, item 24 wants a machine that has never run Findra, and item 33 destroys the state items
+20 to 22 need. `docs/e2e-run-sheet.md` is the same items in an order somebody can sit down and
+work through, in ten phases, with the command, the pass and what a failure implies written out
+for each. Every item below appears there exactly once. Read the run sheet to do the work; read
+this one to understand why an item exists.
+
+`build/Check-E2E.ps1` does every part of it a script can answer and prints a pass/fail table, so
+the human only does what needs eyes:
+
+    pwsh -File build/Check-E2E.ps1 -Exe publish/win-x64/findra.exe
+
 Before starting, tail the log in a spare window so every step's proof appears as it happens:
 
     Get-Content $env:LOCALAPPDATA\Findra\logs\findra-$(Get-Date -f yyyyMMdd).log -Wait -Tail 20
@@ -207,16 +220,22 @@ moment rather than an elevation prompt at every launch.
     file(s)" line in the same session. If it appears on one path and not the other, the two
     have drifted apart again.
 
-32. **The installer script compiles at all.** `installer/findra.iss` has never been through a
-    compiler: Inno Setup is not on the development machine and was deliberately not installed,
-    because the release workflow is where it will be compiled for every release. Everything
-    checked so far is the script's text. On a machine with Inno Setup 6.3 or newer:
+32. **The installer script compiles at all. DONE.** `installer/findra.iss` had never been through
+    a compiler, and every earlier check reported Inno Setup missing because it looks in Program
+    Files and this machine has it at `%LOCALAPPDATA%\Programs\Inno Setup 6\ISCC.exe`. With that
+    found:
 
         pwsh -File build/Publish.ps1 -Rid win-x64
         iscc /DAppVersion=0.1.0 /DPublishDir=..\publish\win-x64 installer\findra.iss
 
-    It must produce `installer/Output/findra-0.1.0-x64.exe`. A failure here is a syntax error or
-    an Inno version older than 6.3, where `ArchitecturesAllowed=x64compatible` is not yet a word.
+    Both architectures compiled and produced `installer/Output/findra-0.1.0-x64.exe` (82 MB) and
+    `findra-0.1.0-arm64.exe` (79 MB). The compile found a real defect on the way -
+    `CreateCustomForm` called with the wrong number of arguments - which is exactly the class of
+    thing an assertion on the script's text cannot see, and it is fixed.
+
+    What is still not done is the compile on a runner, which is step 36: a different Inno version
+    from a chocolatey package, on a machine where `ISCC.exe` is under
+    `%ProgramFiles(x86)%\Inno Setup 6`, for both architectures in one matrix.
 
 33. **A real install, then a real removal.** Run that installer on a machine Findra has never
     been on. The wizard shows the licence, offers "Start Findra", and installs into
@@ -245,10 +264,13 @@ moment rather than an elevation prompt at every launch.
     prompt - and the scheduled task must still point at a findra.exe that exists when the
     machine next signs in.
 
-35. **The first push, which is the first time GitHub Actions has ever run here.** The repository
-    has never been pushed, so `.github/workflows/ci.yml` has been asserted as text and nothing
-    more - `WorkflowTests` reads its triggers, its `-warnaserror`, and the PowerShell inside any
-    block it carries, but no runner has executed a line of it. On the first push to any branch:
+35. **The first push, which is the first time GitHub Actions has ever run here. MOSTLY DONE.** The
+    repository has been pushed and CI has run green across three runs, so `ci.yml` is no longer
+    asserted as text alone - it has executed. What is left is reading the Actions tab by eye
+    against the list below, because a green tick says the job exited zero and not that each of
+    these happened. Before the push, `WorkflowTests` read its triggers, its `-warnaserror`, and
+    the PowerShell inside any block it carries, and no runner had executed a line of it. On that
+    push:
 
     - a run named **build** starts. If nothing starts, the trigger block is wrong, and that is
       the one thing the text tests cannot see;
@@ -268,9 +290,10 @@ moment rather than an elevation prompt at every launch.
     at all.
 
 36. **The first tag, which is the first time `release.yml` has ever run.** Everything about it
-    has been asserted as text and nothing more: no runner has executed a line, Inno Setup is
-    not installed on the machine it was written on, and `installer/findra.iss` has therefore
-    never been compiled by anything. Before tagging, move the `## [Unreleased]` entries into a
+    has been asserted as text and nothing more: no runner has executed a line of it. The script
+    itself has now been compiled, by hand, on this machine (step 32); what a runner does with a
+    chocolatey-installed 6.3 and both architectures in one matrix is still unknown. Before
+    tagging, move the `## [Unreleased]` entries into a
     numbered `## [x.y.z]` section - `build/Check-Release.ps1` exits 5 until that exists, which
     is the gate doing its job rather than a fault - and check that the number matches
     `Directory.Build.props`. Then push the tag and watch for:
@@ -336,7 +359,7 @@ moment rather than an elevation prompt at every launch.
     corpus is used. Adjust the two sentences above the fragment, which describe that run and no
     other, in the same commit.
 
-40. **Read the README on GitHub, once the repository has been pushed for the first time.** Every
+40. **Read the README on GitHub, now that the repository has been pushed.** Every
     image is a repository-relative path, so nothing on the page can be checked against a rendered
     view until there is one. Look for six images that load, six commands underneath them that a
     reader could paste, and tables that do not run off the side of the column on a phone.
@@ -437,12 +460,14 @@ person makes by looking; two are destructive and belong last.
 
 Written down so they are known gaps rather than assumed passes. Every one of them is a step above.
 
-- **Inno Setup is not installed here**, deliberately: the release workflow is where the script is
-  compiled for every release, so that is where it is compiled first. The `.iss` is asserted as
-  text (step 32).
-- **GitHub Actions has never run.** All three workflows are asserted as text, including the two
-  assertions that exist because a deterministic PowerShell parse bug was once filed as something
-  only a real machine could find (steps 35 and 36).
+- ~~**Inno Setup is not installed here.**~~ It was, at `%LOCALAPPDATA%\Programs\Inno Setup 6`,
+  which is not where any earlier check looked. The script now compiles for both architectures and
+  the first compile found a defect no text assertion could reach (step 32). What is still unknown
+  is the compile on a runner (step 36).
+- ~~**GitHub Actions has never run.**~~ `ci.yml` has run green three times since the first push
+  (step 35). `release.yml` and `winget.yml` are still asserted as text and nothing more, including
+  the two assertions that exist because a deterministic PowerShell parse bug was once filed as
+  something only a real machine could find (steps 36 and 38).
 - **A real uninstall needs an elevated terminal and a registered scheduled task, and it is
   destructive.** `--dry-run` is the only form that has run here (steps 33 and 49).
 - **A winget submission needs a pull request against somebody else's repository**, and the App
@@ -461,5 +486,8 @@ Written down so they are known gaps rather than assumed passes. Every one of the
 
 ## Notes
 
-Steps 1 to 4, 9 to 13 and 29 to 54 are the ones that have never executed in any form. Steps 5 to 8
-have been verified by log line and by inspection, but not by eye.
+Steps 1 to 4, 9 to 13 and 29 to 54 are the ones that have never executed in any form, except 32,
+which is done, and 35, which has run and needs reading. Steps 5 to 8 have been verified by log
+line and by inspection, but not by eye.
+
+`docs/e2e-run-sheet.md` is the order to work through them in.
