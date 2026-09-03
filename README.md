@@ -16,7 +16,9 @@ Everything happens on your machine. There is no account, no cloud and no telemet
 Findra is licensed under Apache-2.0. You may use it, clone it, change it and ship your
 changes. The one condition is attribution, and it travels with the code: keep the `NOTICE`
 file, which credits blakazulu and points at https://github.com/blakazulu/findra, and keep it
-in anything you build on top. That is the whole deal.
+in anything you build on top. That is the whole deal. Both files are installed beside Findra's
+own executable as well as kept here, so an installed copy carries the terms and the attribution
+without going back to the repository for them.
 
 The Quicksand typeface ships inside the application under the SIL Open Font License 1.1,
 reproduced in `assets/fonts/OFL.txt`. It is not covered by Findra's own licence.
@@ -89,7 +91,11 @@ and you are never charged twice for the same download.
 `findra --searchshot docs/shots/firstrun.png firstrun Paper`
 
 Nothing on that screen is permanent. Everything on it is in Settings afterwards, and a
-capability taken later re-reads only the files it covers rather than starting again.
+capability taken later re-reads only the files it covers rather than starting again. Findra
+starts that reading within seconds of the files landing, whether you took the capability from
+Settings or from `findra --models install`, and without being restarted. Searching by the new
+capability is the half that waits: the card loads its own side of one when Findra starts, so
+restart it once before you look for a photo by what is in it.
 
 ![The Content section of Settings](docs/shots/settings.png)
 
@@ -128,6 +134,12 @@ these, and every image above was drawn by the same painter the window uses.
 `findra --searchshot` draws sixteen surfaces in any of the six palettes, which is how the
 images on this page are made and how they are regenerated. The command under each image is
 the whole recipe.
+
+Findra has no console window of its own, so nothing black appears when you double-click it or
+sign in with it starting automatically. The commands above still print into the terminal you
+type them at, and still write to a file when you redirect them there. The one visible
+consequence is that your shell does not wait for them: the prompt comes back before the text
+does. `dotnet run --project src/Findra -- --searchtest` waits, if you would rather it did.
 
 ## The numbers
 
@@ -219,7 +231,8 @@ Downloading a capability's model files is a separate thing, and it happens only 
 choose a capability and ask for it.
 
 Full detail, including what the index contains and what the logs record, is in
-[PRIVACY.md](PRIVACY.md).
+[PRIVACY.md](PRIVACY.md). If you have found a security problem rather than a bug,
+[SECURITY.md](SECURITY.md) says where to send it, which is not the issue tracker.
 
 ## Removing it
 

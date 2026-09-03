@@ -68,6 +68,13 @@ into a numbered section on the first release.
   documents it indexed and is not encrypted, which is one reason content indexing is off
   until you ask for it.
 
+- **A security policy** at `SECURITY.md`, so a vulnerability has somewhere to go that is not
+  the public issue tracker. It names the private reporting form, says plainly what is in scope -
+  the elevated helper, the pipe between it and the interface, the decoders that read files
+  nobody vetted, the installer, and the two things that use the network - and what is not,
+  including the unsigned downloads and the unencrypted index, both of which are written down
+  elsewhere rather than being defects to report.
+
 - **Resumable model downloads, fetched by the interface and never by the indexer.** A model
   file already on disk at its full size is never re-requested; a partial one resumes from
   the byte already fetched rather than starting over; a connection that closes early leaves
@@ -400,6 +407,19 @@ into a numbered section on the first release.
 
 - **The installer script's architecture and its uninstall prompt are checked by tests**,
   so neither can quietly go back to a form that fails to build.
+
+- **The front page now says which half of a new capability waits for a restart.** It said a
+  capability taken later re-reads the files it covers, which is true, and left the impression
+  that searching by it worked straight away, which is not: reading starts within seconds,
+  searching the new way needs one restart. It also says that Findra has no console window of
+  its own and that a shell therefore does not wait for the diagnostic commands, so the prompt
+  coming back early reads as expected rather than as a failure.
+
+- **The privacy page accounts for the one file outside its two folders.** The installer records
+  a single word beside the executable saying how Findra got onto the machine, which the page
+  did not mention while promising to say exactly what Findra stores. The code signing policy
+  likewise now names the one registry value Findra writes, the start-at-sign-in entry, rather
+  than only mentioning that the uninstaller removes it.
 
 - **A download cut short is never mistaken for a finished one**, even when the server
   does not say how long the file should have been. Before, a model that arrived
