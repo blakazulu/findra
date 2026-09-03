@@ -262,7 +262,38 @@ moment rather than an elevation prompt at every launch.
     developer's machine does not work on a stranger's, which is the whole reason the check runs
     at all.
 
+36. **The first tag, which is the first time `release.yml` has ever run.** Everything about it
+    has been asserted as text and nothing more: no runner has executed a line, Inno Setup is
+    not installed on the machine it was written on, and `installer/findra.iss` has therefore
+    never been compiled by anything. Before tagging, move the `## [Unreleased]` entries into a
+    numbered `## [x.y.z]` section - `build/Check-Release.ps1` exits 5 until that exists, which
+    is the gate doing its job rather than a fault - and check that the number matches
+    `Directory.Build.props`. Then push the tag and watch for:
+
+    - the **check** job printing the changelog section and nothing else. Whatever it prints is
+      the release body, verbatim;
+    - `choco install innosetup --version=6.3.3` putting `ISCC.exe` under
+      `%ProgramFiles(x86)%\Inno Setup 6` on the current runner image. If the package moves, the
+      step fails loudly rather than building nothing, which is the failure to prefer;
+    - `findra.iss` compiling at all, for both architectures. This is its first compilation
+      anywhere. `ArchitecturesAllowed=x64compatible` and `arm64compatible` are 6.3 syntax and a
+      6.2 compiler rejects them outright;
+    - `softprops/action-gh-release` finding the notes at
+      `artifacts/release-notes/release-notes.md`. `download-artifact` nests by artifact name,
+      and if that path is wrong the release is created with an empty body rather than failing;
+    - two installers attached, `findra-<version>-x64.exe` and `findra-<version>-arm64.exe`, and
+      `fail_on_unmatched_files` catching it if either is missing;
+    - the release body, the release page and the installers saying nothing about being signed.
+      The signing step is a placeholder that prints one line and exits.
+
+37. **Apply to the SignPath Foundation, once step 36 has produced a release to point at.**
+    `docs/code-signing-policy.md` is the application material and carries a status note saying
+    the arrangement is not yet in force. When the application is accepted, the note comes out
+    and the workflow's placeholder step becomes real **in the same commit**:
+    `TheSigningPageSaysItIsNotInForceForAsLongAsTheSigningStepDoesNothing` couples the two in
+    both directions and fails on whichever one moves alone.
+
 ## Notes
 
-Steps 1 to 4, 9 to 13 and 29 to 35 are the ones that have never executed in any form. Steps 5 to 8
+Steps 1 to 4, 9 to 13 and 29 to 37 are the ones that have never executed in any form. Steps 5 to 8
 have been verified by log line and by inspection, but not by eye.

@@ -311,6 +311,20 @@ into a numbered section on the first release.
   underneath it. A mode that quietly stopped working used to be found by the next person who
   needed it to explain something else.
 
+- **A release comes from a tag, and a tag cannot ship without its own notes.** Tagging a version
+  builds Findra for both 64-bit Intel and 64-bit ARM, runs the whole test suite and every
+  headless diagnostic against the published application, compiles an installer for each, and
+  publishes them on a release page whose text is this file's section for that version, word for
+  word. Nothing is published until the tag has been checked against the version the application
+  reports and against the section here: a tag that disagrees with either, or that carries a
+  pre-release suffix, stops the release before anything is built. Nothing in it reaches the
+  winget catalogue, which stays something only a person can start.
+
+- **The downloads are not signed, and the pipeline says so where it would sign them.** The step
+  is there and it prints one line explaining that the arrangement has not been made yet, because
+  the alternative - a step called sign that quietly does nothing - is worse than no step at
+  all. Nothing on the release page, in the installer or in this repository claims otherwise.
+
 ### Changed
 
 - **A capability you install is read in the same session you installed it.** Downloading one
