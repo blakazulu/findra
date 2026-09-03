@@ -853,7 +853,7 @@ so in `CHANGELOG.md`.
 
 # Phase 8 - Uninstall
 
-Three items. **Everything above is destroyed here. Nothing below phase 8 can be re-run without
+Four items. **Everything above is destroyed here. Nothing below phase 8 can be re-run without
 starting from phase 1.**
 
 ### 8.1 (catalogue 33, second half, and 25) Keep by default - admin, destructive
@@ -914,6 +914,30 @@ From a **normal** terminal, on a source build:
 are both gone and nothing beside them has been touched.
 
 **This deletes the 900 MB of models.** Step 0.1 is where you decided whether that mattered.
+
+### 8.4 Uninstall keeping everything, then install again - admin
+
+The step none of the ones above covered, and the one that shipped three faults at once. Uninstall
+from **Apps & features** and click straight through the prompt with the box **unticked**, so the
+models, the index and the settings all survive. Then run the installer again.
+
+**Pass:**
+- **the welcome screen is there.** It is the only surface that registers the `HighestAvailable`
+  task, and uninstalling has just removed that task, so a launch that skips it comes up with half
+  the product missing. `--uninstall` clears `FirstRunDone` in the settings it keeps, for exactly
+  this;
+- the capability rows show the kept models as already installed and the summary offers **nothing
+  to download** - the point of keeping them;
+- answer the screen, take the elevation prompt, and then
+  `schtasks /query /xml ONE /tn "Findra names helper"` finds it;
+- search a filename you know exists and **it comes back**;
+- turn reading on and the count starts climbing.
+
+Those last three are not three checks. With the task missing they all fail together and look
+unrelated: names come back empty because the name index lives in the helper the task starts; the
+content queue is fed from the USN journal through that same helper, so nothing is ever queued; and
+"Start now" then starts an indexer that drains an empty queue and goes idle within a second, which
+reads as a button that does nothing. If any one of the three fails here, check the task first.
 
 ---
 
