@@ -130,7 +130,18 @@ $"""
             { UseShellExecute = true, Verb = "runas", CreateNoWindow = true, WindowStyle = ProcessWindowStyle.Hidden };
             using Process? p = Process.Start(psi);
             if (p is null) return false;
-            p.WaitForExit(60_000);
+
+            // The wait's own answer, not a discarded bool. A UAC prompt nobody answers leaves
+            // schtasks running for as long as the dialog is on screen, and reading ExitCode on a
+            // live process throws - which lands in the catch below and is reported as a
+            // registration failure with an unrelated exception attached.
+            if (!p.WaitForExit(60_000))
+            {
+                try { p.Kill(entireProcessTree: true); } catch { }
+                Log.Error("startup", "schtasks /create did not return within 60s; the elevation prompt was probably left unanswered");
+                return false;
+            }
+
             if (p.ExitCode != 0) { Log.Error("startup", $"schtasks /create exited {p.ExitCode}"); return false; }
             Log.Info("startup", "names helper task registered");
             return true;
@@ -151,16 +162,28 @@ $"""
     /// <para><c>/end</c> first, because deleting a task whose instance is running leaves the
     /// process behind - and that process is the elevated one holding a volume handle.</para>
     /// </summary>
-    public static bool Unregister()
+    public static bool Unregister() => Unregister(RunSchtasks, () => Query().State);
+
+    /// <summary>
+    /// <see cref="Unregister()"/> with the two things it cannot do in a test passed in: running
+    /// schtasks, and asking afterwards whether the task is still there.
+    ///
+    /// <para>Public rather than internal only so the sequence can be tested: this assembly grants
+    /// no <c>InternalsVisibleTo</c>, and every other seam the tests reach is public too. It is a
+    /// seam, not an API - nothing but <see cref="Unregister()"/> should call it.</para>
+    /// </summary>
+    public static bool Unregister(Func<string, int> run, Func<HelperTaskState> query)
     {
-        RunSchtasks(EndArgs(TaskName));               // may fail: it is not running. Not an error.
-        int code = RunSchtasks(DeleteArgs(TaskName));
+        ArgumentNullException.ThrowIfNull(run);
+        ArgumentNullException.ThrowIfNull(query);
+
+        run(EndArgs(TaskName));                       // may fail: it is not running. Not an error.
+        int code = run(DeleteArgs(TaskName));
 
         // A non-zero exit is almost always "no such task", said in the user's own language - which
         // is why it is not parsed. Confirm by asking instead: Query reads the XML form, which is
         // the only answer that is not localized.
-        (HelperTaskState state, _) = Query();
-        bool gone = state != HelperTaskState.Registered;
+        bool gone = query() != HelperTaskState.Registered;
 
         Log.Info("uninstall", gone
             ? "the names helper task is removed"
@@ -177,9 +200,23 @@ $"""
             { UseShellExecute = false, CreateNoWindow = true, RedirectStandardOutput = true, RedirectStandardError = true };
             using Process? p = Process.Start(psi);
             if (p is null) return -1;
-            p.StandardOutput.ReadToEnd();
-            p.StandardError.ReadToEnd();
-            return p.WaitForExit(10_000) ? p.ExitCode : -1;
+
+            // Both reads started before the wait, and never ReadToEnd. Two redirected streams
+            // drained one after the other deadlock the moment the child fills the one nobody is
+            // reading: it blocks writing, this blocks reading the other, and the timeout below is
+            // never reached at all - an unbounded hang inside an elevated uninstaller.
+            Task<string> stdout = p.StandardOutput.ReadToEndAsync();
+            Task<string> stderr = p.StandardError.ReadToEndAsync();
+
+            if (!p.WaitForExit(10_000))
+            {
+                try { p.Kill(entireProcessTree: true); } catch { }
+                Log.Warn("uninstall", $"schtasks {arguments} did not return within 10s");
+                return -1;
+            }
+
+            Task.WaitAll([stdout, stderr], TimeSpan.FromSeconds(1));
+            return p.ExitCode;
         }
         catch (Exception ex) { Log.Warn("uninstall", $"schtasks {arguments} failed: {ex.Message}"); return -1; }
     }

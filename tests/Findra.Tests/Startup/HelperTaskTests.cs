@@ -89,4 +89,68 @@ public class HelperTaskTests
 
         Assert.Equal(@"""D:\Tools & Utils\findra.exe""", doc.Descendants(ns + "Command").Single().Value);
     }
+
+    // ---- taking it back off the machine ---------------------------------------------------------
+
+    /// <summary>
+    /// Everything <see cref="HelperTask.Unregister()"/> does to the machine, in the order it did
+    /// it. Only BuildXml and the two argument strings were covered before, so replacing the whole
+    /// body with <c>return true</c> - never running schtasks, never asking afterwards - left the
+    /// suite green while the HighestAvailable task stayed registered.
+    /// </summary>
+    private static (bool Gone, List<string> Calls) Unregister(HelperTaskState after, int deleteCode = 0)
+    {
+        var calls = new List<string>();
+        bool gone = HelperTask.Unregister(
+            run: arguments => { calls.Add(arguments); return deleteCode; },
+            query: () => { calls.Add("query"); return after; });
+        return (gone, calls);
+    }
+
+    [Fact]
+    public void TheTaskIsStoppedBeforeItIsDeleted()
+    {
+        // Deleting a task whose instance is running leaves the process behind - and that process
+        // is the elevated one holding a volume handle on the system drive.
+        (_, List<string> calls) = Unregister(HelperTaskState.NotRegistered);
+
+        Assert.Equal(3, calls.Count);
+        Assert.Contains("/end", calls[0], StringComparison.Ordinal);
+        Assert.Contains("/delete", calls[1], StringComparison.Ordinal);
+        Assert.Contains("\"Findra names helper\"", calls[0], StringComparison.Ordinal);
+        Assert.Contains("\"Findra names helper\"", calls[1], StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void TheAnswerComesFromAskingAgainAndNotFromSchtasksOwnExitCode()
+    {
+        // schtasks says "no such task" in the user's own language, so its non-zero exit cannot be
+        // read. The query runs last, after both commands, and it is what decides.
+        (bool gone, List<string> calls) = Unregister(HelperTaskState.NotRegistered, deleteCode: 1);
+
+        Assert.Equal("query", calls[^1]);
+        Assert.True(gone, "a task schtasks reported an error for, that is not there afterwards, is gone");
+    }
+
+    [Fact]
+    public void ATaskStillRegisteredAfterwardsIsReportedAsNotRemoved()
+    {
+        // The one answer that must never be optimistic: it is an elevated logon task pointing at a
+        // binary the uninstaller is about to delete, and this false is the uninstall's exit code.
+        (bool gone, _) = Unregister(HelperTaskState.Registered);
+
+        Assert.False(gone);
+    }
+
+    [Fact]
+    public void ATaskThatWasNeverThereIsTheSameOutcomeAsOneThatWasRemoved()
+    {
+        // Findra installed from source on a machine where registration failed. Nothing is left
+        // pointing at the binary, which is the only thing the caller is asking about.
+        Assert.True(Unregister(HelperTaskState.NotRegistered, deleteCode: 1).Gone);
+        // And a query that could not answer at all, which is deliberately not Registered: the
+        // delete has already run, and refusing to say so would fail the uninstall over a
+        // confirmation nobody can act on.
+        Assert.True(Unregister(HelperTaskState.Unknown, deleteCode: -1).Gone);
+    }
 }

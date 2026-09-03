@@ -401,6 +401,13 @@ into a numbered section on the first release.
   everything.** Two things live outside them: the scheduled task that starts the name helper
   at sign-in, and the start-at-sign-in entry. The page now names both and says to run
   `findra.exe --uninstall`, or use the uninstaller, to remove them.
+- **The uninstaller can no longer hang while removing the scheduled task.** It read the two
+  streams `schtasks` writes one after the other, which stops dead the moment either fills up -
+  inside an elevated uninstall, with no timeout that can rescue it and no way out but the task
+  manager.
+- **A registration prompt nobody answers is now reported as what it is.** If the elevation
+  prompt for the scheduled task was left on screen, Findra logged an unrelated error, called it
+  a registration failure, and left a temporary file behind in `%TEMP%`.
 
 ### Security
 

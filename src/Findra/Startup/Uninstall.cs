@@ -32,11 +32,11 @@ public static class Uninstall
     /// an inconvenience, and a plan that could express "keep the task" is one somebody eventually
     /// reads as an option.
     ///
-    /// <para>The ORDER lives in <see cref="Run"/>, which is the only thing that performs it. It
-    /// used to be listed here as a second enum nothing executed: both order tests then asserted a
-    /// literal array against its own literals and stayed green with the task removal deleted from
-    /// <see cref="Run"/> entirely. <c>TheTaskAndTheAutostartEntryGoBeforeAnyDataIsDeleted</c> reads
-    /// <see cref="Run"/> instead.</para>
+    /// <para>The ORDER lives in <see cref="Run(string[])"/>, which is the only thing that performs
+    /// it. It used to be listed here as a second enum nothing executed: both order tests then
+    /// asserted a literal array against its own literals and stayed green with the task removal
+    /// deleted from <c>Run</c> entirely. The order is now recorded as it happens, through the seam
+    /// the second overload of <c>Run</c> takes.</para>
     /// </summary>
     public static UninstallPlan Plan(bool purge, IReadOnlyList<DataSize> measured)
     {
@@ -231,9 +231,40 @@ public static class Uninstall
     public static string ReportFile =>
         Path.Combine(Path.GetTempPath(), "findra-uninstall.txt");
 
-    public static int Run(string[] args)
+    public static int Run(string[] args) =>
+        Run(args, HelperTask.Unregister, Autostart.Clear,
+            spare => StopAll(spare), deletes => Delete(deletes, Roots()));
+
+    /// <summary>
+    /// The uninstall, with every effect it has on the machine passed in.
+    ///
+    /// <para>This overload exists because the version without it could not be run by a test at
+    /// all - it stopped real processes, ran schtasks elevated, wrote the registry and deleted
+    /// folders - so the two tests that covered the order read <c>Run</c>'s own SOURCE and asserted
+    /// on where four names appeared in it. That is blind to what the code does with them:
+    /// wrapping the whole removal block in <c>if (!quiet)</c> keeps every name in place and in
+    /// order, and disables removal on exactly the route the installer takes, leaving the
+    /// HighestAvailable task pointing at a binary that is about to be deleted.</para>
+    ///
+    /// <para>Public rather than internal only so the tests can reach it: this assembly grants no
+    /// <c>InternalsVisibleTo</c>, and every other seam the tests reach is public too. It is a
+    /// seam, not an API - nothing but <see cref="Run(string[])"/> should call it.</para>
+    ///
+    /// <para><paramref name="elevated"/> is the fifth thing a test cannot do for real. Left null
+    /// it is the real check, which is what the shipped path uses.</para>
+    /// </summary>
+    public static int Run(string[] args, Func<bool> unregisterTask, Action clearAutostart,
+                          Action<IReadOnlyList<int>> stop,
+                          Func<IReadOnlyList<DataSize>, IReadOnlyList<Removal>> delete,
+                          Func<bool>? elevated = null)
     {
         ArgumentNullException.ThrowIfNull(args);
+        ArgumentNullException.ThrowIfNull(unregisterTask);
+        ArgumentNullException.ThrowIfNull(clearAutostart);
+        ArgumentNullException.ThrowIfNull(stop);
+        ArgumentNullException.ThrowIfNull(delete);
+        elevated ??= IsElevated;
+
         bool purge = args.Contains("--purge", StringComparer.OrdinalIgnoreCase);
         bool quiet = args.Contains("--quiet", StringComparer.OrdinalIgnoreCase);
         bool dry = args.Contains("--dry-run", StringComparer.OrdinalIgnoreCase);
@@ -252,7 +283,7 @@ public static class Uninstall
             return 0;
         }
 
-        switch (Decide(IsElevated(), relaunched: parent > 0))
+        switch (Decide(elevated(), relaunched: parent > 0))
         {
             case Route.Elevate: return Relaunch(args);
             case Route.Fail:
@@ -264,7 +295,7 @@ public static class Uninstall
         if (!quiet) Console.Write(report);
 
         // Stop everything first, sparing this process and the parent that is waiting on it.
-        StopAll(spare: parent > 0 ? [Environment.ProcessId, parent] : [Environment.ProcessId]);
+        stop(parent > 0 ? [Environment.ProcessId, parent] : [Environment.ProcessId]);
 
         // Then the two that matter most, and the two that are done BEFORE any deletion, so a
         // failure in the delete loop still leaves a machine with no orphaned elevated task.
@@ -275,11 +306,11 @@ public static class Uninstall
         // non-zero exit code nobody acts on, which is the cheaper of the two mistakes by a wide
         // margin. Only a real elevated uninstall proves it is really gone, which is why the
         // end-to-end checklist carries that step.
-        bool taskGone = HelperTask.Unregister();
-        Autostart.Clear();
+        bool taskGone = unregisterTask();
+        clearAutostart();
 
         // Then the data, only if asked, and only inside Findra's own folders.
-        IReadOnlyList<Removal> removed = purge ? Delete(plan.Deletes, Roots()) : [];
+        IReadOnlyList<Removal> removed = purge ? delete(plan.Deletes) : [];
 
         // Last, the one thing it cannot do.
         if (!quiet)
