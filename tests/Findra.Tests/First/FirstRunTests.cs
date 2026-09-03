@@ -1137,10 +1137,28 @@ public class FirstRunTests
             Assert.True(FirstRunLayout.HitTest(x, y, rows, 3).Target != FirstRunTarget.None,
                         $"{what} answers nothing even while the screen is a question");
 
-        // And the one thing that still answers is the button that closes the window.
+        // The button included, WHILE THE FILES ARE STILL COMING. "It should be just a download
+        // status screen at that point": a pill that answers is a pill that has to mean something,
+        // and the only thing it could mean during a download is a choice nobody was offered. The
+        // way out here is the window's own close, which is never disabled - a 2.93 GB fetch is
+        // long enough that a screen answering nothing at all AND refusing to close would be a
+        // trap rather than a settled question.
+        Assert.Equal(FirstRunTarget.None,
+            FirstRunLayout.HitTest(FirstRunLayout.ButtonRect(1).MidX, FirstRunLayout.ButtonRect(1).MidY,
+                                   rows, 3, settled: true, finished: false).Target);
+
+        // And once the last byte has landed it answers, because now there is something for it to
+        // say. Both halves are asserted at the same point on the screen, so this is a statement
+        // about the stage and not about where the button happens to sit.
         Assert.Equal(FirstRunTarget.Go,
             FirstRunLayout.HitTest(FirstRunLayout.ButtonRect(1).MidX, FirstRunLayout.ButtonRect(1).MidY,
-                                   rows, 3, settled: true).Target);
+                                   rows, 3, settled: true, finished: true).Target);
+
+        // Nothing ELSE answers when it is finished either - the chooser stays settled.
+        foreach ((string what, float x, float y) in points)
+            Assert.True(FirstRunLayout.HitTest(x, y, rows, 3, settled: true, finished: true).Target
+                            == FirstRunTarget.None,
+                        $"{what} answers a click after the download finished");
     }
 }
 

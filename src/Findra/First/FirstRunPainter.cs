@@ -269,12 +269,20 @@ public static class FirstRunLayout
     /// decision that has already been handed over, and a download that had begun would not
     /// change with it. The painter draws the same distinction rather than leaving controls
     /// looking live.</para></summary>
-    public static FirstRunHit HitTest(float x, float y, int rows, int limitRow = -1, bool settled = false)
+    public static FirstRunHit HitTest(
+        float x, float y, int rows, int limitRow = -1, bool settled = false, bool finished = false)
     {
         if (x < 0 || x > Width || y < 0 || y > Height) return new FirstRunHit(FirstRunTarget.None, -1);
 
+        // While the download runs this screen answers NOTHING. It is a status screen and the
+        // chooser behind it is settled, so a control that still took a click would be answering a
+        // question that has already been given. The way out during a download is the window's own
+        // close, which stays live and is what the summary points at - a 2.93 GB fetch on a slow
+        // line is long enough that a screen with no exit at all would be a trap rather than a
+        // safeguard. Only when it has finished does a button appear, because only then is there
+        // something for it to mean.
         if (settled)
-            return ButtonRect(1).Contains(x, y)
+            return finished && ButtonRect(1).Contains(x, y)
                 ? new FirstRunHit(FirstRunTarget.Go, -1)
                 : new FirstRunHit(FirstRunTarget.None, -1);
 
@@ -458,11 +466,13 @@ public static class FirstRunPainter
             Parts.Pill(canvas, FirstRunLayout.ButtonRect(0), FirstRun.NotNowLabel,
                        chosen: false, hovered: s.HoverTarget == FirstRunTarget.NotNow, d, face);
 
-        // Lit in the second act as well as the first. It is the only thing on the screen that
-        // still answers, and a settled chooser behind an unlit button is a screen with no way out
-        // that anybody can see.
-        Parts.Pill(canvas, FirstRunLayout.ButtonRect(1), FirstRun.GoLabel(s.Stage),
-                   chosen: true, hovered: s.HoverTarget == FirstRunTarget.Go, d, face);
+        // Not drawn at all while the files are still coming. The second act is a status screen,
+        // and a pill is a promise that a click does something - drawn and inert is worse than
+        // absent, because absent is honest. It arrives with the last byte, which is also the
+        // moment its label stops being a guess about what the person wants to do next.
+        if (s.Stage != FirstRunStage.Downloading)
+            Parts.Pill(canvas, FirstRunLayout.ButtonRect(1), FirstRun.GoLabel(s.Stage),
+                       chosen: true, hovered: s.HoverTarget == FirstRunTarget.Go, d, face);
     }
 
     /// <summary>The parting between what gets downloaded and how Findra behaves, drawn in the
