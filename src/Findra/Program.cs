@@ -8,6 +8,7 @@ public static class Program
     public static int Main(string[] args)
     {
         string mode = args.Length > 0 ? args[0] : "";
+        if (TalksToWhoeverTypedIt(mode)) ParentConsole.Borrow();
         UseUtf8OnTheConsole();
         return mode switch
         {
@@ -42,6 +43,30 @@ public static class Program
     }
 
     /// <summary>
+    /// Whether this mode exists to print something to the person who typed it, and so should join
+    /// the console they typed it at. Findra is a windows-subsystem binary and has no output of its
+    /// own until it asks for one - see <see cref="ParentConsole"/> for why it has to be.
+    ///
+    /// <para>Every mode that begins with <c>--</c> qualifies, including a mistyped one, which owes
+    /// the caller the list of real modes and exit 1. Three do not:</para>
+    ///
+    /// <para><c>--names</c> is started by the logon task and <c>--index</c> by the interface. Both
+    /// are headless children nobody typed, both report through the log file, and neither has a
+    /// terminal to join - so asking for one buys nothing and, on the one launch where the
+    /// interface itself was started from a prompt, would put the indexer's noise in somebody's
+    /// shell.</para>
+    ///
+    /// <para>The interface is the third, and it is a deliberate refusal rather than an oversight.
+    /// A shell does not wait for a windows-subsystem process, so its prompt comes back at once and
+    /// the widget then runs for hours behind it: anything Findra wrote would land in the middle of
+    /// whatever was typed next, and a Ctrl+C aimed at that prompt would be aimed at Findra. The
+    /// interface has a log file, a tray icon and a card to say things through, all of which
+    /// outlive a shell. It says nothing to one.</para>
+    /// </summary>
+    private static bool TalksToWhoeverTypedIt(string mode) =>
+        mode.StartsWith("--", StringComparison.Ordinal) && mode is not ("--names" or "--index");
+
+    /// <summary>
     /// Several of the sentences the diagnostics print are the card's own, and the card's
     /// separator is a middle dot. A console left on the machine's OEM code page renders that as
     /// a replacement character, and so does every Hebrew string the probes carry. Asking for
@@ -53,6 +78,11 @@ public static class Program
     /// anywhere says so. Some hosts refuse the change, and a
     /// window with no console attached refuses it too - a mangled separator is not worth failing
     /// a diagnostic over, and it is certainly not worth failing to start.</para>
+    ///
+    /// <para>It runs AFTER the console is borrowed, and that order is load-bearing: setting the
+    /// encoding sets the console's output code page, and a process that has not joined a console
+    /// yet has no code page to set. Reversed, every diagnostic would take the caught exception and
+    /// print the separator as a replacement character.</para>
     /// </summary>
     private static void UseUtf8OnTheConsole()
     {

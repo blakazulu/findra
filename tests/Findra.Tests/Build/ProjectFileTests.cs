@@ -54,6 +54,30 @@ public class ProjectFileTests
     }
 
     [Fact]
+    public void TheApplicationIsAWindowsSubsystemBinaryAndNotAConsoleOne()
+    {
+        // <OutputType>Exe</OutputType> builds a console-subsystem binary, and Windows gives one a
+        // console window whenever it is started without a terminal. For a widget that is every
+        // launch a stranger will ever make: the installer's run step, the Start-menu shortcut, an
+        // Explorer double-click, the autostart entry at every sign-in, and the elevated logon task
+        // - which is a SECOND black window, and <Hidden>true</Hidden> in the task XML hides the
+        // task from the Task Scheduler list, not its window. The window then stays for the life of
+        // the process, so closing it kills the widget, and nothing on it says what it is.
+        //
+        // It hid here for the whole project because a launch from a terminal attaches to the
+        // console that already exists and shows nothing new, and --searchshot has no window at
+        // all. Neither route is how anybody installs Findra.
+        //
+        // Flipping this back to Exe is not caught by anything else in the suite: everything else
+        // builds, runs and passes. The diagnostics keep printing because Program.Main joins the
+        // caller's console before the mode switch, which is a thing a windows-subsystem process
+        // has to do and a console-subsystem one never would.
+        XDocument app = Projects().Single(p => p.Path.EndsWith("Findra.csproj", StringComparison.Ordinal)).Xml;
+
+        Assert.Equal("WinExe", app.Descendants("OutputType").Single().Value);
+    }
+
+    [Fact]
     public void NoProjectPinsARuntimeIdentifier()
     {
         // Windows on ARM stays reachable, and the cost of keeping it possible is that nobody
