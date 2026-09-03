@@ -60,19 +60,34 @@ public sealed class QueueFeederTests : IDisposable
     public void TheDefaultRulesDecideWhatIsWorthOpening(string path, bool expected)
     {
         ResultKind kind = FileKinds.Classify(Path.GetFileName(path), false);
-        Assert.Equal(expected, QueueFeeder.Eligible(path, kind, FileKinds.DefaultExclusions, []));
+        Assert.Equal(expected, QueueFeeder.Eligible(path, kind, FileKinds.DefaultExclusions));
     }
 
     [Fact]
-    public void ARepoRootExcludesWhatIsUnderItAndNotWhatMerelyStartsWithIt()
+    public void NothingIsSkippedThatWasNotAskedToBe()
     {
-        // "C:\Code\findra" must not exclude "C:\Code\findra-notes". A StartsWith without the
-        // separator check silently drops a whole sibling folder, and nobody finds out.
-        string[] roots = [@"C:\Code\findra"];
+        // A folder holding a .git used to have its contents refused, found by walking the disk for
+        // the marker. It was a guess about whose files they were, and on the machine it shipped to
+        // it was wrong 21 times over - every root was that person's own work, with the pictures
+        // they were searching for inside. It was invisible too: nothing named it, and the only
+        // folder control in the interface adds MORE refusals, so it could not be seen or overruled.
+        //
+        // Skipping is asked for now, never inferred. A checkout under no exclusion is read like
+        // anything else.
+        Assert.True(QueueFeeder.Eligible(@"C:\Code\findra\docs\spec.md", ResultKind.Document, []));
+        Assert.True(QueueFeeder.Eligible(@"C:\Code\Work\app\assets\icon.png", ResultKind.Photo, []));
 
-        Assert.False(QueueFeeder.Eligible(@"C:\Code\findra\docs\spec.md", ResultKind.Document, [], roots));
-        Assert.True(QueueFeeder.Eligible(@"C:\Code\findra-notes\spec.md", ResultKind.Document, [], roots));
-        Assert.True(QueueFeeder.Eligible(@"C:\Code\other\spec.md", ResultKind.Document, [], roots));
+        // And what a checkout really does bury an index with is already in the default list, where
+        // it is a line the person it belongs to can read and delete.
+        foreach (string buried in new[]
+                 {
+                     @"C:\Code\app\node_modules\pkg\readme.md",
+                     @"C:\Code\app\.git\COMMIT_EDITMSG",
+                     @"C:\Code\app\bin\out.txt",
+                     @"C:\Code\app\obj\gen.txt",
+                 })
+            Assert.False(QueueFeeder.Eligible(buried, ResultKind.Document, FileKinds.DefaultExclusions),
+                         buried + " should be excluded by the default list");
     }
 
     // ---- journal events ----

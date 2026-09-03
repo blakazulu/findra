@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
@@ -37,8 +37,6 @@ public sealed class QueueFeeder : IDisposable
     private readonly ContentDb _db;
     private readonly Func<Config> _config;
 
-    private IReadOnlyList<string> _repoRoots = [];
-
     /// <summary>The last total THIS SESSION'S channel was seen at, so an unchanged count is not
     /// read as a fresh drop. Reset by <see cref="NoteSessionStarted"/>, because the counter it
     /// tracks belongs to one connection and starts again at zero on the next one. See
@@ -71,38 +69,29 @@ public sealed class QueueFeeder : IDisposable
 
     // ---- eligibility -------------------------------------------------------------------------
 
-    /// <summary>Worth opening: a kind with content, outside every exclusion, outside every
-    /// repository. A repository's fixtures, sample media and vendored documents are not the
-    /// user's library; their NAMES stay searchable, their contents are not read.
+    /// <summary>
+    /// Worth opening: a kind with content, outside every exclusion. That is the whole rule.
     ///
-    /// Static and pure, taking the rules as parameters rather than reading fields, because this is
-    /// the decision most likely to be argued about later and it has to be answerable one path at a
-    /// time with no database, no config file and no helper.</summary>
-    public static bool Eligible(string path, ResultKind kind,
-                                IReadOnlyList<string> exclusions, IReadOnlyList<string> repoRoots)
-        => FileKinds.HasContent(kind)
-           && !FileKinds.Excluded(path, exclusions)
-           && !UnderAnyRoot(path, repoRoots);
-
-    /// <summary>Under a root, not merely starting with its characters. Without the separator
-    /// test, a root of C:\Code\findra silently swallows C:\Code\findra-notes as well.</summary>
-    private static bool UnderAnyRoot(string path, IReadOnlyList<string> roots)
-    {
-        foreach (string root in roots)
-            if (path.Length > root.Length && path[root.Length] == '\\' &&
-                path.StartsWith(root, StringComparison.OrdinalIgnoreCase)) return true;
-        return false;
-    }
-
-    /// <summary>The repository roots to keep out of the content index. Sorted once, ordinally and
-    /// case-insensitively, because it is walked per file.</summary>
-    public void SetRepoRoots(IReadOnlyList<string> roots)
-    {
-        var sorted = new List<string>(roots.Count);
-        foreach (string r in roots) sorted.Add(r.TrimEnd('\\'));
-        sorted.Sort(StringComparer.OrdinalIgnoreCase);
-        _repoRoots = sorted;
-    }
+    /// <para>There used to be a second half. Any folder holding a <c>.git</c> was discovered on
+    /// the disk and its contents were never read, on the reasoning that a checkout is mostly other
+    /// people's files. It is a defensible guess and it was wrong about the machine it shipped on:
+    /// 21 roots, every one of them the person's own work, with the pictures they went looking for
+    /// inside. Worse, it was invisible - nothing in the interface named it, and the only folder
+    /// control there ADDS refusals, so the rule could be neither seen nor overruled.</para>
+    ///
+    /// <para><b>Skipping is something a person asks for, never something Findra infers.</b> The
+    /// default exclusions already carry what actually buries an index -
+    /// <c>node_modules</c>, <c>.git</c>, <c>bin</c>, <c>obj</c>, <c>packages</c>,
+    /// <c>site-packages</c> - and every one of them is a line somebody can read and delete. An
+    /// "always read" list was the other way to fix this and is the worse one: a second list, whose
+    /// only job is arguing with a rule nobody asked for.</para>
+    ///
+    /// <para>Static and pure, taking the rules as a parameter rather than reading fields, because
+    /// this is the decision most likely to be argued about later and it has to be answerable one
+    /// path at a time with no database, no config file and no helper.</para>
+    /// </summary>
+    public static bool Eligible(string path, ResultKind kind, IReadOnlyList<string> exclusions)
+        => FileKinds.HasContent(kind) && !FileKinds.Excluded(path, exclusions);
 
     /// <summary>
     /// The suffixes the helper is asked to enumerate: every extension that classifies to a kind
@@ -144,7 +133,6 @@ public sealed class QueueFeeder : IDisposable
 
         Config cfg = _config();
         IReadOnlyList<string> exclusions = cfg.SearchExclusions;
-        IReadOnlyList<string> roots = _repoRoots;
 
         var positions = new Dictionary<char, Position>();
         int queued = 0;
@@ -195,7 +183,7 @@ public sealed class QueueFeeder : IDisposable
             if ((e.Attributes & NtfsVolume.FileAttributeDirectory) != 0) continue;
 
             ResultKind kind = FileKinds.Classify(e.Name, false);
-            if (Eligible(e.Path, kind, exclusions, roots))
+            if (Eligible(e.Path, kind, exclusions))
             {
                 _db.Enqueue(vol, e.Frn, e.Path, kind,
                             (e.Reason & NtfsVolume.ReasonFileCreate) != 0 ? ReasonNew : ReasonChange, tx);
@@ -307,7 +295,6 @@ public sealed class QueueFeeder : IDisposable
         string vol = letter.ToString();
         Config cfg = _config();
         IReadOnlyList<string> exclusions = cfg.SearchExclusions;
-        IReadOnlyList<string> roots = _repoRoots;
 
         // One read of the item table rather than a lookup per file. A finished disk is a million
         // rows and a million single-row queries; this is one scan and a dictionary. Indexed,
@@ -335,7 +322,7 @@ public sealed class QueueFeeder : IDisposable
             bool held = known.TryGetValue((vol, f.Frn), out long had);
             if (held && f.Mtime != 0 && had == f.Mtime) continue;
             ResultKind kind = FileKinds.Classify(System.IO.Path.GetFileName(f.Path), false);
-            if (!Eligible(f.Path, kind, exclusions, roots)) continue;
+            if (!Eligible(f.Path, kind, exclusions)) continue;
             if (!queued.Add(f.Frn)) continue;
             _db.Enqueue(vol, f.Frn, f.Path, kind, held ? ReasonChange : ReasonNew, tx);
         }
@@ -481,7 +468,7 @@ public sealed class QueueFeeder : IDisposable
     /// <summary>
     /// Bring the queue and the index back in line with rules that changed between launches.
     ///
-    /// Exclusions are config and repository roots are discovered, so both move. What they now
+    /// Exclusions are configuration, so they move. What they now
     /// exclude has to leave the queue, and what is already indexed under them has to be queued for
     /// removal. Returns how many rows it touched.
     ///
@@ -493,7 +480,6 @@ public sealed class QueueFeeder : IDisposable
 
         Config cfg = _config();
         IReadOnlyList<string> exclusions = cfg.SearchExclusions;
-        IReadOnlyList<string> roots = _repoRoots;
         int touched = 0;
 
         using ContentDb.Scope tx = _db.Begin();
@@ -503,7 +489,7 @@ public sealed class QueueFeeder : IDisposable
             // A queued delete is kept whatever the rules now say about its path. Dropping it
             // would strand the indexed row it was going to remove, permanently.
             if (p.Reason == ContentDb.ReasonDelete) continue;
-            if (Eligible(p.Path, p.Kind, exclusions, roots)) continue;
+            if (Eligible(p.Path, p.Kind, exclusions)) continue;
             _db.Dequeue(p.Id, tx);
             touched++;
         }
@@ -511,7 +497,7 @@ public sealed class QueueFeeder : IDisposable
         foreach ((string vol, ulong frn, string path) in _db.ItemPaths())
         {
             ResultKind kind = FileKinds.Classify(System.IO.Path.GetFileName(path), false);
-            if (Eligible(path, kind, exclusions, roots)) continue;
+            if (Eligible(path, kind, exclusions)) continue;
             _db.Enqueue(vol, frn, path, kind, ContentDb.ReasonDelete, tx);
             touched++;
         }

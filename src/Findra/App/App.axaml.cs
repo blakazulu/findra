@@ -737,16 +737,6 @@ internal sealed class Shell : ISettingsHost
     }
 
     /// <summary>
-    /// A repository is found by the one file every git checkout has in the same place. The
-    /// enumerate call never returns directories - a folder whose name ends in a suffix is exactly
-    /// what its own test forbids - so asking for ".git" would come back empty every time; asking
-    /// for the marker file inside it and taking the grandparent finds the same roots and costs the
-    /// same single pass.
-    /// </summary>
-    private static readonly string[] RepoMarkerSuffix = ["HEAD"];
-    private const string RepoMarkerTail = @"\.git\HEAD";
-
-    /// <summary>
     /// Open the process's stores and start the loop that decides what is indexed.
     ///
     /// ORDER MATTERS. The writer is opened first because it is what creates the file, the schema
@@ -961,10 +951,8 @@ internal sealed class Shell : ISettingsHost
             PumpIndexer(db);
         }
 
-        // Learned before anything is judged, because a repository root changes what is eligible.
-        // Reconciled again afterwards: the pass at startup ran before the helper was reachable and
-        // therefore before any root was known.
-        await LearnRepoRootsAsync(client, feeder, drives, Pump, ct).ConfigureAwait(false);
+        // Reconciled here as well as at startup: the startup pass ran before the helper was
+        // reachable, so anything that depends on the volume list had nothing to work with then.
         feeder.Reconcile();
 
         // The pushed events go into this queue as they arrive, so nothing about the writing side
@@ -1055,27 +1043,6 @@ internal sealed class Shell : ISettingsHost
             walkedAt[v] = System.Diagnostics.Stopwatch.GetTimestamp();
             await FirstPass.WalkAsync(client, feeder, v, at, EnumerateBatch, pump, ct).ConfigureAwait(false);
         }
-    }
-
-    private static async Task LearnRepoRootsAsync(NameClient client, QueueFeeder feeder,
-                                                  IReadOnlyList<char> drives, Action pump,
-                                                  CancellationToken ct)
-    {
-        var roots = new List<string>();
-        foreach (char v in drives)
-        {
-            await foreach (EnumeratedFile f in client
-                               .EnumerateAsync(v, RepoMarkerSuffix, EnumerateBatch, ct)
-                               .ConfigureAwait(false))
-            {
-                pump();
-                if (!f.Path.EndsWith(RepoMarkerTail, StringComparison.OrdinalIgnoreCase)) continue;
-                roots.Add(f.Path[..^RepoMarkerTail.Length]);
-            }
-        }
-        feeder.SetRepoRoots(roots);
-        Log.Info("index", string.Create(CultureInfo.InvariantCulture,
-            $"{roots.Count} repository root(s) found; their names stay searchable and their contents are not read"));
     }
 
     /// <summary>Which drives are fed. An empty setting means every volume the helper reports,
