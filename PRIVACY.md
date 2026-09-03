@@ -71,8 +71,11 @@ re-downloading gigabytes and re-indexing a disk is expensive and most people who
 are reinstalling. Deleting them is a checkbox in the uninstaller and a flag on the command
 line, and `findra.exe --uninstall --purge` removes everything.
 
-You can also just delete `%LOCALAPPDATA%\Findra\` and `%APPDATA%\Findra\` yourself. Nothing
-else on your machine is touched.
+You can also just delete `%LOCALAPPDATA%\Findra\` and `%APPDATA%\Findra\` yourself, which
+removes everything Findra stored. Two things live outside those folders, and deleting the
+folders by hand does not remove them: the scheduled task that starts the name helper at
+sign-in, and the start-at-sign-in entry if you turned it on. Run `findra.exe --uninstall` to
+remove those, or use the uninstaller. Nothing else on your machine is touched.
 
 ## Children
 
