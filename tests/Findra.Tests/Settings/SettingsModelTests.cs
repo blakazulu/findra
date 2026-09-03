@@ -848,4 +848,22 @@ public class SettingsModelTests
             if (before[i].Id != id) Assert.Equal(before[i].Value, after[i].Value);
         }
     }
+
+    [Fact]
+    public void TheContentSentenceChangesWhenTheIndexerStarts()
+    {
+        // The window took EverIndexed and IndexerAlive when it opened and never asked again, so
+        // pressing "Start now" changed nothing anybody could see and the report was that nothing
+        // had happened. The indexer HAD started; this surface simply had no way to hear about it.
+        // The sentence has to be a function of the state, so that pushing a new state changes it.
+        SettingsState before = State(Config.Default with { IndexContent = true }, Section.Content)
+            with { EverIndexed = false, IndexerAlive = false };
+        SettingsState after = before with { IndexerAlive = true };
+
+        string was = Row(before, ControlId.IndexContent).Note;
+        string now = Row(after, ControlId.IndexContent).Note;
+
+        Assert.NotEqual(was, now);
+        Assert.NotEqual("", now);
+    }
 }

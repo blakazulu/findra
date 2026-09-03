@@ -37,11 +37,45 @@ public class IndexStatusTests
     }
 
     [Fact]
-    public void NothingToSayIsSaidWithNothing()
+    public void AskingToReadAndBeingToldNothingIsTheOneThingThisLineMayNotDo()
     {
-        // A permanently visible empty progress line is what makes an idle widget feel busy;
-        // the capsule painter draws this only when it is non-empty.
-        Assert.Equal("", IndexStatus.Line(contentEnabled: true, state: "off", pending: 0, indexed: 0, alive: false, rebuilt: false));
+        // This assertion used to be the opposite: with reading on and nothing read yet, the line
+        // was "" - on the reasoning that a permanently visible progress line makes an idle widget
+        // feel busy. That reasoning is right about an idle widget and wrong about this state.
+        //
+        // A person pressed "Start now", watched every surface say nothing at all, and reported
+        // that indexing was broken. It was not - there was simply a gap between asking and the
+        // walk putting the first file in the queue, and "" is indistinguishable from a product
+        // that ignored them. Silence is only honest when there is nothing to be silent about, and
+        // reading being ON is something.
+        //
+        // The two answers are different because the questions are. A live child has started and
+        // found nothing yet, which is a moment. No live child with the switch on is a session in
+        // which nothing is reading at all, which is a state - and the more useful of the two to
+        // be told about.
+        string starting = IndexStatus.Line(contentEnabled: true, state: "indexing", pending: 0, indexed: 0,
+                                           alive: true, rebuilt: false);
+        string onButIdle = IndexStatus.Line(contentEnabled: true, state: "off", pending: 0, indexed: 0,
+                                            alive: false, rebuilt: false);
+
+        Assert.NotEqual("", starting);
+        Assert.NotEqual("", onButIdle);
+        Assert.NotEqual(starting, onButIdle);
+        // Neither may claim a count it does not have.
+        Assert.DoesNotContain("0 files", starting, StringComparison.Ordinal);
+        Assert.DoesNotContain("0 files", onButIdle, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ReadingTurnedOffWithNothingReadStillSaysHowToTurnItOn()
+    {
+        // The one place silence would still be wrong for a different reason: off and empty is the
+        // state of every fresh install, and it is where the sentence has to name the command.
+        string s = IndexStatus.Line(contentEnabled: false, state: "off", pending: 0, indexed: 0,
+                                    alive: false, rebuilt: false);
+
+        Assert.Contains("off", s, StringComparison.OrdinalIgnoreCase);
+        Assert.NotEqual("", s);
     }
 
     [Fact]
