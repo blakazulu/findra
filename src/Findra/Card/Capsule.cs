@@ -23,26 +23,17 @@ public static class CapsuleLayout
     // ---- the progress pill --------------------------------------------------------------------
 
     /// <summary>
-    /// The second, smaller pill under the bar: what is being read on the left, a track across the
-    /// middle, and how far it has got on the right.
+    /// Where the progress pill goes: under the bar, inset to the bar's own ends so the two read as
+    /// one object rather than a widget with something parked beneath it.
     ///
     /// <para>It used to be a bare track and a line of text floating under the capsule with nothing
     /// around them - the only thing in the product drawn without a container, which read as part of
-    /// the desktop rather than part of Findra. A pill says it belongs to the capsule above it.</para>
+    /// the desktop rather than part of Findra.</para>
     /// </summary>
-    public const float PillH = 26f;
-    public const float PillW = 420f;
-    public const float PillGap = 10f;
-    public const float PillPad = 12f;
-    public const float PillTextSize = 11.5f;
-
-    public const float ProgressH = 3f;
-
     public static SKRect PillRect()
     {
         float top = BarRect().Bottom + 8f;
-        float left = (Width - PillW) / 2f;
-        return new SKRect(left, top, left + PillW, top + PillH);
+        return new SKRect(Pad, top, Width - Pad, top + ProgressPillLayout.Height);
     }
 }
 
@@ -96,48 +87,10 @@ public static class CapsulePainter
         DrawMagnifier(canvas, CapsuleLayout.Pad + 9f, cy, d);
         CardText.Draw(canvas, placeholder, CapsuleLayout.Pad + 34f, cy + 5f, CapsuleLayout.TextSize, face, d.Dim);
 
-        if (!progress.Show) return;
-
-        // The pill itself, in the same chip fill and edge the settings surface uses for a control
-        // that is reporting rather than offering. It is not clickable and it does not pretend to
-        // be: no accent, no hover, no glow.
-        SKRect pill = CapsuleLayout.PillRect();
-        var pr = new SKRoundRect(pill, CapsuleLayout.PillH / 2f);
-        using (var fill = new SKPaint { Color = d.Ground, IsAntialias = true })
-            canvas.DrawRoundRect(pr, fill);
-        using (var chip = new SKPaint { Color = d.Chip, IsAntialias = true })
-            canvas.DrawRoundRect(pr, chip);
-        using (var edge = new SKPaint
-        {
-            Color = d.Edge, IsAntialias = true, Style = SKPaintStyle.Stroke, StrokeWidth = 1f,
-        }) canvas.DrawRoundRect(pr, edge);
-
-        float ty = pill.MidY + CapsuleLayout.PillTextSize * 0.36f;
-        float labelW = CardText.Measure(progress.Label, face, CapsuleLayout.PillTextSize);
-        float countW = CardText.Measure(progress.Count, face, CapsuleLayout.PillTextSize);
-
-        CardText.Draw(canvas, progress.Label, pill.Left + CapsuleLayout.PillPad, ty,
-                      CapsuleLayout.PillTextSize, face, d.Dim);
-        CardText.Draw(canvas, progress.Count, pill.Right - CapsuleLayout.PillPad - countW, ty,
-                      CapsuleLayout.PillTextSize, face, d.Dim);
-
-        // Whatever is left between the two, which is why both are measured rather than assumed:
-        // "indexing recordings" and "1,234,567 of 2,000,000" are the widest either side gets, and
-        // a track laid out from a guess would run underneath one of them.
-        float trackLeft = pill.Left + CapsuleLayout.PillPad + labelW + CapsuleLayout.PillGap;
-        float trackRight = pill.Right - CapsuleLayout.PillPad - countW - CapsuleLayout.PillGap;
-        if (trackRight - trackLeft < 24f) return;
-
-        float py = pill.MidY - CapsuleLayout.ProgressH / 2f;
-        var track = new SKRect(trackLeft, py, trackRight, py + CapsuleLayout.ProgressH);
-        using (var t = new SKPaint { Color = d.Edge, IsAntialias = true })
-            canvas.DrawRoundRect(new SKRoundRect(track, CapsuleLayout.ProgressH / 2f), t);
-
-        var done = new SKRect(track.Left, track.Top,
-                              track.Left + track.Width * Math.Clamp(progress.Fraction, 0, 1),
-                              track.Bottom);
-        using (var f = new SKPaint { Color = d.Accent, IsAntialias = true })
-            canvas.DrawRoundRect(new SKRoundRect(done, CapsuleLayout.ProgressH / 2f), f);
+        // Drawn by ProgressPill, which the card's own pill also goes through: the capsule and
+        // the card show the same fact, and two painters is two answers waiting to differ. This
+        // surface decides only where it goes.
+        ProgressPill.Paint(canvas, CapsuleLayout.PillRect(), progress, d, face);
     }
 
     private static void DrawMagnifier(SKCanvas canvas, float cx, float cy, Derived d)

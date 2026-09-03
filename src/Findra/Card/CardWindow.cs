@@ -193,6 +193,7 @@ public sealed class CardWindow : Window
         // True until a reading says otherwise: a card that has not looked yet offers the pill, for
         // the same reason _contentIndexed starts at -1 rather than 0.
         private volatile bool _contentOffered = true;
+        private IndexProgress _progress;
 
         private volatile SearchCardState _state = SearchCardState.Empty;
         private readonly SearchGate _gate = new();
@@ -210,7 +211,7 @@ public sealed class CardWindow : Window
         public event Action? ContentReadingRequested;
 
         public double CardWidth => SearchCardLayout.Width * _scale;
-        public double CardHeight => SearchCardLayout.Height(_state.Rows.Count, _state.HasQuery, _state.AdvOpen) * _scale;
+        public double CardHeight => SearchCardLayout.Height(_state.Rows.Count, _state.HasQuery, _state.AdvOpen, _state.Progress.Show) * _scale;
 
         public CardCanvas(Derived derived, double scale, Window owner, ContentDb? db,
                           Semantic? semantic = null, CapabilitySet installed = default)
@@ -227,7 +228,7 @@ public sealed class CardWindow : Window
             _derived = derived;
             Focusable = true;
 
-            _state = _state with { IndexLine = IndexLine(), ContentOffered = _contentOffered, OpenedAt = 0 };
+            _state = _state with { IndexLine = IndexLine(), ContentOffered = _contentOffered, Progress = _progress, OpenedAt = 0 };
 
             _timer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(66) };
             _timer.Tick += (_, _) =>
@@ -235,7 +236,7 @@ public sealed class CardWindow : Window
                 // the caret blinks and the index line moves; nothing else here needs frames -
                 // except the unfold, which wants them faster for a quarter of a second
                 PumpContentLine();
-                _state = _state with { Clock = _clock.Elapsed.TotalSeconds, IndexLine = IndexLine(), ContentOffered = _contentOffered };
+                _state = _state with { Clock = _clock.Elapsed.TotalSeconds, IndexLine = IndexLine(), ContentOffered = _contentOffered, Progress = _progress };
                 InvalidateVisual();
             };
             _timer.Start();
@@ -346,6 +347,10 @@ public sealed class CardWindow : Window
             _contentOffered = ContentPill.Offers(
                 pillOn: _state.Content, haveStore: true, readingOn: contentOn,
                 indexed: indexed < 0 ? null : indexed);
+            // And the pill under the field, from the same reading and the same composer the
+            // capsule and the tray's tooltip use.
+            _progress = IndexStatus.Pill(contentOn, db.Get("indexer:kind") ?? "", pending, indexed,
+                                         IndexStatus.Alive(beat, pid));
             return IndexStatus.Line(contentOn, state, pending, indexed, IndexStatus.Alive(beat, pid), rebuilt);
         }
 

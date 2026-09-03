@@ -81,7 +81,7 @@ findra.exe --searchmodels             # are models present, do they load, do the
                                       # which execution provider answered for each runtime
 findra.exe --searchindex [file|folder|q:query]...   # what is indexed, what is queued; given
                                       # paths it queues and drains them, given q: it queries
-findra.exe --searchshot out.png <state> [palette]   # twenty-two states, listed below
+findra.exe --searchshot out.png <state> [palette]   # twenty-three states, listed below
 findra.exe --searchtest               # engine self-check
 findra.exe --searchbench [out.md] [corpus]   # measured numbers, as a pasteable Markdown
                                       # fragment; `corpus` is how many files it generates
@@ -89,10 +89,10 @@ findra.exe --version                  # print the version and log location, then
 ```
 
 The `--searchshot` states are `SearchShot.States`, and that list is the only definition of them.
-Eleven draw the card, five the settings window and six the first-run screen:
+Twelve draw the card, five the settings window and six the first-run screen:
 
 ```
-capsule  empty  contentmode  contentwaiting  typing  results  noresults  many  adv
+capsule  empty  indexing  contentmode  contentwaiting  typing  results  noresults  many  adv
 opening  openingempty
 settings  settingsopening  settingssearches  settingscontent  settingsabout
 firstrun  firstruninstalled  firstrunspeech  firstrundownloading
@@ -254,6 +254,29 @@ always just the search again. Otherwise: files already read and reading merely o
 back on in place; nothing read at all opens Settings at Content, where the switch, the power, the
 limit and the capabilities are; a count nothing has read yet searches, because a window thrown
 over a card somebody has just opened is not undone by pressing anything.
+
+## The progress pill
+
+Under the card's field and under the capsule's bar: a dial, what is being read, the count, and the
+percentage at the far end. **The pill IS the bar** - the fill runs left to right underneath the
+words rather than beside them, so the shape carries the number and the eye reads it without
+reading it.
+
+- **`ProgressPill` paints it and both surfaces go through it.** They show one fact seen in two
+  places; two painters is two answers waiting to differ. Each surface supplies only its own
+  rectangle, which is the one thing they are allowed to disagree about - the card's is the field's
+  width, the capsule's is the bar's.
+- **It changes the card's HEIGHT**, so `SearchCardLayout.Height` takes it and the empty card grows
+  from 129 to 154 while there is something to report. Reserving the band always would put an empty
+  strip under the field on an idle machine, which is the thing the pill exists not to do.
+- **`IndexStatus.Doing` maps the kind to a word, and it switches on the ENUM.** It was written on
+  strings, matching `"Doc"` - the column heading `--searchindex` prints - against a value that is
+  `"Document"`. Documents are most of what a first pass finds, so the noun vanished for nearly
+  every file and the pill read "indexing" with nothing after it. A label copied off one surface
+  into a comparison on another is the shape of that mistake.
+- **`--searchprobe` prints what the pill would draw.** A surface with no diagnostic is one nobody
+  can be asked a question about, and "I cannot see the progress pill" had no answer that did not
+  involve reading source and guessing.
 
 ## The capsule's progress pill
 
