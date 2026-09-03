@@ -11,6 +11,7 @@ public class WorkflowTests
 {
     private static string Ci => Repo.Read(".github/workflows/ci.yml");
     private static string Release => Repo.Read(".github/workflows/release.yml");
+    private static string Winget => Repo.Read(".github/workflows/winget.yml");
 
     private static string[] AllWorkflows() =>
         Directory.GetFiles(Repo.Path_(".github/workflows"), "*.yml");
@@ -97,6 +98,48 @@ public class WorkflowTests
                               .Where(l => !l.TrimStart().StartsWith('#')));
 
     /// <summary>
+    /// Every <c>run: |</c> block in a workflow, dedented, ending where a YAML block scalar really
+    /// ends: at the first line that is not blank and is indented no further than the <c>run:</c>
+    /// key itself.
+    ///
+    /// <para>This replaces a regex that took "one or more indented lines", which ends a block at
+    /// the first BLANK line instead. Every run: block written with a paragraph break in it was
+    /// therefore parsed as far as the break and no further, while the count guard below stayed
+    /// satisfied because the block was found, just not all of it. release.yml happens to have no
+    /// blank lines inside a block, so nothing had ever shown it; winget.yml's manifest step is
+    /// thirty lines of PowerShell with four breaks in it, and a syntax error pasted in after the
+    /// first one was not noticed at all. Indentation is what YAML uses to end a block scalar, so
+    /// it is what this uses.</para>
+    /// </summary>
+    private static string[] RunBlocks(string yaml)
+    {
+        string[] lines = yaml.Replace("\r\n", "\n", StringComparison.Ordinal).Split('\n');
+        var blocks = new List<string>();
+        for (int i = 0; i < lines.Length; i++)
+        {
+            Match head = Regex.Match(lines[i], @"^(?<pad>\s*)run:\s*\|\s*$");
+            if (!head.Success) continue;
+
+            int depth = head.Groups["pad"].Value.Length;
+            var body = new List<string>();
+            while (i + 1 < lines.Length)
+            {
+                string line = lines[i + 1];
+                if (line.Trim().Length > 0 && line.Length - line.TrimStart().Length <= depth) break;
+                body.Add(line);
+                i++;
+            }
+
+            int indent = body.Where(l => l.Trim().Length > 0)
+                             .Select(l => l.Length - l.TrimStart().Length)
+                             .DefaultIfEmpty(0).Min();
+            blocks.Add(string.Join("\n", body.Select(l => l.Length >= indent ? l[indent..] : l)));
+        }
+
+        return [.. blocks];
+    }
+
+    /// <summary>
     /// The build matrix: from <c>matrix:</c> to the first line indented no further than it is.
     /// "Both architectures are built" is a claim about that block and nowhere else.
     /// </summary>
@@ -164,15 +207,8 @@ public class WorkflowTests
             string text = File.ReadAllText(path);
             bool script = path.EndsWith(".ps1", StringComparison.OrdinalIgnoreCase);
 
-            // For a workflow, only the run: blocks; for a .ps1, the whole file. No /s: with it,
-            // the dot in the body crosses newlines, the first block swallows the rest of the
-            // file, and a workflow with two blocks reads as one. That is what the count guard
-            // below caught on the day release.yml arrived with a second block in it - ci.yml
-            // has none at all, so nothing had ever exercised the repetition.
-            string[] blocks = script
-                ? [text]
-                : Regex.Matches(text, @"(?m)^\s*run:\s*\|\s*\n(?<body>(?:^[ \t]+.*\n?)+)")
-                       .Select(m => Dedent(m.Groups["body"].Value)).ToArray();
+            // For a workflow, only the run: blocks; for a .ps1, the whole file.
+            string[] blocks = script ? [text] : RunBlocks(text);
 
             // A parser handed nothing reports no errors, so an extraction that quietly matched
             // none of a workflow's blocks would pass while checking nothing. Counting the block
@@ -189,15 +225,6 @@ public class WorkflowTests
                 Assert.True(errors.Length == 0,
                     $"{Path.GetFileName(path)}: {(errors.Length > 0 ? errors[0].Message : "")}");
             }
-        }
-
-        static string Dedent(string block)
-        {
-            string[] lines = block.Replace("\r\n", "\n", StringComparison.Ordinal).Split('\n');
-            int indent = lines.Where(l => l.Trim().Length > 0)
-                              .Select(l => l.Length - l.TrimStart().Length)
-                              .DefaultIfEmpty(0).Min();
-            return string.Join("\n", lines.Select(l => l.Length >= indent ? l[indent..] : l));
         }
     }
 
@@ -382,5 +409,49 @@ public class WorkflowTests
     public void NothingInTheReleaseClaimsTheArtefactsAreSigned()
     {
         Assert.DoesNotContain("digitally signed", Release, StringComparison.OrdinalIgnoreCase);
+    }
+
+    // ---- the catalogue ----------------------------------------------------------------------
+
+    [Fact]
+    public void TheCatalogueIsOnlyEverPublishedByAPersonStartingItByHand()
+    {
+        // The one irreversible action in this plan. A push, a tag or a release trigger here means
+        // a mis-tagged build reaches other people's machines by the next `winget upgrade`, and
+        // there is no taking it back. This test is the rule.
+        //
+        // The comments come out before the triggers are read. TriggerBlock deliberately does not
+        // end the block on a comment line, so the header that explains which triggers may never
+        // appear here - naming every one of them - would land inside the block and fail the guard
+        // for saying the right thing. The other direction is worse: a comment that mentioned
+        // workflow_dispatch would answer the Contains on a workflow that no longer had one.
+        string on = TriggerBlock(WithoutComments(Winget));
+
+        Assert.Contains("workflow_dispatch", on, StringComparison.Ordinal);
+        foreach (string trigger in new[] { "push:", "pull_request:", "release:", "schedule:", "repository_dispatch:" })
+            Assert.DoesNotContain(trigger, on, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ThisIsTheOnlyWorkflowThatMentionsTheCatalogueAtAll()
+    {
+        // The test above reads one file, so it cannot see the same step pasted into a second one.
+        // This reads all of them.
+        //
+        // It also insists that one workflow does reach the catalogue. "No workflow mentions
+        // winget-pkgs" is a state this repository reaches by deleting winget.yml, and the plan's
+        // form of this test - assert only over the files that are not winget.yml - is green on
+        // exactly that. A rule that says "only this one" has to know the one still exists.
+        var mentions = new List<string>();
+        foreach (string path in AllWorkflows())
+        {
+            string text = File.ReadAllText(path);
+            if (text.Contains("wingetcreate", StringComparison.OrdinalIgnoreCase)
+             || text.Contains("winget-pkgs", StringComparison.OrdinalIgnoreCase))
+                mentions.Add(Path.GetFileName(path));
+        }
+
+        Assert.True(mentions.Count == 1 && mentions[0] == "winget.yml",
+            $"the workflows that reach the catalogue are: [{string.Join(", ", mentions)}]");
     }
 }

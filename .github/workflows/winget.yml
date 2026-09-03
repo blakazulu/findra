@@ -1,0 +1,141 @@
+name: publish to winget
+
+# By hand, and only by hand. No push, tag, release or schedule trigger may appear here: a
+# mis-tagged build that reaches a GitHub release can be deleted, and one that reaches the
+# catalogue is on other people's machines by their next `winget upgrade`.
+#
+# WorkflowTests.TheCatalogueIsOnlyEverPublishedByAPersonStartingItByHand is that rule, asserted.
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: The released version to publish, without the leading v (for example 1.2.0)
+        required: true
+        type: string
+      submit:
+        description: Open the pull request against the catalogue. Leave off to validate only.
+        required: true
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  catalogue:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Every value that comes from the Actions tab reaches PowerShell through env: and never by
+      # textual substitution into the script. release.yml carries the same rule for the same two
+      # reasons: the pasted form is read by EveryPowerShellBlockInEveryWorkflowParses as the
+      # PowerShell it is not, and a value typed by a person into a form field is a value that can
+      # end the statement it was meant to be an argument to.
+      - name: the release must exist before the catalogue hears about it
+        shell: pwsh
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          $v = $env:VERSION
+          if ($v -notmatch '^\d+\.\d+\.\d+$') { throw "'$v' is not a released version number" }
+
+          $url = "https://api.github.com/repos/blakazulu/findra/releases/tags/v$v"
+          $r = Invoke-RestMethod -Uri $url -Headers @{ 'User-Agent' = 'findra-release' }
+          $names = @($r.assets.name)
+          foreach ($arch in 'x64', 'arm64') {
+            if ($names -notcontains "findra-$v-$arch.exe") { throw "the release has no findra-$v-$arch.exe" }
+          }
+
+      - name: fetch wingetcreate
+        shell: pwsh
+        run: |
+          Invoke-WebRequest -Uri https://aka.ms/wingetcreate/latest -OutFile wingetcreate.exe
+
+      # Built from packaging/winget, on the first submission and on every one after it.
+      #
+      # `wingetcreate update` was the obvious choice and is the wrong one: it fetches the manifests
+      # that are already in the catalogue, bumps the version and the hashes, and submits - which
+      # means it cannot make the FIRST submission at all, and after that the description, the tags
+      # and the install switch live in a repository somebody else owns while this repository's copy
+      # drifts with twelve tests still green on it. Seeding from the repo copy every time keeps
+      # packaging/winget the source of truth those tests are actually testing.
+      - name: build the manifests from this repository
+        shell: pwsh
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          $v = $env:VERSION
+          $base = "https://github.com/blakazulu/findra/releases/download/v$v"
+          $out = "manifests/b/blakazulu/Findra/$v"
+          New-Item -ItemType Directory -Force -Path $out | Out-Null
+
+          $hashes = @{}
+          foreach ($arch in 'x64', 'arm64') {
+            $file = "findra-$v-$arch.exe"
+            Invoke-WebRequest -Uri "$base/$file" -OutFile $file
+            $hashes[$arch] = (Get-FileHash -Algorithm SHA256 -LiteralPath $file).Hash
+          }
+
+          # The version and the two hashes are the only things substituted. Everything else - the
+          # identifier, the installer type, the switches, the description and its measured size -
+          # is what the repository says, which is what WingetManifestTests asserts.
+          $zero = '0' * 64
+          foreach ($src in Get-ChildItem packaging/winget/*.yaml) {
+            $text = Get-Content -LiteralPath $src.FullName -Raw
+            $text = $text -replace '(?m)^(PackageVersion:\s*).*$', "`${1}$v"
+            $text = $text -replace '0\.1\.0', $v
+
+            # The same guard the hashes get, and for the same reason. The substitution above works
+            # only while the repository copy literally says 0.1.0 - nothing ties those files to
+            # Directory.Build.props, and the three-manifests test only requires them to agree with
+            # each other. Bump the repo copy and PackageVersion is fixed by the first regex while
+            # the two installer URLs silently keep the stale version, pointing at a release that
+            # is not the one being published.
+            #
+            # Only the lines the substitution was supposed to reach are checked: ManifestVersion is
+            # the schema's version and the yaml-language-server line carries it too, and neither is
+            # a stale package version.
+            foreach ($line in ($text -split "`n" | Where-Object { $_ -match '^(PackageVersion|\s*InstallerUrl):' })) {
+              foreach ($m in [regex]::Matches($line, '\d+\.\d+\.\d+')) {
+                if ($m.Value -ne $v) { throw "a stale version ($($m.Value)) survived in $($src.Name): $line" }
+              }
+            }
+
+            $text = $text -replace "(?s)(x64.*?InstallerSha256:\s*)$zero", "`${1}$($hashes['x64'])"
+            $text = $text -replace "(?s)(arm64.*?InstallerSha256:\s*)$zero", "`${1}$($hashes['arm64'])"
+            if ($text -match $zero) { throw "a placeholder hash survived in $($src.Name)" }
+            Set-Content -LiteralPath (Join-Path $out $src.Name) -Value $text -NoNewline
+          }
+
+      - name: validate, and submit only when asked
+        shell: pwsh
+        env:
+          VERSION: ${{ inputs.version }}
+          SUBMIT: ${{ inputs.submit }}
+          WINGET_TOKEN: ${{ secrets.WINGET_PKGS_TOKEN }}
+        run: |
+          $v = $env:VERSION
+          $dir = "manifests/b/blakazulu/Findra/$v"
+
+          # winget itself - the App Installer CLI - is not reliably present on GitHub-hosted
+          # Windows runners, and a first run that fails at a step which is not about the manifests
+          # at all teaches nobody anything. So: validate when it is there, say so when it is not,
+          # and let wingetcreate's own validation be the floor.
+          if (Get-Command winget -ErrorAction SilentlyContinue) {
+            winget validate --manifest $dir
+            if ($LASTEXITCODE -ne 0) { throw "winget validate rejected the manifests" }
+          } else {
+            Write-Output "winget is not on this runner; relying on wingetcreate's own validation"
+          }
+
+          if ($env:SUBMIT -eq 'true') {
+            ./wingetcreate.exe submit --token $env:WINGET_TOKEN $dir
+          } else {
+            Write-Output "validated only - re-run with submit ticked to open the pull request"
+          }
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: winget-manifests
+          path: manifests

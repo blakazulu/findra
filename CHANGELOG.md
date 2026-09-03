@@ -327,6 +327,16 @@ into a numbered section on the first release.
   the alternative - a step called sign that quietly does nothing - is worse than no step at
   all. Nothing on the release page, in the installer or in this repository claims otherwise.
 
+- **Findra can be installed with `winget install blakazulu.Findra`, and it reaches the
+  catalogue only when a person sends it there.** The listing is kept here rather than in the
+  catalogue: one version covering both 64-bit Intel and 64-bit ARM, the licence and the
+  attribution that goes with it, and the sentence that says the 2.93 GB of models are optional
+  downloads you choose from inside the app rather than the size of the package. Publishing has
+  exactly one trigger, and it is somebody opening the Actions tab and starting it - no push, no
+  tag and no release can reach it - and it can be run once to check the listing without
+  submitting anything. A copy installed this way knows it, so a newer version is one
+  `winget upgrade` rather than a file to go and find.
+
 ### Changed
 
 - **A capability you install is read in the same session you installed it.** Downloading one

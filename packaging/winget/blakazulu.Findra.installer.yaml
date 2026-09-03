@@ -1,0 +1,27 @@
+# yaml-language-server: $schema=https://aka.ms/winget-manifest.installer.1.6.0.schema.json
+PackageIdentifier: blakazulu.Findra
+PackageVersion: 0.1.0
+InstallerType: inno
+Scope: machine
+InstallModes:
+  - interactive
+  - silent
+  - silentWithProgress
+UpgradeBehavior: install
+InstallerSwitches:
+  # How Findra learns where it came from, recorded once at first run so the update check can
+  # point at one command rather than sending somebody to download a file by hand.
+  Custom: /INSTALLSOURCE=winget
+Installers:
+  # The two hashes below are zeros in this repository's copy and nowhere else. The workflow
+  # downloads the released artefacts, replaces both, and throws if either survives - so a
+  # manifest submitted by hand without running the workflow fails validation immediately
+  # rather than installing something nobody verified.
+  - Architecture: x64
+    InstallerUrl: https://github.com/blakazulu/findra/releases/download/v0.1.0/findra-0.1.0-x64.exe
+    InstallerSha256: 0000000000000000000000000000000000000000000000000000000000000000
+  - Architecture: arm64
+    InstallerUrl: https://github.com/blakazulu/findra/releases/download/v0.1.0/findra-0.1.0-arm64.exe
+    InstallerSha256: 0000000000000000000000000000000000000000000000000000000000000000
+ManifestType: installer
+ManifestVersion: 1.6.0
