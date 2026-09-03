@@ -52,7 +52,17 @@ public sealed class IndexerHost : IDisposable
             if (_restarts > 0 && (DateTime.UtcNow - _lastStart).TotalSeconds < wait) return;
 
             string exe = Environment.ProcessPath ?? "";
-            if (exe.Length == 0) return;
+            if (exe.Length == 0)
+            {
+                // Said out loud rather than returned from quietly. There is no path to the
+                // executable, so there is no indexer this session and no later call will find
+                // one - and an unexplained silence here reads exactly like a child that started
+                // and died, which is a different fault with a different fix.
+                Log.Once("index|nopath", "ERROR", "index",
+                    "there is no path to this executable, so the indexer child cannot be started; " +
+                    "nothing will be read inside files this session");
+                return;
+            }
             try
             {
                 _proc = Process.Start(new ProcessStartInfo(exe, $"--index {Environment.ProcessId.ToString(CultureInfo.InvariantCulture)}")
