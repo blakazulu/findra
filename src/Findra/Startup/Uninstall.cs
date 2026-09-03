@@ -264,7 +264,36 @@ public static class Uninstall
 
     public static int Run(string[] args) =>
         Run(args, HelperTask.Unregister, Autostart.Clear,
-            spare => StopAll(spare), deletes => Delete(deletes, Roots()));
+            spare => StopAll(spare), deletes => Delete(deletes, Roots()),
+            forgetTheWelcomeScreen: ForgetTheWelcomeScreen);
+
+    /// <summary>
+    /// Put <c>FirstRunDone</c> back to false in the settings this uninstall is KEEPING.
+    ///
+    /// <para>The flag means "the welcome screen has been answered on this installation", and an
+    /// uninstall is the end of an installation. It has to be cleared here rather than left to the
+    /// next launch to notice, because what the screen produces is a state on the machine and the
+    /// uninstall has just taken that state away: the <c>HighestAvailable</c> logon task is removed
+    /// on every route through <see cref="Run(string[])"/>, and the welcome screen is the only
+    /// surface that registers it. Nothing on an ordinary launch does.</para>
+    ///
+    /// <para>So a reinstall over a kept config used to come up with the screen skipped and the
+    /// task gone, and that is not a cosmetic loss - it is half the product. Name search answers
+    /// nothing, because the names live in the helper the task starts. The content queue is fed
+    /// from the USN journal through that same helper, so the feeder times out, the queue stays
+    /// empty, and pressing "Start now" starts an indexer that finds nothing to do and goes idle in
+    /// a tenth of a second. Three unrelated-looking complaints, one missing task.</para>
+    ///
+    /// <para>A purge deletes the settings file outright, so this writes nothing on that route -
+    /// <c>LoadFromDisk</c> answers a default <c>Config</c> for a file that is not there, and a
+    /// default has the flag false already.</para>
+    /// </summary>
+    private static void ForgetTheWelcomeScreen()
+    {
+        Config c = Config.LoadFromDisk();
+        if (!c.FirstRunDone) return;
+        (c with { FirstRunDone = false }).Save();
+    }
 
     /// <summary>
     /// The uninstall, with every effect it has on the machine passed in.
@@ -281,12 +310,13 @@ public static class Uninstall
     /// <c>InternalsVisibleTo</c>, and every other seam the tests reach is public too. It is a
     /// seam, not an API - nothing but <see cref="Run(string[])"/> should call it.</para>
     ///
-    /// <para><paramref name="elevated"/> is the fifth thing a test cannot do for real. Left null
+    /// <para><paramref name="elevated"/> is the sixth thing a test cannot do for real. Left null
     /// it is the real check, which is what the shipped path uses.</para>
     /// </summary>
     public static int Run(string[] args, Func<bool> unregisterTask, Action clearAutostart,
                           Action<IReadOnlyList<int>> stop,
                           Func<IReadOnlyList<DataSize>, IReadOnlyList<Removal>> delete,
+                          Action forgetTheWelcomeScreen,
                           Func<bool>? elevated = null, Action<string>? announce = null)
     {
         ArgumentNullException.ThrowIfNull(args);
@@ -294,6 +324,7 @@ public static class Uninstall
         ArgumentNullException.ThrowIfNull(clearAutostart);
         ArgumentNullException.ThrowIfNull(stop);
         ArgumentNullException.ThrowIfNull(delete);
+        ArgumentNullException.ThrowIfNull(forgetTheWelcomeScreen);
         elevated ??= IsElevated;
         announce ??= line => Log.Info("uninstall", line);
 
@@ -345,6 +376,13 @@ public static class Uninstall
         // end-to-end checklist carries that step.
         bool taskGone = unregisterTask();
         clearAutostart();
+
+        // And then the record of the welcome screen, on every route, purge or keep. The task has
+        // just gone and the screen is the only thing that registers it, so a settings file that
+        // still says the screen was answered is a reinstall with no name search and no content
+        // queue. Before the deletes rather than after, so a folder that will not go does not take
+        // this with it.
+        forgetTheWelcomeScreen();
 
         // Then the data, only if asked, and only inside Findra's own folders.
         IReadOnlyList<Removal> removed = purge ? delete(plan.Deletes) : [];

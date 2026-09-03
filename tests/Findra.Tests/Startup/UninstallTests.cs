@@ -95,6 +95,7 @@ public class UninstallTests : IDisposable
                     ? new Removal(d.Label, d.Path, false, "the file is in use")
                     : new Removal(d.Label, d.Path, true, null))];
             },
+            forgetTheWelcomeScreen: () => Calls.Add("welcome"),
             announce: line => { Calls.Add("say"); Said = line; },
             // Never the real check. Unelevated, Run would raise a UAC prompt and relaunch itself.
             elevated: () => true);
@@ -110,9 +111,42 @@ public class UninstallTests : IDisposable
         var run = new Recorder();
         run.Run("--uninstall", "--purge", "--quiet");
 
-        // The line saying which way it went comes before all four, because a run that fails half
+        // The line saying which way it went comes before all five, because a run that fails half
         // way through still has to have said what it was doing.
-        Assert.Equal(["say", "stop", "task", "autostart", "delete"], run.Calls);
+        Assert.Equal(["say", "stop", "task", "autostart", "welcome", "delete"], run.Calls);
+    }
+
+    [Theory]
+    [InlineData("--uninstall")]
+    [InlineData("--uninstall", "--purge")]
+    [InlineData("--uninstall", "--quiet")]
+    [InlineData("--uninstall", "--purge", "--quiet")]
+    [InlineData("--uninstall", "--relaunched", "4242")]
+    public void TheWelcomeScreenIsUnansweredAgainOnEveryRouteThroughRun(params string[] args)
+    {
+        // FirstRunDone means "the welcome screen has been answered on this installation", and this
+        // is the end of an installation. It matters on the KEEP route above all, which is the
+        // default and keeps the settings file: the task the screen registers has just been removed
+        // and nothing on an ordinary launch registers it, so a reinstall that skipped the screen
+        // came up with no name search, a content queue nothing could feed, and a "Start now" that
+        // started an indexer with an empty queue. Three complaints, one missing task.
+        var run = new Recorder();
+        run.Run(args);
+
+        Assert.Contains("welcome", run.Calls);
+    }
+
+    [Fact]
+    public void ADryRunAnswersTheQuestionAndChangesNothingAtAll()
+    {
+        // Including the settings file. --dry-run is what the installer's own dialog runs to get
+        // the measured sizes it shows, seconds before the person has decided anything, and it runs
+        // unelevated - so a write here would reset the welcome screen of somebody who then pressed
+        // Cancel.
+        var run = new Recorder();
+        run.Run("--uninstall", "--purge", "--dry-run", "--quiet");
+
+        Assert.Empty(run.Calls);
     }
 
     [Theory]
@@ -124,10 +158,10 @@ public class UninstallTests : IDisposable
     public void TheScheduledTaskGoesOnEveryRouteThroughRun(params string[] args)
     {
         // The property the source-reading test could not see. --quiet is the installer's route:
-        // Inno's UninstallRun entries are `--uninstall --quiet` and `--uninstall --purge --quiet`,
-        // so a removal that only happens when somebody is reading the console leaves a
-        // HighestAvailable logon task pointing at a binary Inno is about to delete - spec 2a's
-        // defect, on the path nearly everybody takes.
+        // CurUninstallStepChanged runs `--uninstall --quiet`, or `--uninstall --purge --quiet` if
+        // the box was ticked, so a removal that only happens when somebody is reading the console
+        // leaves a HighestAvailable logon task pointing at a binary Inno is about to delete -
+        // spec 2a's defect, on the path nearly everybody takes.
         var run = new Recorder();
         run.Run(args);
 

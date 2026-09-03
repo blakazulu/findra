@@ -1,6 +1,6 @@
 ; Findra's installer.
 ;
-; Four rules here are load-bearing and each has a test in
+; Five rules here are load-bearing and each has a test in
 ; tests/Findra.Tests/Build/InstallerScriptTests.cs:
 ;
 ;   1. The install directory carries no version. The scheduled task stores an absolute path to
@@ -13,6 +13,9 @@
 ;   4. QuietUninstallString is deleted after the install. Inno registers it automatically and
 ;      Windows 11's Settings prefers it, which runs the uninstaller silently and skips the
 ;      checkbox that asks about gigabytes of somebody's data.
+;   5. That uninstall is run from CurUninstallStepChanged and NOT from [UninstallRun]. The
+;      checkbox is answered during the uninstall; an [UninstallRun] entry is decided during the
+;      INSTALL. See the comment on CurUninstallStepChanged for what that cost.
 
 #ifndef AppVersion
   #error AppVersion must be passed in: iscc /DAppVersion=<major.minor.patch> /DPublishDir=..\publish\win-x64 findra.iss
@@ -84,13 +87,6 @@ Name: "{group}\Findra"; Filename: "{app}\findra.exe"
 
 [Run]
 Filename: "{app}\findra.exe"; Description: "Start Findra"; Flags: nowait postinstall skipifsilent
-
-[UninstallRun]
-; Runs while findra.exe still exists, before the uninstaller removes any file. This is what
-; removes the scheduled task, the autostart entry and the running processes. Exactly one of the
-; two runs, decided in InitializeUninstall below.
-Filename: "{app}\findra.exe"; Parameters: "--uninstall --quiet"; Flags: runhidden; RunOnceId: "findra-uninstall"; Check: KeepWanted
-Filename: "{app}\findra.exe"; Parameters: "--uninstall --purge --quiet"; Flags: runhidden; RunOnceId: "findra-purge"; Check: PurgeWanted
 
 [UninstallDelete]
 ; installed-by.txt is written by RecordInstallSource below, from [Code], with SaveStringToFile.
@@ -250,7 +246,7 @@ var
   Box: TNewCheckBox;
   OkButton, CancelButton: TNewButton;
 begin
-  // The first thing the uninstaller does, before [UninstallRun] evaluates its Check routines.
+  // The first thing the uninstaller does, before CurUninstallStepChanged runs the uninstall.
   Result := True;
   Purge := False;
   if UninstallSilent() then Exit;
@@ -378,14 +374,43 @@ begin
   Form.Free;
 end;
 
-function PurgeWanted(): Boolean;
+/// The uninstall itself: stopping the three processes, removing the HighestAvailable scheduled
+/// task and the autostart entry, and - only if the checkbox above was ticked - deleting the
+/// models, the index and the settings. usUninstall is before any file is removed, so findra.exe
+/// is still there to be run.
+///
+/// This is [Code] and not [UninstallRun] because of one sentence in Inno's own install order:
+/// "The entries in [UninstallRun] are stored in the uninstall log." They are recorded during the
+/// INSTALL, which is when their Check parameters are evaluated - and Purge is False then, because
+/// the person has not been asked yet and will not be for weeks. So the keep entry was written
+/// into unins000.dat and the purge entry never was, and no answer given during the uninstall
+/// could reach either of them. The checkbox was drawn, was ticked, was read into Purge, and
+/// decided nothing at all: a real uninstall that asked for the models to go left all 2.9 GB of
+/// them on the disk and reported success.
+///
+/// Verified on the shipped artefact rather than reasoned about. A byte search of a real
+/// unins000.dat finds "--uninstall --quiet" among the recorded entries at the end of the file and
+/// does not contain "--uninstall --purge --quiet" anywhere in it.
+///
+/// The general rule is worth more than the fix: a decision taken during the uninstall cannot be
+/// carried by anything the installer wrote down.
+procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
+var
+  app: String;
+  code: Integer;
 begin
-  Result := Purge;
-end;
+  if CurUninstallStep <> usUninstall then Exit;
 
-function KeepWanted(): Boolean;
-begin
+  app := ExpandConstant('{app}\findra.exe');
+  // A repair, a half-finished install, or somebody who deleted the folder by hand. There is no
+  // uninstall to run and nothing here can put the scheduled task right; Inno carries on and
+  // removes what it recorded.
+  if not FileExists(app) then Exit;
+
   // Keeping is the default and the silent answer. Spec 2a: reinstalling is common and
   // re-downloading gigabytes is expensive, so deleting is the thing somebody has to ask for.
-  Result := not Purge;
+  if Purge then
+    Exec(app, '--uninstall --purge --quiet', '', SW_HIDE, ewWaitUntilTerminated, code)
+  else
+    Exec(app, '--uninstall --quiet', '', SW_HIDE, ewWaitUntilTerminated, code);
 end;

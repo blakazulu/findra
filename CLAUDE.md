@@ -700,6 +700,28 @@ defect, not an inconvenience.
 `%APPDATA%\Findra\` config. Deleting them is opt-in via a checkbox and a flag, and the prompt
 states the **measured** size it would free, not a vague warning.
 
+**But it always clears `FirstRunDone` in the config it keeps.** That flag means "the welcome
+screen has been answered on this installation", and an uninstall ends an installation. It is not
+bookkeeping: the screen's whole product is a state on the machine - the `HighestAvailable` task -
+and the uninstall has just removed it, while nothing on an ordinary launch registers one.
+`HelperTask.EnsureRunning` only *runs* a task that exists. So a reinstall over a kept config used
+to start with the screen skipped and the task gone, which is not half a feature but half the
+product: name search answers nothing because the names live in the helper, and the content queue
+is fed from the USN journal through that same helper, so the feeder times out, the queue stays
+empty, and "Start now" starts an indexer that drains nothing and idles in a tenth of a second.
+Three complaints that look unrelated, one missing task. `Uninstall.Run` takes it as a seam like
+its other effects, and it runs on every route including `--quiet`, which is the installer's.
+
+**The uninstall itself is run from `CurUninstallStepChanged`, never from `[UninstallRun]`.**
+Inno's install order says "The entries in `[UninstallRun]` are stored in the uninstall log" -
+during the INSTALL, which is when their `Check` parameters are evaluated. The purge run was
+conditioned on the checkbox, `Purge` is False at install time and cannot be anything else, so
+that entry was never written into `unins000.dat` and no answer given weeks later could reach it.
+The checkbox was drawn, ticked, read into `Purge`, and decided nothing; `PolicyPageTests`
+asserted the two entries and their `Check` names and passed the whole time, because it read the
+shape and the defect was in the timing. **A decision taken during the uninstall cannot be carried
+by anything the installer wrote down.**
+
 **`findra.exe --uninstall` is a first-class mode** (with `--purge` to also delete data),
 because the `dotnet publish` route has no installer - without it, everyone who built from
 source is left with an elevated scheduled task and no supported way to remove it.
