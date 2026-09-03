@@ -506,6 +506,13 @@ speech              ─  whisper-turbo + [e5 pair]              550 MB (+270 if 
   over an existing e5 pair are ordinary states rather than edge cases. **The number still never
   moves when a row is ticked**, which is the rule the own-files pricing was written under: what is
   on the disk does not depend on what is chosen.
+- **`FirstRun.AlreadyChosen` ticks what is already there**, closed over the dependency graph. An
+  unticked row beside a model that is present was a control whose two positions meant the same
+  thing: the selection decides what is FETCHED and nothing else, and what Findra can read is read
+  from the files. Closed rather than a bare presence test, so a machine holding Whisper but not the
+  e5 pair opens with Speech ticked, its dependency ticked with it, and 270 MB priced - which is
+  the truth. Hebrew is dropped where it is not offered: its row is not drawn there, and a selection
+  holding a capability with no row prices a download nobody can see.
 - **A file's size on disk never equals the declared size in the table.** That table is the
   spec's figure in megabytes to one decimal place; real files miss it by tens of kilobytes,
   mostly upward. `ModelStore.SizeSlack` is the only place that width is decided, and nothing

@@ -547,6 +547,12 @@ into a numbered section on the first release.
   "0 MB", and the button says Continue instead of Get these. A half-present capability is priced
   at the half that is missing.
 
+- **What is already installed opens ticked.** The screen used to start with every row empty over a
+  folder that already held all 2.9 GB, asking you to choose again from a list where every answer
+  was already yes - and leaving a row unticked took nothing away, because what Findra can read
+  comes from the files on disk and never from that selection. A machine that has the speech model
+  but not the document models it needs opens with both ticked and prices only the missing half.
+
 - **The capsule has its own progress pill.** What is being read, a track, and how far it has got -
   "indexing photos, 6,680 of 10,800" - in a smaller pill under the search bar. It used to be a bare
   track and a line of text floating under the capsule with nothing around them, the only thing in

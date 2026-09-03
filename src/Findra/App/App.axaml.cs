@@ -474,11 +474,16 @@ internal sealed class Shell : ISettingsHost
     /// </summary>
     private void ShowFirstRun()
     {
+        // Both read once, before the state is built: the tick list is derived from the disk, so
+        // the two have to be looking at the same answer.
+        IReadOnlySet<string> onDisk = ModelsOnDisk();
+        bool hebrewOffered = Capabilities.HebrewIsOffered(Capabilities.SystemLanguages());
+
         var state = new FirstRunState
         {
             // Only where there is Hebrew. A 1.5 GB row is a decision, and a Thai machine should
             // not have to make it.
-            HebrewOffered = Capabilities.HebrewIsOffered(Capabilities.SystemLanguages()),
+            HebrewOffered = hebrewOffered,
             ContentOn = _config.IndexContent,
             // The limit as it stands, not the default: a reinstall over an existing config must
             // not show five minutes to somebody who chose two hours the last time.
@@ -490,7 +495,11 @@ internal sealed class Shell : ISettingsHost
             // And what is actually in the models folder. An uninstall keeps the models unless the
             // purge box is ticked, so a reinstall commonly meets a machine that already has all
             // 2.9 GB - and this screen used to offer to fetch every byte of it again.
-            OnDisk = ModelsOnDisk(),
+            OnDisk = onDisk,
+            // Ticked to match. A row that says "installed" and sits unticked is a control whose
+            // two positions mean the same thing: what Findra can read comes from the files on
+            // disk, and this selection only decides what is fetched.
+            Chosen = FirstRun.AlreadyChosen(onDisk, hebrewOffered),
         };
 
         var window = new FirstRunWindow(state, _palette);

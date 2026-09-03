@@ -1503,4 +1503,58 @@ public class FirstRunDownloadTests : IDisposable
         Assert.Equal(FirstRun.GoLabel(FirstRunStage.Choosing),
                      FirstRun.GoLabel(here with { OnDisk = new HashSet<string>(StringComparer.OrdinalIgnoreCase) }));
     }
+
+    [Fact]
+    public void WhatIsAlreadyInstalledOpensTicked()
+    {
+        // The screen opened with every row unticked over a folder that already held all 2.9 GB,
+        // asking somebody to choose again from a list where every answer was already yes.
+        //
+        // And leaving one unticked did not even take the capability away: what Findra can read is
+        // read from the FILES on disk, never from this selection, which only decides what gets
+        // fetched. So an unticked row over a present model was a control whose two positions meant
+        // the same thing.
+        IReadOnlySet<Capability> ticked = FirstRun.AlreadyChosen(Everything(), hebrewOffered: true);
+
+        foreach (Capability c in Capabilities.All) Assert.Contains(c, ticked);
+
+        // An empty disk ticks nothing, which is the fresh install this screen was designed for.
+        Assert.Empty(FirstRun.AlreadyChosen(
+            new HashSet<string>(StringComparer.OrdinalIgnoreCase), hebrewOffered: true));
+    }
+
+    [Fact]
+    public void TickingWhatIsHereDragsInWhatItStillNeeds()
+    {
+        // A machine holding the Whisper model but not the e5 pair opens with Speech ticked AND its
+        // dependency ticked with it, because that is the truth: Speech needs both and one of them
+        // still has to be fetched. Ticking only what is present would show Speech ready to go and
+        // then quietly download 270 MB.
+        var justSpeech = new HashSet<string>(
+            Capabilities.OwnModels(Capability.Speech).Select(m => m.File), StringComparer.OrdinalIgnoreCase);
+
+        IReadOnlySet<Capability> ticked = FirstRun.AlreadyChosen(justSpeech, hebrewOffered: true);
+
+        Assert.Contains(Capability.Speech, ticked);
+        Assert.Contains(Capability.Meaning, ticked);
+        Assert.DoesNotContain(Capability.Photos, ticked);
+
+        // And the screen prices what is actually left, which is the e5 pair and not the whole of
+        // Speech.
+        var s = new FirstRunState { Chosen = ticked, HebrewOffered = true, OnDisk = justSpeech };
+        Assert.Equal(ModelStore.TotalBytes(FirstRun.NotHereYet(Capabilities.ModelsFor(ticked), justSpeech)),
+                     FirstRun.TotalBytes(s));
+        Assert.NotEqual(0, FirstRun.TotalBytes(s));
+    }
+
+    [Fact]
+    public void HebrewIsNeverTickedOnAMachineThatIsNotOfferedIt()
+    {
+        // Its row is not drawn there, and a selection carrying a capability with no row would
+        // price a download nobody can see and put the preset tiles on a set they do not match.
+        IReadOnlySet<Capability> ticked = FirstRun.AlreadyChosen(Everything(), hebrewOffered: false);
+
+        Assert.DoesNotContain(Capability.Hebrew, ticked);
+        Assert.Contains(Capability.Speech, ticked);
+    }
 }
