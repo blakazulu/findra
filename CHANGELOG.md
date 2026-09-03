@@ -376,7 +376,9 @@ into a numbered section on the first release.
   and the page title and the link preview say the same thing the page now opens on. Three of its
   screenshots had drifted from the ones in `docs/shots` while still printing the command that
   produces the current renders - the Settings picture was missing two controls the product had
-  gained - so all six were regenerated and the two directories now agree.
+  gained - so all six were regenerated and the two directories now agree. They cannot drift
+  again quietly: `build/Make-Shots.ps1` redraws the README's own list into both places in one
+  command, and the suite fails on a picture or a printed command where the two pages disagree.
 
 - **The results card previews the photograph it found.** The stage's picture - the centre-crop
   that shows you the file you are standing on - had never been rendered by any `--searchshot`
