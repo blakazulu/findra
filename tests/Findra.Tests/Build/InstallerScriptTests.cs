@@ -43,6 +43,63 @@ public class InstallerScriptTests
     }
 
     [Fact]
+    public void EveryArchitectureTheReleaseBuildsNamesOneInnoSetupActuallyHas()
+    {
+        // Inno's architecture identifiers are not a regular family, and the script used to build
+        // them by pasting "compatible" onto the {#Arch} the workflow passes. That gives x64 the
+        // real word "x64compatible" and arm64 the word "arm64compatible", which does not exist:
+        // the identifiers are x86compatible, x86os, x64compatible, x64os, arm32compatible, arm64
+        // and win64. ISCC then fails the arm64 matrix leg, the build job fails, the publish job
+        // needs it, and a tag produces NO release for EITHER architecture.
+        //
+        // Nothing caught it. This class asserted no [Setup] directive at all, and the workflow
+        // test only checked that the string win-arm64 appears in the matrix. The comment three
+        // lines above the defect named the correct pair while the code contradicted it, which is
+        // why reading it was not enough either.
+        string[] valid =
+        [
+            "x86compatible", "x86os", "x64compatible", "x64os", "arm32compatible", "arm64", "win64",
+        ];
+
+        MatchCollection used = Regex.Matches(
+            Script, @"(?m)^\s*Architectures(?:Allowed|InstallIn64BitMode)\s*=\s*(.+?)\s*$", RegexOptions.IgnoreCase);
+        Assert.True(used.Count >= 2, $"the script sets {used.Count} architecture directive(s)");
+
+        foreach (Match m in used)
+        {
+            string value = m.Groups[1].Value;
+            Assert.DoesNotContain("{#", value, StringComparison.Ordinal);   // never pasted together
+            foreach (string word in value.Split([' ', '\t'], StringSplitOptions.RemoveEmptyEntries))
+                Assert.Contains(word, valid, StringComparer.OrdinalIgnoreCase);
+        }
+
+        // And both architectures the release builds must actually be reachable in the script,
+        // or the fix could be "delete the arm64 branch", which compiles and ships the wrong thing.
+        Assert.Contains("arm64", Script, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("x64compatible", Script, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void TheReportIsReadIntoTheTypeLoadStringFromFileDeclares()
+    {
+        // Inno 6 is Unicode-only, so String is UnicodeString, and PascalScript requires exact type
+        // identity for a var parameter: LoadStringFromFile's second parameter is AnsiString, and
+        // passing a String is an ISCC compile error rather than a conversion. SaveStringToFile
+        // takes its text as a const parameter, which does convert, which is why only one of the
+        // two ever had to change.
+        //
+        // This is asserted because it cannot be compiled here - Inno Setup is deliberately not
+        // installed, and CI is where the script is built for the first time. A test that reads the
+        // declaration is the only thing standing between that error and a failed first release.
+        Match decl = Regex.Match(Script, @"(?m)^\s*report\s*:\s*(\w+)\s*;");
+        Assert.True(decl.Success, "the uninstall routine declares no report variable");
+        Assert.Equal("AnsiString", decl.Groups[1].Value);
+
+        // The caption takes a String, so the conversion has to be written at the point of use.
+        Assert.Contains("String(report)", Script, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void TheInstallerAsksForAdministratorRights()
     {
         // The product needs them once, to register the HighestAvailable task, and the UNINSTALLER
