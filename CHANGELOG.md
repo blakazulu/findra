@@ -39,6 +39,8 @@ into a numbered section on the first release.
   `--searchbench`, plus `--version`. All six run, and every one of them reports on
   something that exists, and every one of them prints Hebrew and the separator the
   card uses without mangling them, whatever code page the console was left on.
+  `--searchprobe` reports the state of the pipe whether it answered or not, so the
+  line that says which way it went is there to read either way.
 - **The content store**: a SQLite full-text index with a recorded schema version, a
   resumable work queue, and a consumed journal position per volume, so an interrupted
   index continues rather than starting over.
