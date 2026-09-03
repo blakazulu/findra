@@ -402,6 +402,12 @@ into a numbered section on the first release.
 
 ### Fixed
 
+- **Uninstalling leaves nothing behind.** A file the installer wrote itself survived removal,
+  and kept the program folder alive with it.
+- **The uninstall prompt was written for a terminal.** It wrapped the measured sizes out of
+  their columns and ended with a command-line instruction sitting above the checkbox that
+  does the same thing. It now says what it will keep, and offers to free the measured total.
+
 - **The installer builds.** Its uninstall prompt called a Windows function with the wrong
   arguments, which no test could see and which would have failed the first release after
   the tag was already public. Both the Intel and Arm installers now compile.

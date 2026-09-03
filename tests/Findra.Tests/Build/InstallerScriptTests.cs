@@ -320,6 +320,34 @@ public class InstallerScriptTests
     }
 
     [Fact]
+    public void EveryFileTheScriptWritesItselfIsAlsoRemovedByHand()
+    {
+        // Inno removes what it recorded in its own uninstall log, which is the [Files] section and
+        // nothing else. A file written from [Code] with SaveStringToFile is invisible to it, so it
+        // survives the uninstall - and because {app} is then not empty, the DIRECTORY survives too.
+        // A real uninstall on a real machine left "C:\Program Files\Findra" behind holding one
+        // nine-byte installed-by.txt, which no test could see because nothing here had ever run.
+        //
+        // Driven off the SaveStringToFile calls rather than a hard-coded name, so a second file
+        // written the same way fails this until it is listed too.
+        MatchCollection written = Regex.Matches(
+            Script, @"SaveStringToFile\(\s*ExpandConstant\('\{app\}\\([^']+)'\)");
+        Assert.True(written.Count > 0, "no SaveStringToFile into {app} - has the script changed shape?");
+
+        // Reuses the section reader the [UninstallRun] tests use, rather than a second regex: the
+        // last two attempts to write one of these inline lost a backslash to an escaping layer and
+        // produced a pattern that matched nothing, which is the shape of a test that cannot fail.
+        Match section = Regex.Match(Script, @"(?m)^\[UninstallDelete\]$([\s\S]*?)(?=^\[|\z)", RegexOptions.Multiline);
+        Assert.True(section.Success, "the script writes files into {app} but has no [UninstallDelete] section");
+
+        foreach (Match m in written)
+        {
+            string name = m.Groups[1].Value;
+            Assert.Contains(name, section.Groups[1].Value, StringComparison.OrdinalIgnoreCase);
+        }
+    }
+
+    [Fact]
     public void NothingInTheInstallerClaimsTheBinariesAreSigned()
     {
         // The signing step in the release pipeline does nothing yet. A "digitally signed" line in
