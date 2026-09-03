@@ -372,7 +372,8 @@ into a numbered section on the first release.
   machine" should not itself be reaching out, so a content security policy permits the two font
   hosts and nothing else - no analytics, no beacons, and no way for one to arrive by accident.
   The page opens on the mark, the name and the results card, with the card running off the right
-  of the screen rather than stopping at a gutter; the ticket that used to open it now follows it.
+  of the screen rather than stopping at a gutter; the ticket that used to open it now follows it,
+  and the page title and the link preview say the same thing the page now opens on.
 
 - **The results card previews the photograph it found.** The stage's picture - the centre-crop
   that shows you the file you are standing on - had never been rendered by any `--searchshot`
