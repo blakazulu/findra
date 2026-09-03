@@ -1303,7 +1303,7 @@ internal sealed class Shell : ISettingsHost
         menu.Items.Add(quit);
 
         var icon = new TrayIcon { Menu = menu, ToolTipText = Tooltip(), IsVisible = true };
-        if (TrayIconFactory.Draw(_palette) is { } drawn) icon.Icon = drawn;
+        if (TrayIconFactory.Draw() is { } drawn) icon.Icon = drawn;
         icon.Clicked += (_, _) => OpenCentred(fromClick: true);
 
         TrayIcon.SetIcons(_app, new TrayIcons { icon });
@@ -1453,12 +1453,15 @@ internal sealed class Shell : ISettingsHost
         else if (!c.ShowCapsule && _capsule is not null) CloseCapsule();
     }
 
-    /// <summary>Everything painted in the palette except the window that chose it: the tray icon,
-    /// and the capsule, which takes its palette in its constructor and so is made again.</summary>
+    /// <summary>Everything painted in the palette except the window that chose it, which today is
+    /// the capsule alone - it takes its palette in its constructor and so is made again.
+    ///
+    /// <para>The tray icon is deliberately NOT here. It is pinned to Mond because it is composited
+    /// onto Windows' taskbar rather than onto one of our surfaces, so a change of palette is not
+    /// news to it.</para></summary>
     private void OnPaletteChanged(Palette p)
     {
         _palette = p;
-        if (_tray is not null && TrayIconFactory.Draw(p) is { } drawn) _tray.Icon = drawn;
         if (_capsule is not null) { CloseCapsule(); Stage("capsule", CreateCapsule); }
         Log.Info("look", $"the palette is now '{p.Name}' ({(p.Light ? "light" : "dark")})");
     }

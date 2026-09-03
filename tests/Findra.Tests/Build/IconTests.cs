@@ -324,4 +324,48 @@ public class IconTests
             }
         }
     }
+
+    [Fact]
+    public void NothingCanHandTheTrayIconAPalette()
+    {
+        // The user's words: "the icon in the task bar should not change it's color - should be
+        // dark mond". It is composited onto WINDOWS' taskbar, whose light or dark setting has
+        // nothing to do with Findra's, so painting it in the chosen accent put a pale mark on a
+        // light taskbar for anybody using Paper or Porcelain. A tray icon is an identity rather
+        // than a theme, which is why every other one on the system holds still.
+        //
+        // What is asserted is the SHAPE, not the colour: Draw takes no palette, so there is no
+        // argument for a caller to get wrong and no branch in which one could be honoured. A test
+        // that read the source for a Palette.DefaultDark would pass just as happily against a
+        // Draw(Palette) that ignored its argument in one arm, and would say nothing at all about
+        // the shell still redrawing on every palette change - which was half the defect.
+        //
+        // If a palette parameter ever comes back, this stops compiling somewhere, and a caller
+        // that starts passing one fails here. Render KEEPS its palette deliberately: IconTests
+        // renders every palette through it to check the lens stays a hole, and that is a
+        // different question from what the taskbar gets.
+        Assert.NotNull(typeof(TrayIconFactory).GetMethod("Draw", Type.EmptyTypes));
+        Assert.Empty(typeof(TrayIconFactory).GetMethods()
+            .Where(m => m.Name == "Draw")
+            .SelectMany(m => m.GetParameters()));
+    }
+
+    [Fact]
+    public void TheIconIsReachableAtRuntimeAndEveryTaskbarWindowSetsIt()
+    {
+        // ApplicationIcon puts the mark on the binary, which is what the shell reads for
+        // shortcuts, Alt-Tab and the Add/Remove Programs entry. It is NOT what a window shows in
+        // the taskbar: Avalonia does not hand a Window the executable's icon, so a Window that
+        // never sets Icon shows the shell's placeholder. Both windows that appear in the taskbar
+        // did exactly that, and the user saw "a general icon".
+        using Stream? s = typeof(Parts).Assembly.GetManifestResourceStream("Findra.findra.ico");
+        Assert.NotNull(s);
+        Assert.True(s!.Length > 1000, $"the embedded icon is only {s.Length} bytes");
+
+        // And the two windows in the taskbar ask for it. The card and the capsule are absent from
+        // this list deliberately - they carry WS_EX_TOOLWINDOW and are hidden from the taskbar and
+        // from Alt-Tab, so an icon on them would be for nobody.
+        foreach (string window in new[] { "src/Findra/Settings/SettingsWindow.cs", "src/Findra/First/FirstRunWindow.cs" })
+            Assert.Contains("AppIcon.Apply(this)", Repo.Read(window), StringComparison.Ordinal);
+    }
 }

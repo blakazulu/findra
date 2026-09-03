@@ -53,6 +53,10 @@ public sealed class SettingsWindow : Window
     {
         ArgumentNullException.ThrowIfNull(state);
 
+        // This window is in the taskbar, and Avalonia does not hand it the executable's
+        // icon, so without this it shows the shell's placeholder.
+        AppIcon.Apply(this);
+
         _canvas = new SettingsCanvas(state, host, registerHotkey, this);
         Content = _canvas;
 

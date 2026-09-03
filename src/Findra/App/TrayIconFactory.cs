@@ -47,7 +47,23 @@ public static class TrayText
 /// </summary>
 public static class TrayIconFactory
 {
-    public const int Size = 32;
+    /// <summary>
+    /// The bitmap's edge, in real pixels.
+    ///
+    /// <para>256, not 32. This is not a layout number Avalonia scales for us - the bitmap goes to
+    /// the shell as pixels, and the shell asks for whatever the display scaling and the taskbar
+    /// size between them decide: 16 on a 100% desktop with small icons, 24 or 32 commonly, and up
+    /// past 40 at 200%. A 32-pixel source was being enlarged in every one of those cases beyond
+    /// the first, which is what "the icon is very small, can hardly see it" looks like - a mark
+    /// that has gone soft rather than one drawn small.</para>
+    ///
+    /// <para>256 is the largest size <c>assets/icon/findra.ico</c> carries, so the runtime render
+    /// and the generated file now agree about the biggest they go, and the shell is always
+    /// downsampling - which is the direction that keeps its edges. The whole bitmap is under a
+    /// quarter of a megabyte and is drawn once per launch, so its cost is not worth trading a
+    /// blurred mark for.</para>
+    /// </summary>
+    public const int Size = 256;
 
     /// <summary>The mark's own bounding box in the 256-unit design space: the lens at
     /// (110, 108) r 64 and the handle's round cap out at (200, 198) with a 30-unit bar, so
@@ -56,13 +72,25 @@ public static class TrayIconFactory
     /// somebody drew smaller than everyone else's.</summary>
     public static readonly SKRect Bounds = new(46f, 44f, 215f, 213f);
 
+    /// <summary>
+    /// Always Mond, whatever palette the product is wearing.
+    ///
+    /// <para>This icon is composited onto WINDOWS' taskbar, and the taskbar's own light or dark
+    /// setting has nothing to do with Findra's. Painting it in the chosen palette's accent put a
+    /// pale mark on a light taskbar for anybody using Paper or Porcelain - the accent was
+    /// answering the wrong question, because the surface behind it is not one of ours. A tray icon
+    /// is an identity rather than a theme, which is why every other one on the system holds still,
+    /// and it is what the user asked for in those words.</para>
+    /// </summary>
+    private static Palette OnTheTaskbar => Palette.DefaultDark;
+
     /// <summary>Returns null rather than throwing. A machine with no shell to put an icon in is a
     /// degraded state, not a reason to fail a launch.</summary>
-    public static WindowIcon? Draw(Palette palette)
+    public static WindowIcon? Draw()
     {
         try
         {
-            using SKData data = Render(palette);
+            using SKData data = Render(OnTheTaskbar);
             return new WindowIcon(new MemoryStream(data.ToArray()));
         }
         catch (Exception ex)

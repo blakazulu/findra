@@ -512,6 +512,13 @@ into a numbered section on the first release.
 
 ### Fixed
 
+- **The tray icon holds still and is drawn large enough to see.** It was painted in whichever
+  palette you had chosen, which put a pale mark on a light Windows taskbar, and it was drawn
+  at a size the shell then had to enlarge. It is now always the dark Mond mark, rendered at a
+  size the shell scales down from rather than up.
+- **Findra's own icon appears in the taskbar.** The settings window and the first screen were
+  showing Windows' placeholder icon instead.
+
 - **Uninstalling from Windows Settings asks about your data again.** Inno Setup registers a
   silent uninstall command of its own beside the ordinary one, and Settings > Apps prefers it,
   so removing Findra there ran the uninstaller with no window: the checkbox that offers to
