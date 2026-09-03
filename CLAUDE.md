@@ -262,6 +262,58 @@ The README was written last, out of the surfaces and the benchmark. Every image 
 `--searchshot` render with the command that produced it printed underneath; regenerate by
 running the command, never by hand-editing an image.
 
+## The website
+
+`website/public` is the whole site: plain static files, no build step, no framework, no package
+manifest. **Nothing in this repository deploys it** - there is no workflow for it and `ci.yml`,
+`release.yml` and `winget.yml` never touch it. Netlify watches `main` and publishes
+`website/public` as it sits, so a push is a deploy and `netlify.toml` - a publish directory and
+some headers - is the entire configuration. A build step would add a toolchain to a repository
+that is otherwise .NET and PowerShell, and is a thing to argue for rather than introduce.
+
+It carries the README's two rules, and it says so on the page: the shots section is headed
+"Every picture below is the product". So a hand-edited image does not just mislead, it makes the
+page lie about itself.
+
+- **`docs/shots` and `website/public/shots` are two copies of the same renders and are
+  regenerated together.** They are separate files with no test between them, and they had
+  silently drifted: the site served an `adv`, a `firstrun` and a `settingscontent` from an older
+  build while printing the command that produces the current ones. Its Settings picture was
+  missing "Start reading now" and "Indexing power" - two controls the product had gained - so
+  the page was advertising a smaller product than the one it was selling. When a surface
+  changes, regenerate **both** directories, and `cmp` them.
+- **Every number is a `--searchbench` measurement** beside the machine that produced it, as in
+  the README.
+
+**The content security policy is a promise the page makes about itself.** A page selling
+"nothing leaves your machine" must not itself be reaching out, so `netlify.toml` permits
+`fonts.googleapis.com` for stylesheets and `fonts.gstatic.com` for the font files and nothing
+else: `script-src 'self'`, `connect-src 'none'`, `img-src 'self' data:`. No analytics, no
+beacons, no third-party script, no CDN. A `data:` URI is allowed, which is how the header mark is
+inlined; an external image host is not. Anything that needs a new origin in that header is a
+decision to put to somebody, not a detail to add.
+
+**The site names Windows Search and the README may not.** "No comparative claims against named
+competitors" above is scoped to the README and the winget listing, and `Repo.Competitors`
+enforces it for both. The site is written in a different voice on purpose: its `h1` is the joke,
+and the section under it is a Windows Search dialog failing to find a file. That is deliberate
+and shipped - do not quietly correct it, and do not carry it back into the README or the
+manifest, where a test will catch it.
+
+**Nothing on it promises a release that does not exist.** The calls to action say Coming soon
+until there is a tag, and `winget install blakazulu.Findra` appears as the route that will work
+rather than as a download offered today.
+
+**One `h1`.** The page opens on the mark, the name and the results card, which runs off the right
+of the window on purpose; the ticket section below it is an `h2` and steps down in size, because
+at hero size the page appeared to start twice. The `<title>` and `og:title` say what that first
+section says. There is no `twitter:title` - the card falls back to `og:title` and follows it.
+
+**Almost none of this is tested.** No test in the suite reads `website/`. The one exception is
+the mark: `IconTests` fails if `favicon.svg` drifts from `assets/icon/findra.svg`, or if the
+header's data URI stops carrying the generated path. Everything else here holds because somebody
+read it, which is why the shots drifted for as long as they did.
+
 ## Architecture
 
 **Three processes.** This split exists from the first commit; retrofitting it means
