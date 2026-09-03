@@ -443,9 +443,9 @@ internal sealed class Shell : ISettingsHost
     /// it.
     ///
     /// <para>Awaited inside a task whose exceptions are CAUGHT here rather than left on an
-    /// unobserved <c>Task</c>. That is the whole of the third defect this task exists to fix: a
-    /// dropped network raises an <c>HttpRequestException</c> that Plan 5's downloader does not
-    /// catch, and on screen an unobserved throw is a progress bar that simply stops.</para>
+    /// unobserved <c>Task</c>, which is the whole point: a dropped network raises an
+    /// <c>HttpRequestException</c> that <c>ModelDownloader</c> does not catch, and on screen an
+    /// unobserved throw is a progress bar that simply stops.</para>
     /// </summary>
     private async Task FetchFirstRunAsync(FirstRunWindow window, IReadOnlyList<Model> wanted)
     {
@@ -492,8 +492,8 @@ internal sealed class Shell : ISettingsHost
     /// <summary>
     /// Re-queue what a newly-arrived capability can now read, ON THE FLOW THAT OWNS THE WRITER.
     ///
-    /// <para>This is the obligation Plan 5 left open, and it is why
-    /// <c>FirstRunDownloads.RunAsync</c> takes a callback and no <c>ContentDb</c> at all.
+    /// <para>This is why <c>FirstRunDownloads.RunAsync</c> takes a callback and no
+    /// <c>ContentDb</c> at all.
     /// <c>ContentDb.Claim</c> is a thread-id detector rather than a lock, so the second flow to
     /// reach the writer connection gets an <c>InvalidOperationException</c> - and a download
     /// continuation calling <c>CapabilityGate.Apply</c> directly would be that second flow,
@@ -1496,9 +1496,9 @@ internal sealed class Shell : ISettingsHost
     /// <summary>
     /// Fetch what a capability needs, and tell the window when it is there.
     ///
-    /// <para>The same controller the first-run screen uses, deliberately. Task 7 shipped this
-    /// against <c>ModelDownloader.GetAllAsync</c> because <c>FirstRunDownloads</c> did not exist
-    /// yet, and the two behaved differently in the two ways that matter: a fetch that threw
+    /// <para>The same controller the first-run screen uses, deliberately. This was written
+    /// against <c>ModelDownloader.GetAllAsync</c> before <c>FirstRunDownloads</c> existed, and the
+    /// two behaved differently in the two ways that matter: a fetch that threw
     /// escaped as an unobserved exception rather than becoming an outcome, and nothing re-queued
     /// the files the new capability covers until the next launch - which reads, to the person who
     /// just waited for 630 MB, as a download that did not work. One path now, and one policy.

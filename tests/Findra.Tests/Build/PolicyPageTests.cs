@@ -77,8 +77,13 @@ public class PolicyPageTests
 
         // The box has to say what ticking it does. A checkbox with no caption, or one captioned
         // something else, is not the control the page describes to somebody about to click it.
-        Match caption = Regex.Match(iss, @"(?m)^\s*\w+\.Caption\s*:=\s*'(?<text>[^']*delete[^']*)'");
-        Assert.True(caption.Success, "no control in the installer is captioned with what deleting would do");
+        // Bound to the checkbox variable rather than to any control: with `\w+` the caption could
+        // sit on the OK button while the box itself carried none, and the page would still be
+        // describing a control nobody sees.
+        string box = Regex.Match(iss, @"(?m)^\s*(?<v>\w+)\s*:=\s*TNewCheckBox\.Create").Groups["v"].Value;
+        Assert.False(string.IsNullOrEmpty(box), "the installer creates no checkbox");
+        Match caption = Regex.Match(iss, @"(?m)^\s*" + box + @"\.Caption\s*:=\s*'(?<text>[^']*delete[^']*)'");
+        Assert.True(caption.Success, "the installer's checkbox is not captioned with what ticking it would do");
         foreach (string word in new[] { "models", "index", "settings" })
             Assert.Contains(word, caption.Groups["text"].Value, StringComparison.OrdinalIgnoreCase);
 
@@ -154,16 +159,19 @@ public class PolicyPageTests
 
         Assert.NotEmpty(known);
 
-        int checked_ = 0;
-        foreach (string page in new[] { Privacy, Signing })
+        // Counted PER PAGE. A floor over both together was met by PRIVACY.md's two commands on
+        // its own, so the signing page could drop the only one it names - the thing this guard
+        // exists to notice - and the total still cleared the bar.
+        foreach ((string name, string page) in new[] { ("PRIVACY.md", Privacy), ("code-signing-policy.md", Signing) })
+        {
+            int found = 0;
             foreach (Match m in Regex.Matches(page, @"findra(?:\.exe)?\s+(--[a-z-]+)"))
             {
                 Assert.Contains(m.Groups[1].Value, known);
-                checked_++;
+                found++;
             }
 
-        // Neither page may quietly stop naming a command either: this test is the only thing that
-        // reads them for one, so nothing to read means nothing asserted.
-        Assert.True(checked_ >= 2, $"the two pages between them name {checked_} findra commands, which is fewer than they did");
+            Assert.True(found >= 1, $"{name} names no findra command at all, so this test read nothing on it");
+        }
     }
 }

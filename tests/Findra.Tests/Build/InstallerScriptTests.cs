@@ -53,10 +53,18 @@ public class InstallerScriptTests
     [Fact]
     public void TheVersionIsPassedInRatherThanBakedIn()
     {
-        // A literal version in the script is a second place the version lives, which is exactly
-        // what Task 1 removed everywhere else. The #error is what makes forgetting it loud.
+        // A literal version in the script is a second place the version lives, and
+        // Directory.Build.props is the only one there may be. The #error is what makes forgetting
+        // to pass it loud rather than silent.
+        //
+        // Asserting the #ifndef guard exists is not enough on its own: the guard's own error
+        // message carried "1.2.0" until the close-out read it, and every assertion here was green
+        // the whole time. So the teeth are the third line - no three-part number anywhere in the
+        // file, in a comment, in an error message or in a setting. Two-part numbers are left
+        // alone: MinVersion=10.0 and the "Inno Setup 6.3" note are not Findra's version.
         Assert.Contains("#ifndef AppVersion", Script, StringComparison.Ordinal);
-        Assert.Contains("#error", Script, StringComparison.Ordinal);
+        Assert.Contains("{#AppVersion}", Script, StringComparison.Ordinal);
+        Assert.DoesNotMatch(@"\d+\.\d+\.\d+", Script);
     }
 
     /// <summary>
@@ -74,7 +82,14 @@ public class InstallerScriptTests
             @"(?:function|procedure)\s+" + name + @"\b(?:(?!(?:function|procedure)\s+\w+).)*",
             RegexOptions.Singleline | RegexOptions.IgnoreCase);
         Assert.True(m.Success, $"the installer script has no {name}");
-        return m.Value;
+
+        // Comment lines come OUT. Two assertions in this class were answered by the very comment
+        // written about the thing being asserted - StopFindra explains itself with "// --stop, not
+        // CloseApplications", and InitializeUninstall with "// --dry-run --quiet writes that
+        // report" - so both stayed green with the Exec call underneath them rewritten. A routine's
+        // prose is not its behaviour, and nothing here should be able to read it.
+        return string.Join('\n', m.Value.Replace("\r\n", "\n", StringComparison.Ordinal).Split('\n')
+                                        .Where(l => !l.TrimStart().StartsWith("//", StringComparison.Ordinal)));
     }
 
     [Fact]
@@ -92,7 +107,8 @@ public class InstallerScriptTests
         // is a different routine defined above it. A single non-greedy match ends at the first
         // `end;`, which is PrepareToInstall's own, so asserting on that alone can never pass.
         Assert.Contains("StopFindra", Body("PrepareToInstall"), StringComparison.Ordinal);
-        Assert.Contains("--stop", Body("StopFindra"), StringComparison.Ordinal);
+        // The call, not the token: `--stop` also appears in StopFindra's own explanatory comment.
+        Assert.Contains("findra.exe'), '--stop'", Body("StopFindra"), StringComparison.Ordinal);
         Assert.DoesNotContain("--stop", Body("CurStepChanged"), StringComparison.Ordinal);
     }
 
@@ -181,8 +197,12 @@ public class InstallerScriptTests
         // Spec §2a: "The prompt states the measured size it would free ... not a vague warning."
         // The number comes from `findra --uninstall --dry-run --quiet`, which writes its report to
         // a temp file precisely because an Inno script cannot capture a child's standard output.
+        // The exact arguments, not the token. `--dry-run` also appears in the routine's own
+        // comment, so a check for it was green with the Exec rewritten to `--uninstall --quiet` -
+        // which really uninstalls, while the person is still reading the prompt that asks whether
+        // they want to.
         string body = Body("InitializeUninstall");
-        Assert.Contains("--dry-run", body, StringComparison.Ordinal);
+        Assert.Contains("Exec(app, '--uninstall --dry-run --quiet'", body, StringComparison.Ordinal);
         Assert.Contains("LoadStringFromFile", body, StringComparison.Ordinal);
     }
 
@@ -216,8 +236,14 @@ public class InstallerScriptTests
     {
         // Without this, every winget install reports itself as a source build and every update
         // tells the person to read release notes instead of running one command.
-        Assert.Contains("installed-by.txt", Script, StringComparison.Ordinal);
-        Assert.Contains("INSTALLSOURCE", Script, StringComparison.Ordinal);
+        // Scoped to the routine that does it, and to the parameter read rather than the word:
+        // INSTALLSOURCE appears in the comment above the code as well, so renaming the parameter
+        // left the whole-file check green and every winget install reporting itself as a source
+        // build.
+        string body = Body("RecordInstallSource");
+        Assert.Contains("installed-by.txt", body, StringComparison.Ordinal);
+        Assert.Contains("{param:INSTALLSOURCE|}", body, StringComparison.Ordinal);
+        Assert.Contains("'winget'", body, StringComparison.Ordinal);
     }
 
     [Fact]

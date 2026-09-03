@@ -11,12 +11,24 @@ a replacement for it.
 Findra is a standalone Windows desktop search widget: a capsule on the desktop that unfolds
 into a results card, plus a global hotkey. .NET 10, Avalonia, SkiaSharp, SQLite.
 
+All six plans have landed. The tree holds the three processes and the name pipe, the palette
+layer and the card, the capsule, tray and hotkey, the FTS5 content store and the indexer child,
+the model store and the per-capability gates, the settings window and the first-run screen,
+`--uninstall`, an Inno Setup installer, three GitHub Actions workflows, the winget manifests and
+a README written out of real renders and real measurements. What is left is not a plan but
+`docs/end-to-end-checklist.md`: everything that needs a UAC prompt, a sign-out, a real installer
+or a public tag, none of which has ever run here.
+
 ## Commands
 
 ```bash
-dotnet build -warnaserror                      # zero warnings, always
+dotnet build -warnaserror -t:Rebuild           # zero warnings, always - and -t:Rebuild, because
+                                               # an incremental build reports a false clean
 dotnet test                                    # TDD applies to new code (see below)
 dotnet publish -c Release --self-contained     # self-contained is required, not optional
+pwsh -File build/Publish.ps1 -Rid win-x64      # the publish the installer and CI both use
+pwsh -File build/Check-Diagnostics.ps1 -Exe publish/win-x64/findra.exe   # every headless mode
+pwsh -File build/Check-Release.ps1 -Tag v0.1.0 # may this tag be released, and what are its notes
 ```
 
 Six diagnostic modes are non-negotiable and are built from day one. They are how the app is
@@ -30,15 +42,25 @@ findra.exe --searchmodels             # are models present, do they load, do the
                                       # which execution provider answered for each runtime
 findra.exe --searchindex [file|folder|q:query]...   # what is indexed, what is queued; given
                                       # paths it queues and drains them, given q: it queries
-findra.exe --searchshot out.png <capsule|empty|typing|results|noresults|many|adv|opening|openingempty> [palette]
+findra.exe --searchshot out.png <state> [palette]   # sixteen states, listed below
 findra.exe --searchtest               # engine self-check
 findra.exe --searchbench [out.md] [corpus]   # measured numbers, as a pasteable Markdown
                                       # fragment; `corpus` is how many files it generates
 findra.exe --version                  # print the version and log location, then exit
 ```
 
-Two more modes are settings a person changes rather than diagnostics, and they are the only way
-to change them until the first-run screen exists:
+The `--searchshot` states are `SearchShot.States`, and that list is the only definition of them.
+Nine draw the card, five the settings window and two the first-run screen:
+
+```
+capsule  empty  typing  results  noresults  many  adv  opening  openingempty
+settings  settingsopening  settingssearches  settingscontent  settingsabout
+firstrun  firstrundownloading
+```
+
+Two more modes are settings a person changes rather than diagnostics. **They survive the
+first-run screen and the settings window rather than being replaced by them** - they are how the
+capability path is exercised on a machine with no screen, in CI, and by anybody reporting a bug:
 
 ```bash
 findra.exe --models                   # what is installed, and what each capability would add
@@ -48,6 +70,21 @@ findra.exe --models install <preset|cap[,cap]>   # justnames | recommended | eve
 findra.exe --content [on|off]         # is Findra reading inside files at all
 findra.exe --content limit <length>   # off | 5 | 30 | 2 hours | no limit | any number of minutes
 ```
+
+Four modes are neither a diagnostic nor a setting, and the first two are not run by hand:
+
+```bash
+findra.exe --names                    # the elevated name-index helper, started by the task
+findra.exe --index <parentPid>        # the content indexer, started by the UI
+findra.exe --uninstall [--purge] [--dry-run]   # stop everything, remove the scheduled task, the
+                                      # autostart entry and the program files; --purge also
+                                      # deletes the models, the index and the settings;
+                                      # --dry-run prints the whole plan and changes nothing
+findra.exe --stop                     # stop the interface, the indexer and the name helper
+```
+
+Anything beginning with `--` that is not one of these exits 1 and prints the list. A mistyped
+mode must never fall through to the greeting, because a script checks the exit code.
 
 The `--searchbench` fragment opens at heading level two and every section below it at level
 three, so it pastes under the README's own `#` with nothing to edit. It refuses to print a
@@ -63,14 +100,25 @@ numbers - and **both must be real**.
 - **Screenshots come from `--searchshot`**, which draws the actual card with the actual
   painter. Every image is the product, not a mockup. Regenerate by running the command;
   never hand-edit. Record the command next to each image so anyone can reproduce it.
-- **Every number comes from `--searchbench`** pasted verbatim, with the machine named
-  (CPU, RAM, disk class, Windows build). A number without its machine is marketing, not
-  measurement. Model sizes come from real files on disk, never the declared floors.
+- **Every number comes from `--searchbench`** pasted verbatim and whole, with the machine named
+  (CPU, RAM, disk class, accelerator, Windows build). A number without its machine is marketing,
+  not measurement. Model sizes come from real files on disk, never the declared floors. The
+  fragment is pasted with every section it printed, never the flattering half of it.
+- **Never quote a throughput rate from a default-sized `--searchbench` run.** A run of a second
+  or two disagrees with itself by more than a published `files/min` or `MB/s` deserves. Quote the
+  latency tables, the enumeration numbers and the store sizes, which are stable at any size; if
+  an extraction rate is quoted at all, regenerate it with a corpus of at least 10,000 and say in
+  the sentence above it that that is what produced it.
 - **No claim appears that a reader cannot reproduce** with a command from the README itself.
 - **No comparative claims against named competitors** - Findra cannot benchmark them fairly.
+  `tests/Findra.Tests/Build/Repo.cs` holds the one name list the README test and the winget
+  listing test share. It is deliberately incomplete: one well-known tool's name is an ordinary
+  English word and also one of Findra's own presets, so it cannot be grepped for. That one is a
+  reading, not a test.
 
-The README is written last, once the surfaces and the benchmark exist. Until then the repo
-carries a deliberately plain placeholder that promises nothing it cannot yet show.
+The README was written last, out of the surfaces and the benchmark. Every image in it is a
+`--searchshot` render with the command that produced it printed underneath; regenerate by
+running the command, never by hand-editing an image.
 
 ## Architecture
 
@@ -185,6 +233,55 @@ of new visual work and it lives inside inherited code.
 There is deliberately no element/page manifest system. Users extend
 `%APPDATA%\Findra\palettes.json`; they do not author layouts.
 
+`Derived.Tile` and `Derived.Chip` are painted by the settings surfaces and are in the legibility
+check in `--searchtest` and in `DerivedTests`. Nothing in either is "reserved for later" any more.
+
+## The typeface
+
+Quicksand ships inside the application, one weight, embedded from `assets/fonts/Quicksand-Regular.ttf`,
+under the SIL Open Font License 1.1. `assets/fonts/OFL.txt` reaches the publish folder and
+therefore the installer, because OFL condition 2 makes the licence travel with every copy.
+
+**`Parts.Face` is the only place in `src/Findra` that resolves a typeface.** The card, the
+capsule, both settings surfaces and `--searchshot` all draw through it, and a missing resource
+falls back to the system default with a log line rather than stopping the application - a type
+initialiser that throws is unreportable.
+
+That single resolver is why a label's fit is **measured** rather than eyeballed: the tests that
+check a label into its pill and the test that checks the column is not wider than it needs to be
+are each other's opposites. **If a label is ever tight, shorten the label.** Do not widen the
+tolerance and do not move the column - satisfying one of that pair by moving the geometry breaks
+the other. Bold is `SKFont.Embolden` on the same face; there is no second file.
+
+## Shipping
+
+- **The version lives in `Directory.Build.props` and nowhere else.** No `<Version>`,
+  `<AssemblyVersion>`, `<FileVersion>` or `<InformationalVersion>` in any `.csproj`.
+  `IncludeSourceRevisionInInformationalVersion` is off and `BuildInfo.Normalise` strips anything
+  from `+` onward anyway, because `Version.TryParse` rejects `1.2.0+sha`, `UpdateCheck.Compare`
+  answers 0 for what it cannot parse, and 0 is routed to "up to date" - a permanent lie.
+- **A tag with no matching `CHANGELOG.md` section fails the release, and the notes are that
+  section.** GitHub's generated release notes are never turned on. `build/Check-Release.ps1` is
+  the gate, each refusal has its own exit code, and the workflow calls it rather than knowing it.
+- **No pre-release tags.** The comparison cannot order `1.2.0-rc.1`, and `/releases/latest`
+  excludes prereleases, so such a tag ships a release nobody's update check will ever see. The
+  refusal in `Check-Release.ps1` is the line to delete when the comparison learns semver
+  prereleases.
+- **Nothing but a person on the Actions tab publishes to the winget catalogue.** No `push`,
+  `tag`, `release` or `schedule` trigger may reach `winget.yml`. A mis-tagged GitHub release is
+  recoverable; one that reaches the catalogue is somebody else's `winget upgrade`.
+- **Both architectures ship from the first release, in one manifest.** `win-x64` and `win-arm64`
+  from one matrix, two `Installers:` entries under one `PackageVersion`.
+- **The signing step is a placeholder that does nothing, and nothing anywhere claims otherwise** -
+  not the README, not the installer, not the release body, not the winget listing, and not
+  `docs/code-signing-policy.md`, whose status note is coupled to the empty step by a test.
+- **The installer is a third distribution route and `installer` a fourth install source**, beside
+  `winget`, `source` and `unknown`. Spec §2 and §9b still say two and three; the plan document
+  argues the amendment and this line is the record until the spec is amended.
+- **No version number in the install directory**, and `AppId` is a fixed GUID: the scheduled task
+  stores an absolute path to `findra.exe`, so a versioned directory points an elevated logon task
+  at a binary that no longer exists after every upgrade.
+
 ## Data locations
 
 Config roams, bulk does not - 2.9 GB of models must never sit in a roaming profile, and models
@@ -245,18 +342,21 @@ states the **measured** size it would free, not a vague warning.
 because the `dotnet publish` route has no installer - without it, everyone who built from
 source is left with an elevated scheduled task and no supported way to remove it.
 
-## Provenance
+## No lineage
 
-Findra starts from an existing search engine held locally at `C:\Code\Personal\Prism\src\Search`
-(plus `CardText.cs`, `BidiText.cs`, `Log.cs`, `StartupManager.cs`, `ThemeRenderer.Search.cs`).
-Roughly 7,300 lines are copied or near-copied, ~1,700 written new, and one 702-line service
-reshaped around the pipe.
+**Findra is a separate project, not a fork or a component.** Everything in it is owned outright:
+namespaces are `Findra`, and log tags, probe markers, config paths and file names follow.
 
-**Findra is a separate project, not a fork or a component.** Everything it takes is copied in
-and owned outright - namespaces become `Findra`, and log tags, probe markers, config paths and
-file names follow. No lineage is described or implied anywhere in the shipped product: README,
-UI, commit messages or code comments. Referring to the source path when porting is fine;
-describing Findra as derived from another project is not.
+Nothing anywhere - the README, the UI, a commit message, a manifest, a build script or a code
+comment - may describe Findra as derived from another project, name one, or describe behaviour
+that is not Findra's. This is not a name grep: the leaks that survive one are doc comments
+explaining another product's behaviour, magic constants justified by another product's history,
+and vocabulary that belongs to a different object model. Read the comments; ask of each whether it
+reads as written for Findra by somebody who has never seen another codebase.
+
+The same rule covers this repository's own development vocabulary. A shipped comment may not cite
+a plan, a task number or a review, because those documents are not in the tree a reader has. Name
+the thing rather than the document that asked for it.
 
 ## The changelog
 

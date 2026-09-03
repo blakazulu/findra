@@ -342,7 +342,71 @@ moment rather than an elevation prompt at every launch.
     command for when that release exists rather than as an instruction. When step 38 succeeds, that
     paragraph is the thing that becomes false first.
 
+## From the close-out
+
+Eight things the plan asked for that nothing above already covers. Six of them are judgements a
+person makes by looking; two are destructive and belong last.
+
+42. **Refusing the one prompt is survivable, and recoverable.** Rename `%APPDATA%\Findra\config.json`,
+    launch, and answer **No** to the UAC prompt the first-run screen raises. Findra must keep
+    running with the capsule and the tray as normal, the log must say the helper is not registered
+    rather than going quiet, and Settings > Opening it > "Register it" must succeed on a second
+    attempt. The specification calls scheduled-task registration the one thing Findra cannot fix on
+    a stranger's machine, so what is being checked is that it is visible and has a way back.
+43. **Settings by eye, in both modes.** Open all five sections in a dark palette, then again in a
+    light one. Nothing overlaps, no note is clipped at the bottom of the pane, no label is cut off
+    inside its pill, and the pane is the same height in every section. The measured tests say the
+    rows fit; whether the window reads as the same object as the card is a judgement, and this is
+    where it is made.
+44. **The exclusions list is the only scroller, and it scrolls.** With the default entries in
+    place, scroll to the end of the list in Settings > What it searches, remove the last one, and
+    confirm the list is still usable afterwards and that `config.json` holds an array rather than
+    nothing at all. Then check that nothing else anywhere in either surface scrolls.
+45. **Start at sign-in, across a real sign-out.** Tick it, sign out, sign in: the capsule comes
+    back. Untick it, sign out, sign in: it does not, and the `Findra` value is gone from
+    `HKCU\Software\Microsoft\Windows\CurrentVersion\Run`. Checklist step 27a watches the
+    registry value change; only a sign-out shows that Windows acts on it.
+46. **The measured sizes are the real ones.** Run `findra --uninstall --dry-run` and compare its
+    four numbers against what Explorer reports for the same four folders. Everything in the product
+    that quotes a size to somebody about to delete it comes through this one measurement.
+47. **The shipped face is what a person actually sees.** On an installed build, open the card and
+    all five settings sections and confirm they are drawn in Quicksand rather than the system UI
+    face. `Parts.Face` falls back to the default silently and by design, so a packaging mistake
+    shows up here and nowhere else. Check that `OFL-Quicksand.txt` sits beside `findra.exe` in the
+    install folder, which is what the licence asks of every copy. Then take a `--searchshot` PNG
+    here and one on another machine and compare them: identical is what makes a README screenshot
+    the product rather than a picture of one machine.
+48. **winget, end to end, once the catalogue has the package.** `winget install blakazulu.Findra`
+    on a machine Findra has never been on. Afterwards `installed-by.txt` beside the executable says
+    `winget`, and Settings > About offers `winget upgrade blakazulu.Findra` rather than a link to
+    release notes. Somebody who downloaded the `.exe` directly must get the link instead, which is
+    the second half of the same check and needs a second machine or a second install.
+49. **`--purge` from the command line, which is the route with no checkbox in front of it.** On a
+    machine you are willing to reinstall on: `findra --uninstall --purge` from a normal terminal.
+    One elevation prompt, and afterwards `%LOCALAPPDATA%\Findra` and `%APPDATA%\Findra` are both
+    gone and nothing beside them has been touched. Step 33 checks the installer's route; this is
+    the one somebody who built from source takes.
+
+## What could not be verified in this project at all
+
+Written down so they are known gaps rather than assumed passes. Every one of them is a step above.
+
+- **Inno Setup is not installed here**, deliberately: the release workflow is where the script is
+  compiled for every release, so that is where it is compiled first. The `.iss` is asserted as
+  text (step 32).
+- **GitHub Actions has never run.** All three workflows are asserted as text, including the two
+  assertions that exist because a deterministic PowerShell parse bug was once filed as something
+  only a real machine could find (steps 35 and 36).
+- **A real uninstall needs an elevated terminal and a registered scheduled task, and it is
+  destructive.** `--dry-run` is the only form that has run here (steps 33 and 49).
+- **A winget submission needs a pull request against somebody else's repository**, and the App
+  Installer CLI may not even be on the runner (step 38).
+- **Whether the shipped face reads as the product is a judgement** and has never been made: no
+  Findra surface has been looked at by a person in Quicksand (steps 43 and 47).
+- **Whether every control does something when a person clicks it** is the other judgement, and it
+  is the one an earlier draft of the settings window failed with five dead controls (step 27a).
+
 ## Notes
 
-Steps 1 to 4, 9 to 13 and 29 to 41 are the ones that have never executed in any form. Steps 5 to 8
+Steps 1 to 4, 9 to 13 and 29 to 49 are the ones that have never executed in any form. Steps 5 to 8
 have been verified by log line and by inspection, but not by eye.

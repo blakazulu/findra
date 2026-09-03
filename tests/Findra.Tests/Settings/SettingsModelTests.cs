@@ -250,6 +250,12 @@ public class SettingsModelTests
     [InlineData(true, false, false, false, 0x46u, "Ctrl+F")]
     [InlineData(false, true, false, false, 0x20u, "Alt+Space")]
     [InlineData(true, true, true, false, 0x50u, "Ctrl+Alt+Shift+P")]
+    // The Win row is not decoration: without it `win` was false in every row of both theories in
+    // this file, so deleting the MOD_WIN line from ChordFrom passed the whole suite - and then
+    // pressing Win+F during capture produced no chord at all, which reads as a window that ignored
+    // the key. Win+something is a realistic landing spot, because Alt+Space is taken on some
+    // machines and the fallback chain has to go somewhere.
+    [InlineData(false, false, false, true, 0x46u, "Win+F")]
     public void AChordIsBuiltFromWhatWasActuallyPressedAndReadsBack(bool ctrl, bool alt, bool shift, bool win, uint vk, string want)
     {
         // The round trip is the point: whatever ChordFrom produces, Hotkey.Parse must read back,
@@ -271,6 +277,9 @@ public class SettingsModelTests
         // person is reaching for. Binding "Ctrl+" there takes the hotkey away before they have
         // finished pressing the combination they wanted, and the way back is the hotkey.
         Assert.Null(SettingsModel.ChordFrom(ctrl: true, alt: false, shift: false, win: false, vk));
+        // And with the Windows key held, because 0x5B is the one row where holding it is what a
+        // person is actually doing.
+        Assert.Null(SettingsModel.ChordFrom(ctrl: false, alt: false, shift: false, win: true, vk));
     }
 
     [Fact]
@@ -633,8 +642,30 @@ public class SettingsModelTests
     [Fact]
     public void AnUpToDateBuildIsNotOfferedAnUpgradeCommand()
     {
+        // The negative alone is satisfied by an empty string, and by a switch collapsed to one
+        // sentence. The positive half says the line still tells somebody something.
         string line = SettingsModel.AboutUpdateLine("1.3.0", UpdateState.Current, "1.3.0", "winget");
         Assert.DoesNotContain("winget upgrade", line, StringComparison.Ordinal);
+        Assert.Contains("1.3.0", line, StringComparison.Ordinal);
+        Assert.Contains("newest", line, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void TheFourThingsTheAboutLineCanSayAreFourDifferentSentences()
+    {
+        // Three of the five arms of AboutUpdateLine had no test at all, so the whole switch could
+        // have collapsed into one sentence with only the Available theory noticing. Every state a
+        // person can land on has to read differently from every other, or the line is decoration.
+        string[] lines =
+        [
+            SettingsModel.AboutUpdateLine("1.2.0", UpdateState.Available, "1.3.0", "winget"),
+            SettingsModel.AboutUpdateLine("1.3.0", UpdateState.Current, "1.3.0", "winget"),
+            SettingsModel.AboutUpdateLine("1.3.0", UpdateState.Disabled, null, "winget"),
+            SettingsModel.AboutUpdateLine("1.3.0", UpdateState.NotDue, null, "winget"),
+        ];
+
+        Assert.All(lines, l => Assert.False(string.IsNullOrWhiteSpace(l)));
+        Assert.Equal(lines.Length, lines.Distinct(StringComparer.Ordinal).Count());
     }
 
     [Fact]

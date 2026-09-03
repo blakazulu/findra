@@ -10,9 +10,9 @@ namespace Findra.Startup;
 /// installs for somebody else is the wrong person entirely. Findra writes it itself, from its own
 /// session, where HKCU means what it says.</para>
 ///
-/// <para>Separate from the scheduled task: the task starts the elevated NAME HELPER at logon and
-/// Findra does not work without it; this starts the interface, and Findra works fine without it -
-/// you just have to launch it.</para>
+/// <para>Separate from the scheduled task: the task starts the elevated NAME HELPER at logon, and
+/// without it there are no file names to search; this starts the interface, and Findra works fine
+/// without it - you just have to launch it.</para>
 /// </summary>
 public static class Autostart
 {

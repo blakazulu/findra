@@ -5,15 +5,13 @@ using System.Text;
 
 namespace Findra.Startup;
 
-public enum UninstallStep { StopInterface, StopStrays, StopHelper, RemoveScheduledTask, RemoveAutostart, DeleteData, ReportAppFolder }
 public enum Route { Proceed, Elevate, Fail }
 
 public readonly record struct DataSize(string Label, string Path, long Bytes);
 public readonly record struct Removal(string Label, string Path, bool Removed, string? Problem);
 public readonly record struct Running(int? Interface, int? Helper, IReadOnlyList<int> Others);
 
-public sealed record UninstallPlan(
-    IReadOnlyList<UninstallStep> Steps, IReadOnlyList<DataSize> Deletes, IReadOnlyList<DataSize> Keeps)
+public sealed record UninstallPlan(IReadOnlyList<DataSize> Deletes, IReadOnlyList<DataSize> Keeps)
 {
     public long FreedBytes => Deletes.Sum(d => d.Bytes);
 }
@@ -28,27 +26,22 @@ public static class Uninstall
     private static readonly CultureInfo Fixed = CultureInfo.InvariantCulture;
 
     /// <summary>
-    /// What an uninstall does, in order. The order is the point: the helper holds a volume handle
-    /// and the indexer holds the index file, so both are stopped before anything is deleted, and
-    /// the scheduled task goes before the files its target lives in.
+    /// What an uninstall deletes and what it keeps. Purge decides that and nothing else: the
+    /// scheduled task, the autostart entry and the three processes go either way, so they are not
+    /// in the plan at all. Spec §2a - an uninstaller that misses the task is a defect rather than
+    /// an inconvenience, and a plan that could express "keep the task" is one somebody eventually
+    /// reads as an option.
+    ///
+    /// <para>The ORDER lives in <see cref="Run"/>, which is the only thing that performs it. It
+    /// used to be listed here as a second enum nothing executed: both order tests then asserted a
+    /// literal array against its own literals and stayed green with the task removal deleted from
+    /// <see cref="Run"/> entirely. <c>TheTaskAndTheAutostartEntryGoBeforeAnyDataIsDeleted</c> reads
+    /// <see cref="Run"/> instead.</para>
     /// </summary>
     public static UninstallPlan Plan(bool purge, IReadOnlyList<DataSize> measured)
     {
         ArgumentNullException.ThrowIfNull(measured);
-        UninstallStep[] steps =
-        [
-            UninstallStep.StopInterface,
-            UninstallStep.StopStrays,
-            UninstallStep.StopHelper,
-            // Always, and never inside the purge branch. Spec §2a: an uninstaller that misses this
-            // is a defect, not an inconvenience.
-            UninstallStep.RemoveScheduledTask,
-            UninstallStep.RemoveAutostart,
-            UninstallStep.DeleteData,
-            UninstallStep.ReportAppFolder,
-        ];
-
-        return purge ? new UninstallPlan(steps, measured, []) : new UninstallPlan(steps, [], measured);
+        return purge ? new UninstallPlan(measured, []) : new UninstallPlan([], measured);
     }
 
     public static Route Decide(bool elevated, bool relaunched) =>
@@ -80,11 +73,13 @@ public static class Uninstall
     }
 
     /// <summary>The two folders everything Findra writes lives under, and the only two anything is
-    /// ever deleted from.</summary>
-    public static IReadOnlyList<string> Roots(string? localRoot = null, string? roamingRoot = null) =>
+    /// ever deleted from. No overrides: <see cref="Delete"/> takes its roots as an argument, which
+    /// is the seam the containment tests drive, and a second injectable copy here was two
+    /// parameters that could only ever be null.</summary>
+    public static IReadOnlyList<string> Roots() =>
     [
-        localRoot ?? Path.GetDirectoryName(Paths.Models)!,
-        roamingRoot ?? Paths.Config,
+        Path.GetDirectoryName(Paths.Models)!,
+        Paths.Config,
     ];
 
     /// <summary>
@@ -268,28 +263,29 @@ public static class Uninstall
 
         if (!quiet) Console.Write(report);
 
-        // 1..3 - stop everything, sparing this process and the parent that is waiting on it.
+        // Stop everything first, sparing this process and the parent that is waiting on it.
         StopAll(spare: parent > 0 ? [Environment.ProcessId, parent] : [Environment.ProcessId]);
 
-        // 4..5 - the two that matter most, and the two that are done BEFORE any deletion, so a
+        // Then the two that matter most, and the two that are done BEFORE any deletion, so a
         // failure in the delete loop still leaves a machine with no orphaned elevated task.
         // Unconditionally, and never behind a check of what Query said. Query is three-valued so
         // that a locked-down machine is distinguishable from a fresh one, but both still need the
         // task gone: treating Unknown as "nothing to do" is how the orphan survives on exactly the
         // machines least able to clear it by hand. Removing a task that was not there costs one
         // non-zero exit code nobody acts on, which is the cheaper of the two mistakes by a wide
-        // margin. End-to-end checklist step 33 is what proves it is really gone.
+        // margin. Only a real elevated uninstall proves it is really gone, which is why the
+        // end-to-end checklist carries that step.
         bool taskGone = HelperTask.Unregister();
         Autostart.Clear();
 
-        // 6 - the data, only if asked, and only inside Findra's own folders.
+        // Then the data, only if asked, and only inside Findra's own folders.
         IReadOnlyList<Removal> removed = purge ? Delete(plan.Deletes, Roots()) : [];
 
-        // 7 - the one thing it cannot do.
+        // Last, the one thing it cannot do.
         if (!quiet)
         {
             foreach (Removal r in removed.Where(r => !r.Removed))
-                Console.Error.WriteLine($"findra: {r.Label} was not removed - {r.Problem}");
+                Console.Error.WriteLine($"findra: {r.Label} was not removed - {r.Problem}: {r.Path}");
             Console.WriteLine($"findra: delete {appFolder} yourself to finish removing it.");
         }
 

@@ -155,7 +155,26 @@ public class WingetManifestTests
     {
         // Apache-2.0 with a NOTICE, and the propagating attribution that is the reason for
         // choosing it (spec 11).
+        // Keyed to the fields, not to the URL. `github.com/blakazulu/findra` is also the support
+        // URL and the licence URL, so a bare search for it was green with the attribution deleted.
         Assert.Contains("License: Apache-2.0", Locale, StringComparison.Ordinal);
-        Assert.Contains("github.com/blakazulu/findra", Locale, StringComparison.Ordinal);
+        Assert.Contains("Publisher: blakazulu", Locale, StringComparison.Ordinal);
+        Assert.Contains("PackageUrl: https://github.com/blakazulu/findra", Locale, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void TheVersionTheCatalogueWouldPublishIsTheVersionThisBuildIs()
+    {
+        // The three manifests agreeing with each other is not enough: they can agree on a number
+        // the product stopped being. Bumping Directory.Build.props without touching these files
+        // was caught only by the release workflow's own stale-version throw, which is after a tag
+        // has been pushed. Directory.Build.props is the one place the version lives, so it is the
+        // one this is measured against.
+        string props = Repo.Read("Directory.Build.props");
+        string version = Regex.Match(props, @"<Version>\s*(\S+?)\s*</Version>").Groups[1].Value;
+        Assert.False(string.IsNullOrEmpty(version), "Directory.Build.props declares no version");
+
+        foreach (string manifest in new[] { Version, Installer, Locale })
+            Assert.Equal(version, Regex.Match(manifest, @"(?m)^PackageVersion:\s*(\S+)").Groups[1].Value);
     }
 }

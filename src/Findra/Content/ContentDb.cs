@@ -60,8 +60,8 @@ public sealed class ContentDb : IDisposable
     /// first is the worst thing this product can do to someone (spec §2a).</summary>
     public readonly record struct Migration(int To, int[] InvalidatedKinds, string Reason);
 
-    /// <summary>Empty at version 1: there is nothing before it to migrate from. Plan 5 appends
-    /// the step that invalidates what its models change.</summary>
+    /// <summary>Empty at version 1: there is nothing before it to migrate from. A schema change
+    /// appends the step that invalidates whatever it invalidated.</summary>
     public static readonly IReadOnlyList<Migration> Migrations = [];
 
     private readonly SqliteConnection _c;

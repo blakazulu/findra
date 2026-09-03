@@ -201,9 +201,9 @@ public static class Capabilities
     }
 
     /// <summary>The language tags this machine actually has. Impure, so it is separate from the
-    /// rule above and the rule stays testable. Its one caller in this plan is <c>--models list</c>
-    /// (Task 12), which shows the Hebrew row only on a machine where it is worth 1.5 GB; Plan 6's
-    /// first-run screen becomes the second.</summary>
+    /// rule above and the rule stays testable. Its two callers are <c>--models list</c> and the
+    /// first-run screen, both of which show the Hebrew row only on a machine where it is worth
+    /// 1.5 GB.</summary>
     public static IReadOnlyList<string> SystemLanguages()
     {
         var tags = new List<string> { CultureInfo.CurrentUICulture.Name, CultureInfo.InstalledUICulture.Name };

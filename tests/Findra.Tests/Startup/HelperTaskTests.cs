@@ -71,7 +71,12 @@ public class HelperTaskTests
         Assert.Equal("InteractiveToken", doc.Descendants(ns + "LogonType").Single().Value);
         Assert.Equal("IgnoreNew", doc.Descendants(ns + "MultipleInstancesPolicy").Single().Value);
         Assert.Equal("true", doc.Descendants(ns + "Hidden").Single().Value);
-        Assert.All(doc.Descendants(ns + "Enabled"), e => Assert.Equal("true", e.Value));
+        // Counted first. Assert.All over a collection nothing populates asserts nothing: delete
+        // both <Enabled> elements and the sweep passes while the trigger never fires, which is the
+        // exact failure the paragraph above says these lines are the only defence against.
+        var enabled = doc.Descendants(ns + "Enabled").ToList();
+        Assert.Equal(2, enabled.Count);                       // the trigger and the settings block
+        Assert.All(enabled, e => Assert.Equal("true", e.Value));
     }
 
     [Fact]

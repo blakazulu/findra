@@ -7,7 +7,7 @@ public enum Section { Look, Opening, Searches, Content, About }
 
 /// <summary>What a pointer landed on. Shared by the settings window and the first-run screen,
 /// which is why it is not called SettingsTarget.</summary>
-public enum PanelTarget { None, Section, Control, Option, ListItem, ListRemove, Close, Dismiss }
+public enum PanelTarget { None, Section, Control, Option, ListItem, ListRemove, Close }
 
 /// <summary>A hit carries BOTH indices rather than encoding two numbers into one. A row and an
 /// option inside it are different questions and the caller asks both.</summary>
@@ -76,9 +76,11 @@ public static class RailLayout
     /// <item><description>5 options: 128px of label, 62.8px of pill</description></item>
     /// </list>
     ///
-    /// <para><b>62.8px is the tight one, and it is already tight.</b> The five-option row is the
-    /// transcription limit, and <c>TranscribeLimit.Describe</c>'s longest word - "30 minutes",
-    /// measured at 65.3px - does not fit it. The rule is to shorten the label rather than widen
+    /// <para><b>62.8px is the tight one, and it is already tight.</b> The five-option row that
+    /// matters is the transcription limit - the drives row can reach five or more options on a
+    /// machine with several fixed volumes, but its labels are two characters.
+    /// <c>TranscribeLimit.Describe</c>'s longest word - "30 minutes", measured at 65.3px - does
+    /// not fit that pill. The rule is to shorten the label rather than widen
     /// the tolerance or re-narrow the column, so the pills say "30 min" (40.2px), "5 min"
     /// (32.8px), "2 hr" (23.3px), "No limit" (45.6px) and "Off" (19.1px); the long form stays on
     /// the command line, where nothing is measuring it. The row labels themselves arrive with the

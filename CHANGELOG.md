@@ -371,6 +371,11 @@ into a numbered section on the first release.
 
 ### Fixed
 
+- **The scheduled task no longer tells you Findra does not work without it.** Its description,
+  which is what Windows shows in Task Scheduler, said exactly that; without the task Findra runs
+  perfectly well and has no file names to search, which is what it says now.
+- **An uninstall that cannot remove a folder now names the folder.** It reported which of the four
+  it was and what went wrong, and left you to work out where it is.
 - **The privacy page no longer says that deleting Findra's two folders by hand removes
   everything.** Two things live outside them: the scheduled task that starts the name helper
   at sign-in, and the start-at-sign-in entry. The page now names both and says to run

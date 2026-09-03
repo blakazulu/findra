@@ -12,7 +12,7 @@
 ;      binary that is gone, which the specification calls a defect.
 
 #ifndef AppVersion
-  #error AppVersion must be passed in: iscc /DAppVersion=1.2.0 /DPublishDir=..\publish\win-x64 findra.iss
+  #error AppVersion must be passed in: iscc /DAppVersion=<major.minor.patch> /DPublishDir=..\publish\win-x64 findra.iss
 #endif
 #ifndef PublishDir
   #error PublishDir must be passed in

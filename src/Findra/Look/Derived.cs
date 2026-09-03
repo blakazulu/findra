@@ -55,14 +55,16 @@ public sealed class Derived
     /// RowSelected, each about 2 L* or more from the last.</summary>
     public required SKColor RowHover { get; init; }
 
-    /// <summary>A surface above a row - a tile, a thumbnail well, a nested panel. Not yet
-    /// painted; reserved for the settings window. The result list's kind badge does NOT use it:
+    /// <summary>A surface above a row - a tile, a thumbnail well, a nested panel. Paints the
+    /// settings window's section rail and the first-run screen's three preset tiles. The result
+    /// list's kind badge does NOT use it:
     /// that paints a name-hashed gradient pinned dark on every palette, like a file-type tag
     /// that should not shift with theme.</summary>
     public required SKColor Tile { get; init; }
 
-    /// <summary>A small pill or tag's own fill, sitting directly on the ground. Not yet
-    /// painted; reserved for the settings window. The card's filter chips take
+    /// <summary>A small pill or tag's own fill, sitting directly on the ground. Paints an
+    /// unchosen pill in either settings surface and the first-run screen's unticked box. The
+    /// card's filter chips take
     /// <see cref="RowSelected"/> when active and a stroke otherwise, and the row's kind tag now
     /// reads straight off whatever is under it - the fill it used to draw measured under one L*,
     /// which is below the threshold an eye registers at all.</summary>

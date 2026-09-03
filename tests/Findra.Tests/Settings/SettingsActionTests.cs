@@ -29,6 +29,24 @@ public class SettingsActionTests
     {
         // Driven off the enum itself, so an action added later without an arm fails here on the
         // commit that adds it rather than on somebody's desktop.
+        //
+        // Counting the calls is not enough, and the name of this test says so: six of the nine
+        // arms could have been cross-wired to any other host method and the count stayed at one.
+        // What each action must reach is written down here, beside the enum, so a swapped arm is a
+        // failure rather than a surprise on a stranger's machine.
+        var expected = new Dictionary<SettingsAction, string>
+        {
+            [SettingsAction.OpenPalettesFile] = @"palettes:C:\x\palettes.json",
+            [SettingsAction.CaptureChord] = "capture",
+            [SettingsAction.SetAutostart] = "autostart:True",
+            [SettingsAction.ClearAutostart] = "autostart:False",
+            [SettingsAction.RegisterHelper] = "helper",
+            [SettingsAction.PickFolder] = "folder",
+            [SettingsAction.InstallCapability] = "install:Photos",
+            [SettingsAction.CheckNow] = "check",
+            [SettingsAction.RecentreCapsule] = "recentre",
+        };
+
         foreach (SettingsAction action in Enum.GetValues<SettingsAction>())
         {
             if (action == SettingsAction.None) continue;
@@ -40,7 +58,13 @@ public class SettingsActionTests
 
             SettingsActions.Dispatch(action, argument, host);
             Assert.True(host.Calls.Count == 1, $"{action} produced {host.Calls.Count} host calls, expected 1");
+            Assert.True(expected.TryGetValue(action, out string? want),
+                $"{action} has no expected destination written down here");
+            Assert.Equal(want, host.Calls[0]);
         }
+
+        // And no two actions may land on the same call, which is the other half of a cross-wire.
+        Assert.Equal(expected.Count, expected.Values.Distinct(StringComparer.Ordinal).Count());
     }
 
     [Fact]
