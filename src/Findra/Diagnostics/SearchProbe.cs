@@ -43,6 +43,15 @@ public static class SearchProbe
             return 1;
         }
 
+        // Both outcomes say "pipe", and that symmetry is load-bearing rather than tidy. The line
+        // below used to exist only on the UNREACHABLE branch, so build/Check-Diagnostics.ps1's
+        // requirement that the probe mention the pipe was satisfied only when the pipe had FAILED.
+        // On a runner, where no elevated helper exists, that is always true; on a developer machine
+        // with the helper answering it is always false, so the check would have started failing the
+        // first time somebody ran it where the product works. A phrase that only appears on the
+        // error path is not evidence the path was taken.
+        Console.WriteLine("  pipe                   : ok");
+
         try
         {
             StatusReply status = await client.StatusAsync(default);
