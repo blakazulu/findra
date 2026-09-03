@@ -117,6 +117,10 @@ public sealed class FirstRunWindow : Window
         /// selection but left every control lit, hovering and offering a hand cursor.</summary>
         private bool Settled => _state.Stage != FirstRunStage.Choosing;
 
+        /// <summary>The download is over, so a button may appear. While it runs the screen answers
+        /// nothing at all and the way out is the window's own close, which is never disabled.</summary>
+        private bool Finished => _state.Stage == FirstRunStage.Finished;
+
         public void NoteFetching(IReadOnlyList<Model> models)
         {
             _fetching = models;
@@ -143,7 +147,7 @@ public sealed class FirstRunWindow : Window
         protected override void OnPointerMoved(PointerEventArgs e)
         {
             Point p = e.GetPosition(this);
-            FirstRunHit hit = FirstRunLayout.HitTest((float)p.X, (float)p.Y, Rows, LimitRow, Settled);
+            FirstRunHit hit = FirstRunLayout.HitTest((float)p.X, (float)p.Y, Rows, LimitRow, Settled, Finished);
             if (hit.Target == _state.HoverTarget && hit.Index == _state.HoverIndex) return;
             _state = _state with { HoverTarget = hit.Target, HoverIndex = hit.Index };
             Cursor = PointerCursor.Of(Pointers.ForFirstRun(hit.Target));
@@ -161,7 +165,7 @@ public sealed class FirstRunWindow : Window
         {
             Focus();
             Point p = e.GetPosition(this);
-            FirstRunHit hit = FirstRunLayout.HitTest((float)p.X, (float)p.Y, Rows, LimitRow, Settled);
+            FirstRunHit hit = FirstRunLayout.HitTest((float)p.X, (float)p.Y, Rows, LimitRow, Settled, Finished);
 
             // The title strip is the only place a borderless window can be picked up by.
             if (hit.Target == FirstRunTarget.None && p.Y < FirstRunLayout.TileTop)

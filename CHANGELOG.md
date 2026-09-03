@@ -449,6 +449,11 @@ into a numbered section on the first release.
 
 ### Changed
 
+- **While the models download, the first screen is only a status screen.** Nothing on it
+  takes a click, including the button: the choice has been made and there is nothing left
+  to answer. Closing the window still works, and the download carries on in the tray. A
+  button appears when the last file has landed.
+
 - **The transcription limit on the welcome screen says it covers video.** "Transcribe up to"
   under a row called Speech gave no hint that the same number decides what happens to every
   video on the disk, and the row above it is called "Photos and video", which makes video look
