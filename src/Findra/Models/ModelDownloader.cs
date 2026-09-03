@@ -136,10 +136,21 @@ public static class ModelDownloader
         // that closes early leaves a short file, and promoting it puts something above its floor
         // under the final name for ever: every load fails and nothing re-fetches it, because it
         // is "there".
-        if (total > 0 && done < total)
+        // TWO conditions, because the first one is unreachable exactly when it is needed most.
+        // `total` is ContentLength plus, on a resumed leg, the bytes already on disk - so a
+        // response that carries no ContentLength gives total 0 on a fresh GET, skipping the check
+        // entirely, and on a RESUMED leg gives total == the bytes we already had, which `done`
+        // starts at, so `done < total` is false however little arrived. Chunked transfer encoding,
+        // a re-encoding proxy, and a handler that strips the header after decompressing all
+        // produce that. The floor does not need the length: a file below MinBytes cannot be this
+        // model whatever the server did or did not say about its size.
+        if ((total > 0 && done < total) || done < m.MinBytes)
         {
-            string problem = $"the download ended at {done.ToString(CultureInfo.InvariantCulture)} of " +
-                             $"{total.ToString(CultureInfo.InvariantCulture)} bytes";
+            string problem = total > 0
+                ? $"the download ended at {done.ToString(CultureInfo.InvariantCulture)} of " +
+                  $"{total.ToString(CultureInfo.InvariantCulture)} bytes"
+                : $"the download ended at {done.ToString(CultureInfo.InvariantCulture)} bytes, " +
+                  $"short of the {m.MinBytes.ToString(CultureInfo.InvariantCulture)} this file must have";
             Log.Warn("models", $"{m.File}: {problem} - keeping what arrived so the next run resumes");
             return new DownloadOutcome(m, false, done, problem);
         }

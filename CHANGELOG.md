@@ -371,6 +371,11 @@ into a numbered section on the first release.
 
 ### Fixed
 
+- **A download cut short is never mistaken for a finished one**, even when the server
+  does not say how long the file should have been. Before, a model that arrived
+  incomplete could be filed under its real name, and every capability that needed it
+  would fail quietly while Findra believed it was installed.
+
 - **The licence and the attribution notice are installed with Findra**, not just kept in
   the repository. Apache-2.0 requires the notice to travel with every copy, and it is the
   reason Findra is under Apache rather than MIT.
