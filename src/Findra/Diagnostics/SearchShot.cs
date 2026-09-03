@@ -333,6 +333,13 @@ public static class SearchShot
             // clause here is a sentence IndexStatus.Line or IndexLineFormatter really produces.
             IndexLine: state == "many" ? LongIndexLine : "index: 1.5M names · idle",
             StageDetail: "3.1 MB · 12 Aug 2026 19:42", Clock: 0.2,
+            // The stage's PICTURE branch - the centre-crop in DrawStage - was painted by no shot
+            // at all: every state left StageImage null and took the no-art tile, so the one
+            // surface whose whole job is showing you the file was only ever reviewed in its
+            // fallback. `results` and `opening` highlight a photo and get one; `many` highlights
+            // a document and keeps the tile, so both branches are on screen somewhere.
+            StageImage: highlight >= 0 && highlight < rows.Count && rows[highlight].Kind == ResultKind.Photo
+                ? SunsetOverWater() : null,
             // `results` hovers a row that is not the selected one: without it the list's hover
             // fill is painted by no shot and no test, which is what let RowHover sit within
             // 1.4 L* of Row - and inverted on two palettes - without anything noticing.
@@ -344,4 +351,121 @@ public static class SearchShot
             OpenedAt: state == "opening" ? 0.13 : -1);
     }
 
+    /// <summary>The demo photograph: a sunset over water, DRAWN rather than photographed.
+    ///
+    /// <para>Everything else about this state is invented too - the file names, the drive
+    /// letters, the scores, the Hebrew tenancy agreement - and the point of the shot has never
+    /// been that the data is real. It is that the PAINTER is: what a shot shows is what the card
+    /// puts on a screen, pixel for pixel. So the picture is handed to <c>DrawStage</c> as an
+    /// ordinary <see cref="SKImage"/> and goes through the same clip, the same centre-crop and
+    /// the same sampling a decoded HEIC would.</para>
+    ///
+    /// <para>It is deliberately 3:2 and not square. The stage's picture well is square for a
+    /// photo, so a square source would scale and never crop, and the crop is the half of that
+    /// branch most likely to be wrong. This one loses a third of its width and keeps the sun.
+    /// </para></summary>
+    private static SKImage SunsetOverWater()
+    {
+        const int w = 480, h = 320;
+        const float horizon = h * 0.60f;
+
+        using SKSurface surface = SKSurface.Create(new SKImageInfo(w, h, SKColorType.Bgra8888, SKAlphaType.Premul));
+        SKCanvas c = surface.Canvas;
+
+        using (var sky = new SKPaint { IsAntialias = true })
+        {
+            sky.Shader = SKShader.CreateLinearGradient(
+                new SKPoint(0, 0), new SKPoint(0, horizon),
+                [new SKColor(0x1B, 0x1E, 0x3C), new SKColor(0x5B, 0x35, 0x63),
+                 new SKColor(0xC9, 0x5A, 0x3A), new SKColor(0xFF, 0xC1, 0x6B)],
+                [0f, 0.42f, 0.78f, 1f], SKShaderTileMode.Clamp);
+            c.DrawRect(new SKRect(0, 0, w, horizon), sky);
+        }
+
+        // The sun, just clear of the horizon and off centre, so the crop has something to keep.
+        const float sx = w * 0.62f, sy = horizon - 24f, sr = 29f;
+        using (var glow = new SKPaint { IsAntialias = true })
+        {
+            glow.Shader = SKShader.CreateRadialGradient(
+                new SKPoint(sx, sy), sr * 3.6f,
+                [new SKColor(0xFF, 0xD9, 0x8A, 150), new SKColor(0xFF, 0xD9, 0x8A, 0)],
+                SKShaderTileMode.Clamp);
+            c.DrawCircle(sx, sy, sr * 3.6f, glow);
+        }
+        using (var disc = new SKPaint { IsAntialias = true, Color = new SKColor(0xFF, 0xEC, 0xB8) })
+            c.DrawCircle(sx, sy, sr, disc);
+
+        // Blurred, because an unblurred bar in a sky reads as a user-interface element rather
+        // than as cloud, and this picture has to survive being three centimetres wide.
+        using (var cloud = new SKPaint
+        {
+            IsAntialias = true, Color = new SKColor(0x33, 0x24, 0x40, 165),
+            ImageFilter = SKImageFilter.CreateBlur(7f, 3.5f),
+        })
+        {
+            c.DrawRoundRect(new SKRoundRect(new SKRect(w * 0.02f, horizon - 100, w * 0.54f, horizon - 86), 7), cloud);
+            c.DrawRoundRect(new SKRoundRect(new SKRect(w * 0.36f, horizon - 66, w * 1.00f, horizon - 55), 6), cloud);
+        }
+
+        using (var sea = new SKPaint { IsAntialias = true })
+        {
+            sea.Shader = SKShader.CreateLinearGradient(
+                new SKPoint(0, horizon), new SKPoint(0, h),
+                [new SKColor(0xD2, 0x86, 0x50), new SKColor(0x2A, 0x3E, 0x50), new SKColor(0x10, 0x19, 0x26)],
+                [0f, 0.45f, 1f], SKShaderTileMode.Clamp);
+            c.DrawRect(new SKRect(0, horizon, w, h), sea);
+        }
+
+        // The sun's light on the water: a soft wedge widening as it comes forward, with broken
+        // streaks over it. A stack of centred bars on its own reads as a staircase, so the wedge
+        // carries the glow and the streaks only break it up.
+        using (var column = new SKPaint { IsAntialias = true, ImageFilter = SKImageFilter.CreateBlur(9f, 5f) })
+        {
+            column.Shader = SKShader.CreateLinearGradient(
+                new SKPoint(0, horizon), new SKPoint(0, h),
+                [new SKColor(0xFF, 0xDA, 0x8C, 190), new SKColor(0xFF, 0xC0, 0x70, 40)],
+                SKShaderTileMode.Clamp);
+            using var wedge = new SKPath();
+            wedge.MoveTo(sx - 10f, horizon);
+            wedge.LineTo(sx + 10f, horizon);
+            wedge.LineTo(sx + 62f, h);
+            wedge.LineTo(sx - 62f, h);
+            wedge.Close();
+            c.DrawPath(wedge, column);
+        }
+
+        // A fixed seed, so the same command produces the same file: a shot that differs run to
+        // run cannot be checked against the one in the repository.
+        uint seed = 0x5EA5;
+        float Rand()
+        {
+            seed = seed * 1664525u + 1013904223u;
+            return ((seed >> 8) & 0xFFFF) / 65535f;
+        }
+
+        // Several short pieces scattered across the column at each depth, not one centred bar
+        // per row: a bar per row is a ladder, and a ladder is what the eye sees first.
+        using (var streak = new SKPaint { IsAntialias = true })
+            for (float y = horizon + 3f; y < h; y += 5.5f)
+            {
+                float t = (y - horizon) / (h - horizon);
+                float reach = 8f + t * 58f;
+                int pieces = 1 + (int)(Rand() * 3f);
+                for (int i = 0; i < pieces; i++)
+                {
+                    // Two samples averaged, so the pieces crowd the middle of the column and
+                    // thin out at its edges, which is where a real glitter path puts them.
+                    float bias = (Rand() + Rand()) / 2f;
+                    float cx = sx + (bias * 2f - 1f) * reach;
+                    float len = reach * (0.16f + Rand() * 0.42f);
+                    streak.Color = new SKColor(0xFF, 0xE8, 0xB6,
+                        (byte)(140f * (1f - t * 0.6f) * (0.45f + Rand() * 0.55f)));
+                    c.DrawRoundRect(new SKRoundRect(
+                        new SKRect(cx - len / 2f, y, cx + len / 2f, y + 2.1f), 1.05f), streak);
+                }
+            }
+
+        c.Flush();
+        return surface.Snapshot();
+    }
 }
