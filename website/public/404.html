@@ -13,11 +13,17 @@
 <body>
 
 <!-- Netlify serves this file, with a real 404 status, for any path that does not exist. Before
-     it existed the platform's own default page was served instead - which carries a netlify.new
-     referral link in its body, on a site whose entire argument is that nothing is reaching out
-     anywhere. The body below is deliberately a complete map of the site rather than an apology:
-     the reader here is either a person who mistyped, or an agent that guessed a URL, and both of
-     them need the list of real ones, not sympathy. -->
+     it existed the platform's own default page was served instead, which said nothing about
+     Findra and offered no way onward. The body below is deliberately a complete map of the site
+     rather than an apology: the reader here is either a person who mistyped or an agent that
+     guessed a URL, and both need the list of real ones, not sympathy.
+
+     What this does NOT remove is Netlify's own injection. On the current plan the platform adds
+     a hosting-provider meta tag and a netlify.new referral comment into the <head> of every HTML
+     response on this site, this page and the front page alike, after the file leaves the
+     repository. No file here can prevent that; only a plan or a platform setting can. It is
+     recorded here rather than left to be rediscovered, because a site that says nothing leaves
+     your machine should not quietly be carrying a referral link somebody assumes we put there. -->
 
 <div class="bg" aria-hidden="true">
   <div class="bg-blob a"></div>
