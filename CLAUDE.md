@@ -31,6 +31,13 @@ rather than left in a commit message: the console, the seams, the capability ref
 floor and the installer's architecture identifiers. Each of those is a rule that looks like a
 detail from inside a diff and is a broken machine from outside one.
 
+Findra has a face since then. One mark, generated from a single set of numbers into the icon the
+linker compiles into the executable, the installer and its wizard, the tray, and the site's
+favicon and header - five homes for one logo, where four of them agreeing is not the same thing
+as all five. `## The mark` below is what holds them together. The same pass found the stage's
+picture branch had never been rendered by any shot, which is the rule now sitting under the
+`--searchshot` commands above.
+
 ## Commands
 
 ```bash
@@ -117,7 +124,15 @@ The `--searchbench` fragment opens at heading level two and every section below 
 three, so it pastes under the README's own `#` with nothing to edit. It refuses to print a
 throughput rate for a run shorter than a second and says how to get a longer one.
 
-`--searchshot` must learn every new palette and every new surface as it is written.
+`--searchshot` must learn every new palette and every new surface as it is written - and
+**a surface with every one of its states shot can still have a whole branch of its painter
+that nothing has ever rendered.** The card's stage has two: a decoded picture centre-cropped
+into the well, and the no-picture tile. Every state left the image unset, so for as long as
+the card had existed the one surface whose whole job is showing you the file had only ever
+been reviewed in its fallback - while nine states, a README image and its alt text all looked
+complete. `results` and `opening` now carry a picture and `many` keeps the tile, so both are
+on screen somewhere. The rule the next one needs: where a painter branches on data a state
+supplies, some state has to supply it, or the branch ships unlooked at.
 
 ## The console
 
