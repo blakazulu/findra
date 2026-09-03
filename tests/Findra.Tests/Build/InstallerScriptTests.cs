@@ -325,6 +325,11 @@ public class InstallerScriptTests
         // The signing step in the release pipeline does nothing yet. A "digitally signed" line in
         // the installer's own copy would be a claim the product cannot support, on the surface a
         // stranger reads first.
-        Assert.DoesNotContain("signed", Script, StringComparison.OrdinalIgnoreCase);
+        // Whole word. A bare substring search also fires on "assigned", "designed" and
+        // "redesigned", which are ordinary words a comment in this file may legitimately want -
+        // it caught the comment above CreateCustomForm the first time that comment was written.
+        // The boundary keeps every real claim in range, including the hyphenated "code-signed",
+        // because a hyphen is a word boundary too.
+        Assert.DoesNotMatch(@"(?i)\bsigned\b", Script);
     }
 }
