@@ -97,4 +97,29 @@ public class CapsuleTests
         }
         finally { CultureInfo.CurrentCulture = was; }
     }
+
+    [Fact]
+    public void BothOfTheCardsPlaceholdersFitItsFieldWithoutBeingCutShort()
+    {
+        // The card's field DOES ellipsize, which is why this went unnoticed: an overlong
+        // placeholder is not a clipped glyph or a crash, it is a sentence that reads as though the
+        // product stopped mid-thought. "Describe a photo, words in a document, speech..." was 45
+        // characters against a field sized for the 28-character one beside it.
+        //
+        // The budget is DrawCapsule's own: text starts at height * 1.05 from the left and stops
+        // height * 0.5 short of the right, at height * 0.40.
+        SKTypeface face = Parts.Face;
+        SKRect r = SearchCardLayout.FieldRect();
+        float size = r.Height * 0.40f;
+        float budget = r.Right - (r.Left + r.Height * 1.05f) - r.Height * 0.5f;
+
+        foreach (string p in new[] { SearchCardPainter.NamePlaceholder, SearchCardPainter.ContentPlaceholder })
+        {
+            float w = CardText.Measure(p, face, size);
+            Assert.True(w <= budget, $"'{p}' is {w:0.0}px against a field that holds {budget:0.0}px");
+            // And the belt-and-braces version of the same thing: what is DRAWN is what was asked
+            // for, rather than a shortened copy of it.
+            Assert.Equal(p, CardText.Ellipsize(p, face, size, budget));
+        }
+    }
 }

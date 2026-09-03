@@ -81,7 +81,7 @@ findra.exe --searchmodels             # are models present, do they load, do the
                                       # which execution provider answered for each runtime
 findra.exe --searchindex [file|folder|q:query]...   # what is indexed, what is queued; given
                                       # paths it queues and drains them, given q: it queries
-findra.exe --searchshot out.png <state> [palette]   # twenty-one states, listed below
+findra.exe --searchshot out.png <state> [palette]   # twenty-two states, listed below
 findra.exe --searchtest               # engine self-check
 findra.exe --searchbench [out.md] [corpus]   # measured numbers, as a pasteable Markdown
                                       # fragment; `corpus` is how many files it generates
@@ -89,10 +89,11 @@ findra.exe --version                  # print the version and log location, then
 ```
 
 The `--searchshot` states are `SearchShot.States`, and that list is the only definition of them.
-Ten draw the card, five the settings window and six the first-run screen:
+Eleven draw the card, five the settings window and six the first-run screen:
 
 ```
-capsule  empty  contentwaiting  typing  results  noresults  many  adv  opening  openingempty
+capsule  empty  contentmode  contentwaiting  typing  results  noresults  many  adv
+opening  openingempty
 settings  settingsopening  settingssearches  settingscontent  settingsabout
 firstrun  firstruninstalled  firstrunspeech  firstrundownloading
 firstrunfinished  firstrunready
