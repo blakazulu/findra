@@ -1,0 +1,50 @@
+# How Git is allowed to touch these files on the way in and out of the repository.
+#
+# This exists because of a real failure. The first push to GitHub turned CI red on two tests
+# that pass on every developer machine: the working copy held bare LF, the Windows runners
+# check out with core.autocrlf=true, and the installer script therefore arrived as CRLF. A
+# multiline `$` in .NET matches before \n and not before \r\n, so an anchored search for the
+# [UninstallRun] section silently found nothing in a file that plainly had one.
+#
+# Two things were wrong and both are fixed. The tests no longer care - Repo.Read normalises
+# line endings, because a test asserting what a file SAYS should not change its answer with a
+# checkout setting. And the repository now says what it wants, so a checkout is the same
+# everywhere instead of depending on each contributor's Git configuration.
+
+# Normalise everything text to LF in the repository. Working copies still get the platform's
+# own endings on checkout, which is what Windows tools expect.
+* text=auto
+
+# The files where the ending is part of the contract, or where a tool is fussy.
+*.cs        text diff=csharp
+*.csproj    text
+*.props     text
+*.sln       text eol=crlf
+*.yml       text eol=lf
+*.yaml      text eol=lf
+*.ps1       text eol=crlf
+*.iss       text eol=crlf
+*.md        text
+*.json      text
+*.txt       text
+
+# Binary, and it matters. Quicksand must reach the assembly byte for byte: OFL condition 3
+# makes "Quicksand" a Reserved Font Name, so a modified file may not keep the name, and a
+# line-ending conversion is a modification. The screenshots are the README's evidence that
+# every image is the product rather than a mockup, and a converted PNG is a corrupt one.
+*.ttf       binary
+*.otf       binary
+*.png       binary
+*.jpg       binary
+*.ico       binary
+*.bin       binary
+*.onnx      binary
+*.spm       binary
+*.db        binary
+*.exe       binary
+*.dll       binary
+
+# Keep generated evidence out of the language statistics: the shots are pictures of the
+# product, not source, and the plans are working documents rather than shipped code.
+docs/shots/**            linguist-generated=true
+docs/superpowers/**      linguist-documentation=true

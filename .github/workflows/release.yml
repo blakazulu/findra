@@ -18,7 +18,7 @@ jobs:
     outputs:
       version: ${{ steps.gate.outputs.version }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       # Every GitHub expression this workflow needs inside a PowerShell block arrives through
       # env: rather than being pasted into the script text. Two reasons, and both are checked:
@@ -38,7 +38,7 @@ jobs:
           "version=$($tag.Substring(1))" >> $env:GITHUB_OUTPUT
           Get-Content release-notes.md
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: release-notes
           path: release-notes.md
@@ -54,9 +54,9 @@ jobs:
           - rid: win-arm64
             arch: arm64
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-dotnet@v4
+      - uses: actions/setup-dotnet@v6
         with:
           dotnet-version: '10.0.x'
 
@@ -105,7 +105,7 @@ jobs:
       - name: sign the installer (not yet arranged)
         run: echo "signing is not yet arranged - see docs/code-signing-policy.md"
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: installer-${{ matrix.arch }}
           path: installer/Output/*.exe
@@ -114,14 +114,14 @@ jobs:
     needs: [check, build]
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           path: artifacts
 
       # The notes are the changelog section, verbatim. GitHub's own generated notes are
       # deliberately not used: they would make CHANGELOG.md decorative, and the changelog is where
       # Findra's update check sends anybody who built from source.
-      - uses: softprops/action-gh-release@v2
+      - uses: softprops/action-gh-release@v3
         with:
           name: Findra ${{ needs.check.outputs.version }}
           body_path: artifacts/release-notes/release-notes.md
