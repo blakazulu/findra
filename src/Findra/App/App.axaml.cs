@@ -419,6 +419,28 @@ internal sealed class Shell : ISettingsHost
         }
     }
 
+    /// <summary>
+    /// Which model files are already here, by name.
+    ///
+    /// <para>Read once, when the screen is built, rather than per row: it is seven
+    /// <c>FileInfo</c> lookups and the painter runs them on every frame. A file that arrives while
+    /// the screen is up is the download's own business - <c>FirstRun.Progress</c> credits it - and
+    /// the choosing screen is settled by then.</para>
+    /// </summary>
+    private static IReadOnlySet<string> ModelsOnDisk()
+    {
+        var here = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        try
+        {
+            foreach (Model m in ModelStore.All)
+                if (ModelStore.Present(m)) here.Add(m.File);
+        }
+        // A models folder that cannot be read is a screen that offers the full download, which is
+        // the behaviour this replaced and is safe: the download itself asks the disk again.
+        catch (Exception ex) { Log.Warn("models", "could not read what is already on disk: " + ex.Message); }
+        return here;
+    }
+
     /// <summary>Build everything the welcome screen held back. Once: a second call would be a
     /// second tray icon and a second capsule over one process.</summary>
     private void StartTheRest()
@@ -465,6 +487,10 @@ internal sealed class Shell : ISettingsHost
             // What is actually in the Run key, not a default: a reinstall over an existing entry
             // must not show the switch off while the entry is there.
             StartAtLogon = Autostart.IsSet(),
+            // And what is actually in the models folder. An uninstall keeps the models unless the
+            // purge box is ticked, so a reinstall commonly meets a machine that already has all
+            // 2.9 GB - and this screen used to offer to fetch every byte of it again.
+            OnDisk = ModelsOnDisk(),
         };
 
         var window = new FirstRunWindow(state, _palette);

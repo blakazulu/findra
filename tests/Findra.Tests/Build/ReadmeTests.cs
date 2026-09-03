@@ -1,4 +1,4 @@
-using System.Globalization;
+﻿using System.Globalization;
 using System.Text.RegularExpressions;
 
 using Findra;
@@ -192,6 +192,7 @@ public class ReadmeTests
         4 => "four", 5 => "five", 6 => "six", 7 => "seven", 8 => "eight", 9 => "nine", 10 => "ten",
         11 => "eleven", 12 => "twelve", 13 => "thirteen", 14 => "fourteen", 15 => "fifteen",
         16 => "sixteen", 17 => "seventeen", 18 => "eighteen", 19 => "nineteen", 20 => "twenty",
+        21 => "twenty-one", 22 => "twenty-two", 23 => "twenty-three", 24 => "twenty-four",
         _ => throw new InvalidOperationException($"{n} is outside the range the README's prose was written for"),
     };
 

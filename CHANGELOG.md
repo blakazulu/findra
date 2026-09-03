@@ -539,6 +539,14 @@ into a numbered section on the first release.
   while gigabytes of models were still downloading over the same disk, and the indexing rate fell
   from 57 files a minute to 9 while the two competed.
 
+- **The welcome screen stops offering to download models you already have.** It never asked the
+  disk: every row printed its capability's full size and the summary priced the whole selection,
+  while the download itself skipped what was there - so a reinstall over kept models offered
+  2.93 GB and then filled every bar at once. Rows for what is present now read **installed**, the
+  preset tiles cost what is actually still missing, the summary says so in words rather than
+  "0 MB", and the button says Continue instead of Get these. A half-present capability is priced
+  at the half that is missing.
+
 - **The capsule has its own progress pill.** What is being read, a track, and how far it has got -
   "indexing photos, 6,680 of 10,800" - in a smaller pill under the search bar. It used to be a bare
   track and a line of text floating under the capsule with nothing around them, the only thing in

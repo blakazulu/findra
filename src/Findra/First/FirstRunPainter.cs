@@ -591,7 +591,7 @@ public static class FirstRunPainter
             }) canvas.DrawRoundRect(rr, edge);
 
             CardText.DrawCentred(canvas, FirstRun.PresetTitles[i], r.MidX, r.Top + 44, 15f, face, d.Ink);
-            CardText.DrawCentred(canvas, FirstRun.PresetSize(presets[i]), r.MidX, r.Top + 72,
+            CardText.DrawCentred(canvas, FirstRun.PresetSize(presets[i], s.OnDisk), r.MidX, r.Top + 72,
                                  Parts.LabelSize, face, TileSizeInk(chosen, d));
         }
     }

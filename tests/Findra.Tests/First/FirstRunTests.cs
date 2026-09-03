@@ -1097,6 +1097,11 @@ public class FirstRunTests
             FirstRun.GoLabel(FirstRunStage.Choosing),
             FirstRun.GoLabel(FirstRunStage.Downloading),
             FirstRun.GoLabel(FirstRunStage.Finished),
+            // The three the state-aware overload can add: the last question's pair, and the word
+            // for a machine with nothing left to fetch.
+            FirstRun.LaterLabel,
+            FirstRun.StartReadingLabel,
+            FirstRun.ContinueLabel,
         ];
 
         foreach (string label in labels)
@@ -1371,5 +1376,131 @@ public class FirstRunDownloadTests : IDisposable
     {
         Assert.Equal(FirstRun.StartReadingLabel, FirstRun.GoLabel(Finished(contentOn: true)));
         Assert.Equal(FirstRun.CloseLabel, FirstRun.GoLabel(Finished(contentOn: false)));
+    }
+
+    // ---- what is already on the disk ---------------------------------------------------------
+
+    private static IReadOnlySet<string> Everything() =>
+        new HashSet<string>(ModelStore.All.Select(m => m.File), StringComparer.OrdinalIgnoreCase);
+
+    [Fact]
+    public void ACapabilityAlreadyOnTheDiskIsPricedAtNothingAndSaysSo()
+    {
+        // The screen never asked the disk. Every row printed its capability's full size and the
+        // summary printed the whole closed selection, while Wanted - which is what actually
+        // fetches - skipped what was there. Somebody who kept their models through an uninstall
+        // was offered 2.93 GB, pressed the button, and watched every bar fill at once.
+        var s = new FirstRunState
+        {
+            Chosen = Capabilities.Close([Capability.Photos, Capability.Meaning]),
+            HebrewOffered = true,
+            OnDisk = Everything(),
+        };
+
+        foreach (FirstRunRow row in FirstRun.Rows(s).Where(r => r.Capability is not null))
+            Assert.Equal(FirstRun.InstalledLabel, row.Size);
+
+        // The same word Settings uses for the same fact, so the two surfaces do not describe an
+        // installed capability two ways.
+        Assert.Equal("installed", FirstRun.InstalledLabel);
+
+        Assert.Equal(0, FirstRun.TotalBytes(s));
+        Assert.Equal("0 MB", FirstRun.PresetSize(Preset.Everything, s.OnDisk));
+    }
+
+    [Fact]
+    public void AnEmptyDiskIsPricedExactlyAsItAlwaysWas()
+    {
+        // The other half, and the one that must not move: the numbers on a fresh machine are the
+        // ones the README and the website quote.
+        var fresh = new FirstRunState { Chosen = Capabilities.Close([Capability.Photos]), HebrewOffered = true };
+
+        FirstRunRow photos = FirstRun.Rows(fresh).Single(r => r.Capability == Capability.Photos);
+        Assert.Equal(Sizes.Human(ModelStore.TotalBytes(Capabilities.OwnModels(Capability.Photos))), photos.Size);
+        Assert.NotEqual(0, FirstRun.TotalBytes(fresh));
+    }
+
+    [Fact]
+    public void HalfACapabilityIsPricedAtTheHalfThatIsMissing()
+    {
+        // An ordinary state, not an edge case: a resumed download, or Speech on a machine that
+        // already took Meaning and so already holds the e5 pair. Priced per capability it would
+        // quote 547 MB where most of it is already here - and "installed" would be a lie.
+        Model one = Capabilities.OwnModels(Capability.Photos)[0];
+        var half = new FirstRunState
+        {
+            Chosen = Capabilities.Close([Capability.Photos]),
+            HebrewOffered = true,
+            OnDisk = new HashSet<string>([one.File], StringComparer.OrdinalIgnoreCase),
+        };
+
+        FirstRunRow photos = FirstRun.Rows(half).Single(r => r.Capability == Capability.Photos);
+        Assert.NotEqual(FirstRun.InstalledLabel, photos.Size);
+        Assert.Equal(
+            Sizes.Human(ModelStore.TotalBytes(
+                Capabilities.OwnModels(Capability.Photos).Where(m => m.File != one.File))),
+            photos.Size);
+    }
+
+    [Fact]
+    public void NothingLeftToFetchIsASentenceAndNeverZeroMegabytes()
+    {
+        // "0 MB to download" is arithmetically true and reads as a fault, on the screen a reinstall
+        // over kept models always shows.
+        string said = FirstRun.Summary(new FirstRunState
+        {
+            Chosen = Capabilities.Close([Capability.Photos]),
+            HebrewOffered = true,
+            ContentOn = true,
+            OnDisk = Everything(),
+        });
+
+        Assert.DoesNotContain("0 MB", said, StringComparison.Ordinal);
+        Assert.Contains("already on this machine", said, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void TheRowsTheSummaryAndTheTilesAllAskTheSameDisk()
+    {
+        // Three numbers describing one download. They used to come from three expressions and only
+        // one of them - none, in fact - consulted the disk.
+        var s = new FirstRunState
+        {
+            Chosen = Capabilities.Close([Capability.Photos, Capability.Speech]),
+            HebrewOffered = true,
+            OnDisk = new HashSet<string>(
+                Capabilities.OwnModels(Capability.Photos).Select(m => m.File), StringComparer.OrdinalIgnoreCase),
+        };
+
+        Assert.Equal(FirstRun.InstalledLabel,
+                     FirstRun.Rows(s).Single(r => r.Capability == Capability.Photos).Size);
+
+        // And the summary counts only what is really missing, which is the closed Speech set less
+        // the Photos files already here.
+        Assert.Equal(ModelStore.TotalBytes(FirstRun.NotHereYet(Capabilities.ModelsFor(s.Chosen), s.OnDisk)),
+                     FirstRun.TotalBytes(s));
+    }
+
+    [Fact]
+    public void TheButtonDoesNotOfferToFetchWhatIsAlreadyHere()
+    {
+        // "Get these" over a machine that already holds every file promises a download that will
+        // not happen - the same defect as the sizes beside it, on the one control somebody presses
+        // to agree to it. The press still writes the settings and registers the scheduled task, so
+        // it is reworded rather than disabled.
+        var here = new FirstRunState
+        {
+            Chosen = Capabilities.Close([Capability.Photos]),
+            HebrewOffered = true,
+            OnDisk = Everything(),
+        };
+        Assert.Equal(FirstRun.ContinueLabel, FirstRun.GoLabel(here));
+
+        // Nothing chosen at all is the same fact by a different route, and it always was.
+        Assert.Equal(FirstRun.ContinueLabel, FirstRun.GoLabel(new FirstRunState { HebrewOffered = true }));
+
+        // And a real download still says what it is.
+        Assert.Equal(FirstRun.GoLabel(FirstRunStage.Choosing),
+                     FirstRun.GoLabel(here with { OnDisk = new HashSet<string>(StringComparer.OrdinalIgnoreCase) }));
     }
 }
