@@ -81,7 +81,7 @@ findra.exe --searchmodels             # are models present, do they load, do the
                                       # which execution provider answered for each runtime
 findra.exe --searchindex [file|folder|q:query]...   # what is indexed, what is queued; given
                                       # paths it queues and drains them, given q: it queries
-findra.exe --searchshot out.png <state> [palette]   # nineteen states, listed below
+findra.exe --searchshot out.png <state> [palette]   # twenty states, listed below
 findra.exe --searchtest               # engine self-check
 findra.exe --searchbench [out.md] [corpus]   # measured numbers, as a pasteable Markdown
                                       # fragment; `corpus` is how many files it generates
@@ -89,18 +89,23 @@ findra.exe --version                  # print the version and log location, then
 ```
 
 The `--searchshot` states are `SearchShot.States`, and that list is the only definition of them.
-Ten draw the card, five the settings window and four the first-run screen:
+Ten draw the card, five the settings window and five the first-run screen:
 
 ```
 capsule  empty  contentwaiting  typing  results  noresults  many  adv  opening  openingempty
 settings  settingsopening  settingssearches  settingscontent  settingsabout
-firstrun  firstrunspeech  firstrundownloading  firstrunfinished
+firstrun  firstrunspeech  firstrundownloading  firstrunfinished  firstrunready
 ```
 
 `contentwaiting` is the Content pill drawn NOT offering - reading is on and the first pass has not
 finished a file, so there is nothing to search, nothing to turn on and nothing settings could add.
 It is hovered on purpose: suppressing the hover fill is half of what makes a dead control read as
 dead, and a state that never hovers it proves only the resting colour.
+
+`firstrunfinished` and `firstrunready` are the last act's two shapes, and one state can only show
+one of them: the first took reading and so carries the last question and two buttons, the second
+did not and is the plain "Findra is ready" with one way out. A finished shot that only ever had
+reading on would ship the other half of the painter unlooked at.
 
 `firstrunspeech` is not a variation of `firstrun`: the transcription limit is on that screen
 only when Speech is ticked, and the two layouts - with the row and without it - are what a
@@ -200,6 +205,16 @@ ordering is the part that was wrong. `Shell.Run` switches on `StartupStep` and i
 throws: a step added to the enum and forgotten there is the tray icon, the hotkey or the content
 index silently not existing.
 
+- **Nothing reads inside files until the LAST question is answered.** The first act's switch
+  states the preference and is saved the moment it is answered; the content loop used to act on it
+  ten seconds later, so the indexer was reading and embedding files while 2.9 GB of models came
+  down the wire over the same disk - on a real install the rate fell from 57 files a minute to 9.
+  `App._holdReading` holds it, `FirstRun.Asks` decides whether the last act asks, and "Start
+  reading" clears the hold. "Later" leaves it set for the session and changes no setting, so the
+  next launch reads without asking again - which is why the button is **Later** and not "Not now".
+  Anything that explicitly starts reading clears the hold too: the settings button and the card's
+  Content pill are both a person saying "now", and a hold nothing could clear would be the dead
+  button all over again.
 - **The names helper is the one deliberate exception** and is not in
   `AfterTheScreenIsAnswered()`: the answer registers the scheduled task and starts the helper
   itself, immediately, because names are the half of Findra that works with nobody's models and

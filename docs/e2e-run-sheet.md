@@ -853,7 +853,7 @@ so in `CHANGELOG.md`.
 
 # Phase 8 - Uninstall
 
-Five items. **Everything above is destroyed here. Nothing below phase 8 can be re-run without
+Six items. **Everything above is destroyed here. Nothing below phase 8 can be re-run without
 starting from phase 1.**
 
 ### 8.1 (catalogue 33, second half, and 25) Keep by default - admin, destructive
@@ -963,6 +963,31 @@ share the hotkey's path. Try the capsule specifically.
 
 **Then close the welcome screen and try all five again.** Every one of them must work. A gate that
 does not lift is worse than no gate.
+
+### 8.6 The last question, and that nothing reads before it is answered
+
+While the models are still downloading, in a second terminal:
+
+    "C:\Program Files\Findra\findra.exe" --searchindex
+
+**Pass:** the queue may be filling, but `indexer` is **not running** and reading is paused. The
+indexer used to start ten seconds after the first page was answered, so it read and embedded files
+while gigabytes came down the wire over the same disk - on a real install the rate fell from 57
+files a minute to 9 while the two competed.
+
+When the download ends the screen asks whether to start reading, says a first pass can take a few
+hours, and offers **Later** beside **Start reading**.
+
+**Pass, taking Later:** the window closes, `--searchindex` still reports the indexer not running,
+and `%APPDATA%\Findra\config.json` still has `"indexContent": true` - Later is about timing, not
+about the setting, which is why it is not called "Not now". Then open Settings > Content and press
+**Start now**: it begins, and the button changes to `Indexing n/m`.
+
+**Pass, taking Start reading:** the window closes and `--searchindex` reports a running indexer
+within a second or two.
+
+**And restart Findra after taking Later.** It must begin reading on its own, with no question,
+because the preference said yes and only the timing was declined.
 
 ---
 

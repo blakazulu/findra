@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
@@ -145,11 +145,53 @@ public static class FirstRun
     /// question.</summary>
     public const string NotNowLabel = "Not now";
 
-    /// <summary>The right-hand button's label. One function rather than three literals in the
+    /// <summary>The right-hand button's label. One function rather than four literals in the
     /// painter, so the test that measures every label into its pill measures what is drawn.
     /// </summary>
     public static string GoLabel(FirstRunStage stage) =>
         stage == FirstRunStage.Choosing ? "Get these" : CloseLabel;
+
+    /// <summary>The same, for a screen that is asking the last question rather than reporting.
+    /// </summary>
+    public static string GoLabel(FirstRunState s) =>
+        Asks(s) ? StartReadingLabel : GoLabel(s.Stage);
+
+    /// <summary>The left-hand button when the last question is on the screen. It is about TIMING
+    /// and not about the preference: "Look inside my files" was answered on the first act and is
+    /// saved either way, so this declines to start in this session rather than turning anything
+    /// off. "Not now" would read as the second.</summary>
+    public const string LaterLabel = "Later";
+
+    public const string StartReadingLabel = "Start reading";
+
+    /// <summary>
+    /// Is the finished screen asking whether to start reading inside files now?
+    ///
+    /// <para>Only at the end, and only when the switch on the first act said yes. The first act
+    /// asks what Findra should be able to UNDERSTAND - the models - and there is no room on it for
+    /// the one warning this question needs, which is that a first pass walks every drive and can
+    /// run for hours. The last act has the room and is the moment: the download is done, nothing
+    /// is competing for the disk, and the person is still here.</para>
+    ///
+    /// <para><b>Nothing reads until this is answered.</b> That is the whole point of asking, and it
+    /// is also why the indexer no longer starts ten seconds after the first act while 2.9 GB is
+    /// still coming down the wire - the two were reading and writing the same disk at once, and the
+    /// indexing rate fell from 57 files a minute to 9 while the download ran.</para>
+    /// </summary>
+    public static bool Asks(FirstRunState s)
+    {
+        ArgumentNullException.ThrowIfNull(s);
+        return s.Stage == FirstRunStage.Finished && s.ContentOn;
+    }
+
+    /// <summary>The question itself, and the warning that is the reason for asking it at all. Here
+    /// rather than in the painter because the layout has to measure them to know how tall the
+    /// screen is, and a second copy in the painter is how the two come to disagree.</summary>
+    public const string AskTitle = "Shall Findra start reading inside your files now?";
+
+    public const string AskNote =
+        "It walks every drive and reads what it finds, which can take a few hours the first time, " +
+        "and it only reads while Findra is open. Settings, under Content, starts it whenever you like.";
 
     /// <summary>The five choices, in <see cref="TranscribeLimit.Presets"/> order, so an option
     /// index is an index into that list and there is nothing to keep in step.</summary>
@@ -282,10 +324,14 @@ public static class FirstRun
             // And the end of the run says it has ended, and where the way out is. A finished run
             // that reported only its count left somebody looking at "1 of 1 done" with no reason
             // to believe anything more was going to happen.
+            // "you can close this window" is right when closing is the only thing left, and wrong
+            // when there is a question underneath it - a sentence telling somebody to leave, six
+            // lines above the one thing on the screen still worth answering.
             string over = s.Stage == FirstRunStage.Finished && s.Problem.Length == 0 && current is null
                 // Not "Findra is ready" - the title says that, two inches above, and a screen
                 // that says the same thing twice in two registers reads as one thing said badly.
-                ? " Everything you chose has arrived, and you can close this window."
+                ? Asks(s) ? " Everything you chose has arrived."
+                          : " Everything you chose has arrived, and you can close this window."
                 : "";
 
             return $"{doing}{done.ToString(Fixed)} of {s.Downloads.Count.ToString(Fixed)} " +

@@ -251,8 +251,25 @@ public static class FirstRunLayout
     /// band and the button. The one resize happens on a deliberate click on a button that then
     /// stops existing, which is the moment nothing is under the pointer waiting to be hit.</para>
     /// </summary>
-    public static float SettledHeight(int rows, int limitRow = -1) =>
-        RowRect(rows - 1, limitRow).Bottom + RowsToSwitchesGap + SettledSummaryH + ButtonH + 40f;
+    public static float SettledHeight(int rows, int limitRow = -1, bool asking = false) =>
+        RowRect(rows - 1, limitRow).Bottom + RowsToSwitchesGap + SettledSummaryH
+        + (asking ? AskH : 0f) + ButtonH + 40f;
+
+    /// <summary>
+    /// Room for the last question: a rule, the question, and the paragraph that is the reason for
+    /// asking it. <c>TheLastQuestionFitsTheRoomTheWindowMakesForIt</c> measures both strings in the
+    /// shipped face rather than trusting this number, on the terms every other band on this screen
+    /// is held to.
+    /// </summary>
+    public const float AskH = 122f;
+
+    /// <summary>Where that block sits: under the summary it follows, above the two buttons it is
+    /// asking through.</summary>
+    public static SKRect AskRect(int rows, int limitRow = -1)
+    {
+        float top = SettledSummaryRect(rows, limitRow).Bottom;
+        return new SKRect(Inset, top, Width - Inset, top + AskH);
+    }
 
     /// <summary>Room for the second act's sentence. Two lines at the summary's own leading, which
     /// is what the longest of them needs - a dropped connection names the host, and 44 was two
@@ -298,12 +315,13 @@ public static class FirstRunLayout
     /// change with it. The painter draws the same distinction rather than leaving controls
     /// looking live.</para></summary>
     public static FirstRunHit HitTest(
-        float x, float y, int rows, int limitRow = -1, bool settled = false, bool finished = false)
+        float x, float y, int rows, int limitRow = -1, bool settled = false, bool finished = false,
+        bool asking = false)
     {
         // Against the height THIS act has. The settled window is shorter than the choosing one,
         // and a bound taken from the choosing constant would accept a click below its own bottom
         // edge - which is off the window entirely.
-        float bottom = settled ? SettledHeight(rows, limitRow) : Height;
+        float bottom = settled ? SettledHeight(rows, limitRow, asking) : Height;
         if (x < 0 || x > Width || y < 0 || y > bottom) return new FirstRunHit(FirstRunTarget.None, -1);
 
         // While the download runs this screen answers NOTHING. It is a status screen and the
@@ -314,9 +332,16 @@ public static class FirstRunLayout
         // safeguard. Only when it has finished does a button appear, because only then is there
         // something for it to mean.
         if (settled)
-            return finished && ButtonRect(1, SettledHeight(rows, limitRow)).Contains(x, y)
+        {
+            if (!finished) return new FirstRunHit(FirstRunTarget.None, -1);
+            float h = SettledHeight(rows, limitRow, asking);
+            // Two buttons only while the last question is on the screen. Without it there is one
+            // way out and a second pill beside it would be a choice with no difference in it.
+            if (asking && ButtonRect(0, h).Contains(x, y)) return new FirstRunHit(FirstRunTarget.NotNow, -1);
+            return ButtonRect(1, h).Contains(x, y)
                 ? new FirstRunHit(FirstRunTarget.Go, -1)
                 : new FirstRunHit(FirstRunTarget.None, -1);
+        }
 
         for (int i = 0; i < 3; i++)
             if (TileRect(i).Contains(x, y)) return new FirstRunHit(FirstRunTarget.Preset, i);
@@ -439,12 +464,17 @@ public static class FirstRunPainter
             _ => "Welcome to Findra",
         }, left, 44, TitleSize, face, d.Ink);
 
-        CardText.Draw(canvas, s.Stage switch
-        {
-            FirstRunStage.Downloading => "You can close this window. The downloads carry on, and Findra is in the tray.",
-            FirstRunStage.Finished => "Findra is in the tray. Settings can add any of the rest later.",
-            _ => "Names are searchable the moment Findra starts. Everything below is optional.",
-        }, left, 70, Parts.LabelSize, face, d.Fade(170));
+        CardText.Draw(canvas,
+            // The finished screen has two of these, because it has two shapes. With the last
+            // question on it, "Settings can add any of the rest later" points somebody away from
+            // the one thing still worth answering, six lines above it.
+            FirstRun.Asks(s) ? "Everything you asked for is on the disk. One thing left to decide."
+            : s.Stage switch
+            {
+                FirstRunStage.Downloading => "You can close this window. The downloads carry on, and Findra is in the tray.",
+                FirstRunStage.Finished => "Findra is in the tray. Settings can add any of the rest later.",
+                _ => "Names are searchable the moment Findra starts. Everything below is optional.",
+            }, left, 70, Parts.LabelSize, face, d.Fade(170));
 
         int limitRow = FirstRun.LimitRow(s);
 
@@ -491,11 +521,31 @@ public static class FirstRunPainter
                        : new SKRect(band.Left, band.Bottom - need, band.Right, band.Bottom),
                    d, face);
 
-        // One button in the second act, not two. The answer has already been given, so "Not now"
-        // has nothing left to decline and a second pill that does exactly what the first one does
-        // is a choice with no difference in it.
+        // The last question, and the only thing on this screen that is still a question once the
+        // first act has been answered. Nothing reads until it is: a first pass walks every drive
+        // and there is no room on the first act to say so, which is the whole reason it is asked
+        // here rather than folded into the switch above.
+        bool asking = FirstRun.Asks(s);
+        if (asking)
+        {
+            SKRect ask = FirstRunLayout.AskRect(rows.Count, limitRow);
+            Rule(canvas, new SKRect(ask.Left, ask.Top, ask.Right, ask.Top + 1), d);
+            CardText.Draw(canvas, FirstRun.AskTitle, ask.Left, ask.Top + 30, Parts.LeadSize, face, d.Ink);
+            Parts.Note(canvas, FirstRun.AskNote,
+                       new SKRect(ask.Left, ask.Top + 40, ask.Right, ask.Bottom), d, face);
+        }
+
+        // One button in the second act, not two - unless the last question is on the screen, which
+        // is the one place a second answer means something different from the first. Otherwise the
+        // answer has already been given, so "Not now" has nothing left to decline and a second pill
+        // that does exactly what the first one does is a choice with no difference in it.
         if (!busy)
             Parts.Pill(canvas, FirstRunLayout.ButtonRect(0), FirstRun.NotNowLabel,
+                       chosen: false, hovered: s.HoverTarget == FirstRunTarget.NotNow, d, face);
+        else if (asking)
+            Parts.Pill(canvas,
+                       FirstRunLayout.ButtonRect(0, FirstRunLayout.SettledHeight(rows.Count, limitRow, asking: true)),
+                       FirstRun.LaterLabel,
                        chosen: false, hovered: s.HoverTarget == FirstRunTarget.NotNow, d, face);
 
         // Not drawn at all while the files are still coming. The second act is a status screen,
@@ -504,9 +554,9 @@ public static class FirstRunPainter
         // moment its label stops being a guess about what the person wants to do next.
         if (s.Stage != FirstRunStage.Downloading)
             Parts.Pill(canvas,
-                       busy ? FirstRunLayout.ButtonRect(1, FirstRunLayout.SettledHeight(rows.Count, limitRow))
+                       busy ? FirstRunLayout.ButtonRect(1, FirstRunLayout.SettledHeight(rows.Count, limitRow, asking))
                             : FirstRunLayout.ButtonRect(1),
-                       FirstRun.GoLabel(s.Stage),
+                       FirstRun.GoLabel(s),
                        chosen: true, hovered: s.HoverTarget == FirstRunTarget.Go, d, face);
     }
 

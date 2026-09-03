@@ -24,7 +24,7 @@ public static class SearchShot
         "capsule", "empty", "contentwaiting", "typing", "results", "noresults", "many", "adv",
         "opening", "openingempty",
         "settings", "settingsopening", "settingssearches", "settingscontent", "settingsabout",
-        "firstrun", "firstrunspeech", "firstrundownloading", "firstrunfinished",
+        "firstrun", "firstrunspeech", "firstrundownloading", "firstrunfinished", "firstrunready",
     ];
 
     public static int Render(string outPath, string state, string? paletteName = null)
@@ -192,7 +192,13 @@ public static class SearchShot
     /// </summary>
     private static SKBitmap RenderFirstRun(string state, Derived d, SKTypeface face)
     {
-        bool done = state == "firstrunfinished";
+        // Two finished screens, because the last act has two shapes and one state can only ever
+        // show one of them. `firstrunfinished` took reading, so it carries the last question and
+        // two buttons; `firstrunready` did not, so it is the plain "Findra is ready" with one way
+        // out. A finished shot that only ever had reading on would ship the other half of the
+        // painter unlooked at, which is the rule the card's picture branch is written under.
+        bool ready = state == "firstrunready";
+        bool done = state == "firstrunfinished" || ready;
         bool busy = state == "firstrundownloading" || done;
         bool speech = state == "firstrunspeech";
         var s = new FirstRunState
@@ -201,7 +207,7 @@ public static class SearchShot
                 ? Capabilities.Close([Capability.Photos, Capability.Speech])
                 : Capabilities.Close([Capability.Photos, Capability.Meaning]),
             HebrewOffered = true,
-            ContentOn = true,
+            ContentOn = !ready,
             CheckUpdates = true,
             StartAtLogon = true,
             // Not the default, so the shot shows a chosen pill somewhere other than where an
@@ -243,7 +249,9 @@ public static class SearchShot
         // window really is or the review render carries an empty band the product does not have.
         int rows = FirstRun.Rows(s).Count;
         int limitRow = FirstRun.LimitRow(s);
-        float tall = busy ? FirstRunLayout.SettledHeight(rows, limitRow) : FirstRunLayout.Height;
+        float tall = busy
+            ? FirstRunLayout.SettledHeight(rows, limitRow, FirstRun.Asks(s))
+            : FirstRunLayout.Height;
 
         int w = (int)Math.Ceiling(FirstRunLayout.Width), h = (int)Math.Ceiling(tall);
         var info = new SKImageInfo(w, h, SKColorType.Bgra8888, SKAlphaType.Premul);
