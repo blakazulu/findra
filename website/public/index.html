@@ -1,0 +1,614 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Findra - We fixed Windows search. You're welcome.</title>
+<meta name="description" content="Desktop search for Windows that answers in under a millisecond, straight from RAM. Finds files by name, by what is written inside them, by what a photo shows and by what was said out loud. Free, open source, and nothing leaves your machine.">
+<link rel="canonical" href="https://findra-search.netlify.app/">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://findra-search.netlify.app/">
+<meta property="og:title" content="Findra - We fixed Windows search. You're welcome.">
+<meta property="og:description" content="Names in about half a millisecond, straight from RAM. Documents, photos and speech when you ask for them. No account, no cloud, no telemetry.">
+<meta property="og:image" content="https://findra-search.netlify.app/shots/results.png">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="theme-color" content="#08090c">
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<div class="bg" aria-hidden="true">
+  <div class="bg-blob a"></div>
+  <div class="bg-blob b"></div>
+  <div class="bg-grid"></div>
+  <div class="bg-grain"></div>
+  <div class="bg-sweep"></div>
+</div>
+
+<header class="nav">
+  <a class="brand" href="#top">
+    <span class="brand-mark" aria-hidden="true"></span>
+    <span class="brand-name">FINDRA</span>
+  </a>
+  <nav class="nav-links">
+    <a href="#finds">What it finds</a>
+    <a href="#numbers">The numbers</a>
+    <a href="#privacy">Privacy</a>
+    <a href="#install">Install</a>
+  </nav>
+  <div class="nav-right">
+    <span class="pill-thinking" aria-hidden="true">
+      <span class="spinner"></span>
+      explorer.exe: still thinking
+    </span>
+    <a class="btn btn-primary btn-sm" href="#install">Coming soon</a>
+  </div>
+</header>
+
+<main id="top">
+
+  <!-- ================= hero ================= -->
+  <div class="wrap">
+    <section class="hero">
+      <div class="hero-copy">
+        <span class="eyebrow"><span class="dot"></span>TICKET #3036 &middot; OPEN SINCE 1996 &middot; NOW CLOSED</span>
+
+        <h1>WE FIXED WINDOWS<br>SEARCH.<br><span class="accent">YOU'RE WELCOME.</span></h1>
+
+        <p class="hero-sub">
+          You bought a drive that reads seven thousand megabytes a second. Windows uses it to
+          think about your question for four minutes, freeze a folder you were not looking in,
+          find nothing, and then gently suggest that the internet might know where you keep your
+          own tax return.
+        </p>
+        <p class="hero-sub bright">
+          Findra holds the file table in RAM and answers before your finger comes off Enter.
+          Half a millisecond, measured, on a disk with 1.5 million files on it.
+        </p>
+
+        <div class="hero-actions">
+          <a class="btn btn-primary" href="#install">
+            <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/></svg>
+            Coming soon
+          </a>
+          <a class="btn btn-ghost" href="#finds">See what it finds</a>
+        </div>
+
+        <div class="hero-meta">
+          <span>Windows 10 and 11</span>
+          <span class="sep">/</span>
+          <span>Apache-2.0</span>
+          <span class="sep">/</span>
+          <span>No account, because we do not want to know you</span>
+        </div>
+      </div>
+
+      <div class="stack" aria-hidden="true">
+
+        <div class="win win-err">
+          <div class="win-bar"><span>Windows Search</span><span class="x">&times;</span></div>
+          <div class="body">
+            <span class="err-badge">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.6" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </span>
+            <span class="lines">
+              <span class="l1">Windows cannot find "receipt_final.pdf".</span>
+              <span class="l2">Check the spelling and try again.</span>
+              <span class="l3">The spelling was correct. The file is in Downloads.</span>
+            </span>
+          </div>
+        </div>
+
+        <div class="win win-froze">
+          <div class="win-bar"><span>File Explorer (Not Responding)</span><span class="x">&times;</span></div>
+          <div class="body">
+            <div class="crawl-bar"><span class="crawl-fill"></span><span>Searching "receipt_final"...</span></div>
+            <div class="dots">
+              <i></i><i></i><i></i>
+              <span class="txt">Working on it... elapsed <span class="clock" id="elapsed">4 min 12 s</span></span>
+            </div>
+            <div class="scan-note"><span id="scanned">1,842,910</span> files checked, none of them yours</div>
+          </div>
+        </div>
+
+        <div class="win win-findra">
+          <div class="cap-head">
+            <span class="cap-orb"></span>
+            <span class="cap-q">receipt final<span class="caret">|</span></span>
+            <span class="cap-key">Win + Space</span>
+          </div>
+          <div class="cap-row hit">
+            <span class="info">
+              <span class="name">receipt_final.pdf</span>
+              <span class="path">C:\Users\you\Downloads\ (yes, there)</span>
+            </span>
+            <span class="ms">0.5 ms</span>
+          </div>
+          <div class="cap-row">
+            <span class="info">
+              <span class="name">receipt_final_FINAL_v3.pdf</span>
+              <span class="path">D:\Taxes\2025\</span>
+            </span>
+            <span class="ms">0.6 ms</span>
+          </div>
+          <div class="cap-row">
+            <span class="info">
+              <span class="name">shop_counter.jpg</span>
+              <span class="path">matched on what is in the photo: "a paper receipt"</span>
+            </span>
+            <span class="ms">1.3 ms</span>
+          </div>
+        </div>
+
+      </div>
+    </section>
+  </div>
+
+  <!-- ================= ticker ================= -->
+  <div class="ticker" aria-hidden="true">
+    <div class="ticker-track" id="ticker"></div>
+  </div>
+
+  <!-- ================= event log ================= -->
+  <div class="wrap">
+    <section id="sins">
+      <div class="sec-head-row reveal">
+        <div class="sec-head" style="margin-bottom:0">
+          <span class="kicker">THE PAPER TRAIL</span>
+          <h2>Thirty years, five log entries</h2>
+        </div>
+        <p class="aside">Windows kept meticulous records of everything except where your file was.</p>
+      </div>
+
+      <div class="log reveal">
+        <div class="log-head">
+          <span class="left">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#fa7e00" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+            <span class="title">Event Viewer</span>
+            <span class="path">Applications and Services / Windows Search</span>
+          </span>
+          <span class="count">5 events, one of them useful</span>
+        </div>
+
+        <div class="log-row head">
+          <span>LEVEL</span><span>EVENT</span><span>SOURCE</span><span>DESCRIPTION</span>
+        </div>
+
+        <div class="log-row">
+          <span class="log-lvl err">Error</span>
+          <span class="log-id">3036</span>
+          <span class="log-src">SearchIndexer</span>
+          <span class="log-desc">Indexed 1,842,910 files overnight. Excluded the desktop for reasons known only to itself.</span>
+        </div>
+        <div class="log-row">
+          <span class="log-lvl err">Error</span>
+          <span class="log-id">1000</span>
+          <span class="log-src">explorer.exe</span>
+          <span class="log-desc">Faulting application. Took the taskbar with it so you would not feel alone.</span>
+        </div>
+        <div class="log-row">
+          <span class="log-lvl warn">Warning</span>
+          <span class="log-id">7043</span>
+          <span class="log-src">SearchProtocolHost</span>
+          <span class="log-desc">Drive at 100% for six minutes. Twenty-three cores idle and watching.</span>
+        </div>
+        <div class="log-row">
+          <span class="log-lvl warn">Warning</span>
+          <span class="log-id">0042</span>
+          <span class="log-src">SearchUI</span>
+          <span class="log-desc">Could not find a local file. Offered eleven web results and a shopping tab.</span>
+        </div>
+        <div class="log-row good">
+          <span class="log-lvl">Resolved</span>
+          <span class="log-id">0001</span>
+          <span class="log-src">findra.exe</span>
+          <span class="log-desc">Found it in half a millisecond. Also found it quoted inside three PDFs and a voice note. Went back to using 73 MB.</span>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <!-- ================= excuses ================= -->
+  <div class="wrap">
+    <section>
+      <div class="sec-head reveal">
+        <span class="kicker">THE OFFICIAL EXCUSES</span>
+        <h2>Why it did not find your file</h2>
+      </div>
+
+      <div class="grid-4">
+        <article class="excuse reveal">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#fa7e00" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/></svg>
+          <h3>The index had not got to it</h3>
+          <p>You saved the file. The indexer runs at 3 AM. Until then, as far as Windows is concerned, you did not.</p>
+          <span class="fix">Findra: names are live, always</span>
+        </article>
+
+        <article class="excuse reveal">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#fa7e00" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="7" y1="9" x2="17" y2="9"/></svg>
+          <h3>That folder was not included</h3>
+          <p>There is a settings page listing which of your own drives Windows is willing to look at. Nobody has ever found it twice.</p>
+          <span class="fix">Findra: every NTFS volume</span>
+        </article>
+
+        <article class="excuse reveal">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#fa7e00" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.2" y2="16.2"/></svg>
+          <h3>You only remembered the sentence</h3>
+          <p>Not what you called the file. Windows would like the filename, please, and would prefer you had it memorised.</p>
+          <span class="fix">Findra: inside documents too</span>
+        </article>
+
+        <article class="excuse reveal">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#fa7e00" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.5-6.5 10-6.5S22 12 22 12s-3.5 6.5-10 6.5S2 12 2 12z"/><circle cx="12" cy="12" r="2.6"/></svg>
+          <h3>It sent the question upstream</h3>
+          <p>You typed a private filename into a box on your own computer and something went over the wire about it.</p>
+          <span class="fix">Findra: nothing leaves</span>
+        </article>
+      </div>
+    </section>
+  </div>
+
+  <!-- ================= what it finds ================= -->
+  <div class="wrap">
+    <section id="finds">
+      <div class="sec-head reveal">
+        <span class="kicker">WHAT IT FINDS</span>
+        <h2>Names first. Then, if you ask, everything else.</h2>
+        <p>
+          Names cost seconds to index and about 73 MB of memory, so they are on from the moment
+          Findra starts. Reading inside files walks every drive and can run for hours, so it never
+          begins on its own. You turn it on, one capability at a time, and each one is a separate
+          download you can decline.
+        </p>
+      </div>
+
+      <div class="table-wrap reveal">
+        <table>
+          <thead>
+            <tr>
+              <th scope="col">What you can search for</th>
+              <th scope="col">Needs a model</th>
+              <th scope="col">On by default</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><td>Names of files and folders, across every NTFS volume</td><td class="no">no</td><td class="yes">yes, the moment Findra starts</td></tr>
+            <tr><td>Words in documents, and the text inside pictures</td><td class="no">no</td><td class="no">no, until you turn content indexing on</td></tr>
+            <tr><td>Photos and video, by what is in the frame</td><td class="yes">yes</td><td class="no">no</td></tr>
+            <tr><td>Documents by what they mean, not only the words they use</td><td class="yes">yes</td><td class="no">no</td></tr>
+            <tr><td>Speech in recordings, with a second pass for Hebrew</td><td class="yes">yes</td><td class="no">no</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <p class="hero-sub reveal" style="margin-top:22px;max-width:900px">
+        Everything Findra can install adds up to 2.93 GB, and that is the figure only if you take
+        all of it. Take none and it still searches every name on the machine. Sizes on screen are
+        marginal, counted against what you have already picked, because Speech and Meaning share
+        files and you are never charged twice for the same download.
+      </p>
+    </section>
+  </div>
+
+  <!-- ================= screenshots ================= -->
+  <div class="wrap">
+    <section id="shots">
+      <div class="sec-head-row reveal">
+        <div class="sec-head" style="margin-bottom:0">
+          <span class="kicker">NOT A MOCKUP</span>
+          <h2>Every picture below is the product</h2>
+        </div>
+        <p class="aside">
+          Each one was drawn by the same painter the window uses, with the command printed
+          underneath it. Run the command, get the image.
+        </p>
+      </div>
+
+      <div class="shots">
+        <figure class="shot wide reveal" style="margin:0">
+          <div class="shot-img"><img src="shots/results.png" alt="The Findra results card showing nine results for the query sunset, with a photo previewed beside them" width="820" height="626"></div>
+          <figcaption class="shot-cap">
+            <h3>The card</h3>
+            <p>Nine results for "sunset": files by name, documents by their contents, and a photograph matched on what is actually in the frame.</p>
+            <code>findra --searchshot results.png results Mond</code>
+          </figcaption>
+        </figure>
+
+        <figure class="shot reveal" style="margin:0">
+          <div class="shot-img"><img src="shots/capsule.png" alt="The Findra capsule sitting on the desktop, waiting" width="560" height="128"></div>
+          <figcaption class="shot-cap">
+            <h3>The capsule</h3>
+            <p>It sits on the desktop doing nothing until you click it, or press the hotkey from wherever you happen to be.</p>
+            <code>findra --searchshot capsule.png capsule Mond</code>
+          </figcaption>
+        </figure>
+
+        <figure class="shot reveal" style="margin:0">
+          <div class="shot-img"><img src="shots/light.png" alt="The same results card rendered in the light Blueprint palette" width="820" height="626"></div>
+          <figcaption class="shot-cap">
+            <h3>Six palettes, three dark and three light</h3>
+            <p>Pick one of each and Findra follows the Windows setting, or pin it to either. Your own go in palettes.json.</p>
+            <code>findra --searchshot light.png results Blueprint</code>
+          </figcaption>
+        </figure>
+
+        <figure class="shot reveal" style="margin:0">
+          <div class="shot-img"><img src="shots/advanced.png" alt="The advanced search form with a query built up from its fields" width="820" height="640"></div>
+          <figcaption class="shot-cap">
+            <h3>The grammar, with a form</h3>
+            <p>Typing has a syntax. There is a form for the parts of it nobody remembers, and it writes the query for you.</p>
+            <code>findra --searchshot advanced.png adv Mond</code>
+          </figcaption>
+        </figure>
+
+        <figure class="shot reveal" style="margin:0">
+          <div class="shot-img"><img src="shots/firstrun.png" alt="The first-run screen with the Recommended preset chosen" width="820" height="820"></div>
+          <figcaption class="shot-cap">
+            <h3>One question, then out of the way</h3>
+            <p>Take a preset, take one capability, or take nothing at all. Nothing on this screen is permanent.</p>
+            <code>findra --searchshot firstrun.png firstrun Paper</code>
+          </figcaption>
+        </figure>
+
+        <figure class="shot wide reveal" style="margin:0">
+          <div class="shot-img"><img src="shots/settings.png" alt="The Content section of Findra's settings window, showing the switch for reading inside files" width="820" height="560"></div>
+          <figcaption class="shot-cap">
+            <h3>Reading inside your files is a switch, and it starts off</h3>
+            <p>One number, in minutes, decides how long a recording is worth transcribing. Turning content indexing off later throws away nothing already read, and turning a capability on re-reads only the files that capability covers.</p>
+            <code>findra --searchshot settings.png settingscontent Paper</code>
+          </figcaption>
+        </figure>
+      </div>
+    </section>
+  </div>
+
+  <!-- ================= numbers ================= -->
+  <div class="wrap">
+    <section id="numbers">
+      <div class="sec-head reveal">
+        <span class="kicker">THE NUMBERS</span>
+        <h2>Measured, on a named machine, by a command you can run</h2>
+        <p>
+          Everything below came out of <code style="font-family:var(--mono);font-size:14px;color:var(--ink-dim)">findra --searchbench</code>
+          and was pasted without editing. No number appears on this page that you cannot reproduce
+          on your own computer with one command.
+        </p>
+      </div>
+
+      <div class="stat-row">
+        <div class="stat reveal">
+          <span class="v">0.50 ms</span>
+          <span class="k">A name, end to end</span>
+          <span class="n">Median round trip for "config", pipe hop included. Slowest query measured was 3.99 ms.</span>
+        </div>
+        <div class="stat reveal">
+          <span class="v">2.8 s</span>
+          <span class="k">From cold to ready</span>
+          <span class="n">1,573,675 names enumerated off the volume at sign-in. No overnight pass, no 3 AM.</span>
+        </div>
+        <div class="stat reveal">
+          <span class="v">73.1 MB</span>
+          <span class="k">What it costs to hold</span>
+          <span class="n">The whole resident name index for that million and a half files.</span>
+        </div>
+        <div class="stat reveal">
+          <span class="v">0</span>
+          <span class="k">Bytes about your files</span>
+          <span class="n">No account, no cloud, no analytics, no crash reporting, no telemetry.</span>
+        </div>
+      </div>
+
+      <div class="table-wrap reveal">
+        <table>
+          <thead>
+            <tr>
+              <th scope="col">Name query</th>
+              <th scope="col">Round trip p50</th>
+              <th scope="col">Round trip p95</th>
+              <th scope="col">Index scan p50</th>
+              <th scope="col">Worst</th>
+              <th scope="col">Hits</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><td>config</td><td class="num">0.50 ms</td><td class="num">0.54 ms</td><td class="num">0.06 ms</td><td class="num">0.56 ms</td><td>50</td></tr>
+            <tr><td>report</td><td class="num">0.54 ms</td><td class="num">0.61 ms</td><td class="num">0.16 ms</td><td class="num">1.31 ms</td><td>50</td></tr>
+            <tr><td>readme</td><td class="num">1.00 ms</td><td class="num">1.06 ms</td><td class="num">0.51 ms</td><td class="num">1.33 ms</td><td>50</td></tr>
+            <tr><td>invoice</td><td class="num">2.53 ms</td><td class="num">5.04 ms</td><td class="num">2.13 ms</td><td class="num">5.42 ms</td><td>45</td></tr>
+            <tr><td>sunset</td><td class="num">3.99 ms</td><td class="num">4.43 ms</td><td class="num">3.55 ms</td><td class="num">5.20 ms</td><td>35</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="machine reveal">
+        <span><b>Machine</b> AMD Ryzen 9 9900X3D</span>
+        <span><b>RAM</b> 47.1 GB</span>
+        <span><b>Disk</b> NVMe SSD</span>
+        <span><b>OS</b> Windows 11 Pro 10.0.26200.9168</span>
+        <span><b>Accelerator</b> ONNX via DirectML</span>
+        <span><b>Build</b> Findra 0.1.0</span>
+        <span><b>Samples</b> n=50 per query</span>
+      </div>
+
+      <p class="hero-sub reveal" style="margin-top:22px;max-width:900px">
+        A number without its machine is marketing rather than measurement, so the machine is named.
+        Yours will differ. Findra tries DirectML for the vision and meaning models and Vulkan for
+        speech, and falls back to the processor when neither answers, which is a supported
+        configuration rather than a failure: only the first pass through your files is slower, and
+        <code style="font-family:var(--mono);font-size:13.5px;color:var(--ink-dim)">findra --searchmodels</code>
+        prints which provider it chose and every one it turned down, with reasons.
+      </p>
+    </section>
+  </div>
+
+  <!-- ================= privacy ================= -->
+  <div class="wrap">
+    <section id="privacy">
+      <div class="sec-head reveal">
+        <span class="kicker">WHAT LEAVES YOUR MACHINE</span>
+        <h2>One request. Written down, not buried.</h2>
+      </div>
+
+      <div class="privacy">
+        <div class="panel reveal">
+          <h3>Never leaves</h3>
+          <ul class="never" style="list-style:none;margin:0;padding:0">
+            <li><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fa7e00" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg> Your files, and their contents</li>
+            <li><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fa7e00" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg> Their names, and where they live</li>
+            <li><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fa7e00" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg> What you searched for, and when</li>
+            <li><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fa7e00" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg> Anything at all about who you are</li>
+          </ul>
+          <p>
+            There is no account, no cloud service, no analytics, no crash reporting and no
+            telemetry. The models run on your own processor or graphics card; a photograph is
+            never uploaded to be understood.
+          </p>
+        </div>
+
+        <div class="panel accent reveal">
+          <h3>The one exception</h3>
+          <p>
+            Once every 24 hours, on startup, in the background, Findra makes an anonymous HTTPS GET
+            to the GitHub releases API to learn whether a newer version exists. No query
+            parameters, no machine identifier, no install identifier, nothing about your files or
+            your searches.
+          </p>
+          <p>
+            It never blocks anything, a failure is a line in the log rather than a dialog, it is
+            disclosed on the first-run screen, and you can switch it off. Off means the request is
+            not made at all.
+          </p>
+          <p style="color:var(--ink-dim)">
+            Findra never installs an update by itself. Replacing a running executable and
+            re-registering an elevated task are the two operations most likely to leave a machine
+            broken, and it declines to do either behind your back.
+          </p>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <!-- ================= install ================= -->
+  <div class="wrap">
+    <section id="install">
+      <div class="sec-head reveal">
+        <span class="kicker">INSTALL</span>
+        <h2>Get Findra</h2>
+        <p>
+          Findra is at version 0.1.0 and the first release has not been tagged yet, so building it
+          yourself is the route that works today. It needs the .NET 10 SDK and nothing else.
+        </p>
+      </div>
+
+      <div class="install">
+        <div class="panel reveal">
+          <span class="badge now">WORKS TODAY</span>
+          <h3>Build it from source</h3>
+          <p>Four commands, and you have a self-contained build. The tests run on your machine too.</p>
+          <div class="cmd-block"><span class="p">$</span> git clone https://github.com/blakazulu/findra
+<span class="p">$</span> cd findra
+<span class="p">$</span> dotnet build
+<span class="p">$</span> dotnet publish src/Findra -c Release --self-contained</div>
+          <p style="font-size:14px">
+            Name search needs the helper, which asks for administrator rights exactly once, to open
+            the volume. Nothing else in Findra ever needs them, and the part that reads your files
+            deliberately runs without them.
+          </p>
+          <div class="cmd-block"><span class="p">$</span> dotnet run --project src/Findra -- --names</div>
+          <a class="btn btn-ghost" href="https://github.com/blakazulu/findra" rel="noopener">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 .5C5.73.5.9 5.34.9 11.6c0 4.9 3.17 9.06 7.57 10.53.55.1.76-.24.76-.53v-2.07c-3.08.67-3.73-1.3-3.73-1.3-.5-1.29-1.23-1.63-1.23-1.63-1-.69.08-.67.08-.67 1.11.08 1.7 1.15 1.7 1.15.99 1.7 2.6 1.21 3.23.93.1-.72.39-1.21.7-1.49-2.46-.28-5.05-1.24-5.05-5.5 0-1.22.43-2.21 1.14-2.99-.11-.28-.5-1.41.11-2.94 0 0 .93-.3 3.05 1.14a10.5 10.5 0 0 1 5.56 0c2.12-1.44 3.05-1.14 3.05-1.14.61 1.53.22 2.66.11 2.94.71.78 1.14 1.77 1.14 2.99 0 4.27-2.6 5.21-5.07 5.49.4.35.76 1.03.76 2.08v3.08c0 .3.2.64.77.53 4.4-1.47 7.56-5.63 7.56-10.53C23.1 5.34 18.27.5 12 .5z"/></svg>
+            Source on GitHub
+          </a>
+        </div>
+
+        <div class="panel reveal">
+          <span class="badge soon">WITH THE FIRST RELEASE</span>
+          <h3>Installer and winget</h3>
+          <p>
+            The installer is written and the winget manifests are already in the repository, for
+            both x64 and arm64. When the first release is tagged, this is the whole install.
+          </p>
+          <div class="cmd" title="Click to copy" data-copy="winget install blakazulu.Findra">
+            <span class="p">&gt;</span><span class="t">winget install blakazulu.Findra</span><span class="c">COPY</span>
+          </div>
+          <p style="font-size:14px">
+            Neither the installer nor the executables are signed yet, so Windows will warn about an
+            unknown publisher until that changes.
+          </p>
+          <h3 style="font-size:17px;margin-top:6px">Removing it, whenever you like</h3>
+          <p style="font-size:14px">
+            Uninstalling always removes the elevated logon task, because a scheduled task pointing
+            at a binary that is no longer there is a defect and not an inconvenience. It keeps your
+            models, your index and your settings unless you say otherwise, and tells you the
+            measured size it would free before it deletes anything.
+          </p>
+          <div class="cmd-block"><span class="p">$</span> findra --uninstall --dry-run</div>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <!-- ================= final ================= -->
+  <div class="wrap">
+    <section style="padding-top:0">
+      <div class="final reveal">
+        <div class="copy">
+          <h2>Close the ticket.</h2>
+          <p>
+            Names in half a millisecond from the moment you sign in. Documents, photos and speech
+            when you ask for them, and not a second sooner. No account, no telemetry, no 3 AM index
+            rebuild, and a licence that lets you take the whole thing apart.
+          </p>
+        </div>
+        <div class="actions">
+          <a class="btn btn-primary" href="#install">
+            <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/></svg>
+            Coming soon
+          </a>
+          <div class="cmd" title="Click to copy" data-copy="git clone https://github.com/blakazulu/findra">
+            <span class="p">$</span><span class="t">git clone github.com/blakazulu/findra</span><span class="c">COPY</span>
+          </div>
+          <span class="fine">Windows 10 and 11 &middot; x64 and arm64 &middot; Apache-2.0</span>
+        </div>
+      </div>
+    </section>
+  </div>
+
+</main>
+
+<footer class="wrap">
+  <div class="foot">
+    <div class="col">
+      <span class="brand" style="margin-bottom:6px">
+        <span class="brand-mark" aria-hidden="true"></span>
+        <span class="brand-name">FINDRA</span>
+      </span>
+      <span>Desktop search for Windows.</span>
+      <span>Built with .NET 10, Avalonia, SkiaSharp and SQLite.</span>
+    </div>
+    <div class="col">
+      <strong>PROJECT</strong>
+      <a href="https://github.com/blakazulu/findra" rel="noopener">Source</a>
+      <a href="https://github.com/blakazulu/findra/blob/main/CHANGELOG.md" rel="noopener">Changelog</a>
+      <a href="https://github.com/blakazulu/findra/issues" rel="noopener">Issues</a>
+    </div>
+    <div class="col">
+      <strong>THE SMALL PRINT</strong>
+      <a href="https://github.com/blakazulu/findra/blob/main/PRIVACY.md" rel="noopener">Privacy</a>
+      <a href="https://github.com/blakazulu/findra/blob/main/SECURITY.md" rel="noopener">Security</a>
+      <a href="https://github.com/blakazulu/findra/blob/main/LICENSE" rel="noopener">Apache-2.0</a>
+      <a href="https://github.com/blakazulu/findra/blob/main/NOTICE" rel="noopener">Notice</a>
+    </div>
+    <div class="col">
+      <strong>ATTRIBUTION</strong>
+      <span>Findra by blakazulu.</span>
+      <span>Quicksand under the SIL Open Font License 1.1.</span>
+      <span>&copy; <span id="year">2026</span></span>
+    </div>
+  </div>
+</footer>
+
+<script src="app.js" defer></script>
+</body>
+</html>
