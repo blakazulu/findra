@@ -43,8 +43,8 @@ public class UninstallTests : IDisposable
         //
         // The plan cannot express that any more: it carries deletes and keeps and nothing else, so
         // there is no field a task removal could be made conditional on. What purge decides is
-        // asserted here; that the task goes regardless is asserted by the test below, which reads
-        // the code that removes it.
+        // asserted here; that the task goes regardless is asserted below, by running Run down each
+        // of its routes and watching what it removes.
         UninstallPlan keep = Uninstall.Plan(purge: false, Measured);
         UninstallPlan purge = Uninstall.Plan(purge: true, Measured);
 
@@ -54,63 +54,134 @@ public class UninstallTests : IDisposable
         Assert.Empty(purge.Keeps);
     }
 
+    // ---- what Run actually does, in order -----------------------------------------------------
+
     /// <summary>
-    /// The source of <see cref="Uninstall.Run"/>, from its signature to the end of the file.
+    /// Every effect <see cref="Uninstall.Run(string[])"/> has, recorded in the order it had them.
     ///
-    /// <para>Reading the source is not the assertion anybody would pick first. It is the one
-    /// available: <c>Run</c> stops real processes, calls <c>schtasks</c>, writes the registry and
-    /// deletes folders, so nothing can execute it here, and the version of these two tests that
-    /// asserted over a plan's step list was green with the task removal deleted from <c>Run</c>
-    /// outright - which is the defect spec §2a calls out by name.</para>
+    /// <para>The two tests this replaced read <c>Run</c>'s own source and asserted where four
+    /// names appeared in it. That is blind to what surrounds them: wrapping the whole removal
+    /// block in <c>if (!quiet)</c> keeps every name in place and in source order, and the suite
+    /// stayed green - while disabling the removal on the route the installer's own UninstallRun
+    /// entries take, which is nearly every real uninstall. It was also brittle the other way,
+    /// because it read to the end of the file: moving the removal into a private helper below
+    /// <c>Run</c> broke it without changing a thing.</para>
     /// </summary>
-    private static string RunSource
+    private sealed class Recorder
     {
-        get
-        {
-            string src = Repo.Read("src/Findra/Startup/Uninstall.cs");
-            int at = src.IndexOf("public static int Run(string[] args)", StringComparison.Ordinal);
-            Assert.True(at >= 0, "Uninstall.Run is not where this test expects it");
-            return src[at..];
-        }
+        public List<string> Calls { get; } = [];
+        public IReadOnlyList<int>? Spared { get; private set; }
+        public IReadOnlyList<DataSize>? Deleted { get; private set; }
+
+        /// <summary>What HelperTask.Unregister answered - false is a task still registered.</summary>
+        public bool TaskGone { get; init; } = true;
+
+        /// <summary>What would not go, by label. Everything else is removed cleanly.</summary>
+        public string? Stuck { get; init; }
+
+        public int Run(params string[] args) => Uninstall.Run(
+            args,
+            unregisterTask: () => { Calls.Add("task"); return TaskGone; },
+            clearAutostart: () => Calls.Add("autostart"),
+            stop: spare => { Calls.Add("stop"); Spared = spare; },
+            delete: deletes =>
+            {
+                Calls.Add("delete");
+                Deleted = deletes;
+                return [.. deletes.Select(d => d.Label == Stuck
+                    ? new Removal(d.Label, d.Path, false, "the file is in use")
+                    : new Removal(d.Label, d.Path, true, null))];
+            },
+            // Never the real check. Unelevated, Run would raise a UAC prompt and relaunch itself.
+            elevated: () => true);
     }
 
     [Fact]
-    public void TheTaskAndTheAutostartEntryGoBeforeAnyDataIsDeleted()
+    public void TheOrderIsStopEverythingThenTheTaskThenAutostartThenAnyDeletion()
     {
         // A helper holding a volume handle and an indexer holding the index file are both live
         // while files are being deleted, if the order is wrong. And the task must be gone before
         // the delete loop, so a folder that will not go still leaves a machine with no orphaned
         // elevated task.
-        string run = RunSource;
-        int stop = run.IndexOf("StopAll(", StringComparison.Ordinal);
-        int task = run.IndexOf("HelperTask.Unregister()", StringComparison.Ordinal);
-        int autostart = run.IndexOf("Autostart.Clear()", StringComparison.Ordinal);
-        int data = run.IndexOf("Delete(plan.Deletes", StringComparison.Ordinal);
+        var run = new Recorder();
+        run.Run("--uninstall", "--purge", "--quiet");
 
-        Assert.True(stop >= 0, "Run stops nothing");
-        Assert.True(task >= 0, "Run never removes the scheduled task - spec 2a calls that a defect");
-        Assert.True(autostart >= 0, "Run never removes the autostart entry");
-        Assert.True(data >= 0, "Run never deletes the data it measured");
+        Assert.Equal(["stop", "task", "autostart", "delete"], run.Calls);
+    }
 
-        Assert.True(task > stop, "the task is removed before the helper it starts is stopped");
-        Assert.True(data > task, "data is deleted before the scheduled task is gone");
-        Assert.True(data > autostart, "data is deleted before the autostart entry is gone");
+    [Theory]
+    [InlineData("--uninstall")]                             // the ordinary keep run
+    [InlineData("--uninstall", "--purge")]                  // and its purge variant
+    [InlineData("--uninstall", "--quiet")]                  // what the installer runs, on uninstall
+    [InlineData("--uninstall", "--purge", "--quiet")]       // and what it runs when the box is ticked
+    [InlineData("--uninstall", "--relaunched", "4242")]     // the elevated child of the UAC prompt
+    public void TheScheduledTaskGoesOnEveryRouteThroughRun(params string[] args)
+    {
+        // The property the source-reading test could not see. --quiet is the installer's route:
+        // Inno's UninstallRun entries are `--uninstall --quiet` and `--uninstall --purge --quiet`,
+        // so a removal that only happens when somebody is reading the console leaves a
+        // HighestAvailable logon task pointing at a binary Inno is about to delete - spec 2a's
+        // defect, on the path nearly everybody takes.
+        var run = new Recorder();
+        run.Run(args);
+
+        Assert.Contains("task", run.Calls);
+        Assert.Contains("autostart", run.Calls);
     }
 
     [Fact]
-    public void RemovingTheTaskIsNotConditionalOnAnythingRunAsked()
+    public void AKeepRunDeletesNothingAtAll()
     {
-        // Unregister() sits on its own statement, unguarded. An `if (purge)`, an `if (taskThere)`
-        // or a `Query() == Registered` in front of it is the orphan surviving - Query is
-        // three-valued precisely so a locked-down machine is distinguishable from a fresh one, and
-        // both still need the task gone.
-        string run = RunSource;
-        int task = run.IndexOf("HelperTask.Unregister()", StringComparison.Ordinal);
-        string before = run[..task];
-        string statement = before[(before.LastIndexOf('\n') + 1)..];
+        var run = new Recorder();
+        int code = run.Run("--uninstall", "--quiet");
 
-        Assert.Equal("bool taskGone = ", statement.TrimStart());
-        Assert.DoesNotContain("HelperTask.Query", run, StringComparison.Ordinal);
+        Assert.DoesNotContain("delete", run.Calls);
+        Assert.Null(run.Deleted);
+        Assert.Equal(0, code);
+    }
+
+    [Fact]
+    public void APurgeRunDeletesAllFourOfFindrasOwnFolders()
+    {
+        // Pairs with the test above, so neither can be satisfied by a Run that never deletes -
+        // which would be a perfectly green uninstaller that frees nothing --purge promised.
+        var run = new Recorder();
+        int code = run.Run("--uninstall", "--purge", "--quiet");
+
+        Assert.Equal(["models", "index", "logs", "settings"], run.Deleted!.Select(d => d.Label));
+        Assert.Equal(0, code);
+    }
+
+    [Fact]
+    public void TheParentWaitingOnAnElevatedRelaunchIsSparedAlongWithThisProcess()
+    {
+        // StopOrder does the sparing, but only with the list Run hands it. Run building that list
+        // out of this process alone puts the waiting parent back in range of the kill.
+        var run = new Recorder();
+        run.Run("--uninstall", "--quiet", "--relaunched", "4242");
+
+        Assert.Contains(4242, run.Spared!);
+        Assert.Contains(Environment.ProcessId, run.Spared!);
+    }
+
+    [Fact]
+    public void ATaskThatWouldNotGoAwayIsANonZeroExit()
+    {
+        // Nobody reads an uninstaller's exit code by hand, but the installer does, and this is the
+        // one failure that leaves an elevated logon task behind.
+        var run = new Recorder { TaskGone = false };
+
+        Assert.Equal(1, run.Run("--uninstall", "--quiet"));
+    }
+
+    [Fact]
+    public void AFolderThatWouldNotGoIsANonZeroExitToo()
+    {
+        // The rest still went - Delete carries on past one failure - so the report is not empty
+        // and the exit code is the only thing saying the purge was incomplete.
+        var run = new Recorder { Stuck = "index" };
+
+        Assert.Equal(1, run.Run("--uninstall", "--purge", "--quiet"));
     }
 
     // ---- what is kept, and what it says ------------------------------------------------------
