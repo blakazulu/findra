@@ -68,7 +68,7 @@ public static class CardPlacement
     /// empty card puts the grown one off the bottom of a short screen.</summary>
     public static PixelSize GrownSize(double zoom, double scaling) => new(
         (int)Math.Round(SearchCardLayout.Width * zoom * scaling),
-        (int)Math.Round(SearchCardLayout.Height(SearchCardLayout.MaxRows, true) * zoom * scaling));
+        (int)Math.Round(SearchCardLayout.WindowHeight(SearchCardLayout.MaxRows, true, progress: true) * zoom * scaling));
 
     public static PixelPoint Centred(PixelRect workingArea, int width, int height)
     {

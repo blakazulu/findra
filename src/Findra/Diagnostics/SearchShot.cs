@@ -289,7 +289,7 @@ public static class SearchShot
     {
         SearchCardState s = Build(state);
         int w = (int)Math.Ceiling(SearchCardLayout.Width);
-        int h = (int)Math.Ceiling(SearchCardLayout.Height(s.Rows.Count, s.HasQuery, s.AdvOpen, s.Progress.Show));
+        int h = (int)Math.Ceiling(SearchCardLayout.WindowHeight(s.Rows.Count, s.HasQuery, s.AdvOpen, s.Progress.Show));
         var info = new SKImageInfo(w, h, SKColorType.Bgra8888, SKAlphaType.Premul);
         using SKSurface surface = SKSurface.Create(info);
         SearchCardPainter.Paint(surface.Canvas, s, d, face);

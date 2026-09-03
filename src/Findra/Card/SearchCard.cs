@@ -59,20 +59,33 @@ public static class SearchCardLayout
     public static SKRect SettingsRect()
         => new(Width - Pad - ContentW, FieldTop + FieldH + 5, Width - Pad, FieldTop + FieldH + 35);
 
+    /// <summary>The air between the card's bottom edge and the progress pill under it, and under
+    /// the pill before the window ends. The same 8px the capsule leaves between its bar and its
+    /// own pill, so the two surfaces hang the pill off themselves the same way.</summary>
+    public const float ProgressGap = 8f;
+
     /// <summary>
-    /// The progress pill, directly under the field and exactly as wide as it.
+    /// The progress pill: BELOW the card, in the window but outside the card's own shape, inset to
+    /// the card's padding at both ends. Its top depends on how tall the card is at that moment, so
+    /// it takes the same arguments <see cref="Height"/> does.
     ///
-    /// <para>Under the field rather than in the footer because the empty card - the one somebody
-    /// opens and looks at while nothing has been typed - has no footer, and that is precisely when
-    /// "how far has it got" is the question. It clears the Settings pill on the right by the same
-    /// margin the field does, since it is the field's own width.</para>
+    /// <para>It used to sit inside the card, between the field and the hints. That squeezed the
+    /// one surface whose job is the field against the one whose job is the count, and the card's
+    /// body was drawn at the height WITHOUT the pill while the window was sized WITH it - so the
+    /// hints were painted below the card's bottom edge onto the desktop. Below the card it is the
+    /// shape the capsule already has: a bar, and a pill of its own hanging under it.</para>
     /// </summary>
-    public static SKRect ProgressRect()
+    public static SKRect ProgressRect(int count, bool hasQuery, bool advOpen = false)
     {
-        float top = FieldTop + FieldH + 8f;
-        SKRect f = FieldRect();
-        return new SKRect(f.Left, top, f.Right, top + ProgressPillLayout.Height);
+        float top = Height(count, hasQuery, advOpen) + ProgressGap;
+        return new SKRect(Pad, top, Width - Pad, top + ProgressPillLayout.Height);
     }
+
+    /// <summary>The window's height: the card, and the progress pill under it when there is one.
+    /// The card itself is <see cref="Height"/>; everything that sizes a window or a bitmap takes
+    /// this one, and everything that draws or hit-tests the card takes that one.</summary>
+    public static float WindowHeight(int count, bool hasQuery, bool advOpen = false, bool progress = false)
+        => progress ? ProgressRect(count, hasQuery, advOpen).Bottom + ProgressGap : Height(count, hasQuery, advOpen);
 
     /// <summary>Where the header line's right-aligned half ends: the field's own right edge,
     /// NOT the card's. The pill column now reaches down into the header's band, and a timing
@@ -99,18 +112,13 @@ public static class SearchCardLayout
         return count == 0 ? RowH * 1.6f : Math.Max(rows, StageMinH);
     }
 
-    public static float Height(int count, bool hasQuery, bool advOpen = false, bool progress = false)
+    public static float Height(int count, bool hasQuery, bool advOpen = false)
     {
         // The empty card is the hint's height OR the pill column's, whichever needs more. It was
         // the hint's alone, which ended nine pixels above the bottom of the third pill.
-        //
-        // The progress pill pushes the hint down when there is one, and the card grows with it
-        // rather than reserving the band always: an empty strip under the field on an idle machine
-        // is the thing the pill exists to avoid drawing.
-        float hintTop = progress ? ProgressRect().Bottom : FieldTop + FieldH;
         float h = hasQuery
             ? BodyTop + BodyH(count, hasQuery) + FooterH
-            : Math.Max(hintTop + EmptyHintH + 6, SettingsRect().Bottom + Pad);
+            : Math.Max(FieldTop + FieldH + EmptyHintH + 6, SettingsRect().Bottom + Pad);
         // the popup draws inside this window, so the card grows to hold it while it is open
         return advOpen ? Math.Max(h, SearchAdvancedLayout.Panel().Bottom + 14) : h;
     }
@@ -254,7 +262,7 @@ public sealed record SearchCardState(
     /// whether the pill is alive.</summary>
     bool ContentOffered = true,
 
-    /// <summary>What the progress pill under the field says, or <c>default</c> for no pill. From
+    /// <summary>What the progress pill under the card says, or <c>default</c> for no pill. From
     /// <c>IndexStatus.Pill</c>, the same composer the capsule's pill and the tray's tooltip use.
     /// </summary>
     IndexProgress Progress = default)
@@ -340,7 +348,10 @@ public static class SearchCardPainter
 
         bool hasQuery = s.HasQuery;
         int count = s.Rows.Count;
+        // h is the CARD's height and total the window's: the progress pill hangs under the card in
+        // the gap between the two, and the card's own shape must end where Height says it does.
         float w = SearchCardLayout.Width, h = SearchCardLayout.Height(count, hasQuery, s.AdvOpen);
+        float total = SearchCardLayout.WindowHeight(count, hasQuery, s.AdvOpen, s.Progress.Show);
         // Two weights under the ink. Every one of them goes through d.Fade rather than
         // WithAlpha: a raw alpha carries the same light/dark asymmetry a raw mix fraction does,
         // and a ramp tuned on Mond reads a full step fainter on Paper without it.
@@ -358,7 +369,7 @@ public static class SearchCardPainter
         if (unfolding)
         {
             float fieldBottom = SearchCardLayout.FieldTop + SearchCardLayout.FieldH + 6;
-            float reveal = fieldBottom + (h - fieldBottom) * open;
+            float reveal = fieldBottom + (total - fieldBottom) * open;
             using var layer = new SKPaint { Color = SKColors.White.WithAlpha((byte)(255 * Math.Min(1f, 0.35f + open))) };
             canvas.SaveLayer(layer);
             canvas.ClipRect(new SKRect(0, 0, w, reveal));
@@ -408,14 +419,14 @@ public static class SearchCardPainter
         // Never latched on: settings is a place to go, not a mode the card is in.
         Pill(SearchCardLayout.SettingsRect(), SettingsLabel, false, s.HoverTarget == SearchTarget.Settings, false);
 
+        // Under the card, whatever the card is showing. It draws nothing at all when there is
+        // nothing to report, and the window is the card's own height in that case.
+        ProgressPill.Paint(canvas, SearchCardLayout.ProgressRect(count, hasQuery, s.AdvOpen), s.Progress, d, face);
+
         if (!hasQuery)
         {
-            // Under the field, above the hints. It draws nothing at all when there is nothing to
-            // report, and the hints sit where they always did in that case.
-            ProgressPill.Paint(canvas, SearchCardLayout.ProgressRect(), s.Progress, d, face);
-            float hintTop = s.Progress.Show ? SearchCardLayout.ProgressRect().Bottom : f.Bottom;
             CardText.Draw(canvas, EmptyHints[s.Content ? 1 : 0],
-                SearchCardLayout.Pad + 6, hintTop + 24, 12.5f, face, dim);
+                SearchCardLayout.Pad + 6, f.Bottom + 24, 12.5f, face, dim);
             if (s.AdvOpen) SearchAdvancedPainter.Paint(canvas, s, d, face);
             if (unfolding) canvas.Restore();
             return;

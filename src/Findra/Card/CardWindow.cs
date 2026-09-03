@@ -211,7 +211,7 @@ public sealed class CardWindow : Window
         public event Action? ContentReadingRequested;
 
         public double CardWidth => SearchCardLayout.Width * _scale;
-        public double CardHeight => SearchCardLayout.Height(_state.Rows.Count, _state.HasQuery, _state.AdvOpen, _state.Progress.Show) * _scale;
+        public double CardHeight => SearchCardLayout.WindowHeight(_state.Rows.Count, _state.HasQuery, _state.AdvOpen, _state.Progress.Show) * _scale;
 
         public CardCanvas(Derived derived, double scale, Window owner, ContentDb? db,
                           Semantic? semantic = null, CapabilitySet installed = default)
@@ -347,7 +347,7 @@ public sealed class CardWindow : Window
             _contentOffered = ContentPill.Offers(
                 pillOn: _state.Content, haveStore: true, readingOn: contentOn,
                 indexed: indexed < 0 ? null : indexed);
-            // And the pill under the field, from the same reading and the same composer the
+            // And the pill under the card, from the same reading and the same composer the
             // capsule and the tray's tooltip use.
             // evenWhenSettled: this is a window somebody opened, and it owes an answer whether or
             // not there is work in hand. The capsule, which is on the desktop all day, does not.

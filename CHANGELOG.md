@@ -599,9 +599,10 @@ into a numbered section on the first release.
   video frames and transcripts - every part that needs a model - could not be tested without a
   screen at all. It now runs the same path the card runs and prints what each hit scored and why.
 
-- **The card shows how far the index has got, under the search field.** A pill with a dial, what
+- **The card shows how far the index has got, in a pill hanging under the card.** A dial, what
   is being read, the count and the percentage - and the pill itself is the bar, filling left to
-  right underneath the words. It is always there when the card is open: reading, paused, off, or
+  right underneath the words. It sits below the card the way the capsule's sits below the bar,
+  rather than squeezed between the field and the hints inside it. It is always there when the card is open: reading, paused, off, or
   "up to date, 12,480 files" once a pass has finished. The desktop capsule carries the same pill
   from the same painter but stays quiet when there is no work, because it sits on the desktop all
   day and a widget that says "up to date" for eight hours is one that looks busy doing nothing.
