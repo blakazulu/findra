@@ -58,14 +58,38 @@ public static class IndexStatus
     /// is written by the child a second at a time, and a capsule that read it mid-write would
     /// otherwise name the wrong thing with complete confidence.</para>
     /// </summary>
-    public static string Doing(string kind) => "indexing" + (kind switch
+    public static string Doing(string kind) =>
+        Enum.TryParse(kind, out ResultKind k) && Enum.IsDefined(k) ? Doing(k) : "indexing";
+
+    /// <summary>
+    /// The same, on the enum, which is the only form that can be checked.
+    ///
+    /// <para>This switch was written on STRINGS - "Photo", "Video", "Audio", "Doc" - and "Doc" is
+    /// not a member of <see cref="ResultKind"/>. It is the column heading <c>--searchindex</c>
+    /// prints, copied from one surface into a comparison on another, so every document on the
+    /// machine fell through to the default and the pill read "indexing" with no noun. Documents
+    /// are most of what a first pass finds, so the label was wrong nearly all of the time and
+    /// looked merely terse.</para>
+    ///
+    /// <para>The <c>_</c> arm is only there because an enum can hold a value no member names and
+    /// the compiler insists (CS8524). It is not the guard: a seventh KIND would fall into it
+    /// silently, so <c>EveryKindWhoseContentsAreReadHasAWordForIt</c> holds this to
+    /// <see cref="FileKinds.HasContent"/> instead - every kind the indexer can queue must have a
+    /// noun, and a new one fails that test rather than shipping a verb with nothing after it.
+    /// </para>
+    /// </summary>
+    public static string Doing(ResultKind kind) => "indexing" + kind switch
     {
-        "Photo" => " photos",
-        "Video" => " video",
-        "Audio" => " recordings",
-        "Doc" => " documents",
+        ResultKind.Photo => " photos",
+        ResultKind.Video => " video",
+        ResultKind.Audio => " recordings",
+        ResultKind.Document => " documents",
+        // A file with no kind of its own and a folder are both indexed by name alone. There is no
+        // honest noun for them, and the bare verb is the fallback rather than a special case.
+        ResultKind.File => "",
+        ResultKind.Folder => "",
         _ => "",
-    });
+    };
 
     /// <summary>
     /// <paramref name="contentEnabled"/> is whether anybody has asked for the inside of files to

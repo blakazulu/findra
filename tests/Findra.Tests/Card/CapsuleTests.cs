@@ -48,8 +48,8 @@ public class CapsuleTests
         // with a million files to read is the longest count. Below 24px the painter draws no track
         // at all, which is honest but is not the design.
         SKTypeface face = Parts.Face;
-        string label = IndexStatus.Doing("Audio");
-        string count = IndexStatus.Pill(true, "Audio", 1_000_000, 999_999, true).Count;
+        string label = IndexStatus.Doing(ResultKind.Audio);
+        string count = IndexStatus.Pill(true, nameof(ResultKind.Audio), 1_000_000, 999_999, true).Count;
 
         float room = CapsuleLayout.PillW - CapsuleLayout.PillPad * 2 - CapsuleLayout.PillGap * 2
                    - CardText.Measure(label, face, CapsuleLayout.PillTextSize)
@@ -75,15 +75,47 @@ public class CapsuleTests
     {
         // The kind arrives as the ResultKind's own ToString off the queue row, and printing that
         // would put an identifier on the desktop.
-        Assert.Equal("indexing photos", IndexStatus.Doing("Photo"));
-        Assert.Equal("indexing recordings", IndexStatus.Doing("Audio"));
-        Assert.Equal("indexing documents", IndexStatus.Doing("Doc"));
-        Assert.Equal("indexing video", IndexStatus.Doing("Video"));
+        Assert.Equal("indexing photos", IndexStatus.Doing(ResultKind.Photo));
+        Assert.Equal("indexing recordings", IndexStatus.Doing(ResultKind.Audio));
+        Assert.Equal("indexing documents", IndexStatus.Doing(ResultKind.Document));
+        Assert.Equal("indexing video", IndexStatus.Doing(ResultKind.Video));
 
-        // A kind the pill has no word for, and the row read mid-write, both fall back to the verb
-        // rather than to a guess.
+        // A row read mid-write, or one written by a build that had no kind row at all, falls back
+        // to the bare verb rather than to a guess.
         Assert.Equal("indexing", IndexStatus.Doing(""));
-        Assert.Equal("indexing", IndexStatus.Doing("Folder"));
+        Assert.Equal("indexing", IndexStatus.Doing("nonsense"));
+        Assert.Equal("indexing", IndexStatus.Doing("99"));
+    }
+
+    [Fact]
+    public void EveryKindTheQueueCanHoldIsSpeltTheWayTheEnumSpellsIt()
+    {
+        // THE test this needed. The switch was written on strings - "Photo", "Video", "Audio",
+        // "Doc" - and "Doc" is not a member of ResultKind. It is the column heading --searchindex
+        // prints, copied from one surface into a comparison on another. Documents are most of what
+        // a first pass finds, so the pill read "indexing" with no noun nearly all of the time and
+        // looked merely terse rather than broken.
+        //
+        // Round-tripping every member through the string form is what makes that impossible: a
+        // member whose ToString does not reach its own word fails here.
+        foreach (ResultKind k in Enum.GetValues<ResultKind>())
+            Assert.Equal(IndexStatus.Doing(k), IndexStatus.Doing(k.ToString()));
+
+    }
+
+    [Fact]
+    public void EveryKindWhoseContentsAreReadHasAWordForIt()
+    {
+        // Driven off FileKinds.HasContent rather than a list written out here, because that is the
+        // predicate deciding what the indexer can ever be working on. The switch needs a default
+        // arm - an enum can hold a value no member names, and the compiler insists - so a seventh
+        // kind would fall into it and ship a verb with nothing after it. This is what refuses.
+        foreach (ResultKind k in Enum.GetValues<ResultKind>())
+        {
+            if (!FileKinds.HasContent(k)) continue;
+            Assert.NotEqual("indexing", IndexStatus.Doing(k));
+            Assert.StartsWith("indexing ", IndexStatus.Doing(k), StringComparison.Ordinal);
+        }
     }
 
     [Fact]

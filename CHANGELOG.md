@@ -553,6 +553,12 @@ into a numbered section on the first release.
   comes from the files on disk and never from that selection. A machine that has the speech model
   but not the document models it needs opens with both ticked and prices only the missing half.
 
+- **The progress pill names documents again.** Its label matched on `"Doc"` - the column heading
+  the `--searchindex` report prints - where the value it is given is `"Document"`. Documents are
+  most of what a first pass finds, so for nearly every file the pill read "indexing" with no noun
+  after it and looked terse rather than broken. It matches on the kind itself now, not on a
+  spelling borrowed from another screen.
+
 - **`--searchprobe` reports what the capsule's progress pill would draw.** A surface with no
   diagnostic is one nobody can be asked a question about: "I cannot see the progress pill" had no
   answer that did not involve reading source and guessing. It now prints the label, the percentage
