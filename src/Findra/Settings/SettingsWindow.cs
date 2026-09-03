@@ -101,6 +101,21 @@ public sealed class SettingsWindow : Window
     public void NoteUpdate(UpdateState update, string? latest) =>
         _canvas.Refresh(s => s with { Update = update, Latest = latest });
 
+    /// <summary>
+    /// Mark a row as waiting on its own work, or as finished with it.
+    ///
+    /// <para>Set before the work starts and cleared in a finally, so a fault leaves no row stuck
+    /// saying "Asking...". The four rows that need it are the four slow ones - the update check,
+    /// the helper registration, a capability download and starting the indexer - and until this
+    /// existed each was a bare Task.Run whose control looked untouched while it ran.</para>
+    /// </summary>
+    public void MarkWaiting(ControlId id, bool waiting) => _canvas.Refresh(s =>
+    {
+        var busy = new HashSet<ControlId>(s.Busy);
+        if (waiting) busy.Add(id); else busy.Remove(id);
+        return s with { Busy = busy };
+    });
+
     /// <summary>Go to a section, on the same terms a click on the rail does. The card can ask for
     /// settings at a particular section - the Content pill sends somebody here when there is
     /// nothing indexed to search - and a window already open has to follow rather than stay where

@@ -126,6 +126,25 @@ public sealed record SettingsState(Config Config)
     /// </summary>
     public bool Capturing { get; init; }
 
+    /// <summary>
+    /// The rows with something of their own still running, so the panel can say so and refuse a
+    /// second click.
+    ///
+    /// <para>Four actions here are slow and none of them said anything: "Check now" makes a
+    /// network request, "Register it" raises a prompt and waits up to a minute for schtasks, a
+    /// capability row starts a download of hundreds of megabytes, and "Start now" wakes a child
+    /// process. Each was a bare Task.Run with no state beside it, so the control looked untouched
+    /// and a second click started the work twice - two stacked elevation prompts, or a second
+    /// HTTP GET that then collides with the first one's part file.</para>
+    ///
+    /// <para>Transient like <see cref="Capturing"/>: it belongs to this window's session and is
+    /// never written to the configuration.</para>
+    /// </summary>
+    public IReadOnlySet<ControlId> Busy { get; init; } = new HashSet<ControlId>();
+
+    /// <summary>Is this row waiting on something it started?</summary>
+    public bool Waiting(ControlId id) => Busy.Contains(id);
+
     public string HotkeyMessage { get; init; } = "";
     public int ExclusionScroll { get; init; }
     public string Version { get; init; } = "";
@@ -233,7 +252,8 @@ public static class SettingsModel
         s.Helper == HelperTaskState.Registered
             ? Control.Plain(ControlId.Helper, ControlKind.Text, "The name helper", "registered",
                 note: "It starts at sign-in and reads file names. The only part needing administrator rights.")
-            : Control.Plain(ControlId.Helper, ControlKind.Button, "The name helper", "Register it",
+            : Control.Plain(ControlId.Helper, ControlKind.Button, "The name helper",
+                            s.Waiting(ControlId.Helper) ? "Asking Windows..." : "Register it",
                 note: s.Helper == HelperTaskState.Unknown
                     ? "Findra could not tell whether the task is there. Registering it again is safe."
                     : "Not registered, so searching by name has nothing to search. One prompt, once."),
@@ -329,7 +349,8 @@ public static class SettingsModel
                 ContentSentence(s.Config, s.EverIndexed, s.IndexerAlive), 0),
             // A toggle states a preference. This says begin, and the sentence above it changes the
             // moment it is pressed - which is the half that was missing rather than the switch.
-            Control.Plain(ControlId.StartIndexing, ControlKind.Button, "Start reading now", "Start now"),
+            Control.Plain(ControlId.StartIndexing, ControlKind.Button, "Start reading now",
+                          s.Waiting(ControlId.StartIndexing) ? "Starting..." : "Start now"),
             new(ControlId.IndexPower, ControlKind.Choice, "Indexing power",
                 IndexPowerLevels.ShortName(s.Config.IndexPower), false, powers,
                 [.. IndexPowerLevels.Presets.Select(p => p == s.Config.IndexPower)],
@@ -348,6 +369,7 @@ public static class SettingsModel
                 // MARGINAL, given what is already there (spec §6). Meaning and Speech share the
                 // e5 pair, so a fixed per-row number makes the total fail to add up in public.
                 : Control.Plain(ControlId.Capability, ControlKind.Button, Capabilities.Title(c),
+                                s.Waiting(ControlId.Capability) ? "Downloading..." :
                                 Sizes.Human(Capabilities.MarginalBytes(c, s.Installed.Have ?? new HashSet<Capability>())), tag: (int)c));
         }
 
@@ -382,7 +404,8 @@ public static class SettingsModel
             note: "One anonymous request to GitHub, at most once every 24 hours, in the background. " +
                   "No query parameters, no machine or install identifier, nothing about your files. " +
                   "Findra never installs anything itself, and off means the request is not made."),
-        Control.Plain(ControlId.CheckNow, ControlKind.Button, "Check now", "Check"),
+        Control.Plain(ControlId.CheckNow, ControlKind.Button, "Check now",
+                      s.Waiting(ControlId.CheckNow) ? "Asking..." : "Check"),
         Control.Plain(ControlId.InstalledVia, ControlKind.Text, "Installed via", s.Config.InstallSource ?? "unknown"),
         Control.Plain(ControlId.Removing, ControlKind.Note, "",
             note: "Removing Findra: the uninstaller, or findra --uninstall, which also removes the scheduled task. " +
@@ -402,6 +425,11 @@ public static class SettingsModel
         if (hit.Row < 0 || hit.Row >= rows.Count) return SettingsOutcome.Nothing(s);
         Control row = rows[hit.Row];
         Config c = s.Config;
+
+        // A row already waiting on its own work answers nothing. Cheaply and first, so no arm
+        // below has to remember - the four slow actions are exactly the ones where a second click
+        // costs something real, and one place to refuse them is one place to get right.
+        if (s.Waiting(row.Id)) return SettingsOutcome.Nothing(s);
 
         if (hit.Target == PanelTarget.ListRemove && s.Section == Section.Searches)
         {
