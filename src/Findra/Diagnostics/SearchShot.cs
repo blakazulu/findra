@@ -312,7 +312,15 @@ public static class SearchShot
     private static SearchCardState Build(string state)
     {
         if (state == "empty")
-            return SearchCardState.Empty with { IndexLine = "index: 1.5M names · idle", Clock = 0.2 };
+            return SearchCardState.Empty with { IndexLine = "index: 1.5M names · idle",
+                Clock = 0.2,
+                // The settled pill, which is what an ordinary card shows once a first pass is
+                // done - and what the README's own picture of an empty card has to be, because
+                // that is the card nearly everybody has nearly all of the time.
+                Progress = IndexStatus.Pill(contentEnabled: true, nameof(ResultKind.Document),
+                                            pending: 0, indexed: 12_480, alive: false,
+                                            evenWhenSettled: true),
+            };
 
         // The card in content mode with nothing typed, which is two branches nothing else reached.
         //

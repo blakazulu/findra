@@ -37,16 +37,41 @@ public static class IndexStatus
     /// progress pill makes an idle widget feel busy, which is the thing spec §3 says the capsule
     /// must not do.</para>
     /// </summary>
-    public static IndexProgress Pill(bool contentEnabled, string kind, long pending, long indexed, bool alive)
+    public static IndexProgress Pill(bool contentEnabled, string kind, long pending, long indexed,
+                                     bool alive, bool evenWhenSettled = false)
     {
-        if (!contentEnabled || !alive || pending <= 0) return default;
-
         long total = indexed + pending;
-        return new IndexProgress(
-            Doing(kind),
-            indexed.ToString("N0", Fixed) + " of " + total.ToString("N0", Fixed),
-            total <= 0 ? 0f : (float)(indexed / (double)total),
-            Show: true);
+        string N(long v) => v.ToString("N0", Fixed);
+
+        // Work in hand. The only state the capsule draws, and the only one with a moving bar.
+        if (contentEnabled && alive && pending > 0)
+            return new IndexProgress(Doing(kind), N(indexed) + " of " + N(total),
+                                     total <= 0 ? 0f : (float)(indexed / (double)total), Show: true);
+
+        // The DESKTOP capsule stops here: it is on screen all day with nothing asked of it, and a
+        // pill sitting there saying "up to date" is a widget that looks busy while doing nothing,
+        // which spec §3 forbids.
+        //
+        // The card does not stop here, and the difference is that somebody OPENED it. A window
+        // you deliberately put on the screen owes you an answer to the question you opened it
+        // with, and "nothing at all" is indistinguishable from a feature that is broken - which is
+        // exactly how it read to the first person who went looking for this pill on a machine
+        // whose first pass had finished while they were installing.
+        if (!evenWhenSettled) return default;
+
+        if (!contentEnabled)
+            return new IndexProgress("not reading inside files",
+                                     indexed > 0 ? N(indexed) + " read" : "", 0f, Show: true);
+
+        if (pending > 0)
+            return new IndexProgress("paused", N(pending) + " waiting",
+                                     total <= 0 ? 0f : (float)(indexed / (double)total), Show: true);
+
+        // Nothing queued and nothing read is a machine that has been asked and has not started;
+        // nothing queued with files behind it is a finished pass. They are different sentences.
+        return indexed > 0
+            ? new IndexProgress("up to date", N(indexed) + " files", 1f, Show: true)
+            : new IndexProgress("nothing read yet", "", 0f, Show: true);
     }
 
     /// <summary>
