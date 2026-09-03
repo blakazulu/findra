@@ -373,7 +373,10 @@ into a numbered section on the first release.
   hosts and nothing else - no analytics, no beacons, and no way for one to arrive by accident.
   The page opens on the mark, the name and the results card, with the card running off the right
   of the screen rather than stopping at a gutter; the ticket that used to open it now follows it,
-  and the page title and the link preview say the same thing the page now opens on.
+  and the page title and the link preview say the same thing the page now opens on. Three of its
+  screenshots had drifted from the ones in `docs/shots` while still printing the command that
+  produces the current renders - the Settings picture was missing two controls the product had
+  gained - so all six were regenerated and the two directories now agree.
 
 - **The results card previews the photograph it found.** The stage's picture - the centre-crop
   that shows you the file you are standing on - had never been rendered by any `--searchshot`
