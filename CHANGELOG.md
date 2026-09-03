@@ -371,6 +371,12 @@ into a numbered section on the first release.
 
 ### Fixed
 
+- **The licence and the attribution notice are installed with Findra**, not just kept in
+  the repository. Apache-2.0 requires the notice to travel with every copy, and it is the
+  reason Findra is under Apache rather than MIT.
+- **The installer builds for both architectures.** The Arm64 build named an architecture
+  Inno Setup does not have, which would have failed the release for Intel and Arm alike.
+
 - **The scheduled task no longer tells you Findra does not work without it.** Its description,
   which is what Windows shows in Task Scheduler, said exactly that; without the task Findra runs
   perfectly well and has no file names to search, which is what it says now.

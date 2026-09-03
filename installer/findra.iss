@@ -39,8 +39,19 @@ PrivilegesRequired=admin
 ; the chocolatey package to 6.3 or newer for exactly this reason; on 6.2 the line is a compile
 ; error rather than a silent misbuild, which is the failure mode to prefer.
 MinVersion=10.0
-ArchitecturesAllowed={#Arch}compatible
-ArchitecturesInstallIn64BitMode={#Arch}compatible
+; Written out per architecture rather than built by pasting "compatible" onto {#Arch}. Inno's
+; identifiers are not a regular family: x64 has "x64compatible", arm64 does NOT have an
+; "arm64compatible" - the identifier is just "arm64". Appending the suffix to both gave the x64
+; leg a valid word and the arm64 leg one that does not exist, which is an ISCC error, which fails
+; the build job, which means a tag produces no release for EITHER architecture. The comment above
+; named the correct pair while the code below contradicted it.
+#if Arch == "arm64"
+ArchitecturesAllowed=arm64
+ArchitecturesInstallIn64BitMode=arm64
+#else
+ArchitecturesAllowed=x64compatible
+ArchitecturesInstallIn64BitMode=x64compatible
+#endif
 OutputDir=Output
 OutputBaseFilename=findra-{#AppVersion}-{#Arch}
 Compression=lzma2/max
@@ -111,7 +122,13 @@ end;
 
 function InitializeUninstall(): Boolean;
 var
-  app, reportPath, report: String;
+  app, reportPath: String;
+  // AnsiString, and not String, because that is the exact type LoadStringFromFile's var parameter
+  // is declared with. Inno 6 is Unicode-only, so String is UnicodeString, and PascalScript demands
+  // exact type identity for a var parameter - passing a String here is an ISCC compile error, not
+  // a conversion. SaveStringToFile above takes its text as a const parameter, which does convert,
+  // which is why only this one had to change.
+  report: AnsiString;
   code: Integer;
   Form: TSetupForm;
   Body: TNewStaticText;
@@ -131,7 +148,11 @@ begin
   // script cannot capture a child process's standard output, and the alternative - the installer
   // estimating the size itself - is the vague warning the specification rejects.
   report := '';
-  reportPath := ExpandConstant('{%TEMP}') + '\findra-uninstall.txt';
+  // {%TMP|...} first, because the two sides disagree about which variable wins: .NET's
+  // Path.GetTempPath - which wrote this file - reads TMP before TEMP, while Inno's {%TEMP}
+  // reads only TEMP. Where a machine sets them differently, reading TEMP alone finds nothing
+  // and the dialog silently loses the measured size it exists to show.
+  reportPath := ExpandConstant('{%TMP|' + ExpandConstant('{%TEMP}') + '}') + '\findra-uninstall.txt';
   DeleteFile(reportPath);
   Exec(app, '--uninstall --dry-run --quiet', '', SW_HIDE, ewWaitUntilTerminated, code);
   LoadStringFromFile(reportPath, report);
@@ -151,7 +172,7 @@ begin
   Body.Width := Form.ClientWidth - ScaleX(32);
   Body.Height := ScaleY(200);
   Body.WordWrap := True;
-  Body.Caption := report;
+  Body.Caption := String(report);
 
   Box := TNewCheckBox.Create(Form);
   Box.Parent := Form;
