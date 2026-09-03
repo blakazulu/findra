@@ -30,7 +30,7 @@ jobs:
           node-version: '22'
 
       - name: the site's markdown negotiation
-        run: node netlify/edge-functions/markdown.test.mjs
+        run: node tests/edge/markdown.test.mjs
 
       - name: build
         run: dotnet build --configuration Release -warnaserror
