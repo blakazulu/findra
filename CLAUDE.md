@@ -21,6 +21,11 @@ or a public tag. The checklist is the catalogue, ordered by which plan found eac
 runnable top to bottom; **`docs/e2e-run-sheet.md` is the same items in ten phases somebody can
 work through in one session**, and `build/Check-E2E.ps1` answers every part of it a script can.
 
+A pass of interface fixes has landed on top of that, every one of them from somebody running
+the real product: the first screen now owns the display, Settings is on the card, the Content
+pill has somewhere to go, the four surfaces set a cursor, and Settings gained the two Content
+rows that had no control. What each of those is holding is written down below.
+
 Two adversarial reviews have landed since the last plan. What they found is written down below
 rather than left in a commit message: the console, the seams, the capability refresh, the download
 floor and the installer's architecture identifiers. Each of those is a rule that looks like a
@@ -149,6 +154,67 @@ The visible price is that a shell does not wait for `findra.exe`: run a diagnost
 the prompt returns before the text does. That is cosmetic and is the whole cost of the change.
 `dotnet run --project src/Findra -- --version` waits, because the shell is waiting for `dotnet`.
 
+## Starting up
+
+**When the first screen is needed, it owns the display until it is answered.** `Window.Show()`
+does not block, so `Start()` used to carry straight on and build the hotkey, the capsule and the
+tray behind it - the whole product running behind a welcome screen somebody was still reading,
+and a download they had just asked for reading as a window in the way of it.
+
+`src/Findra/Startup/StartupOrder.cs` is the seam. Which stages a launch takes and in what order
+is a LIST rather than a run of statements, because no window can be built in a test and the
+ordering is the part that was wrong. `Shell.Run` switches on `StartupStep` and its default arm
+throws: a step added to the enum and forgotten there is the tray icon, the hotkey or the content
+index silently not existing.
+
+- **The names helper is the one deliberate exception** and is not in
+  `AfterTheScreenIsAnswered()`: the answer registers the scheduled task and starts the helper
+  itself, immediately, because names are the half of Findra that works with nobody's models and
+  nobody should wait on a 1.5 GB download for their filenames.
+- **`_firstRunIsUp` is set AFTER `Show()`.** A screen that threw on its way up must leave a
+  launch that carries on; `WhenTheScreenCouldNotBeShown()` is that path and it is real, because
+  every stage is wrapped.
+
+## The card's pill column
+
+Three pills stack beside the field: Content, Advanced and **Settings**, which is there because
+settings could be opened from exactly two hidden places - the tray icon's menu and a right-click
+on the capsule - so the capability list, the transcription limit, the indexing power and the
+switch that starts reading all read as features Findra does not have.
+
+- **`SearchCardLayout.HeaderRight` is the field's right edge, not the card's.** The column reaches
+  down into the header's band, so a timing right-aligned to the card is drawn straight across the
+  Settings pill on every search that reports one.
+- **The empty card's height is the hint's OR the column's, whichever needs more.** It was the
+  hint's alone, which ended nine pixels above the bottom of the third pill.
+- **The card's pills do not ellipsise.** `SearchCardPainter`'s three labels and its two empty
+  hints are named constants so `CardPillTests` measures what is drawn rather than a copy of it;
+  a label wider than its pill is drawn over both ends of its own outline.
+
+**`ContentPill.Decide` owns what pressing Content means**, not `CardWindow`. Releasing the pill is
+always just the search again. Otherwise: files already read and reading merely off turns reading
+back on in place; nothing read at all opens Settings at Content, where the switch, the power, the
+limit and the capabilities are; a count nothing has read yet searches, because a window thrown
+over a card somebody has just opened is not undone by pressing anything.
+
+## The pointer
+
+Findra paints all four of its surfaces itself, so nothing about a rectangle tells Windows what is
+under the pointer. **`src/Findra/Look/Pointers.cs` is the only place a cursor shape is decided**,
+and it maps each surface's own hit-test answer, so the shape and the behaviour cannot disagree
+about what is under the pointer.
+
+- **The capsule body is the only Move cursor in the product.** It has been draggable since it was
+  written and said so nowhere. Nothing that answers a click may offer to move anything.
+- **The field and the advanced form's fields take the I-beam; everything else clickable takes the
+  hand.**
+- **Every arm is written out and the default throws.** A target added to `SearchTarget`,
+  `PanelTarget` or `FirstRunTarget` and forgotten there is a control that quietly shows the plain
+  arrow, which is the whole thing this removes.
+- `PointerCursor.Of` builds its cursors ON DEMAND and keeps them, never in a static initialiser -
+  a cursor is made through Avalonia's platform factory, and the same reasoning `Parts.Face` is
+  written under applies.
+
 ## The README is a product page
 
 It has to sell Findra to someone who has never heard of it, so it carries screenshots and
@@ -270,6 +336,16 @@ speech              ─  whisper-turbo + [e5 pair]              550 MB (+270 if 
   starts it, `--content off` stops it without discarding anything already read, and the setting
   survives a restart. An index nobody has asked for and a finished index have identical counts,
   so every surface says which one it is looking at rather than printing "up to date".
+- **`IndexPowerLevels` is the one list of duty-cycle levels**, on exactly the terms
+  `TranscribeLimit.ShortName` sets: the numbers and their labels come out of one table, every
+  level offered is inside the clamp `Config.Load` applies, and the row writes the NUMBER at the
+  chosen index rather than the index - which clamps to 10 and leaves the indexer resting nine
+  tenths of the time. The setting was honoured end to end from the day it was written and had no
+  control at all, which is the same shape of defect as a control that is drawn and dead.
+- **"Start now" is beside the toggle rather than instead of it.** A toggle states a preference and
+  never announces a start, and Findra reads only while it is open, so the button is a real request
+  even when the switch is already on. It writes the configuration AND asks the shell, for the
+  reason the autostart toggle needs both halves.
 - **One number, in minutes, decides how long a recording is worth transcribing**, covering
   sound files and video together. Zero is off, negative is no limit, positive is minutes, five
   by default. A recording over the limit is passed over with a reason of its own, and raising
