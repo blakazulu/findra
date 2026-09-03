@@ -444,9 +444,34 @@ into a numbered section on the first release.
   the first time anything has said out loud that it can be dragged; the search field takes the
   I-beam; every button, pill, chip and row on the card, in Settings and on the welcome screen
   takes the hand. Nothing that answers a click offers to move anything.
+- **`--searchshot firstrunfinished`**, an eighteenth surface. The end of a first-run download
+  had its own title, its own sentence and both bars full, and no command had ever drawn it.
 
 ### Changed
 
+- **The transcription limit on the welcome screen says it covers video.** "Transcribe up to"
+  under a row called Speech gave no hint that the same number decides what happens to every
+  video on the disk, and the row above it is called "Photos and video", which makes video look
+  like somebody else's business. The Speech row now says it transcribes recordings and videos,
+  and the limit carries a note: one number for audio and video, and a video longer than the
+  limit is still found by its frames if you took Photos - only its words are skipped.
+- **"Look inside my files" now explains itself.** It was a bare switch label while the update
+  check under it carried a paragraph, which put the longest explanation on the smallest choice
+  and none at all on the largest. It now says that names are searchable either way, that Findra
+  walks your drives and reads them and that this can take hours, that it happens only while
+  Findra is open, and that the text it reads is kept in an index in your user profile which is
+  not encrypted. The same row in Settings says where the text goes too, in every state.
+- **The welcome screen stops being a form once the download starts.** The tiles, the rows, the
+  transcription limit and the three switches were all still live while files were arriving,
+  acting on a selection that had already been handed over. The second act is now a download and
+  a way out of it: nothing but the Close button answers a click, the settings are no longer
+  drawn as controls, and the sentence that reports progress follows the list it is about.
+- **The welcome screen says it is downloading.** It reported "2 of 4 done", which could have
+  been anything - and content indexing, a different and far longer job, may be starting on the
+  same machine. It now names what it is doing, and a finished run says it has finished and
+  points at the way out.
+- **The README links to the project's own page** at https://findra-search.netlify.app, whose
+  screenshots are the same renders from the same commands.
 - **The size beside a capability on the first screen is that capability's download, and it
   stays put.** It used to be the marginal figure - what the row would add to what was already
   ticked - so ticking a row turned its number into "0 MB" and the size you were weighing
@@ -481,6 +506,16 @@ into a numbered section on the first release.
 
 
 ### Fixed
+
+- **A completed download no longer reports itself unfinished for ever.** Choosing Everything
+  and waiting for all of it left the welcome screen saying "2 of 4 done" with every bar
+  visually full, and nothing would ever move again. Two of the seven model files are a few
+  kilobytes smaller than the size the table quotes for them - the table is a figure in
+  megabytes to one decimal place, so it was never going to be a byte count - and the screen
+  credited each file only the bytes that arrived, leaving Photos and Hebrew permanently short
+  by twelve thousandths of one per cent. A file is now counted as finished when its length is
+  the length that file should be, which is the same question the downloader already asks of a
+  part it finds on disk.
 
 - **Uninstalling leaves nothing behind.** A file the installer wrote itself survived removal,
   and kept the program folder alive with it.

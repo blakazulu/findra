@@ -165,6 +165,26 @@ public class ReadmeTests
         Assert.Contains($"{Word(Palette.BuiltIn.Count)} palettes ship", Readme, StringComparison.OrdinalIgnoreCase);
     }
 
+    [Fact]
+    public void TheReadmeSendsAReaderToTheSameSiteTheSiteSaysItIs()
+    {
+        // A stranger who lands on the repository was given no route to the page written to
+        // explain the product, and a stranger on the page who clicked through to GitHub found a
+        // file behaving as though the site did not exist. The link is one sentence; the reason it
+        // is a test is that a URL typed into prose has no way of noticing when the site moves.
+        //
+        // Held against the site's OWN canonical link rather than against a constant repeated
+        // here, because a third copy of the address is a third thing to keep in step. Netlify
+        // publishes website/public exactly as it sits, so that tag is what the page really is.
+        Match canonical = Regex.Match(
+            Repo.Read("website/public/index.html"),
+            @"<link\s+rel=""canonical""\s+href=""(?<url>https://[^""]+)""");
+        Assert.True(canonical.Success, "the site page declares no canonical URL to check the README against");
+
+        string site = canonical.Groups["url"].Value.TrimEnd('/');
+        Assert.Contains(site, Readme, StringComparison.Ordinal);
+    }
+
     /// <summary>A small number in words, because the README is prose. Deliberately narrow: a count
     /// outside this range means the page needs rewriting rather than a bigger lookup table.</summary>
     private static string Word(int n) => n switch

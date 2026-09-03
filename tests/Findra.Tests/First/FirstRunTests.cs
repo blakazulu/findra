@@ -878,6 +878,270 @@ public class FirstRunTests
             Assert.Equal(i, hit.Index);
         }
     }
+    // ---- what the screen explains ---------------------------------------------------------------
+
+    [Fact]
+    public void TheTranscriptionLimitSaysItCoversVideoAndNotOnlySound()
+    {
+        // The label is "Transcribe up to" and the row it belongs to is Speech, so nothing on this
+        // screen said the number also decides what happens to every video on the disk. The
+        // settings window has said so since it was written; the screen somebody commits a 547 MB
+        // download on had no note at all.
+        string note = FirstRun.LimitNote;
+
+        Assert.Contains("audio", note, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("video", note, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("frames", note, StringComparison.OrdinalIgnoreCase);
+
+        // And it is true of the code rather than merely reassuring: Decoders.Video reads the
+        // frames only where Photos is installed, so the note names that condition rather than
+        // promising the frames unconditionally.
+        Assert.Contains("Photos", note, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void TheLimitNoteFitsTheBandTheLayoutReservesForIt()
+    {
+        // The same shape as the disclosure's check and for the same reason: the band is a
+        // constant in FirstRunLayout, the sentence is prose in FirstRun, and nothing else holds
+        // the two together. Measured in the SHIPPED face, at the size a note is drawn.
+        SKRect band = FirstRunLayout.LimitNoteRect(3);
+        int lines = Parts.Wrap(FirstRun.LimitNote, Parts.Face, Parts.NoteSize, band.Width).Count;
+
+        Assert.True(Parts.NoteHeight(lines) <= FirstRunLayout.LimitNoteH,
+            $"the limit note wraps to {lines} lines, needing {Parts.NoteHeight(lines)}px of the " +
+            $"{FirstRunLayout.LimitNoteH}px reserved under the pills");
+
+        Assert.True(band.Top >= FirstRunLayout.LimitRect(3).Bottom, "the note overlaps the pills");
+        Assert.True(band.Bottom <= FirstRunLayout.RowRect(4, 3).Top, "the note overlaps the row below it");
+    }
+
+    [Fact]
+    public void TheSpeechRowNamesVideoWhereItIntroducesTranscription()
+    {
+        // "Transcribe recordings" is what somebody reads before deciding to spend 547 MB, and a
+        // video library is not obviously a set of recordings - least of all with a row above it
+        // called "Photos and video", which makes video look like somebody else's business.
+        string note = RowFor(State(), Capability.Speech).Note;
+        Assert.Contains("video", note, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void TheContentSwitchSaysWhatLookingInsideFilesActuallyMeans()
+    {
+        // The most consequential privacy choice on the screen was a bare label while the update
+        // check under it carried four lines. Each clause here is checked against the code and
+        // against PRIVACY.md rather than written from the label.
+        string note = FirstRun.ContentNote;
+
+        // Names work either way, which is what makes "Not now" a complete answer.
+        Assert.Contains("name", note, StringComparison.OrdinalIgnoreCase);
+        // What it does, and that it is not instant.
+        Assert.Contains("drive", note, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("hours", note, StringComparison.OrdinalIgnoreCase);
+        // Only while Findra is running: the indexer is a child of the interface.
+        Assert.Contains("open", note, StringComparison.OrdinalIgnoreCase);
+        // PRIVACY.md's straight answer, no softer here than it is there.
+        Assert.Contains("index", note, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("not encrypted", note, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void TheContentNoteFitsTheBandTheLayoutReservesForIt()
+    {
+        SKRect band = FirstRunLayout.ContentNoteRect(5, -1);
+        int lines = Parts.Wrap(FirstRun.ContentNote, Parts.Face, Parts.NoteSize, band.Width).Count;
+
+        Assert.True(Parts.NoteHeight(lines) <= FirstRunLayout.ContentNoteH,
+            $"the content note wraps to {lines} lines, needing {Parts.NoteHeight(lines)}px of the " +
+            $"{FirstRunLayout.ContentNoteH}px reserved between the first switch and the second");
+
+        Assert.True(band.Top >= FirstRunLayout.SwitchRect(0, 5, -1).Bottom, "the note overlaps its own switch");
+        Assert.True(band.Bottom <= FirstRunLayout.SwitchRect(1, 5, -1).Top, "the note overlaps the switch below it");
+    }
+
+    // ---- the second act, continued ------------------------------------------------------------
+
+    [Fact]
+    public void AFileShorterThanItsDeclaredSizeStillCompletesItsCapability()
+    {
+        // The declared table is the spec's figure in MiB to one decimal place, and two of the
+        // seven real files are SMALLER than it: siglip2-vision.onnx by 42,692 bytes and
+        // whisper-ivrit.bin by 3,521. Crediting only the bytes that moved leaves Photos and
+        // Hebrew 0.012% short for ever, so a complete Everything install reads "2 of 4 done"
+        // with every bar visually full. REAL numbers, because a synthetic model whose real size
+        // equals its declared size cannot fail this - which is why nothing caught it.
+        const long realVision = 371_992_072;    // declared 372,034,764
+        const long realIvrit = 1_624_555_275;   // declared 1,624,558,796
+
+        Assert.True(realVision < ModelStore.Siglip2Vision.Bytes, "the vision tower is no longer short");
+        Assert.True(realIvrit < ModelStore.WhisperHebrew.Bytes, "the Hebrew fine-tune is no longer short");
+
+        FirstRunState all = State(Capability.Photos, Capability.Hebrew);   // Everything, in effect
+        var moved = new Dictionary<string, long>(StringComparer.OrdinalIgnoreCase);
+        foreach (Model m in ModelStore.All) moved[m.File] = m.Bytes + 12_000;
+        moved[ModelStore.Siglip2Vision.File] = realVision;
+        moved[ModelStore.WhisperHebrew.File] = realIvrit;
+
+        IReadOnlyList<CapabilityProgress> bars = FirstRun.Progress(all, ModelStore.All, moved);
+
+        foreach (CapabilityProgress p in bars)
+            Assert.True(p.Got >= p.Total,
+                $"{Capabilities.Title(p.Capability)} is {p.Total - p.Got} bytes short of its own total");
+
+        Assert.Contains($"{bars.Count} of {bars.Count}",
+            FirstRun.Summary(all with { Stage = FirstRunStage.Finished, Downloads = bars }),
+            StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void AHalfFetchedFileIsStillHalfFetched()
+    {
+        // The slack that credits a finished-but-short file must not credit one that is genuinely
+        // still coming: it is one part in fifty, not "near enough".
+        FirstRunState s = State(Capability.Photos);
+        Model vision = ModelStore.Siglip2Vision;
+
+        CapabilityProgress bar = FirstRun.Progress(
+            s, Capabilities.OwnModels(Capability.Photos),
+            new Dictionary<string, long> { [vision.File] = vision.Bytes / 2 })
+            .Single(b => b.Capability == Capability.Photos);
+
+        Assert.True(bar.Got < bar.Total, "a half-fetched file was credited in full");
+    }
+
+    [Fact]
+    public void TheRunningScreenSaysItIsDownloadingAndNotIndexing()
+    {
+        // "2 of 4 done" could be anything, and content indexing - a different, later and far
+        // longer job - may be about to start on the same machine. The word has to be on screen.
+        FirstRunState s = State(Capability.Photos, Capability.Speech) with
+        {
+            Stage = FirstRunStage.Downloading,
+            Downloads =
+            [
+                new CapabilityProgress(Capability.Photos, 660_000_000, 660_000_000),
+                new CapabilityProgress(Capability.Speech, 100_000_000, 818_000_000),
+            ],
+        };
+
+        string summary = FirstRun.Summary(s);
+        Assert.Contains("Downloading", summary, StringComparison.Ordinal);
+        Assert.DoesNotContain("indexing", summary, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void AFinishedRunSaysSoAndPointsAtTheWayOut()
+    {
+        FirstRunState done = State(Capability.Photos) with
+        {
+            Stage = FirstRunStage.Finished,
+            Downloads = [new CapabilityProgress(Capability.Photos, 660_000_000, 660_000_000)],
+        };
+
+        Assert.Contains("close", FirstRun.Summary(done), StringComparison.OrdinalIgnoreCase);
+
+        // The button under it says the same thing, in both halves of the second act.
+        Assert.Equal(FirstRun.CloseLabel, FirstRun.GoLabel(FirstRunStage.Finished));
+        Assert.Equal(FirstRun.CloseLabel, FirstRun.GoLabel(FirstRunStage.Downloading));
+        Assert.NotEqual(FirstRun.CloseLabel, FirstRun.GoLabel(FirstRunStage.Choosing));
+
+        // A run that ended badly keeps its report rather than being told it is ready.
+        string bad = FirstRun.Summary(done with { Problem = "the network went away" });
+        Assert.Contains("network went away", bad, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData(-1)]
+    [InlineData(3)]
+    public void TheSecondActsSummaryFollowsItsListAndClearsTheWayOut(int limit)
+    {
+        // The second act draws no switches, so the sentence moves out of the band they were in
+        // and follows the list it is about. Both ends have to hold: it may not run into the last
+        // row above it, and it may not run into the button below it.
+        int rows = FirstRun.Rows(State()).Count;
+        SKRect band = FirstRunLayout.SettledSummaryRect(rows, limit);
+
+        Assert.True(band.Top > FirstRunLayout.RowRect(rows - 1, limit).Bottom, "the summary overlaps the last row");
+        Assert.True(band.Bottom <= FirstRunLayout.ButtonRect(1).Top, "the summary overlaps the way out");
+        Assert.True(band.Right <= FirstRunLayout.ButtonRect(1).Left, "the summary runs under the button");
+
+        // And the longest thing it can say still fits. The worst case is a run that ended badly:
+        // the longest capability title, a real network message, and the promise about the tray.
+        FirstRunState worst = State(Capability.Hebrew) with
+        {
+            Stage = FirstRunStage.Downloading,
+            Downloads =
+            [
+                new CapabilityProgress(Capability.Meaning, 283_000_000, 283_000_000),
+                new CapabilityProgress(Capability.Speech, 12_000, 574_000_000),
+                new CapabilityProgress(Capability.Hebrew, 0, 1_549_000_000),
+            ],
+            Problem = "No such host is known. (huggingface.co:443)",
+        };
+
+        SKRect w = FirstRunLayout.SettledSummaryRect(FirstRun.Rows(worst).Count, FirstRun.LimitRow(worst));
+        int lines = Parts.Wrap(FirstRun.Summary(worst), Parts.Face, Parts.LeadSize, w.Width).Count;
+        Assert.True(Parts.LeadHeight(lines) <= w.Height,
+            $"the summary wraps to {lines} lines, needing {Parts.LeadHeight(lines)}px of the {w.Height}px it has");
+    }
+
+    [Fact]
+    public void EveryLabelOnTheButtonFitsTheButtonItIsDrawnIn()
+    {
+        // Parts.Pill ellipsises, so a label too wide is drawn over both ends of its own outline.
+        float room = FirstRunLayout.ButtonRect(0).Width - 12;
+        string[] labels =
+        [
+            FirstRun.NotNowLabel,
+            FirstRun.GoLabel(FirstRunStage.Choosing),
+            FirstRun.GoLabel(FirstRunStage.Downloading),
+            FirstRun.GoLabel(FirstRunStage.Finished),
+        ];
+
+        foreach (string label in labels)
+        {
+            float need = CardText.Measure(label, Parts.Face, Parts.LabelSize);
+            Assert.True(need <= room, $"'{label}' needs {need:F1}px and its button gives {room:F1}px");
+        }
+    }
+
+    [Fact]
+    public void NothingButTheWayOutAnswersAClickOnceTheDownloadHasStarted()
+    {
+        // "In that phase nothing should be clickable." A tile, a row, a switch or a limit pill
+        // that still answers is a control acting on a selection already handed to the shell, and
+        // a screen that looks live while it is not is worse than one that is plainly settled.
+        int rows = FirstRun.Rows(State()).Count;
+
+        var points = new List<(string What, float X, float Y)>();
+        for (int i = 0; i < 3; i++)
+            points.Add(($"tile {i}", FirstRunLayout.TileRect(i).MidX, FirstRunLayout.TileRect(i).MidY));
+        for (int i = 0; i < rows; i++)
+            points.Add(($"row {i}", FirstRunLayout.RowRect(i, 3).MidX, FirstRunLayout.RowRect(i, 3).MidY));
+        for (int o = 0; o < FirstRun.LimitOptions.Count; o++)
+            points.Add(($"limit {o}",
+                        FirstRunLayout.LimitOptionRect(o, 3).MidX, FirstRunLayout.LimitOptionRect(o, 3).MidY));
+        for (int i = 0; i < 3; i++)
+            points.Add(($"switch {i}",
+                        FirstRunLayout.SwitchRect(i, rows, 3).MidX, FirstRunLayout.SwitchRect(i, rows, 3).MidY));
+        points.Add(("not now", FirstRunLayout.ButtonRect(0).MidX, FirstRunLayout.ButtonRect(0).MidY));
+
+        foreach ((string what, float x, float y) in points)
+            Assert.True(FirstRunLayout.HitTest(x, y, rows, 3, settled: true).Target == FirstRunTarget.None,
+                        $"{what} still answers a click while the download runs");
+
+        // Every one of them answers while the screen is still a question, so the sweep is a
+        // statement about the stage rather than about a layout with nothing in it.
+        foreach ((string what, float x, float y) in points)
+            Assert.True(FirstRunLayout.HitTest(x, y, rows, 3).Target != FirstRunTarget.None,
+                        $"{what} answers nothing even while the screen is a question");
+
+        // And the one thing that still answers is the button that closes the window.
+        Assert.Equal(FirstRunTarget.Go,
+            FirstRunLayout.HitTest(FirstRunLayout.ButtonRect(1).MidX, FirstRunLayout.ButtonRect(1).MidY,
+                                   rows, 3, settled: true).Target);
+    }
 }
 
 public class FirstRunDownloadTests : IDisposable
@@ -969,4 +1233,5 @@ public class FirstRunDownloadTests : IDisposable
             FirstRunDownloads.RunAsync([A], _dir, Serving("abc"u8.ToArray()), null,
                                        () => Task.CompletedTask, cts.Token));
     }
+
 }

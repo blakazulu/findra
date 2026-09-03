@@ -268,18 +268,32 @@ public static class SettingsModel
 
     // ---- Content ----------------------------------------------------------------------------
 
+    /// <summary>
+    /// Where the text Findra reads ends up, on every one of the four sentences below.
+    ///
+    /// <para><c>PRIVACY.md</c> calls this the straight answer the index deserves, and it is the
+    /// one fact this row never carried: the four sentences described the SWITCH - on, off, turned
+    /// off, on but idle - and none of them said what turning it on puts on the disk. The first-run
+    /// screen says it where the choice is first made; this row is where the same choice is made
+    /// again, months later, by somebody who never read that screen.</para>
+    /// </summary>
+    public const string IndexIsInTheClear =
+        " What it reads is kept in an index in your user profile, which is not encrypted.";
+
     /// <summary>Three states, three sentences, and one switch for all of them. "Paused" is the wrong
     /// word for two of them: one has never been asked for, the other was turned off.</summary>
     public static string ContentSentence(Config config, bool everIndexed, bool indexerAlive)
     {
         ArgumentNullException.ThrowIfNull(config);
         if (!config.IndexContent)
-            return everIndexed
+            return (everIndexed
                 ? "Turned off. What was already read stays searchable; nothing new is being read."
-                : "Off. Searching by name works now; looking inside files walks every drive, so Findra waits to be asked.";
-        return indexerAlive
+                : "Off. Searching by name works now; looking inside files walks every drive, so Findra waits to be asked.")
+                + IndexIsInTheClear;
+        return (indexerAlive
             ? "On. Findra reads inside files while it is running."
-            : "On, but nothing is being read - indexing only happens while Findra is open.";
+            : "On, but nothing is being read - indexing only happens while Findra is open.")
+            + IndexIsInTheClear;
     }
 
     private static IReadOnlyList<Control> Content(SettingsState s)

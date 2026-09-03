@@ -7,6 +7,9 @@ what was said in a recording.
 
 Everything happens on your machine. There is no account, no cloud and no telemetry.
 
+Findra has a page of its own at https://findra-search.netlify.app. Its screenshots are the
+same renders as the ones here, drawn by the same commands.
+
 ![The Findra capsule, waiting on the desktop](docs/shots/capsule.png)
 
 `findra --searchshot docs/shots/capsule.png capsule Mond`
@@ -88,9 +91,12 @@ along the bottom is what your selection actually costs, and it is smaller than t
 together whenever two capabilities share a file: Speech is searched like a document, so taking
 it takes the document models with it, and you are never charged twice for the same download.
 
-Ticking Speech also puts the transcription limit on that screen. Five minutes is the default,
-which covers a voice memo and cuts a lecture short, so the screen that signs you up for
-transcription is the screen that asks how much of each recording is worth transcribing.
+Ticking Speech also puts the transcription limit on that screen, because the screen that signs
+you up for transcription is the screen that should ask how much of a recording is worth
+transcribing. It is one number for audio and video together - five minutes by default, which
+covers a voice memo and cuts a lecture short. A video longer than the limit is still indexed by
+its frames if you took Photos, and raising the limit later goes back for exactly the files it
+passed over.
 
 ![The first-run screen, with the Recommended preset chosen](docs/shots/firstrun.png)
 
@@ -142,7 +148,7 @@ these, and every image above was drawn by the same painter the window uses.
     findra --content on               start reading inside files
     findra --uninstall --dry-run      what removing Findra would do, without doing it
 
-`findra --searchshot` draws seventeen surfaces in any of the six palettes, which is how the
+`findra --searchshot` draws eighteen surfaces in any of the six palettes, which is how the
 images on this page are made and how they are regenerated. The command under each image is
 the whole recipe.
 

@@ -108,6 +108,29 @@ public class ContentSectionTests
     }
 
     [Fact]
+    public void EveryStateOfTheContentSwitchSaysWhereTheTextItReadsEndsUp()
+    {
+        // The four sentences described the SWITCH - on, off, turned off, on but idle - and none of
+        // them said what turning it on puts on the disk. PRIVACY.md is blunt about it, and a
+        // settings row that is softer than the privacy page is the wrong way round: the page is
+        // read by people who went looking, the row by people who are about to decide.
+        foreach (bool on in new[] { false, true })
+            foreach (bool ever in new[] { false, true })
+                foreach (bool alive in new[] { false, true })
+                {
+                    string sentence = SettingsModel.ContentSentence(
+                        Config.Default with { IndexContent = on }, ever, alive);
+
+                    Assert.Contains("index", sentence, StringComparison.OrdinalIgnoreCase);
+                    Assert.Contains("not encrypted", sentence, StringComparison.OrdinalIgnoreCase);
+                    Assert.Contains("profile", sentence, StringComparison.OrdinalIgnoreCase);
+                }
+
+        // And it is the privacy page's own answer rather than a milder paraphrase of it.
+        Assert.Contains("not encrypted", Repo.Read("PRIVACY.md"), StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
     public void TheContentSectionStillFitsThePaneInEveryStateItsSentenceCanBeIn()
     {
         // Two rows were added to a section whose first row carries a sentence that changes with
