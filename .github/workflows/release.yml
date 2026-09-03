@@ -1,0 +1,129 @@
+name: release
+
+# A tag, and only a tag. Check-Release.ps1 refuses anything that is not v<major>.<minor>.<patch>,
+# refuses a pre-release suffix (Findra's update check parses versions with System.Version and
+# GitHub's releases/latest skips pre-releases), and refuses a tag that disagrees with
+# Directory.Build.props or has no CHANGELOG.md section.
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  check:
+    runs-on: windows-latest
+    outputs:
+      version: ${{ steps.gate.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+
+      # Every GitHub expression this workflow needs inside a PowerShell block arrives through
+      # env: rather than being pasted into the script text. Two reasons, and both are checked:
+      # the pasted form does not parse as PowerShell at all, which
+      # EveryPowerShellBlockInEveryWorkflowParses catches by reading; and a value that reaches a
+      # shell by textual substitution is a value that can end the statement it was meant to be
+      # an argument to.
+      - name: is this tag releasable, and what are its notes
+        id: gate
+        shell: pwsh
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          $tag = $env:TAG
+          pwsh -File build/Check-Release.ps1 -Tag $tag > release-notes.md
+          if ($LASTEXITCODE -ne 0) { Get-Content release-notes.md; exit $LASTEXITCODE }
+          "version=$($tag.Substring(1))" >> $env:GITHUB_OUTPUT
+          Get-Content release-notes.md
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-notes
+          path: release-notes.md
+
+  build:
+    needs: check
+    runs-on: windows-latest
+    strategy:
+      matrix:
+        include:
+          - rid: win-x64
+            arch: x64
+          - rid: win-arm64
+            arch: arm64
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: build
+        run: dotnet build --configuration Release -warnaserror
+
+      - name: test
+        run: dotnet test --configuration Release --no-build
+
+      # The RID lives here and in no project file, which is what keeps win-arm64 reachable.
+      # Publish.ps1 is where --self-contained lives, so a stranger is never asked to install
+      # .NET before Findra will start.
+      - name: publish, self-contained
+        run: pwsh -File build/Publish.ps1 -Rid ${{ matrix.rid }}
+
+      - name: the headless diagnostics
+        # arm64 cannot execute on an x64 runner. The x64 artefact is the one that gets exercised.
+        if: matrix.rid == 'win-x64'
+        run: pwsh -File build/Check-Diagnostics.ps1 -Exe publish/win-x64/findra.exe
+
+      # 6.3 or newer: findra.iss uses the x64compatible/arm64 form of ArchitecturesAllowed,
+      # which 6.2 rejects.
+      - name: install Inno Setup
+        run: choco install innosetup --version=6.3.3 --no-progress -y
+
+      - name: build the installer
+        shell: pwsh
+        env:
+          APP_VERSION: ${{ needs.check.outputs.version }}
+          RID: ${{ matrix.rid }}
+          ARCH: ${{ matrix.arch }}
+        run: |
+          # The braced spelling is required for the variable Windows writes with brackets in its
+          # name: PowerShell ends a variable name at the first character that cannot be part of
+          # one, and an opening bracket is one of those, so the bare spelling would expand to a
+          # directory that does not exist. There is a test over every workflow that says so.
+          $iscc = Join-Path ${env:ProgramFiles(x86)} 'Inno Setup 6\ISCC.exe'
+          & $iscc "/DAppVersion=$env:APP_VERSION" "/DPublishDir=..\publish\$env:RID" "/DArch=$env:ARCH" installer\findra.iss
+          if ($LASTEXITCODE -ne 0) { throw "the installer compiler exited with $LASTEXITCODE" }
+
+      # Nothing yet. The project applies to SignPath Foundation once a release exists to point at,
+      # and docs/code-signing-policy.md is the application material. Until that is arranged this
+      # step is a placeholder on purpose, and nothing anywhere claims the binaries are signed -
+      # not the installer, not the release body, not the README, and not the policy page, which
+      # carries a status note of its own that a test keeps coupled to this step.
+      - name: sign the installer (not yet arranged)
+        run: echo "signing is not yet arranged - see docs/code-signing-policy.md"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: installer-${{ matrix.arch }}
+          path: installer/Output/*.exe
+
+  publish:
+    needs: [check, build]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      # The notes are the changelog section, verbatim. GitHub's own generated notes are
+      # deliberately not used: they would make CHANGELOG.md decorative, and the changelog is where
+      # Findra's update check sends anybody who built from source.
+      - uses: softprops/action-gh-release@v2
+        with:
+          name: Findra ${{ needs.check.outputs.version }}
+          body_path: artifacts/release-notes/release-notes.md
+          files: artifacts/installer-*/*.exe
+          fail_on_unmatched_files: true
