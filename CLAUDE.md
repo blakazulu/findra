@@ -683,6 +683,16 @@ NVIDIA / AMD / Intel GPUs, integrated or discrete, or no usable accelerator at a
 **No capability may require a particular vendor**, and nothing may fail because of the
 silicon it found.
 
+**Everything below has been run on exactly one configuration: an x64 AMD CPU with a discrete
+NVIDIA card, plus the processor-only path on that same machine.** No AMD GPU and no Intel GPU
+has ever run any of it, integrated or discrete, and neither has arm64. Every measurement in
+this file carries that limit; say so wherever a number or a claim about hardware is written
+down, in the README and on the site as well as here. The vendor-neutral chains are a design
+decision meant to make those machines work - they are not evidence that they do, and the two
+must not be reported as if they were the same thing. It is worth being blunt about the
+direction of the risk: the failures this code guards against were reported on an AMD 780M, so
+the hardware most likely to break is precisely the hardware never tested.
+
 - **A provider that LOADS has not been shown to WORK.** The accelerated speech rung was accepted
   the moment `WhisperFactory.FromPath` returned, and the known integrated-GPU failures happen after
   that: Vulkan initialises, the shaders compile, the device registers, and the transcript comes
