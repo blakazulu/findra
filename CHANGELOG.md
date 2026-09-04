@@ -516,6 +516,11 @@ into a numbered section on the first release.
 
 ### Fixed
 
+- **The end-to-end check no longer stops half way through on a real machine.** It looked up
+  Findra's uninstall entry by reading a property that some registry keys simply do not have - a
+  patch entry, a half-written key, another vendor's bookkeeping - which is a terminating error, so
+  every check below that point went unrun rather than unanswered.
+
 - **Closing the welcome screen without answering no longer leaves Findra running invisibly.** The
   X, Alt+F4 and the taskbar are never disabled, and none of them count as an answer - so
   everything the screen was holding back stayed held back: no tray icon, no hotkey, no capsule,
