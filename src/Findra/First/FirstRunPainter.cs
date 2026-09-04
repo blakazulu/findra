@@ -328,11 +328,35 @@ public static class FirstRunLayout
         return new SKRect(Inset, top, Width - Inset - ButtonW - TileGap, top + SettledSummaryH);
     }
 
+    /// <summary>
+    /// The same hit test, with every one of its bounds derived from the state rather than handed
+    /// in - which is what the surfaces call, because the five arguments below are five chances to
+    /// aim at a screen that is not the one on the display.
+    ///
+    /// <para>One of them had already gone wrong. The band the transcription limit sits in is
+    /// RESERVED and DRAWN from <see cref="BandRow"/>, which is -1 once the screen has been
+    /// answered; the window's height comes from <see cref="SurfaceHeight"/>, which reads the same
+    /// answer. The hit test was given <c>FirstRun.LimitRow</c> instead, which names Speech's row
+    /// in every act - so on a machine offered Hebrew, anybody who took Speech got a last question
+    /// whose two buttons were hit-tested 64 px below the bottom edge of the window they were
+    /// painted in. Nothing on that screen hovered, nothing changed the cursor and nothing could be
+    /// pressed.</para>
+    /// </summary>
+    public static FirstRunHit HitTest(float x, float y, FirstRunState s)
+    {
+        ArgumentNullException.ThrowIfNull(s);
+        return HitTest(x, y, FirstRun.Rows(s).Count, BandRow(s),
+                       settled: s.Stage != FirstRunStage.Choosing,
+                       finished: s.Stage == FirstRunStage.Finished,
+                       asking: FirstRun.Asks(s));
+    }
+
     /// <summary>Tiles, rows, the transcription limit, switches, buttons, in that order, each
     /// bounded by what is actually drawn. <paramref name="rows"/> is
     /// <c>FirstRun.Rows(state).Count</c>, which is one shorter where Hebrew is not offered;
-    /// <paramref name="limitRow"/> is <c>FirstRun.LimitRow(state)</c>, which is -1 where Speech is
-    /// not taken.
+    /// <paramref name="limitRow"/> is <see cref="BandRow"/>, which is the row the band is actually
+    /// drawn under and NOT <c>FirstRun.LimitRow</c> - the two part company the moment the screen is
+    /// answered. Prefer the overload above, which reads both from the state.
     ///
     /// <para><paramref name="settled"/> is the second act, and it answers with the way out and
     /// nothing else. Once the screen has been answered the selection belongs to the shell: a
