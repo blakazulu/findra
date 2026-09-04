@@ -112,10 +112,39 @@ public static class ContentBranch
     /// </summary>
     public const float RankStep = 1e-5f;
 
-    /// <summary>Where a picture stops being unrelated. SigLIP-2 is a sigmoid model and its
-    /// cosines sit LOW - unrelated is near 0 and "obviously this" is 0.10 to 0.12, measured on a
-    /// real library. Do not compare these numbers to another model's.</summary>
-    public const float PhotoFloor = 0.05f, PhotoSpan = 0.15f, PhotoCeiling = 0.92f;
+    /// <summary>
+    /// Where a picture stops being unrelated. SigLIP-2 is a SIGMOID model and its cosines sit low
+    /// and narrow: unrelated is near 0 and "obviously this" is 0.10 to 0.13. Do not compare these
+    /// numbers to another model's, and do not reason about them as if they were CLIP's.
+    ///
+    /// <para><b>The floor was 0.05, and that is inside the noise.</b> Measured on a real 3,097
+    /// picture library with the query "headphones": the two images that actually showed headphones
+    /// scored 0.130 and 0.132, and ten unrelated screenshots scored 0.03 to 0.066. The band from
+    /// 0.07 to 0.12 was empty. A floor of 0.05 therefore rejected nothing anybody would call
+    /// noise - it admitted the top of the noise cluster and called it a match.</para>
+    ///
+    /// <para>Put in the units the model was trained in, the old floor is absurd rather than merely
+    /// low. SigLIP's own score is <c>sigmoid(exp(logit_scale) * cos + logit_bias)</c>, and for the
+    /// checkpoint Findra ships those learned scalars are 112.90 and -16.7718 (see
+    /// <see cref="ModelStore.Siglip2Scale"/>). That makes cos 0.05 a probability of 0.000015 and
+    /// cos 0.13 a probability of 0.12 - a ratio of eight thousand, across a raw cosine gap that
+    /// looks like a factor of two and a half.</para>
+    ///
+    /// <para>0.09 is the bottom of the empty band, which is the honest place for it: above every
+    /// unrelated image measured, below every real match measured, and it corresponds to a
+    /// calibrated probability of about 0.0013.</para>
+    ///
+    /// <para>The SPAN moved with it and had to. It maps the cosine into a 0-1 band, and a span
+    /// still reaching 0.15 above a floor that has risen would squeeze every real match into the
+    /// bottom third of the scale. 0.06 puts a 0.15 cosine at the ceiling and 0.131 - the measured
+    /// "obviously this" - at about two thirds.</para>
+    ///
+    /// <para><b>A caveat that belongs with the numbers.</b> Those measurements were taken over UI
+    /// icons and screenshots, which are OUT OF DISTRIBUTION for a model trained on natural
+    /// photographs with alt-text. A desktop index is screenshot-heavy so the case matters, but do
+    /// not assume the same separation holds for photographs without measuring them.</para>
+    /// </summary>
+    public const float PhotoFloor = 0.09f, PhotoSpan = 0.06f, PhotoCeiling = 0.92f;
 
     /// <summary>e5 puts unrelated text near 0.75 and a paraphrase near 0.9, so the interesting
     /// range is narrow and high. A floor of 0 would make every document a weak match for

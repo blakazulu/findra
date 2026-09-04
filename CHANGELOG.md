@@ -524,6 +524,13 @@ into a numbered section on the first release.
 
 ### Fixed
 
+- **Searching photos stops returning things that merely are not black.** The threshold below which
+  a picture counted as unrelated was set at less than half the value of a real match, so it sat
+  inside the noise rather than above it. Measured over a 3,097-picture library: pictures that
+  genuinely matched scored 0.130 and above, unrelated screenshots scored up to 0.066, and the
+  threshold was 0.05. It is now 0.09, and the scale the scores are spread across moved with it so
+  a real match still lands in the upper half rather than the bottom third.
+
 - **`--searchindex` says which files were passed over and why.** The reason each skip carries was
   recorded from the beginning and read by nothing, so "waiting for a model", "too small to be a
   picture" and "no decoder for this format" were one undifferentiated count. It is the first thing

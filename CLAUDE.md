@@ -657,6 +657,20 @@ speech              ─  whisper-turbo + [e5 pair]              550 MB (+270 if 
   failure. A 1.5 GB file for one language took speech search away from every other language.
   `Semantic.Open` is the same shape one level up - one try per encoder, or a broken e5 file stops
   photo search loading.
+- **SigLIP-2's score is not a cosine, and the floor has to be argued in the model's own units.**
+  It is `sigmoid(exp(logit_scale) * cos + logit_bias)`, and those scalars are LEARNED parameters
+  living on the combined model - so splitting the export into a vision file and a text file, which
+  Findra must do, leaves the calibration in neither, with nothing to warn you. `ModelStore`
+  records the pair for the checkpoint it ships (112.90, -16.7718), read from the checkpoint's own
+  safetensors rather than quoted, and `Siglip2Probability` exists ONLY so a threshold can be
+  reasoned about: the sigmoid is monotone in the cosine and can never reorder anything.
+  `PhotoFloor` was 0.05, which is p=0.000015 - it rejected nothing. Measured on a real 3,097
+  picture library, real matches are 0.130-0.132 and unrelated images 0.030-0.066, with the band
+  between empty; the floor is 0.09 and the span moved to 0.06 with it, because a span reaching
+  0.15 above a risen floor squeezes every real match into the bottom third of the scale. The
+  measurement was taken over icons and screenshots, which are out of distribution for a model
+  trained on photographs - the case matters on a desktop, but photographs need measuring
+  separately before the same numbers are assumed.
 - **A file's size on disk never equals the declared size in the table.** That table is the
   spec's figure in megabytes to one decimal place; real files miss it by tens of kilobytes,
   mostly upward. `ModelStore.SizeSlack` is the only place that width is decided, and nothing

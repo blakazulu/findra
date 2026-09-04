@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 
@@ -45,6 +45,35 @@ public static class ModelStore
     public static readonly Model Siglip2Spm = new("siglip2.spm",
         "https://huggingface.co/onnx-community/siglip2-base-patch16-256-ONNX/resolve/main/tokenizer.model",
         3_000_000, Mib(4.0), "its vocabulary");
+
+    /// <summary>
+    /// SigLIP-2's own calibration, for the checkpoint above and no other.
+    ///
+    /// <para>SigLIP's score is not a cosine. It is
+    /// <c>sigmoid(exp(logit_scale) * cos + logit_bias)</c>, and those two scalars are LEARNED
+    /// parameters of the trained model. They live on the combined model rather than on either
+    /// tower, so the moment the export is split into a vision file and a text file - which Findra
+    /// needs, because one runs over the library and the other runs once per query - the
+    /// calibration is not in the files any more, and nothing anywhere warns you. That is a trap
+    /// the export format sets rather than an oversight anybody would catch in review.</para>
+    ///
+    /// <para><b>Recorded beside the file it belongs to, and never hardcoded blind</b>, for the
+    /// reason <see cref="SizeSlack"/> exists: these are properties of one checkpoint. SigLIP v1
+    /// base carries a bias of -12.93 against v2's -16.77, and that gap alone is a forty-six-fold
+    /// difference in probability at the same cosine. A checkpoint swapped without moving these
+    /// would silently move every threshold in the product and nothing would fail loudly.</para>
+    ///
+    /// <para>Read from <c>google/siglip2-base-patch16-256</c>'s own <c>model.safetensors</c> by a
+    /// ranged byte read of the header, not quoted from a write-up.</para>
+    /// </summary>
+    public const float Siglip2Scale = 112.90f, Siglip2Bias = -16.771803f;
+
+    /// <summary>What SigLIP-2 itself would call this cosine: a probability, not a rank. Nothing
+    /// in the search path uses it, because the sigmoid is MONOTONE in the cosine and so cannot
+    /// change any ordering - it is here so that a threshold can be argued about in the units the
+    /// model was trained in, where 0.05 and 0.09 stop looking like neighbours.</summary>
+    public static double Siglip2Probability(double cosine)
+        => 1.0 / (1.0 + Math.Exp(-(Siglip2Scale * cosine + Siglip2Bias)));
 
     public static readonly Model E5Base = new("e5-base-q.onnx",
         "https://huggingface.co/Xenova/multilingual-e5-base/resolve/main/onnx/model_quantized.onnx",
