@@ -172,6 +172,7 @@ CREATE INDEX IF NOT EXISTS items_path ON items(path);
 CREATE TABLE IF NOT EXISTS pending(
     id INTEGER PRIMARY KEY, vol TEXT NOT NULL, frn INTEGER NOT NULL, path TEXT NOT NULL,
     kind INTEGER NOT NULL, reason TEXT NOT NULL, queued_at INTEGER NOT NULL,
+    attempts INTEGER NOT NULL DEFAULT 0,
     UNIQUE(vol, frn));
 CREATE TABLE IF NOT EXISTS segments(
     id INTEGER PRIMARY KEY, item INTEGER NOT NULL, kind INTEGER NOT NULL,
@@ -183,6 +184,28 @@ CREATE VIRTUAL TABLE IF NOT EXISTS fts USING fts5(text, content='segments', cont
     tokenize='unicode61 remove_diacritics 2');
 CREATE TABLE IF NOT EXISTS meta(key TEXT PRIMARY KEY, value TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS opened(path TEXT PRIMARY KEY, count INTEGER NOT NULL, last INTEGER NOT NULL);");
+
+        // CREATE TABLE IF NOT EXISTS does nothing to a table that is already there, so a column
+        // added to the text above reaches new databases only. Every column added after the first
+        // release needs this too, and it is deliberately NOT a numbered migration: those exist to
+        // decide which files are stale, and adding a column that starts at its default makes no
+        // row mean anything different. Asked of the table rather than of a stamp, so it is right
+        // however the database got here.
+        AddColumnIfMissing("pending", "attempts", "INTEGER NOT NULL DEFAULT 0");
+    }
+
+    private void AddColumnIfMissing(string table, string column, string decl)
+    {
+        bool has = false;
+        using (var ask = _c.CreateCommand())
+        {
+            ask.CommandText = $"SELECT 1 FROM pragma_table_info('{table}') WHERE name=$n";
+            ask.Parameters.AddWithValue("$n", column);
+            has = ask.ExecuteScalar() is not null;
+        }
+        if (has) return;
+        Exec($"ALTER TABLE {table} ADD COLUMN {column} {decl}");
+        Log.Info("index", $"the {table} table gained its {column} column");
     }
 
     // ---- the schema stamp, and the migrations it gates ----
@@ -670,7 +693,24 @@ CREATE TABLE IF NOT EXISTS opened(path TEXT PRIMARY KEY, count INTEGER NOT NULL,
 
     // ---- the queue (the UI writes, the indexer drains) ----
 
-    public readonly record struct Pending(long Id, string Vol, ulong Frn, string Path, ResultKind Kind, string Reason);
+    public readonly record struct Pending(long Id, string Vol, ulong Frn, string Path, ResultKind Kind, string Reason, int Attempts = 0);
+
+    /// <summary>
+    /// How many times a file may be handed to the indexer before it is written off.
+    ///
+    /// <para>The count exists for the failure C# cannot catch. A managed throw is already handled
+    /// - the row is recorded Failed and dequeued - but a decoder that takes the PROCESS down
+    /// (an access violation inside an image, model or media library, a stack overflow, an
+    /// out-of-memory) never reaches that code. The child is restarted, <see cref="TakeNext"/>'s
+    /// deterministic ordering hands back the same row, and it dies again: the queue stops for good
+    /// at that file, and everything behind it is never read. The only symptom is a repeating line
+    /// in the log.</para>
+    ///
+    /// <para>Three, because the causes that clear on their own - a file being written as it was
+    /// opened, a network share that blinked, a moment of memory pressure - almost never survive
+    /// three passes, and a file that does is not going to be read by a fourth.</para>
+    /// </summary>
+    public const int MaxAttempts = 3;
 
     /// <summary>Queue a file. Re-queuing a file already waiting just refreshes its path and reason.</summary>
     public void Enqueue(string vol, ulong frn, string path, ResultKind kind, string reason, SqliteTransaction? tx = null)
@@ -926,11 +966,31 @@ CREATE TABLE IF NOT EXISTS opened(path TEXT PRIMARY KEY, count INTEGER NOT NULL,
         using var cmd = _c.CreateCommand();
         // Deletes first, then oldest first. A delete takes rows OUT, so running it ahead of the
         // re-index of the same path keeps the index from briefly holding both.
-        cmd.CommandText = "SELECT id, vol, frn, path, kind, reason FROM pending ORDER BY (reason=$d) DESC, id LIMIT 1";
+        cmd.CommandText = "SELECT id, vol, frn, path, kind, reason, attempts FROM pending ORDER BY (reason=$d) DESC, id LIMIT 1";
         cmd.Parameters.AddWithValue("$d", ReasonDelete);
         using var r = cmd.ExecuteReader();
         if (!r.Read()) return null;
-        return new Pending(r.GetInt64(0), r.GetString(1), unchecked((ulong)r.GetInt64(2)), r.GetString(3), (ResultKind)r.GetInt32(4), r.GetString(5));
+        return new Pending(r.GetInt64(0), r.GetString(1), unchecked((ulong)r.GetInt64(2)), r.GetString(3),
+                           (ResultKind)r.GetInt32(4), r.GetString(5), r.GetInt32(6));
+    }
+
+    /// <summary>
+    /// Count one attempt at this row, and say whether it has had its last.
+    ///
+    /// <para><b>Called and committed BEFORE the file is opened</b>, which is the whole design.
+    /// Counting afterwards records nothing when the attempt takes the process with it, and that is
+    /// precisely the attempt worth counting - a managed throw already ends with the row recorded
+    /// Failed and dequeued. Written first, a hard crash leaves the raised count on the disk, so the
+    /// restarted child sees it and moves on rather than dying on the same file for ever.</para>
+    /// </summary>
+    public bool CountAttempt(long id)
+    {
+        using var claim = Enter();
+        using var cmd = _c.CreateCommand();
+        cmd.CommandText = "UPDATE pending SET attempts = attempts + 1 WHERE id=$i RETURNING attempts";
+        cmd.Parameters.AddWithValue("$i", id);
+        object? v = cmd.ExecuteScalar();
+        return v is long n && n > MaxAttempts;
     }
 
     public void Dequeue(long id, SqliteTransaction? tx = null)

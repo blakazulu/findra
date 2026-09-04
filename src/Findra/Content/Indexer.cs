@@ -252,6 +252,19 @@ public sealed class Indexer
             }
             if (lastState != "indexing") { Log.Info("index", "indexer working"); lastState = "indexing"; }
 
+            // Counted and committed BEFORE the file is opened, which is what makes it work at all.
+            // A decoder that throws is already handled - the row is recorded Failed and dequeued -
+            // but one that takes the PROCESS down never reaches that code: an access violation in
+            // an image, model or media library, a stack overflow, an out-of-memory. The child is
+            // restarted, TakeNext's deterministic ordering hands back the same row, and it dies
+            // again. The queue stopped for good at that file and everything behind it was never
+            // read, with nothing to show for it but a repeating restart line in the log.
+            //
+            // Written first, the raised count survives the crash. So the row is written off on the
+            // fourth sight of it, the queue moves, and the file is named in the index with a reason
+            // somebody can read rather than being an invisible full stop.
+            if (item.Reason != ContentDb.ReasonDelete && WriteOffIfItKeepsComingBack(item)) continue;
+
             // BEFORE the file is opened, not after it is finished. Status is the only writer of
             // indexer:beat, and writing it afterwards meant the beat covering a file was written
             // once the file was already read - so the row named the last thing finished rather
@@ -275,6 +288,47 @@ public sealed class Indexer
             int rest = power >= 100 ? 30 : (int)Math.Min(8000, busy.ElapsedMilliseconds * (100.0 - power) / power) + 30;
             Thread.Sleep(rest);
         }
+    }
+
+    /// <summary>Count this attempt, and if the row has had its last, record it and take it out of
+    /// the queue. True means "already dealt with; go to the next one".</summary>
+    private bool WriteOffIfItKeepsComingBack(ContentDb.Pending item)
+    {
+        bool spent;
+        try { spent = _db.CountAttempt(item.Id); }
+        catch (Exception ex)
+        {
+            // The counter is a safety net, not the work. A database that will not take the update
+            // has larger problems, and refusing to index because of it would turn a slow disk into
+            // a stopped one.
+            Log.Once("index|attempts", "WARN", "index", "an attempt could not be counted :: " + ex.Message);
+            return false;
+        }
+        if (!spent) return false;
+
+        Log.Warn("index", $"{Path.GetFileName(item.Path)} has been given " +
+                          $"{ContentDb.MaxAttempts.ToString(CultureInfo.InvariantCulture)} attempts and has ended " +
+                          "each of them; it is written off so the rest of the queue can move");
+        try
+        {
+            long mtime = File.Exists(item.Path) ? new FileInfo(item.Path).LastWriteTimeUtc.Ticks : 0;
+            List<long> dead;
+            using (var tx = _db.Begin())
+            {
+                dead = _db.Upsert(item.Vol, item.Frn, item.Path, item.Kind, mtime, 0, ContentDb.StateFailed,
+                                  "this file ended every attempt to read it", Array.Empty<ContentDb.Segment>(), tx);
+                _db.Dequeue(item.Id, tx);
+                tx.Commit();
+            }
+            _decoders.Release(dead);
+        }
+        catch (Exception ex)
+        {
+            Log.Once("index|writeoff", "ERROR", "index", "could not write off a file :: " + ex.Message);
+            return false;
+        }
+        _failed++;
+        return true;
     }
 
     private void UpdateRate()

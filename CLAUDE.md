@@ -464,6 +464,29 @@ The helper also streams USN journal events; the UI decides what to enqueue. The 
 parent decides what is indexed" still holds, but the parent is no longer the process watching
 the journal.
 
+**One interface per index.** `src/Findra/Startup/OnlyOne.cs` is an exclusive handle on
+`.running` in the index folder, taken in `RunUi` before Avalonia starts. Two interfaces do not
+coexist: each starts a `--index` child, and the second child's vector store opens for writing over
+a file the first holds, throws a sharing violation, is restarted, and throws again for ever at a
+five-minute backoff. **A file handle rather than a named mutex**, and the reasons are each a bug
+avoided: a mutex belongs to the THREAD that took it, so it is reentrant on one thread and a test
+cannot prove the guard works; Windows closes a dead process's handles unconditionally, so a hard
+kill frees the claim, where a named semaphore would not; and the index directory IS the key, so two
+profiles are two Findras and one person signed in twice is one. A second launch exits 0 - Findra is
+running, which is what was asked for - after saying which process has it and how to reach it.
+Failing to take the claim for any reason but contention lets the launch through with a log line: a
+guard that refuses to start is worse than the collision it prevents.
+
+**A file that keeps ending the indexer is written off after `ContentDb.MaxAttempts` tries.**
+`pending.attempts` is incremented AND COMMITTED before the file is opened, which is the whole
+design. A managed throw was always handled - the row is recorded Failed and dequeued - but a
+decoder that takes the PROCESS down never reaches that code, and `TakeNext`'s deterministic
+ordering hands the same row to the restarted child, which dies again. The queue stopped for good at
+that file with nothing to show but a repeating restart line. Counting afterwards records nothing
+about exactly the attempt worth counting. The column is added to existing databases by
+`AddColumnIfMissing` and deliberately NOT by a numbered migration: those decide which files are
+stale, and a new column at its default makes no row mean anything different.
+
 **Indexing stops when the app quits.** The indexer is a child of the UI, so this is by
 construction - no lifetime code. The UI must say so plainly rather than looking idle.
 
