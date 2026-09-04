@@ -529,6 +529,13 @@ into a numbered section on the first release.
   publishes from that build onwards, so the whole application is built against it.
 
 
+### Added
+
+- **A code signing policy page on the website**, at `/code-signing/`, saying who writes Findra, who
+  approves a release and who signs it, and what the program changes on the machine. It is generated
+  from the same `docs/code-signing-policy.md` the repository already carried, so there is one
+  document and not two. Nothing is signed yet and the page opens by saying so.
+
 ### Changed
 
 - **The progress bar under the results card appears only while Findra is actually reading files.**

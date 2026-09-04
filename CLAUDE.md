@@ -839,6 +839,24 @@ the three written pages are generated, and that generator is **run by hand and b
 No workflow runs it, so the failure this has to survive is somebody editing the Markdown, not
 running it, and shipping a page that still says the old thing.
 
+- **`/code-signing/` exists because somebody else requires it, and that shapes it.** The SignPath
+  Foundation's terms say to use the term "Code signing policy" on the project's home page and on
+  its download/release pages, as a section header or a link to a dedicated page - so the front
+  page carries that exact phrase twice, once in the footer and once in the install section beside
+  the sentence saying Findra is not signed. `WebsiteTests` asserts both, and asserts the count,
+  because `index.html` is hand-written while every other footer comes out of `Make-Pages.mjs`. The
+  page is generated from `docs/code-signing-policy.md`, which `PolicyPageTests` already holds to
+  its promises - including the coupling that keeps its "Not yet in force" note and the release
+  workflow's empty signing step in step. A second copy as HTML would be a second policy no test
+  reads. **The application cannot be made until a release exists**: their terms require the project
+  to be "already released in the form that should be signed", and the Reputation field is not a
+  formality.
+- **The generator's Markdown vocabulary is the union of what its sources use, and no more.** An
+  unsupported construction does not fail - it renders as prose with its own marker still in it.
+  The block quote arrived with the signing policy and would otherwise have put a literal `>` on
+  every line of the one paragraph a reader sees first. `WebsiteTests.Strip` learns each new
+  construction at the same time, or the prose comparison fails on a marker rather than on a
+  sentence.
 - **`PRIVACY.md` is the privacy policy and the page is emitted from it.** A second copy written out
   as HTML would be a second policy, and the only thing worse than no privacy page is two that
   disagree. `build/Make-Pages.mjs` generates `/privacy/` from it and copies the file verbatim to

@@ -7,7 +7,7 @@
 //
 //     node build/Make-Pages.mjs
 //
-// There are two reasons this exists rather than three hand-written HTML files.
+// There are two reasons this exists rather than four hand-written HTML files.
 //
 // The first is PRIVACY.md. That file is the privacy policy: it is what GitHub shows, what
 // PolicyPageTests holds to its promises, and what Findra's own update check sends somebody who
@@ -16,8 +16,8 @@
 // source, the page is emitted from it, and WebsiteTests strips both back to prose and asserts
 // they still say the same thing.
 //
-// The second is the shell. The navigation and the footer are the same on every page, and three
-// hand-maintained copies of a footer is three chances to link the wrong privacy policy.
+// The second is the shell. The navigation and the footer are the same on every page, and four
+// hand-maintained copies of a footer is four chances to link the wrong privacy policy.
 
 import { writeFileSync, mkdirSync, readFileSync, copyFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
@@ -61,6 +61,26 @@ const PAGES = [
     markdown: 'about.md',
   },
   {
+    // The one page here that exists because somebody else requires it. The SignPath Foundation's
+    // terms say to "use the term 'Code signing policy' on your project's home page and
+    // download/release pages", so the term is the link label in the footer and in the install
+    // section, and this is the page they point at. Generated from docs/code-signing-policy.md
+    // for the reason PRIVACY.md is generated: PolicyPageTests holds that file to its promises -
+    // including the coupling that keeps its "Not yet in force" note and the release workflow's
+    // empty signing step in step with each other - and a second copy written out as HTML would
+    // be a second policy that no test reads.
+    slug: 'code-signing',
+    source: 'docs/code-signing-policy.md',
+    kicker: 'Signing',
+    headline: 'Code signing policy: who writes Findra, who approves a release, and who signs it.',
+    title: 'Code signing policy - Findra',
+    description:
+      'The team roles behind a Findra release, what the program changes on the machine, and ' +
+      'what it never sends anywhere. Findra is not signed yet; this is the policy for when it is.',
+    reviewed: '2026-09-04',
+    markdown: 'code-signing.md',
+  },
+  {
     slug: 'contact',
     source: 'website/content/contact.md',
     kicker: 'Contact',
@@ -76,10 +96,15 @@ const PAGES = [
 
 // ---------------------------------------------------------------- Markdown
 
-// A converter for the Markdown these three pages actually use, and no more than that. Headings,
-// paragraphs, bullet lists, one table, inline code, bold, fenced code and bare links - which is
-// the whole vocabulary of the three source files and is checked by a test that would fail if a
-// fourth construction appeared and came out as literal asterisks.
+// A converter for the Markdown these four pages actually use, and no more than that. Headings,
+// paragraphs, bullet lists, one table, inline code, bold, fenced code, block quotes and bare
+// links - which is the whole vocabulary of the four source files and is checked by a test that
+// would fail if a further construction appeared and came out as literal asterisks.
+//
+// The block quote arrived with the signing policy and is the reason to say what "no more than
+// that" costs: an unsupported construction does not fail, it renders as prose with its own
+// marker still in it, so `> ` would have appeared on the page as a literal character on every
+// line of the one paragraph a reader has to see first.
 
 const escape = (s) => s
   .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -128,6 +153,17 @@ function body(markdown) {
     if (/^```/.test(lines[0])) {
       const code = lines.slice(1, lines[lines.length - 1].startsWith('```') ? -1 : undefined);
       html.push(`<pre><code>${escape(code.join('\n'))}</code></pre>`);
+      continue;
+    }
+
+    // A block quote. Paragraphs inside one are separated by a bare `>` line rather than by a
+    // blank line, because a blank line would have ended the block before this ever saw it.
+    if (/^>/.test(lines[0])) {
+      const quoted = lines.map((l) => l.replace(/^>[ \t]?/, '')).join('\n');
+      const paragraphs = quoted.split(/\n\s*\n/).map((q) => q.trim()).filter(Boolean);
+      html.push('<blockquote>\n' +
+        paragraphs.map((q) => `  <p>${inline(q.split('\n').join(' '))}</p>`).join('\n') +
+        '\n</blockquote>');
       continue;
     }
 
@@ -194,6 +230,7 @@ const FOOTER = `
       <a href="/about/">About</a>
       <a href="/contact/">Contact</a>
       <a href="/privacy/">Privacy</a>
+      <a href="/code-signing/">Code signing policy</a>
       <a href="https://github.com/blakazulu/findra/blob/main/SECURITY.md" rel="noopener">Security</a>
       <a href="https://github.com/blakazulu/findra/blob/main/LICENSE" rel="noopener">Apache-2.0</a>
     </div>

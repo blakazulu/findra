@@ -19,6 +19,12 @@
     <priority>0.6</priority>
   </url>
   <url>
+    <loc>https://findra-search.netlify.app/code-signing/</loc>
+    <lastmod>2026-09-04</lastmod>
+    <changefreq>yearly</changefreq>
+    <priority>0.5</priority>
+  </url>
+  <url>
     <loc>https://findra-search.netlify.app/contact/</loc>
     <lastmod>2026-09-03</lastmod>
     <changefreq>yearly</changefreq>
