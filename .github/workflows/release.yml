@@ -77,10 +77,58 @@ jobs:
         if: matrix.rid == 'win-x64'
         run: pwsh -File build/Check-Diagnostics.ps1 -Exe publish/win-x64/findra.exe
 
-      # 6.3 or newer: findra.iss uses the x64compatible/arm64 form of ArchitecturesAllowed,
-      # which 6.2 rejects.
-      - name: install Inno Setup
-        run: choco install innosetup --version=6.3.3 --no-progress -y
+      # A FLOOR of 6.3, not a pinned version: findra.iss uses the x64compatible/arm64 form of
+      # ArchitecturesAllowed, which 6.2 rejects, and anything newer is fine.
+      #
+      # This was `choco install innosetup --version=6.3.3`, which means exactly 6.3.3 and not "at
+      # least" it. The runner image ships Inno Setup, and when that image moved to 6.7.1 the pin
+      # became a downgrade, which chocolatey refuses with exit 1 - so the first tagged release
+      # failed at the step that installs a tool the machine already had, after the build, the
+      # tests, the publish and the diagnostics had all passed, and took both matrix legs with it.
+      # Do not condition a build on a fact somebody else controls and may change underneath it.
+      #
+      # The path is resolved here and handed on rather than assumed. Chocolatey puts Inno Setup in
+      # Program Files (x86), a per-user install puts it under LOCALAPPDATA, and a build step that
+      # hardcodes one of those breaks on a machine holding the other.
+      - name: find or install Inno Setup
+        shell: pwsh
+        run: |
+          # The braced spelling is required for the variable Windows writes with brackets in its
+          # name: PowerShell ends a variable name at the first character that cannot be part of
+          # one, and an opening bracket is one of those, so the bare spelling would expand to a
+          # directory that does not exist. There is a test over every workflow that says so.
+          $roots = @("${env:ProgramFiles(x86)}\Inno Setup 6",
+                     "$env:ProgramFiles\Inno Setup 6",
+                     "$env:LOCALAPPDATA\Programs\Inno Setup 6")
+
+          function Find-Iscc {
+            foreach ($root in $script:roots) {
+              $exe = Join-Path $root 'ISCC.exe'
+              if (Test-Path -LiteralPath $exe) { return $exe }
+            }
+            return $null
+          }
+
+          $iscc = Find-Iscc
+          if ($iscc) {
+            $found = (Get-Item -LiteralPath $iscc).VersionInfo.FileVersion
+            Write-Output "Inno Setup $found is already here, at $iscc"
+            $number = [regex]::Match($found, '^\d+(\.\d+)+').Value
+            if (-not $number -or [version] $number -lt [version] '6.3') {
+              Write-Output "older than the 6.3 findra.iss needs, so installing a current one"
+              $iscc = $null
+            }
+          }
+
+          if (-not $iscc) {
+            choco install innosetup --no-progress -y
+            if ($LASTEXITCODE -ne 0) { throw "chocolatey could not install Inno Setup" }
+            $iscc = Find-Iscc
+          }
+
+          if (-not $iscc) { throw "no ISCC.exe on this machine after installing Inno Setup" }
+          Write-Output "using $iscc"
+          "ISCC=$iscc" >> $env:GITHUB_ENV
 
       - name: build the installer
         shell: pwsh
@@ -89,12 +137,7 @@ jobs:
           RID: ${{ matrix.rid }}
           ARCH: ${{ matrix.arch }}
         run: |
-          # The braced spelling is required for the variable Windows writes with brackets in its
-          # name: PowerShell ends a variable name at the first character that cannot be part of
-          # one, and an opening bracket is one of those, so the bare spelling would expand to a
-          # directory that does not exist. There is a test over every workflow that says so.
-          $iscc = Join-Path ${env:ProgramFiles(x86)} 'Inno Setup 6\ISCC.exe'
-          & $iscc "/DAppVersion=$env:APP_VERSION" "/DPublishDir=..\publish\$env:RID" "/DArch=$env:ARCH" installer\findra.iss
+          & $env:ISCC "/DAppVersion=$env:APP_VERSION" "/DPublishDir=..\publish\$env:RID" "/DArch=$env:ARCH" installer\findra.iss
           if ($LASTEXITCODE -ne 0) { throw "the installer compiler exited with $LASTEXITCODE" }
 
       # Nothing yet. The project applies to SignPath Foundation once a release exists to point at,

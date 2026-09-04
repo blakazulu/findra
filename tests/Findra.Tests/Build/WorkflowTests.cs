@@ -1,4 +1,4 @@
-using System.Text.RegularExpressions;
+﻿using System.Text.RegularExpressions;
 
 using Xunit;
 
@@ -208,6 +208,39 @@ public class WorkflowTests
         {
             string text = File.ReadAllText(path);
             Assert.DoesNotMatch(@"\$env:[A-Za-z_][A-Za-z0-9_]*\(", text);
+        }
+    }
+
+    [Fact]
+    public void NoWorkflowPinsAChocolateyPackageToAVersionTheRunnerMayAlreadyBeat()
+    {
+        // `choco install innosetup --version=6.3.3` does not mean "at least 6.3.3", it means
+        // exactly it - and the GitHub Windows image ships Inno Setup already. When that image
+        // moved to 6.7.1 the pin became a DOWNGRADE, which chocolatey refuses outright:
+        //
+        //     A newer version of InnoSetup (v6.7.1) is already installed.
+        //     Use --allow-downgrade or --force to attempt to install older versions.
+        //     Chocolatey installed 0/1 packages. 1 packages failed.
+        //
+        // The first tagged release died there, on a step whose job is to install a tool the
+        // runner already had, after the build, the tests, the publish and the diagnostics had
+        // all passed. Both matrix legs went with it.
+        //
+        // The rule is the one this repository keeps arriving at from other directions: do not
+        // condition a build on a fact somebody else controls and may change underneath it. What
+        // findra.iss actually needs is a FLOOR - 6.3 or newer, for the x64compatible/arm64 form
+        // of ArchitecturesAllowed - and a floor is checked, not pinned.
+        //
+        // Comment lines are dropped first, and that is not tidiness. The comment above the step
+        // this came from quotes the command it replaced, which is the whole reason anybody will
+        // understand it in a year - and a test reading the file whole fails on the explanation of
+        // its own fix. That is the shape of the signing-status coupling, which reads a step's
+        // BODY for the same reason. A line whose first non-space character is "#" is a comment in
+        // the YAML and a comment in the PowerShell alike, and neither one runs.
+        foreach (string path in AllWorkflows())
+        {
+            string ran = Regex.Replace(File.ReadAllText(path), @"(?m)^[ \t]*#.*$", "");
+            Assert.DoesNotMatch(@"choco\s+install[^\r\n]*--version=", ran);
         }
     }
 

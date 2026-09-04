@@ -553,6 +553,12 @@ all of it gets verified without a screen.
 
 ### Fixed
 
+- **The release pipeline builds the installer again.** It asked the build machine to install a
+  pinned version of Inno Setup, which is older than the one the machine already had, and that was
+  refused as a downgrade - so the first attempt at tagging 0.1.0 stopped at a step whose job is to
+  install a tool that was already there. It now takes what is on the machine when it is new enough
+  and installs one only when it is not.
+
 - **The welcome screen's last question can be answered on a machine that took speech.** Turning on
   speech search adds a "Transcribe up to" row to the list, and that row is only there while the
   list is still a question - it goes when the screen is answered. The window and the drawing knew
