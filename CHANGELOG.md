@@ -516,6 +516,15 @@ into a numbered section on the first release.
 
 ### Fixed
 
+- **`--searchindex` says which files were passed over and why.** The reason each skip carries was
+  recorded from the beginning and read by nothing, so "waiting for a model", "too small to be a
+  picture" and "no decoder for this format" were one undifferentiated count. It is the first thing
+  anybody asks when a file they can see is not findable.
+
+- **The query diagnostic asks the same question the card does.** It requested twenty results where
+  the card requests sixty-four and then lets a filter chip narrow them, so the rows somebody had
+  actually complained about were the rows it could not see.
+
 - **Only one Findra runs against one index.** Nothing stopped a second, and the two do not simply
   coexist: each starts its own indexer, and the second cannot open the store the first is holding,
   so it is restarted and fails again every five minutes for as long as both are open. The second
