@@ -683,6 +683,17 @@ NVIDIA / AMD / Intel GPUs, integrated or discrete, or no usable accelerator at a
 **No capability may require a particular vendor**, and nothing may fail because of the
 silicon it found.
 
+- **A provider that LOADS has not been shown to WORK.** The accelerated speech rung was accepted
+  the moment `WhisperFactory.FromPath` returned, and the known integrated-GPU failures happen after
+  that: Vulkan initialises, the shaders compile, the device registers, and the transcript comes
+  back garbled with nonsense timestamps (whisper.cpp #2596, an AMD 780M on Windows 11 - the
+  integrated GPU in a generation of Ryzen laptops). Findra would embed that through e5 and store it
+  as a finished transcript, and nothing re-reads a file that succeeded. `Media.ProveItTranscribes`
+  runs a second of generated tone through the factory before the rung is accepted, and
+  `WhatIsWrongWith` judges the SHAPE - finite, ordered, in-range timestamps and no control
+  characters - never the words, because a tone has no correct transcript and requiring one would
+  fail working machines. The failure direction is chosen: a false rejection costs speed, a false
+  acceptance writes nonsense into somebody's index for ever.
 - **Detect at runtime, never assume.** Try providers in order, take the first that
   initialises: ONNX (SigLIP-2, e5) is **DirectML → CPU**; Whisper is **Vulkan → CPU**.
   Both cover NVIDIA, AMD and Intel in one path.
@@ -692,6 +703,27 @@ silicon it found.
 - **CPU is a supported configuration, not a failure state.** Only the initial content
   index is slower - queries embed one short string. The UI says so rather than looking stuck.
 - **No CPU-feature assumptions** - no AVX-512 requirement, no vendor-specific intrinsics.
+- **The picture model is checked on the PROCESSOR even on a machine with an accelerator.**
+  "CPU is a supported configuration, not a failure state" was a promise nothing verified, and the
+  way it breaks is not subtle. Measured on this machine, one image through SigLIP-2's vision tower:
+
+  | | fp32 (shipped) | fp16 |
+  |---|---|---|
+  | CPU | 40.3 ms | **will not load at all** |
+  | DirectML | 8.7 ms | 7.5 ms |
+
+  The fp16 export of the same checkpoint throws inside ONNX Runtime's own graph optimiser on the
+  CPU provider (`SimplifiedLayerNormFusion` against an inserted precision-free cast) while running
+  perfectly on DirectML. **Two separate research passes recommended swapping to it** - it halves a
+  354.8 MB download and is a URL change - and it would have taken photo indexing away from every
+  machine with no usable GPU, reporting the capability as installed the whole time. Only running
+  it found that. `--searchmodels` now opens the vision tower on the processor as well and says so,
+  which is the one place anybody looks before filing that report.
+
+  The embeddings themselves are interchangeable - fp32 against fp16 is a cosine of 0.99999, so the
+  artifact is not the objection and a per-provider split remains the right eventual answer. It is
+  now MANDATORY design work rather than an optimisation: an fp16 file cannot simply be the one
+  artifact for everybody.
 - **`--searchmodels` reports the chosen provider and every one it rejected, with reasons.**
   "It's slow on my laptop" is unanswerable; "DirectML failed to initialise, fell back to
   CPU" is a bug report.

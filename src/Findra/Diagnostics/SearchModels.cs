@@ -1,4 +1,4 @@
-using System.Globalization;
+﻿using System.Globalization;
 using System.Text;
 using SkiaSharp;
 using Whisper.net;
@@ -203,6 +203,25 @@ public static class SearchModels
                 // tokenizer is producing garbage" from "the scores are simply low", before any
                 // of the rest of the pipeline is suspected.
                 if (clipText is not null || e5 is not null) probe = Probe(clipText, e5, vision);
+
+                // AND the picture tower has to load on the PROCESSOR, on a machine that has an
+                // accelerator and will never ask it to. "CPU is a supported configuration, not a
+                // failure state" is a promise nothing checked, and the way it breaks is not subtle:
+                // an fp16 export of this very model loads happily on DirectML at 7.5 ms an image
+                // and throws during graph optimisation on the CPU provider - so a swap that looks
+                // measured and correct on a developer's machine takes photo indexing away from
+                // everybody without a working GPU, and their log says the capability is installed.
+                // Cheap here, and here is the one place anybody looks before filing that report.
+                if (visionReady)
+                {
+                    try { using var onCpu = new ClipImageEncoder(wantAccelerator: false, dir); }
+                    catch (Exception ex)
+                    {
+                        notes.Add("the picture model loads with an accelerator but NOT on the processor: " +
+                                  $"{ex.GetType().Name}: {ex.Message.Split((char)10)[0]}");
+                        aPresentModelFailedToLoad = true;
+                    }
+                }
             }
             catch (Exception ex)
             {
