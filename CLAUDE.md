@@ -248,6 +248,17 @@ index silently not existing.
   `FirstRunWindow.AskedAboutReading` is what `WhenTheWelcomeScreenIsGone` reads to tell the third
   from the second; without it the hold outlived the screen and both Content switches read as on
   while reading nothing.
+- **The hit test takes the STATE, never the five bounds.** `FirstRunLayout.HitTest(x, y, state)`
+  is what the canvas calls, and it derives the row count, the band row, settled, finished and
+  asking from the one state the painter and the window are already reading. Handed in by hand they
+  were five chances to measure a screen that is not the one on the display, and one was already
+  wrong: the band row went in as `FirstRun.LimitRow`, which names Speech's row in every act, while
+  `SurfaceHeight` and the painter read `FirstRunLayout.BandRow`, which drops it the moment the
+  screen is answered. On a machine offered Hebrew - where a row sits BELOW Speech - anybody who
+  took Speech got a last question whose "Later" and "Start reading" were hit-tested 64px under the
+  bottom edge of the window they were painted in: no hover, no cursor, nothing clickable, on the
+  one screen that has to be answered. It never showed in a shot, in CI or on a machine with no
+  Hebrew row, because there Speech is the last row and the two answers agree.
 
 ## The card's pill column
 

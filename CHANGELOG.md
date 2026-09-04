@@ -531,6 +531,15 @@ into a numbered section on the first release.
 
 ### Fixed
 
+- **The welcome screen's last question can be answered on a machine that took speech.** Turning on
+  speech search adds a "Transcribe up to" row to the list, and that row is only there while the
+  list is still a question - it goes when the screen is answered. The window and the drawing knew
+  that; the part that works out what is under the pointer did not, so it measured a screen one row
+  taller than the one on the display. On any machine offered Hebrew, anybody who chose speech
+  reached the final "Shall Findra start reading inside your files now?" and found that neither
+  "Later" nor "Start reading" would light up or respond - the two buttons were being looked for
+  below the bottom edge of the window they were painted in.
+
 - **The accelerated speech runtime has to transcribe something before Findra will use it.** It was
   accepted as soon as it loaded, and the known failure on AMD integrated graphics happens after a
   clean load: everything initialises and then the transcript comes back as garbage. Findra would

@@ -1317,6 +1317,40 @@ public class FirstRunDownloadTests : IDisposable
     }
 
     [Fact]
+    public void TheLastQuestionsButtonsCanBePressedOnAMachineThatTookSpeech()
+    {
+        // Everything, on a machine that is offered Hebrew - which is the ordinary answer for
+        // anybody who pressed the third tile, and it is the one selection that breaks the screen.
+        //
+        // Speech is chosen, so FirstRun.LimitRow names its row in EVERY act. The transcription
+        // band is only drawn while the screen is still the question, which is what BandRow says,
+        // and both the window's height and the painter's button rects read BandRow. The surfaces
+        // handed FirstRun.LimitRow to the hit test instead, and Hebrew sits BELOW Speech - so the
+        // whole settled layout the hit test measured was one 64 px band taller than the window on
+        // the display. Both buttons of the last question were tested for below its bottom edge:
+        // no hover, no cursor and no press, on the one screen that has to be answered.
+        FirstRunState asking = new()
+        {
+            Chosen = Capabilities.Close([Capability.Photos, Capability.Meaning,
+                                         Capability.Speech, Capability.Hebrew]),
+            HebrewOffered = true,
+            ContentOn = true,
+            Stage = FirstRunStage.Finished,
+        };
+        Assert.True(FirstRun.Asks(asking), "reading was chosen, so the last question is on the screen");
+        Assert.True(FirstRun.LimitRow(asking) < FirstRun.Rows(asking).Count - 1,
+                    "Hebrew sits under Speech, which is what makes the two answers differ");
+
+        // The height the window is actually given, and therefore the rects the painter draws in.
+        float h = FirstRunLayout.SurfaceHeight(asking);
+        SKRect later = FirstRunLayout.ButtonRect(0, h);
+        SKRect start = FirstRunLayout.ButtonRect(1, h);
+
+        Assert.Equal(FirstRunTarget.NotNow, FirstRunLayout.HitTest(later.MidX, later.MidY, asking).Target);
+        Assert.Equal(FirstRunTarget.Go, FirstRunLayout.HitTest(start.MidX, start.MidY, asking).Target);
+    }
+
+    [Fact]
     public void TheWindowMakesRoomForTheQuestionAndGivesItBackWhenThereIsNone()
     {
         FirstRunState asking = Finished(contentOn: true);

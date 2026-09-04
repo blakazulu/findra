@@ -135,24 +135,22 @@ public sealed class FirstRunWindow : Window
             Focusable = true;
         }
 
-        private int Rows => FirstRun.Rows(_state).Count;
-
-        /// <summary>Which row the transcription limit sits under, or -1 where Speech is not
-        /// taken. Read per event rather than stored, for the reason the row count is: ticking
-        /// Speech puts a control on the screen, and a hit test working from a stale answer would
-        /// aim at the row the pills have just pushed down.</summary>
-        private int LimitRow => FirstRun.LimitRow(_state);
-
-        /// <summary>Has the screen been answered? Read per event for the same reason the row
-        /// count is, and handed to the hit test so that the tiles, the rows, the limit pills and
-        /// the switches stop answering the moment the selection leaves for the shell. The stage
-        /// check further down was a partial version of this: it stopped a click CHANGING the
-        /// selection but left every control lit, hovering and offering a hand cursor.</summary>
-        private bool Settled => _state.Stage != FirstRunStage.Choosing;
-
-        /// <summary>The download is over, so a button may appear. While it runs the screen answers
-        /// nothing at all and the way out is the window's own close, which is never disabled.</summary>
-        private bool Finished => _state.Stage == FirstRunStage.Finished;
+        /// <summary>
+        /// Where the pointer is, on the screen as it is RIGHT NOW - read per event rather than
+        /// stored, because ticking Speech puts a control on the screen and a hit test working
+        /// from a stale answer aims at the row the pills have just pushed down.
+        ///
+        /// <para>Every bound comes off the state, and that is the whole point of it. Handing the
+        /// five arguments in by hand was five chances to measure a screen that is not the one on
+        /// the display, and one of them was already wrong: the transcription band's row went in as
+        /// <c>FirstRun.LimitRow</c>, which names Speech's row in every act, while the window's
+        /// height and the painter both read <c>FirstRunLayout.BandRow</c>, which drops it the
+        /// moment the screen is answered. On a machine offered Hebrew, anybody who took Speech got
+        /// a last question whose two buttons were tested for 64 px below the bottom edge of the
+        /// window they were painted in - so "Start reading" could not be hovered, did not change
+        /// the cursor and could not be pressed.</para>
+        /// </summary>
+        private FirstRunHit HitAt(Point p) => FirstRunLayout.HitTest((float)p.X, (float)p.Y, _state);
 
         /// <summary>Is the last question on the screen? Two buttons instead of one, a taller
         /// window to hold the question, and a "Start reading" that means something rather than
@@ -193,7 +191,7 @@ public sealed class FirstRunWindow : Window
         protected override void OnPointerMoved(PointerEventArgs e)
         {
             Point p = e.GetPosition(this);
-            FirstRunHit hit = FirstRunLayout.HitTest((float)p.X, (float)p.Y, Rows, LimitRow, Settled, Finished, Asking);
+            FirstRunHit hit = HitAt(p);
             if (hit.Target == _state.HoverTarget && hit.Index == _state.HoverIndex) return;
             _state = _state with { HoverTarget = hit.Target, HoverIndex = hit.Index };
             // The free "Words in documents" row is not a choice - Apply returns the state
@@ -216,7 +214,7 @@ public sealed class FirstRunWindow : Window
         {
             Focus();
             Point p = e.GetPosition(this);
-            FirstRunHit hit = FirstRunLayout.HitTest((float)p.X, (float)p.Y, Rows, LimitRow, Settled, Finished, Asking);
+            FirstRunHit hit = HitAt(p);
 
             // The title strip is the only place a borderless window can be picked up by.
             if (hit.Target == FirstRunTarget.None && p.Y < FirstRunLayout.TileTop)
