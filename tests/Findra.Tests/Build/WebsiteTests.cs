@@ -1,4 +1,4 @@
-using System.Text.Json;
+﻿using System.Text.Json;
 using System.Text.RegularExpressions;
 
 using Xunit;
@@ -193,6 +193,23 @@ public class WebsiteTests
 
         // Free means free, and a price of anything else here is a claim the whole site contradicts.
         Assert.Equal("0", app.GetProperty("offers").GetProperty("price").GetString());
+
+        // Availability and downloadUrl are the two fields that go stale the day a release lands,
+        // and neither is visible on the page - which is exactly why they sat wrong. PreOrder says
+        // "you cannot have this yet" to every machine that reads the page, and a downloadUrl
+        // pointing at the repository root is a page with no download on it.
+        //
+        // Coupled to the same fact the README's install paragraph is coupled to: a numbered
+        // section in CHANGELOG.md, which appears when a release is cut and never before. Nothing
+        // on the page changes when it does, so a person will not notice; this will.
+        bool released = Regex.IsMatch(Repo.Read("CHANGELOG.md"), @"(?m)^##\s+\[\d+\.\d+\.\d+\]");
+        Assert.Equal(released ? "https://schema.org/InStock" : "https://schema.org/PreOrder",
+                     app.GetProperty("offers").GetProperty("availability").GetString());
+        if (released)
+        {
+            Assert.Contains("/releases", app.GetProperty("downloadUrl").GetString()!,
+                            StringComparison.Ordinal);
+        }
         Assert.True(app.GetProperty("isAccessibleForFree").GetBoolean());
         Assert.Contains("Windows", app.GetProperty("operatingSystem").GetString()!, StringComparison.Ordinal);
 

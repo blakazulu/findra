@@ -9,6 +9,11 @@ and Findra follows [Semantic Versioning](https://semver.org/spec/v2.0.0/).
 
 ### Fixed
 
+- **The website stopped telling machines that Findra cannot be downloaded yet.** The structured
+  data the page carries for search engines and assistants still said the release was a pre-order
+  and pointed its download link at the repository root rather than at the releases page. Neither
+  is visible to a reader, which is why both survived the release.
+
 - **The code signing page no longer says Findra is unreleased.** It opened by explaining that the
   application to the SignPath Foundation could not be made until a release existed, which stopped
   being true the moment 0.1.0 shipped. It still says plainly that nothing is signed yet, because
