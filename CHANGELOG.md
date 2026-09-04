@@ -7,6 +7,14 @@ and Findra follows [Semantic Versioning](https://semver.org/spec/v2.0.0/).
 
 ## [Unreleased]
 
+### Changed
+
+- **The README's numbers were measured again, on a machine that has really used Findra.** The old
+  ones came from a debug build against a content index holding ten documents, so the full-text
+  table measured the query path rather than a corpus. This run is the released build, with every
+  model installed and 6,257 files read off a real disk, and both accelerators loaded. A filename
+  now comes back in 0.31 to 0.50 ms where it was 0.50 to 1.00.
+
 ### Fixed
 
 - **The website stopped telling machines that Findra cannot be downloaded yet.** The structured
