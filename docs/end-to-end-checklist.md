@@ -91,7 +91,11 @@ as much a test of the download path as of the models.
 19. **The accelerator is real.** `findra --searchmodels` must name the provider it chose
     and every one it rejected with a reason. On this machine it should choose the discrete
     graphics card rather than the processor. If it falls back to the processor, the reason
-    must say why.
+    must say why. It must also report that the picture model opens on the PROCESSOR, which
+    is checked even here, because an artifact can run perfectly on a graphics card and fail
+    to load at all without one.
+    **Only NVIDIA has ever run this.** No AMD or Intel GPU has been tested, integrated or
+    discrete, and that is the largest untested surface in the product.
 20. **Photos become searchable by description.** Index a folder of photos, then search for
     what is in one rather than its filename.
 21. **Speech becomes searchable.** Index a recording and search a phrase spoken in it.

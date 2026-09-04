@@ -389,9 +389,26 @@ the ONNX pair (SigLIP-2, e5) should choose **DirectML** rather than the processo
 baseline already shows that. Now that Whisper is on disk, the Whisper line must stop saying "not
 tried - no model is on disk to open" and name **Vulkan** or, with a reason, CPU.
 
+The picture model is ALSO opened on the processor here, on purpose, even though this machine will
+never ask it to. That line is not decoration: an fp16 export of the same checkpoint loads happily
+on DirectML at 7.5 ms an image and throws inside ONNX Runtime's graph optimiser on the CPU
+provider, so a model artifact can be measured, correct and fast on the machine doing the measuring
+while taking photo indexing away from everybody without a usable GPU.
+
 **A failure means** "it's slow on my laptop" stays unanswerable. "DirectML failed to initialise,
 fell back to CPU" is a bug report; silence is not. CPU is a supported configuration, not a failure
 state - what is not acceptable is not saying which one happened.
+
+> **This step has only ever been walked on NVIDIA.** Findra's provider chains are vendor-neutral
+> by design - DirectML covers AMD, Intel and NVIDIA, and Vulkan does the same for speech - but
+> **no AMD or Intel GPU has run any of this**, integrated or discrete. Two of the failures the
+> code now guards against were reported on an AMD 780M specifically: whisper.cpp #2596, where
+> Vulkan initialises cleanly and then the transcript is garbage, and #3455, where a version bump
+> stopped detecting AMD integrated GPUs altogether. `Media.ProveItTranscribes` exists for the
+> first of those and has been seen to PASS on NVIDIA, which proves it does not reject a working
+> machine. It has never been seen to catch the thing it was written for. Whoever first runs
+> Findra on AMD or Intel graphics is doing this step for real, and that is the single largest
+> untested surface in the product.
 
 ### 2.6 Restore the config you want to keep
 
@@ -426,6 +443,27 @@ the capsule's position, the tray icon. A capsule is visible on the desktop.
 legitimately fail (`Alt+Space` is the system menu chord in some configurations); the rule is that
 Findra walks a fallback chain, takes the first that registers, and **tells you which one it landed
 on**. Never silently.
+
+### 3.2a One Findra per index
+
+With the interface already running from 3.2, start it again:
+
+    findra
+
+**Pass:** the second one exits immediately and says Findra is already running, naming the process
+id and the hotkey that reaches the first. Exit code **0** - Findra IS running, which is what was
+asked for. The capsule does not appear twice, no second tray icon appears, and the log of the
+running process is undisturbed.
+
+**A failure means** two interfaces against one index, and they do not politely share it. Each
+starts its own `--index` child; the second child cannot open the vector store the first is holding,
+so it dies, is restarted, and dies again every five minutes for as long as both are open. The
+second hotkey also lands on a fallback chord because the first took the real one.
+
+Then prove the claim is a handle rather than a file. End the first Findra (`findra --stop`), check
+that `%LOCALAPPDATA%\Findra\index\.running` is gone, and start it again: it must come up
+normally. If a hard kill ever leaves that file behind, the next launch must still start - the
+handle is the claim, and Windows releases it when the process dies.
 
 ### 3.3 (catalogue 3) Real names - eye
 

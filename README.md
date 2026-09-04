@@ -140,6 +140,8 @@ these, and every image above was drawn by the same painter the window uses.
                                       answered, the generation counter, the round trip
     findra --searchindex q:invoice    what is indexed and what is queued; given paths
                                       instead, it queues them and drains the queue
+    findra --searchindex why:C:.png   why one file did or did not match, and what the
+                                      index holds about it. Reads and changes nothing
     findra --searchmodels             which models are on disk, whether they load, whether
                                       they agree, and which execution provider answered
     findra --searchshot out.png results Mond   render any surface to a PNG
@@ -173,6 +175,15 @@ which is what makes it reproducible on your machine rather than a fact about thi
 
 Produced by `findra --searchbench`. Every number below was measured on the machine
 named here, by this build, and re-running that command reproduces the whole page.
+
+**One machine, and it has an NVIDIA card.** These numbers come from a single desktop with a
+discrete NVIDIA GPU, so they say what Findra does there and nothing about anywhere else.
+Findra is built to run on AMD and Intel processors, on AMD, Intel and NVIDIA graphics,
+on integrated graphics, and on machines with no usable accelerator at all - but of those,
+only this configuration and the processor-only path have actually been measured.
+**AMD and Intel graphics have not been tested on real hardware.** The vendor-neutral paths
+are chosen precisely so that they should work there; that is a design decision, not a
+measurement, and it is written here as one.
 
 ### Machine
 

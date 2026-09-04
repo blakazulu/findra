@@ -457,6 +457,13 @@ into a numbered section on the first release.
 
 ### Changed
 
+- **The README and the site now say which hardware Findra has actually been tested on.** Every
+  measurement published so far comes from one desktop with a discrete NVIDIA card, plus the
+  processor-only path on that same machine. AMD and Intel graphics have not been tested on real
+  hardware at all. Findra's provider chains are vendor-neutral by design so that those machines
+  should work, but that is a design decision rather than a measurement, and the two are no longer
+  written as if they were the same thing.
+
 - **The first screen becomes a shorter window while the files come down.** With the choices
   settled there is nothing to draw where they were, so the window closes up around what is
   left instead of leaving a hand's width of nothing under the progress.
