@@ -253,13 +253,14 @@ public sealed class CardWindow : Window
                 // The progress pill hangs UNDER the card, so whether it is drawn decides the
                 // WINDOW's height - and this tick was the one place the pill could appear with
                 // nothing asking the window to re-measure. Resize runs once, in the constructor,
-                // when the pill is still default; the first status read lands a tick later and
-                // every settled arm of IndexStatus.Pill returns Show true, so on any machine with
-                // a content index the pill turned on within ~100 ms of opening and was then drawn
+                // when the pill is still default; the first status read lands a tick later, so a
+                // card opened while a pass is running gains the pill after ~100 ms and was drawn
                 // outside a window sized without it - clipped away entirely by the draw op's own
-                // bounds. Not a gap, not a clipped pill: nothing at all, on the empty card, which
-                // is the one card this pill exists for. Typing a character raised CardResized for
-                // another reason and the pill appeared, which is what made it look intermittent.
+                // bounds. Not a gap, not a clipped pill: nothing at all. It works the other way
+                // too, and now more often: the last file of a pass drops the pill and the window
+                // has to give the band back, or the card leaves a strip of nothing under itself.
+                // Typing a character raised CardResized for another reason and the pill appeared,
+                // which is what made it look intermittent.
                 bool grew = progress.Show != _state.Progress.Show;
                 _state = _state with { Clock = _clock.Elapsed.TotalSeconds, IndexLine = IndexLine(), ContentOffered = _contentOffered, Progress = progress };
                 if (grew) CardResized?.Invoke();
@@ -379,11 +380,12 @@ public sealed class CardWindow : Window
                 pillOn: _state.Content, haveStore: true, readingOn: contentOn,
                 indexed: indexed < 0 ? null : indexed);
             // And the pill under the card, from the same reading and the same composer the
-            // capsule and the tray's tooltip use.
-            // evenWhenSettled: this is a window somebody opened, and it owes an answer whether or
-            // not there is work in hand. The capsule, which is on the desktop all day, does not.
+            // capsule and the tray's tooltip use - with no argument that would make it answer
+            // differently here. A settled index draws nothing on either surface: what the card
+            // owes somebody who opened it is answered by the Content pill in its own header,
+            // and a bar resting at 100% under it was a second answer to that question.
             Progress = IndexStatus.Pill(contentOn, db.Get("indexer:kind") ?? "", pending, indexed,
-                                         IndexStatus.Alive(beat, pid), evenWhenSettled: true);
+                                        IndexStatus.Alive(beat, pid));
             return IndexStatus.Line(contentOn, state, pending, indexed, IndexStatus.Alive(beat, pid), rebuilt);
         }
 

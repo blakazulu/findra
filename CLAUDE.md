@@ -316,13 +316,18 @@ reading it.
   places; two painters is two answers waiting to differ. Each surface supplies only its own
   rectangle, which is the one thing they are allowed to disagree about - the card's is the card's
   width less its padding, the capsule's is the bar's.
-- **The card always shows it; the capsule shows it only while there is work.** `evenWhenSettled`
-  is the difference and it is not a preference. The capsule is on the desktop all day with nothing
-  asked of it, and a pill sitting there reading "up to date" is a widget that looks busy doing
-  nothing (spec §3). The card is a window somebody OPENED, and it owes an answer to the question
-  they opened it with - drawing nothing there is indistinguishable from a broken feature, which is
-  exactly how it read to the first person who went looking for this pill on a machine whose first
-  pass had finished while they were installing.
+- **Both surfaces show it only while there is work in hand, and `IndexStatus.Pill` takes no
+  argument that could say otherwise.** Reading off, no live indexer, or an empty queue is a settled
+  index and draws nothing - not a bar at zero and not a bar at 100%. The card had an
+  `evenWhenSettled` of its own for a while, on the reasoning that a window somebody OPENED owes an
+  answer whether or not anything is moving, and it drew four more shapes nobody else drew: "up to
+  date", "paused", "nothing read yet" and "not reading inside files". The card does owe that answer
+  and the **Content pill in its own header** is what gives it - whether Findra is reading and
+  whether it has read anything, where the eye already is. What hung under the card was a second
+  answer to a question already answered, resting at 100% for the rest of the day, which is the
+  idle-widget-looking-busy that spec §3 forbids the capsule. The card has no better claim to it.
+  `--searchprobe` names which settled state it is, in `Pill`'s own decision order, for anybody
+  going looking for a pill that is correctly absent.
 - **It hangs BELOW the card, outside the card's shape**, the way the capsule's hangs under the bar.
   `SearchCardLayout.Height` is the card and `WindowHeight` is the card plus the pill's band; sizing
   a window or a bitmap takes the second, drawing or hit-testing the card takes the first. It sat

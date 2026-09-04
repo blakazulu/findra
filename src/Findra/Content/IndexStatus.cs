@@ -36,42 +36,33 @@ public static class IndexStatus
     /// nothing behind it: reading off, no live indexer, or an empty queue. A permanently visible
     /// progress pill makes an idle widget feel busy, which is the thing spec §3 says the capsule
     /// must not do.</para>
+    ///
+    /// <para><b>Both surfaces get the same answer</b>, and there is no argument to ask for a
+    /// different one. The card used to pass <c>evenWhenSettled</c> and draw four more shapes
+    /// nobody else drew - "up to date", "paused", "nothing read yet" and "not reading inside
+    /// files" - on the reasoning that a window somebody deliberately opened owes an answer whether
+    /// or not work is in hand. It does, and the Content pill in the card's own header is what
+    /// gives it: whether Findra is reading, and whether it has read anything, is answered up there
+    /// where the eye already is. What hung under the card was a second answer to a question
+    /// already answered, in the shape of a progress bar resting at 100% for the rest of the day.
+    /// The capsule has never done that and the card has no better claim to.</para>
     /// </summary>
     public static IndexProgress Pill(bool contentEnabled, string kind, long pending, long indexed,
-                                     bool alive, bool evenWhenSettled = false)
+                                     bool alive)
     {
         long total = indexed + pending;
         string N(long v) => v.ToString("N0", Fixed);
 
-        // Work in hand. The only state the capsule draws, and the only one with a moving bar.
+        // Work in hand. The only state either surface draws, and the only one with a moving bar.
         if (contentEnabled && alive && pending > 0)
             return new IndexProgress(Doing(kind), N(indexed) + " of " + N(total),
                                      total <= 0 ? 0f : (float)(indexed / (double)total), Show: true);
 
-        // The DESKTOP capsule stops here: it is on screen all day with nothing asked of it, and a
-        // pill sitting there saying "up to date" is a widget that looks busy while doing nothing,
-        // which spec §3 forbids.
-        //
-        // The card does not stop here, and the difference is that somebody OPENED it. A window
-        // you deliberately put on the screen owes you an answer to the question you opened it
-        // with, and "nothing at all" is indistinguishable from a feature that is broken - which is
-        // exactly how it read to the first person who went looking for this pill on a machine
-        // whose first pass had finished while they were installing.
-        if (!evenWhenSettled) return default;
-
-        if (!contentEnabled)
-            return new IndexProgress("not reading inside files",
-                                     indexed > 0 ? N(indexed) + " read" : "", 0f, Show: true);
-
-        if (pending > 0)
-            return new IndexProgress("paused", N(pending) + " waiting",
-                                     total <= 0 ? 0f : (float)(indexed / (double)total), Show: true);
-
-        // Nothing queued and nothing read is a machine that has been asked and has not started;
-        // nothing queued with files behind it is a finished pass. They are different sentences.
-        return indexed > 0
-            ? new IndexProgress("up to date", N(indexed) + " files", 1f, Show: true)
-            : new IndexProgress("nothing read yet", "", 0f, Show: true);
+        // Everything else is a settled index: reading off, no indexer behind the queue, nothing
+        // queued at all. There is no work to draw a picture of, so nothing is drawn - which is not
+        // a bar at zero and not a bar at 100%. --searchprobe names which of those it is, in this
+        // order, for anybody who goes looking for a pill that is correctly absent.
+        return default;
     }
 
     /// <summary>

@@ -70,6 +70,62 @@ public class CardProgressTests
     }
 
     [Fact]
+    public void TheCardDrawsThePillOnlyWhileThereIsWorkInHand()
+    {
+        // The pill is a picture of work happening, on the card exactly as on the capsule. It used
+        // to have four more shapes that the card alone drew - "up to date", "paused", "nothing
+        // read yet" and "not reading inside files" - on the reasoning that a window somebody
+        // opened owes an answer whether or not anything is moving. It does, and the Content pill
+        // in the header is what gives it: whether Findra is reading, and whether it has read
+        // anything, is answered up there where the eye already is. A second answer hanging under
+        // the card was a progress bar sitting at 100% all day, which is the thing spec 3 says a
+        // widget must not do - the capsule has never done it and the card has no better claim.
+        Assert.False(IndexStatus.Pill(contentEnabled: true, nameof(ResultKind.Document),
+                                      pending: 0, indexed: 12_480, alive: true).Show,
+                     "a finished pass");
+        Assert.False(IndexStatus.Pill(contentEnabled: true, nameof(ResultKind.Document),
+                                      pending: 297, indexed: 4_000, alive: false).Show,
+                     "a backlog with no indexer behind it");
+        Assert.False(IndexStatus.Pill(contentEnabled: true, nameof(ResultKind.Document),
+                                      pending: 0, indexed: 0, alive: true).Show,
+                     "asked and not started");
+        Assert.False(IndexStatus.Pill(contentEnabled: false, nameof(ResultKind.Document),
+                                      pending: 0, indexed: 12_480, alive: true).Show,
+                     "reading off");
+        Assert.True(IndexStatus.Pill(contentEnabled: true, nameof(ResultKind.Document),
+                                     pending: 342, indexed: 688, alive: true).Show,
+                    "work in hand, which is the one state that draws");
+    }
+
+    [Fact]
+    public void TheEmptyCardCarriesNoPillBand()
+    {
+        // Through the shot, because the composed state is what went wrong: IndexStatus.Pill
+        // already answered Show false for a settled index, and the card asked it the other
+        // question. Nothing that measured a rectangle could see that; the rendered height can.
+        // The empty card is the card nearly everybody has nearly all of the time, so it is the
+        // one this has to be true of.
+        Assert.Equal((int)Math.Ceiling(SearchCardLayout.Height(0, false)), ShotHeight("empty"));
+
+        // And the indexing state still hangs the band under it, or the rule has been read as
+        // "never draw the pill" rather than "draw it while there is work".
+        Assert.True(ShotHeight("indexing") > (int)Math.Ceiling(SearchCardLayout.Height(0, false)),
+                    "the card with work in hand still carries the pill");
+    }
+
+    private static int ShotHeight(string state)
+    {
+        string path = Path.Combine(Path.GetTempPath(), $"findra-pillband-{state}.png");
+        try
+        {
+            Assert.Equal(0, Findra.Diagnostics.SearchShot.Render(path, state, "Mond"));
+            using SKBitmap bmp = SKBitmap.Decode(path);
+            return bmp.Height;
+        }
+        finally { if (File.Exists(path)) File.Delete(path); }
+    }
+
+    [Fact]
     public void NoPillMeansNoBandUnderTheCard()
     {
         // Show false is no pill at all, not a pill at zero - and no gap reserved for one either.

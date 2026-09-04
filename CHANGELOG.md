@@ -529,6 +529,15 @@ into a numbered section on the first release.
   publishes from that build onwards, so the whole application is built against it.
 
 
+### Changed
+
+- **The progress bar under the results card appears only while Findra is actually reading files.**
+  It used to stay there once a pass had finished, resting at 100% and saying "up to date", along
+  with three other resting states - and a progress bar that never moves is not information, it is
+  a widget looking busy. The Content pill in the card's own header already says whether Findra is
+  reading and whether it has read anything. The desktop capsule has always worked this way; the
+  card now does too.
+
 ### Fixed
 
 - **The welcome screen's last question can be answered on a machine that took speech.** Turning on
