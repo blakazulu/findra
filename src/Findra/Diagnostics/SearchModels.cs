@@ -165,7 +165,7 @@ public static class SearchModels
         {
             IReadOnlyList<Model> need = Capabilities.ModelsFor([c]);
             int have = need.Count(m => ModelStore.Present(m, dir));
-            long marginal = Capabilities.MarginalBytes(c, installed.Have);
+            long marginal = Capabilities.MarginalBytes(c, installed);
             capRows.Add(new CapabilityRow(c, installed.Has(c), have, need.Count, marginal));
         }
 

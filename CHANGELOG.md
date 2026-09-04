@@ -516,6 +516,77 @@ into a numbered section on the first release.
 
 ### Fixed
 
+- **Closing the welcome screen without answering no longer leaves Findra running invisibly.** The
+  X, Alt+F4 and the taskbar are never disabled, and none of them count as an answer - so
+  everything the screen was holding back stayed held back: no tray icon, no hotkey, no capsule,
+  no window, and no way to end it but the task manager. The next launch would then have put a
+  second one behind another welcome screen. Findra now starts the rest of itself and asks again
+  next time, which is the right outcome for a question nobody answered.
+
+- **A welcome screen that fails to appear no longer locks Findra out of its own surfaces.** The
+  gate that keeps the card and Settings behind the screen was taken before the screen was shown,
+  and a window that throws on its way up never raises its own close - so the recovery path built
+  a complete Findra whose hotkey, capsule, tray and Settings all silently refused to open
+  anything, for the life of the process.
+
+- **The switch that starts reading works in your first session.** Reading is held from the moment
+  the welcome screen appears and released by "Start reading" - but a screen that never got as far
+  as asking, because reading was off in the first act, had nothing to release it. The hold then
+  outlived the screen for the whole session, and the Content switch in the capsule's menu and the
+  one in Settings both read as on while reading nothing.
+
+- **"Everything" no longer downloads a 1.5 GB Hebrew model on machines that are not offered it.**
+  The Hebrew row is hidden where the system reads no Hebrew, and the row list, the ticks and the
+  summary all knew that; the three preset tiles did not. Pressing "Everything" there selected a
+  capability with nothing on screen to name it: the visible rows added to 1.45 GB, the tile said
+  2.93 GB, and the download drew a progress bar for a row that did not exist.
+
+- **Searching by a capability you just installed works without restarting, on the run that
+  installed it.** The query-side encoders are opened once at startup, which on a first run happens
+  before the download it just agreed to - so they were opened against an empty folder, answered
+  nothing, and were never reopened. The first content search anybody ever ran came back empty on a
+  machine whose welcome screen had just said everything they chose had arrived, while the indexer
+  read those same files perfectly well.
+
+- **A paused index says it is paused, not that Findra is closed.** A paused index has no indexer
+  running by design, so the line checked "is anything running" first and blamed the one cause that
+  was not true. It is the state the whole first-run download sits in, so it was often the first
+  thing this line ever said.
+
+- **A broken Hebrew speech model no longer takes speech search away from every other language.**
+  It is a second pass over what the general model called Hebrew, but it was opened inside the
+  general model's own attempt: one corrupt file threw for every recording on the disk, each was
+  recorded as failed, and nothing re-queues a failure.
+
+- **A download that stops short is refused even when the server never said how long the file was.**
+  The floor is deliberately generous, so between it and the real size there was a window up to
+  124 MB wide where a truncated file passed, was promoted under its real name, and then read as
+  installed while failing everything that needed it. Where there is no length, the declared size
+  decides.
+
+- **A dropped connection or a full disk during a download is reported rather than thrown.** Only
+  the final rename was guarded, so both left `--models install` as a stack trace instead of the
+  documented "what arrived is kept", and left the welcome screen's progress bar simply stopping.
+
+- **Every surface quotes the same download size.** Settings, the card's offer, `--models` and
+  `--searchmodels` priced a capability from the capabilities already installed, and a capability
+  is all-or-nothing - so a folder holding the Whisper model with no e5 pair beside it was quoted
+  818 MB for a 270 MB download, while `--models install` said 270. One failed leg of a download
+  leaves exactly that folder.
+
+- **A query encoder that will not load no longer takes the other one down with it.** Both were
+  opened inside one attempt, so a corrupt e5 file stopped photo search from loading at all -
+  something entirely unrelated to photos.
+
+- **A build whose own version cannot be read is reported unknown, not up to date.** Only the
+  release tag was checked for this; the running version took the same route into "up to date",
+  which is a claim made on no information.
+
+- **Uninstalling forgets how this copy was installed.** It is recorded once because how a copy
+  arrived cannot change - but an uninstall ends that copy. Kept, it told somebody who built from
+  source once and then installed from winget to read the release notes for ever, instead of
+  running `winget upgrade`.
+
 - **Reinstalling gives you back the welcome screen, and a working Findra with it.** Removing
   Findra takes away the scheduled task that starts the name helper, and the welcome screen is
   the only thing that registers it - but the settings file, which uninstalling keeps on

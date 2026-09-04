@@ -427,7 +427,7 @@ public static class SettingsModel
                 // e5 pair, so a fixed per-row number makes the total fail to add up in public.
                 : Control.Plain(ControlId.Capability, ControlKind.Button, Capabilities.Title(c),
                                 s.Waiting(ControlId.Capability) ? "Downloading..." :
-                                Sizes.Human(Capabilities.MarginalBytes(c, s.Installed.Have ?? new HashSet<Capability>())), tag: (int)c));
+                                Sizes.Human(Capabilities.MarginalBytes(c, s.Installed)), tag: (int)c));
         }
 
         return rows;

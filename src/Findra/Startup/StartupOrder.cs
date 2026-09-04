@@ -58,6 +58,22 @@ public static class StartupOrder
     public static IReadOnlyList<StartupStep> WhenTheScreenCouldNotBeShown() => Rest(withNamesHelper: true);
 
     /// <summary>
+    /// What was held back, when the screen was CLOSED without being answered - the X, Alt+F4, or
+    /// the taskbar's close.
+    ///
+    /// <para>The same stages as a screen that could not be shown, and for the same reason: the
+    /// answer that would have built the rest of Findra is never coming. Without this the process
+    /// is left alive with no window, no tray icon and no hotkey, which can be ended only from the
+    /// task manager - and since nothing wrote <c>FirstRunDone</c>, the next launch would stack a
+    /// second one behind another welcome screen.</para>
+    ///
+    /// <para>It includes the names helper for the same reason the unshown path does: nothing else
+    /// is going to register it, and names are the half of Findra that needs no models at all.
+    /// </para>
+    /// </summary>
+    public static IReadOnlyList<StartupStep> WhenTheScreenWasClosedUnanswered() => Rest(withNamesHelper: true);
+
+    /// <summary>
     /// The order everything else is built in, one place, so a launch that answered a welcome
     /// screen and one that did not take the same stages in the same order.
     ///

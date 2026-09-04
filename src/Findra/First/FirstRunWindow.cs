@@ -41,6 +41,14 @@ public sealed class FirstRunWindow : Window
     /// arrives or the window closes without it.</summary>
     public event Action? StartReadingRequested;
 
+    /// <summary>Whether the last question ever reached the screen. Read by the shell when the
+    /// window closes, because the hold on reading has three endings and only two of them raise an
+    /// event: "Start reading" clears it, "Later" deliberately keeps it for the session, and a
+    /// screen that never asked at all has nobody to clear it. Without this the third case leaves a
+    /// hold nothing can release, and every switch that turns reading on reads as on and reads
+    /// nothing.</summary>
+    public bool AskedAboutReading => _canvas.AskedAboutReading;
+
     public FirstRunWindow(FirstRunState state, Palette palette)
     {
         ArgumentNullException.ThrowIfNull(state);
@@ -150,6 +158,10 @@ public sealed class FirstRunWindow : Window
         /// window to hold the question, and a "Start reading" that means something rather than
         /// a second way to close.</summary>
         private bool Asking => FirstRun.Asks(_state);
+
+        /// <summary>The same question, for the shell, after the window has gone. A pure function
+        /// of the final state, so it needs no flag of its own.</summary>
+        public bool AskedAboutReading => Asking;
 
         public void NoteFetching(IReadOnlyList<Model> models)
         {

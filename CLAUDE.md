@@ -229,9 +229,24 @@ index silently not existing.
   screen somebody reads, thinks about and then leaves running while 2.9 GB arrives, and for all of
   that it stood over every other window on the machine. **What makes it the only door into Findra
   is the gate in `App.TheWelcomeScreenIsInTheWay`**, not a flag that outranks the whole desktop.
-- **`_firstRunIsUp` is set AFTER `Show()`.** A screen that threw on its way up must leave a
-  launch that carries on; `WhenTheScreenCouldNotBeShown()` is that path and it is real, because
-  every stage is wrapped.
+- **`_firstRunIsUp` AND `_firstRun` are set AFTER `Show()`.** A screen that threw on its way up
+  must leave a launch that carries on; `WhenTheScreenCouldNotBeShown()` is that path and it is
+  real, because every stage is wrapped. `_firstRun` is the GATE, and taking it before `Show` made
+  that path worse than useless: `Closed` never fires on a window that never opened, so the
+  recovery built a whole product whose hotkey, capsule, tray and Settings each called `Activate`
+  on a dead window, saw "the screen is in the way", and refused for the life of the process.
+- **A screen CLOSED without an answer hands the launch on too.** The X, Alt+F4 and the taskbar are
+  never disabled and none of them raise `Answered`, so everything held back stayed held back: a
+  process with no window, no tray icon and no hotkey, endable only from the task manager, and a
+  next launch that would stack a second one behind another welcome screen.
+  `StartupOrder.WhenTheScreenWasClosedUnanswered()` is that path. Nothing writes `FirstRunDone`,
+  so the screen is asked again, which is the right outcome for a question nobody answered.
+- **The hold on reading has THREE endings and only two of them are events.** "Start reading"
+  clears it, "Later" deliberately keeps it for the session, and a screen that never ASKED - reading
+  off in the first act, or closed before the last one - has nobody to clear it.
+  `FirstRunWindow.AskedAboutReading` is what `WhenTheWelcomeScreenIsGone` reads to tell the third
+  from the second; without it the hold outlived the screen and both Content switches read as on
+  while reading nothing.
 
 ## The card's pill column
 
@@ -498,9 +513,15 @@ speech              ─  whisper-turbo + [e5 pair]              550 MB (+270 if 
   and not queued, so `Apply` re-queues exactly those (`onlyBecause: [NoModel]`) rather than
   believing a record that says the debt was paid. Done is a fact the index holds, not a note
   somebody left; the same shape is what makes a machine written off by an older build recoverable.
-- **Indexing picks a capability up without a restart; searching by it does not.** The query-side
-  encoders are opened once when the interface starts, so the card cannot answer the new way until
-  Findra is restarted. Any surface that installs a capability has to say both halves.
+- **Indexing picks a capability up without a restart; searching by it does not - with one
+  exception, and it is the common case.** The query-side encoders are opened once when the
+  interface starts, which on a FIRST RUN happens before the download that run just agreed to: they
+  were opened against an empty folder, answered null, and nothing reopened them, so the first
+  content search anybody ever ran came back empty on a machine whose screen had just said
+  everything they chose had arrived. `OpenTheQueryEncodersIfThereAreNone` opens them when this
+  session has NONE, which is safe because a null one is held by nobody; replacing a live one means
+  disposing sessions a card may be part-way through a query on, and that case keeps the rule
+  below. Otherwise the card cannot answer the new way until Any surface that installs a capability has to say both halves.
   `--models install` ends with exactly that sentence and the README carries it; the settings row
   and the first-run screen do not yet, and that is a gap rather than a decision. Saying the whole
   thing is live is the shorter sentence and it is false.
@@ -558,6 +579,12 @@ speech              ─  whisper-turbo + [e5 pair]              550 MB (+270 if 
   over an existing e5 pair are ordinary states rather than edge cases. **The number still never
   moves when a row is ticked**, which is the rule the own-files pricing was written under: what is
   on the disk does not depend on what is chosen.
+- **`FirstRun.PresetChoice` drops Hebrew where its row is not drawn**, and the tiles go through it.
+  `AlreadyChosen` had always dropped it for this reason and the three preset tiles had not, so
+  "Everything" on a machine that reads no Hebrew selected a capability with nothing on screen to
+  name it: the visible rows added to 1.45 GB, the tile and the bottom line said 2.93 GB, and the
+  download drew a fourth progress bar for a row that did not exist. A selection holding a
+  capability with no row prices a download nobody can see - and then fetches it.
 - **`FirstRun.AlreadyChosen` ticks what is already there**, closed over the dependency graph. An
   unticked row beside a model that is present was a control whose two positions meant the same
   thing: the selection decides what is FETCHED and nothing else, and what Findra can read is read
@@ -565,6 +592,24 @@ speech              ─  whisper-turbo + [e5 pair]              550 MB (+270 if 
   e5 pair opens with Speech ticked, its dependency ticked with it, and 270 MB priced - which is
   the truth. Hebrew is dropped where it is not offered: its row is not drawn there, and a selection
   holding a capability with no row prices a download nobody can see.
+- **`CapabilitySet` carries the FILES it was built from, and every price is read from those.**
+  A capability is all-or-nothing, so a folder holding whisper-turbo with no e5 pair beside it has
+  Speech uninstalled and 550 MB counting for nothing: Settings, the card's offer, `--models` and
+  `--searchmodels` all quoted 818 MB for a 270 MB download while `--models install`, which prices
+  by file, said 270. That folder is ordinary - a download run carries on past a file that failed,
+  so one bad leg of a Speech install leaves exactly it. A set built by hand with no files derives
+  them from its capabilities, which keeps the old arithmetic where it was right.
+- **A guard conditioned on the server's length needs a floor that does not need it, and the FLOOR
+  is not `MinBytes` alone.** `MinBytes` is a generous "this cannot be the file" line, so with no
+  `Content-Length` there was a window up to 124 MB wide where a truncated file passed it, was
+  promoted under its real name, and then read as installed while failing everything that needed
+  it. Where the length is absent, `Model.Bytes` less `ModelStore.SizeSlack` decides.
+- **The Hebrew fine-tune is opened in a try of ITS OWN.** It is a second pass over what the general
+  model called Hebrew, and it was opened inside the general model's attempt: one corrupt file threw
+  for every recording on the disk, each was recorded `StateFailed`, and nothing re-queues a
+  failure. A 1.5 GB file for one language took speech search away from every other language.
+  `Semantic.Open` is the same shape one level up - one try per encoder, or a broken e5 file stops
+  photo search loading.
 - **A file's size on disk never equals the declared size in the table.** That table is the
   spec's figure in megabytes to one decimal place; real files miss it by tens of kilobytes,
   mostly upward. `ModelStore.SizeSlack` is the only place that width is decided, and nothing
@@ -790,7 +835,16 @@ not guessed each launch.
 
 **Compare parsed version numbers, never strings** - `1.10.0` is newer than `1.9.0`, and a
 check that gets that wrong is worse than none, because it tells people they are current when
-they are not.
+they are not. **Both sides are checked for parsing, not just the tag.** `Compare` answers 0 when
+EITHER side fails, and 0 was routed into "up to date": the release tag was guarded and the running
+version was not, so a build whose own version cannot be read reported itself current on no
+information at all.
+
+**An uninstall clears `InstallSource` along with `FirstRunDone`.** It is recorded once because how
+a COPY arrived cannot change - but an uninstall ends that copy, and the next may arrive by another
+route. Kept, it told somebody who built from source once and then installed from winget to read
+the release notes for ever instead of running `winget upgrade`, and Settings reported the wrong
+source under About.
 
 ## Install, resume and uninstall
 

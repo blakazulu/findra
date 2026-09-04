@@ -160,11 +160,20 @@ public static class IndexStatus
         // a pipe round trip per second for a string.
         if (pending == 0) return $"index up to date · {N(indexed)} files";
 
-        // Two different pauses reach this line and mean opposite things. Findra not running is
-        // not the user's switch: indexing only happens while Findra is open, so a backlog left by
-        // a previous session is expected and has to be explained rather than look stuck.
-        if (!alive) return $"{N(pending)} waiting - indexing is paused while Findra is closed";
+        // Two different pauses reach this line and mean opposite things, and the ORDER of these
+        // two is the whole of it. A paused index has no child by design - nothing starts one while
+        // the queue is not moving - so asking "is a child alive" first answers "no" for both, and
+        // then blames the one cause that is not true: a person watching a paused index inside a
+        // running Findra was told indexing was paused because Findra was closed. It is the state
+        // the whole first-run download sits in, where reading is held until the last question is
+        // answered, so it was the first sentence many people ever read from this line.
+        //
+        // Paused first, therefore. It is a fact recorded in the index by whoever paused it. Only
+        // when nothing paused it does an absent child mean what the second line says: a backlog
+        // left by a previous session, which is expected and has to be explained rather than look
+        // stuck.
         if (state == "paused") return $"{N(pending)} waiting - indexing paused";
+        if (!alive) return $"{N(pending)} waiting - indexing is paused while Findra is closed";
         return $"indexing {N(pending)} · {N(indexed)} done";
     }
 

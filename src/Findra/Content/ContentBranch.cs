@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
@@ -38,27 +38,40 @@ public sealed class Semantic(VectorStore vectors, Func<string, float[]>? text, F
         var store = new VectorStore();
         var own = new List<IDisposable> { store };
         Func<string, float[]>? asText = null, asImage = null;
-        try
+
+        // One try EACH, and that is the whole point of the shape. A model that is on disk and will
+        // not load is the one case where an absent capability is worth a log line - it is not the
+        // normal state, it is a broken file - and "whatever loaded stays" is only true if a throw
+        // from the first encoder cannot skip the second. Under one try it held in one order only:
+        // a corrupt e5 file took the picture encoder down with it, and searching photos stopped
+        // working because something entirely unrelated to photos was broken.
+        if (installed.Has(Capability.Meaning))
         {
-            if (installed.Has(Capability.Meaning))
+            try
             {
                 var e5 = new E5Encoder(wantAccelerator: false, modelDir);
                 own.Add(e5);
                 asText = e5.EncodeQuery;
             }
-            if (installed.Has(Capability.Photos))
+            catch (Exception ex)
+            {
+                Log.Error("models", "the meaning query encoder would not load - " +
+                                    "searching by meaning is off for this session", ex);
+            }
+        }
+        if (installed.Has(Capability.Photos))
+        {
+            try
             {
                 var clip = new ClipTextEncoder(wantAccelerator: false, modelDir);
                 own.Add(clip);
                 asImage = clip.Encode;
             }
-        }
-        catch (Exception ex)
-        {
-            // A model that is on disk and will not load is the one case where an absent
-            // capability IS worth a log line - it is not the normal state, it is a broken file.
-            // It is still not an error the user has to acknowledge: whatever loaded stays.
-            Log.Error("models", "a query encoder would not load - that capability is off for this session", ex);
+            catch (Exception ex)
+            {
+                Log.Error("models", "the picture query encoder would not load - " +
+                                    "searching photos is off for this session", ex);
+            }
         }
         if (asText is null && asImage is null)
         {

@@ -104,11 +104,20 @@ public static class UpdateMemory
         // Compare returns zero both for "the same version" and for "one of these did not parse",
         // so an unparseable remembered tag would otherwise read as "up to date" - a claim made on
         // no information, which spec 9b calls worse than not checking at all.
-        string trimmed = latestKnown.Trim();
-        if (trimmed.Length > 0 && (trimmed[0] == 'v' || trimmed[0] == 'V')) trimmed = trimmed[1..];
-        if (!Version.TryParse(trimmed, out _)) return UpdateState.Unknown;
+        // BOTH sides, for that reason and not only the remembered one: a build whose own version
+        // does not parse is exactly as uncomparable as a tag that does not, and reporting it
+        // "Current" is the same claim on the same absence of information.
+        if (!Parses(latestKnown) || !Parses(running)) return UpdateState.Unknown;
 
         return UpdateCheck.Compare(running, latestKnown) < 0 ? UpdateState.Available : UpdateState.Current;
+
+        static bool Parses(string? s)
+        {
+            if (string.IsNullOrWhiteSpace(s)) return false;
+            string trimmed = s.Trim();
+            if (trimmed.Length > 0 && (trimmed[0] == 'v' || trimmed[0] == 'V')) trimmed = trimmed[1..];
+            return Version.TryParse(trimmed, out _);
+        }
     }
 
     /// <summary>What the tray's "Check for updates" item says once a check the user asked for has
@@ -517,9 +526,20 @@ internal sealed class Shell : ISettingsHost
         // The rest of the product IS built from the answer - names are searchable seconds later
         // and nobody should wait on 2.9 GB for their filenames - but a card opened over a running
         // download is a second Findra in front of the one that is still setting itself up.
-        _firstRun = window;
-        window.Closed += (_, _) => { _firstRun = null; _firstRunIsUp = false; };
+        window.Closed += (_, _) =>
+        {
+            _firstRun = null;
+            _firstRunIsUp = false;
+            WhenTheWelcomeScreenIsGone(window);
+        };
         window.Show();
+        // The gate is taken AFTER Show, and this is the same rule _firstRunIsUp is written under.
+        // Taken before it, a window that threw on its way up would leave the gate closed with
+        // nothing behind it: Closed never fires on a window that never opened, so every entry
+        // point - the hotkey, the capsule, the tray, Settings - would call Activate on a dead
+        // window, see "the screen is in the way", and refuse for the life of the process. The
+        // recovery path below would have run and built a product nothing could open.
+        _firstRun = window;
         // AFTER Show, because this is what tells Start that the screen really is on the display
         // and the rest of the launch may wait for an answer. Set before it, a window that threw on
         // its way up would leave a process with nothing on screen and nothing to answer.
@@ -536,8 +556,53 @@ internal sealed class Shell : ISettingsHost
     /// is the half of Findra that is always on and it does not work at all without the scheduled
     /// task.</para>
     /// </summary>
+    /// <summary>
+    /// The welcome screen has left the display, however it left. Two things are settled here that
+    /// nothing else could settle, and both used to be left dangling.
+    ///
+    /// <para><b>A screen closed without an answer still has to hand the launch on.</b> The X, the
+    /// taskbar and Alt+F4 are never disabled - the screen says so itself - and none of them raise
+    /// <c>Answered</c>. Everything held back was waiting on that answer, so the process was left
+    /// running with no window, no tray icon, no hotkey and no capsule: invisible, and endable only
+    /// from the task manager. Nothing wrote <c>FirstRunDone</c>, so the screen is asked again on
+    /// the next launch, which is the right outcome for a question nobody answered.</para>
+    ///
+    /// <para><b>And a hold nobody can release has to be released here.</b> Reading is held from
+    /// the moment the screen goes up, and only "Start reading" lets it go. That is right while the
+    /// question is on screen and right for "Later", which is somebody choosing to defer for the
+    /// session - but a screen that never ASKED (reading was off in the first act, or it was closed
+    /// before the last one) has nobody to let it go, and the hold would then outlive the screen for
+    /// the whole session. The Content switch in the capsule's menu and the one in Settings would
+    /// both read as on and read nothing, which is the dead-control defect again with no control to
+    /// point at.</para>
+    /// </summary>
+    private void WhenTheWelcomeScreenIsGone(FirstRunWindow window)
+    {
+        if (!_firstRunWasAnswered)
+        {
+            Log.Warn("startup", "the welcome screen was closed without an answer; starting the " +
+                                "rest of Findra, and it will ask again on the next launch");
+            foreach (StartupStep step in StartupOrder.WhenTheScreenWasClosedUnanswered()) Run(step);
+        }
+
+        bool asked = false;
+        try { asked = window.AskedAboutReading; }
+        catch (Exception ex) { Log.Warn("startup", "the welcome screen would not say whether it asked: " + ex.Message); }
+
+        if (_holdReading && !asked)
+        {
+            Log.Info("index", "the welcome screen went without asking about reading; the hold on it is released");
+            _holdReading = false;
+        }
+    }
+
+    /// <summary>Whether <see cref="OnFirstRunAnswered"/> ran. The screen's own <c>Closed</c> cannot
+    /// tell an answer from a dismissal, and the two need opposite recoveries.</summary>
+    private bool _firstRunWasAnswered;
+
     private void OnFirstRunAnswered(FirstRunWindow window, FirstRunState answer)
     {
+        _firstRunWasAnswered = true;
         _config = FirstRun.Outcome(answer, _config);
         _config.Save();
         Log.Info("startup", "the first-run screen was answered: " +
@@ -666,10 +731,53 @@ internal sealed class Shell : ISettingsHost
     /// throwing inside a handler nobody is watching. <see cref="OnContentLoopAsync"/> hands the
     /// work to the loop that holds the connection and waits for its answer.</para>
     /// </summary>
+    /// <summary>
+    /// Open the query-side encoders when this session has none, after models have arrived.
+    ///
+    /// <para>The encoders are opened once, in <c>StartTheRest</c> - which the first-run path runs
+    /// BEFORE the download it just agreed to. So on every first run that fetched anything they
+    /// were opened against an empty models folder, answered null, and nothing reopened them: the
+    /// first content search that person ever ran came back empty, with no offer and no note, on a
+    /// machine whose welcome screen had just said everything they chose had arrived. The indexer
+    /// meanwhile read those same files perfectly well, so the index filled up with answers nothing
+    /// could ask for.</para>
+    ///
+    /// <para><b>Only when there is none.</b> Replacing a live <c>Semantic</c> means disposing ONNX
+    /// sessions a card may be part-way through a query on, and there is no safe moment to do that
+    /// from here. That case keeps the rule Findra already documents and states on every surface
+    /// that installs a capability: indexing picks it up without a restart, searching by it does
+    /// not. A null one is held by nobody, which is what makes this case different rather than an
+    /// exception to it.</para>
+    /// </summary>
+    private void OpenTheQueryEncodersIfThereAreNone(CapabilitySet installed)
+    {
+        if (_semantic is not null) return;
+
+        Semantic? opened;
+        try { opened = Semantic.Open(installed); }
+        catch (Exception ex)
+        {
+            Log.Error("models", "the query encoders would not open after the download", ex);
+            return;
+        }
+        if (opened is null) return;
+
+        // The field is read from the interface thread when a card is built, so it is written from
+        // there too. Open() itself is the expensive half and has already happened off it.
+        Dispatcher.UIThread.Post(() =>
+        {
+            if (_semantic is not null) { opened.Dispose(); return; }
+            _semantic = opened;
+            Log.Info("models", "query encoders ready after the download: " +
+                               (opened.Text is null ? "" : "meaning ") + (opened.Image is null ? "" : "pictures"));
+        });
+    }
+
     private async Task RequeueWhatArrivedAsync()
     {
         CapabilitySet installed = CapabilitySet.Installed(ModelStore.Dir);
         _installed = installed;
+        OpenTheQueryEncodersIfThereAreNone(installed);
 
         int requeued = await OnContentLoopAsync(db =>
             CapabilityGate.Apply(db, CapabilityGate.Plan(installed, CapabilityGate.StampsIn(db))))

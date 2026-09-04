@@ -149,6 +149,10 @@ public sealed class Decoders : IDecoders
     private ClipImageEncoder? _vision;
     private E5Encoder? _e5;
     private WhisperFactory? _whisper, _whisperHe;
+
+    /// <summary>The Hebrew fine-tune is on disk and will not open. Set once, so a broken file is
+    /// one log line rather than one failed decode per recording on the machine.</summary>
+    private bool _heIsBroken;
     private bool _dirty;
 
     public CapabilitySet Installed { get; private set; }
@@ -460,8 +464,29 @@ public sealed class Decoders : IDecoders
     {
         (Model general, Model? hebrew) = SpeechModels(Installed);
         _whisper ??= Media.OpenWhisper(ModelStore.PathOf(general, _dir)).Value;
-        if (_whisperHe is null && hebrew is not null && ModelStore.Present(hebrew, _dir))
-            _whisperHe = Media.OpenWhisper(ModelStore.PathOf(hebrew, _dir)).Value;
+
+        // The FINE-TUNE is allowed to fail on its own, and this is the whole reason it has a try
+        // of its own. It is a second pass over what the general model called Hebrew, so a machine
+        // where it will not open should transcribe everything else exactly as a machine without it
+        // does. Under the general model's own open it did the opposite: one corrupt or truncated
+        // whisper-ivrit.bin threw out of here for EVERY recording on the disk, each one was
+        // recorded as failed - a state nothing re-queues - and the transcripts the general model
+        // would have produced were never written. A 1.5 GB file for one language silently took
+        // speech search away from every other language on the machine.
+        //
+        // Tried once. _heIsBroken stops a file that will not open being opened again for every
+        // recording in the queue, which on a first pass is a decode failure per recording rather
+        // than one line in the log.
+        if (_whisperHe is null && !_heIsBroken && hebrew is not null && ModelStore.Present(hebrew, _dir))
+        {
+            try { _whisperHe = Media.OpenWhisper(ModelStore.PathOf(hebrew, _dir)).Value; }
+            catch (Exception ex)
+            {
+                _heIsBroken = true;
+                Log.Error("index", "the Hebrew speech model is on disk and would not open - " +
+                                   "recordings are transcribed by the general model only", ex);
+            }
+        }
 
         (List<Media.Line> lines, string lang) = Media.Transcribe(samples, _whisper, _whisperHe).GetAwaiter().GetResult();
         Log.Once($"index|speech|{lang}", "INFO", "index",
