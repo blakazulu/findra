@@ -214,10 +214,16 @@ if (Test-Path -LiteralPath $standardDir) {
 # shown, so all of it was kept. The installer deletes the value after installing, and an installed
 # machine is the only place that can be seen. Found by DisplayName, so this holds no second copy of
 # the AppId the installer declares.
+#
+# The property is tested with `-contains 'DisplayName'` rather than read straight off the object,
+# because a real machine's uninstall hive holds keys that have none - a patch entry, a half-written
+# key, some vendor's own bookkeeping. Reading an absent property is a TERMINATING error here, so
+# the whole check stopped dead on the first such key and every row below it went unrun rather than
+# unanswered, which is the one outcome a three-state checker must not produce.
 $askedFirst = 'the uninstaller can still ask before it keeps or deletes your data'
 $entry = Get-ChildItem -LiteralPath 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall' -ErrorAction SilentlyContinue |
     ForEach-Object { Get-ItemProperty -LiteralPath $_.PSPath -ErrorAction SilentlyContinue } |
-    Where-Object { $_.DisplayName -eq 'Findra' } |
+    Where-Object { $_ -and $_.PSObject.Properties.Name -contains 'DisplayName' -and $_.DisplayName -eq 'Findra' } |
     Select-Object -First 1
 if (-not $entry) {
     Row 'not yet' $askedFirst `
