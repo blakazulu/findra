@@ -1155,6 +1155,60 @@ CREATE TABLE IF NOT EXISTS opened(path TEXT PRIMARY KEY, count INTEGER NOT NULL,
     }
 
     /// <summary>Exact-word hits from the FTS index, best first.</summary>
+    /// <summary>What the index holds about ONE file, by path, or null when it holds nothing.
+    ///
+    /// <para>Every other reader here answers a question about the whole index - what is queued,
+    /// what failed, what matched. Nothing could answer "what about THIS file", which is the only
+    /// question anybody actually asks: they can see the file, they searched for it, it did not
+    /// come back, and every fact needed to explain that was already recorded and unreachable.
+    /// </para>
+    /// </summary>
+    public ItemRow? ItemByPath(string path)
+    {
+        using var cmd = _c.CreateCommand();
+        cmd.CommandText = "SELECT vol, frn, path, kind, mtime, size, state, COALESCE(error,''), indexed_at, id " +
+                          "FROM items WHERE path = $p COLLATE NOCASE LIMIT 1";
+        cmd.Parameters.AddWithValue("$p", path);
+        using var r = cmd.ExecuteReader();
+        if (!r.Read()) return null;
+        return new ItemRow(r.GetString(0), unchecked((ulong)r.GetInt64(1)), r.GetString(2),
+                           (ResultKind)r.GetInt32(3), r.GetInt64(4), r.GetInt64(5), r.GetInt32(6),
+                           r.GetString(7), r.GetInt64(8), r.GetInt64(9));
+    }
+
+    public readonly record struct ItemRow(string Vol, ulong Frn, string Path, ResultKind Kind,
+                                          long Mtime, long Size, int State, string Error,
+                                          long IndexedAt, long Id);
+
+    /// <summary>Is this file waiting, and what for? A path can be queued without an item row at
+    /// all - a file offered by the walk that has never been read - so this is asked separately.
+    /// </summary>
+    public (string Reason, int Attempts)? QueuedAs(string path)
+    {
+        using var cmd = _c.CreateCommand();
+        cmd.CommandText = "SELECT reason, attempts FROM pending WHERE path = $p COLLATE NOCASE LIMIT 1";
+        cmd.Parameters.AddWithValue("$p", path);
+        using var r = cmd.ExecuteReader();
+        return r.Read() ? (r.GetString(0), r.GetInt32(1)) : null;
+    }
+
+    /// <summary>Every segment an item holds, in the order they were written. The text is carried
+    /// so a caller can show what a chunk actually says - which is how "it matched on words" is
+    /// told from "it matched on meaning" without guessing.</summary>
+    public List<SegmentHit> SegmentsOf(long itemId)
+    {
+        var list = new List<SegmentHit>();
+        using var cmd = _c.CreateCommand();
+        cmd.CommandText = "SELECT s.id, i.path, i.kind, s.kind, s.t0, s.t1, s.text, s.vec " +
+                          "FROM segments s JOIN items i ON i.id = s.item WHERE s.item = $i ORDER BY s.id";
+        cmd.Parameters.AddWithValue("$i", itemId);
+        using var r = cmd.ExecuteReader();
+        while (r.Read())
+            list.Add(new SegmentHit(r.GetInt64(0), r.GetString(1), (ResultKind)r.GetInt32(2),
+                                    r.GetInt32(3), r.GetDouble(4), r.GetDouble(5), r.GetString(6), r.GetInt64(7)));
+        return list;
+    }
+
     public List<SegmentHit> Fts(string query, int limit)
     {
         var list = new List<SegmentHit>();

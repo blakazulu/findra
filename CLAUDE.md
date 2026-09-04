@@ -79,8 +79,9 @@ findra.exe --searchprobe [query]      # whole path end to end; must report which
                                       # the content indexer is doing
 findra.exe --searchmodels             # are models present, do they load, do they agree, and
                                       # which execution provider answered for each runtime
-findra.exe --searchindex [file|folder|q:query]...   # what is indexed, what is queued; given
-                                      # paths it queues and drains them, given q: it queries
+findra.exe --searchindex [file|folder|q:query|why:path]...   # what is indexed, what is queued;
+                                      # given paths it queues and drains them, given q: it queries,
+                                      # given why:<path> it explains ONE file and changes nothing
 findra.exe --searchshot out.png <state> [palette]   # twenty-three states, listed below
 findra.exe --searchtest               # engine self-check
 findra.exe --searchbench [out.md] [corpus]   # measured numbers, as a pasteable Markdown
@@ -269,6 +270,29 @@ always just the search again. Otherwise: files already read and reading merely o
 back on in place; nothing read at all opens Settings at Content, where the switch, the power, the
 limit and the capabilities are; a count nothing has read yet searches, because a window thrown
 over a card somebody has just opened is not undone by pressing anything.
+
+## Explaining one file
+
+**`--searchindex why:<path>` is how "I can see this file and searching does not find it" gets an
+answer.** Every other diagnostic describes the whole index - what is queued, what failed, what
+matched - and none of them could say anything about a FILE, which is the only thing anybody asks
+about. The facts were all recorded and unreachable: explaining one real result meant reading source
+and reasoning from the outside, which is the defect `--searchprobe` exists to remove for the
+progress pill, one level along.
+
+- **It reads and changes nothing.** Handing the same path in bare QUEUES it; `why:` is a question.
+- **With a `q:` beside it, it scores that file's own vectors against that query** and says whether
+  each cleared the floor its kind is judged on. `VectorStore.Search` can only report the rows that
+  WON, and a file somebody is asking about is nearly always one that lost - so `ScoreOf` reads one
+  known row instead. A tombstoned row is reported as discarded rather than scored, because its
+  bytes are still there and dotting them yields a confident number for a segment that belongs to
+  nothing.
+- **`ExplainFile.Verdict` names THE reason, in decision order**, on the terms `--searchprobe` is
+  written under: not on the disk, not a content kind, excluded, queued, never offered, passed over,
+  failed, read-but-empty, read-but-edited-since, read. A diagnostic that names a reason which is
+  not the reason sends somebody reinstalling.
+- **The floors it prints come from `ContentBranch`'s own constants**, so it cannot describe a
+  threshold the engine does not apply.
 
 ## The progress pill
 

@@ -202,6 +202,100 @@ public static class SearchIndexReport
         return sb.ToString();
     }
 
+    /// <summary>
+    /// `why:&lt;path&gt;` - everything the index holds about one file, and, with a `q:` beside it,
+    /// what each of its vectors scores against that query.
+    ///
+    /// <para>Reads and changes nothing. Handing the same path in bare QUEUES it, which is a
+    /// different verb and the wrong one for a question.</para>
+    /// </summary>
+    internal static void Explain(ContentDb db, List<string> paths, List<string> queries,
+                                IReadOnlyList<string> exclusions)
+    {
+        // Opened once for all the paths, and only when a query was actually asked. Loading two
+        // encoders to answer "is this file indexed" would make the cheap half of this mode as slow
+        // as the expensive one.
+        CapabilitySet installed = CapabilitySet.Installed();
+        using Semantic? semantic = queries.Count > 0 ? Semantic.Open(installed) : null;
+        semantic?.Vectors.Reload();
+
+        foreach (string raw in paths)
+        {
+            string path = Path.GetFullPath(raw);
+            Console.WriteLine($"why: {path}");
+            Console.WriteLine();
+
+            ExplainFile.Standing s = ExplainFile.Look(db, path, exclusions);
+
+            Console.WriteLine($"  verdict    : {ExplainFile.Verdict(s)}");
+            Console.WriteLine($"  on disk    : {(s.OnDisk ? Bytes(s.Bytes) + ", modified " + s.Modified?.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture) : "no")}");
+            Console.WriteLine($"  kind       : {FileKinds.Label(s.Kind)}" +
+                              (s.ContentKind ? "" : " - names only, nothing to read inside"));
+            if (s.Excluded) Console.WriteLine("  excluded   : yes - a skipped-folder rule covers this path");
+            if (s.QueuedFor is { } q)
+                Console.WriteLine($"  queued     : yes, as '{q}'" +
+                                  (s.Attempts > 0 ? $", after {s.Attempts.ToString(CultureInfo.InvariantCulture)} attempt(s)" : ""));
+
+            if (!s.Known) { Console.WriteLine("  in index   : no"); Console.WriteLine(); continue; }
+
+            Console.WriteLine($"  in index   : {State(s.State)}" +
+                              (s.ReadAt is { } at ? ", read " + at.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture) : ""));
+            if (s.Recorded.Length > 0) Console.WriteLine($"  recorded   : {s.Recorded}");
+            if (s.StaleBy > 0) Console.WriteLine("  stale      : the file has been edited since it was read");
+
+            if (s.Segments.Count == 0) Console.WriteLine("  segments   : none - nothing about this file is searchable");
+            else
+            {
+                Console.WriteLine($"  segments   : {s.Segments.Sum(x => x.Count).ToString(CultureInfo.InvariantCulture)}");
+                foreach ((int segKind, int count) in s.Segments)
+                    Console.WriteLine($"      {ExplainFile.SegName(segKind),-8} {count.ToString(CultureInfo.InvariantCulture)}");
+            }
+
+            if (semantic is not null && db.ItemByPath(path) is { } row)
+                foreach (string query in queries) Score(db, row, semantic, query);
+
+            Console.WriteLine();
+        }
+    }
+
+    private static void Score(ContentDb db, ContentDb.ItemRow row, Semantic semantic, string query)
+    {
+        Console.WriteLine();
+        Console.WriteLine($"  for '{query}':");
+        float[]? picture = semantic.Image?.Invoke(query);
+        float[]? words = semantic.Text?.Invoke(query);
+        if (picture is null && words is null)
+        {
+            Console.WriteLine("      no query encoder on this machine, so nothing can be scored");
+            return;
+        }
+
+        List<ExplainFile.SegmentScore> scored = ExplainFile.Against(db, row, semantic.Vectors, picture, words);
+        if (scored.Count == 0) { Console.WriteLine("      no segments to score"); return; }
+
+        // Best first: the one that decides whether this file comes back at all is the one worth
+        // reading, and a long transcript can hold hundreds.
+        foreach (ExplainFile.SegmentScore sc in scored.OrderByDescending(x => x.Cosine).Take(8))
+        {
+            Console.WriteLine($"      {ExplainFile.SegName(sc.SegKind),-8} {ExplainFile.Says(sc)}");
+            if (sc.Text.Length > 0)
+                Console.WriteLine($"               {(sc.Text.Length > 96 ? sc.Text[..96] + "…" : sc.Text)}");
+        }
+        if (scored.Count > 8)
+            Console.WriteLine($"      and {(scored.Count - 8).ToString(CultureInfo.InvariantCulture)} more segment(s)");
+
+        bool any = scored.Any(x => x.Vec >= 0 && x.Live && x.Floor > 0 && x.Cosine >= x.Floor);
+        Console.WriteLine($"      verdict  {(any ? "this file is a match for that query" : "nothing in this file clears its floor for that query")}");
+    }
+
+    private static string State(int state) => state switch
+    {
+        ContentDb.StateIndexed => "read",
+        ContentDb.StateFailed => "could not be read",
+        ContentDb.StateSkipped => "passed over",
+        _ => "queued",
+    };
+
     private static readonly string[] ByteUnits = ["B", "KB", "MB", "GB", "TB"];
 
     private static string Bytes(long bytes)
@@ -226,9 +320,15 @@ public static class SearchIndex
     {
         var files = new List<string>();
         var queries = new List<string>();
+        var explain = new List<string>();
         foreach (string a in args.Skip(1))
         {
             if (a.StartsWith("q:", StringComparison.OrdinalIgnoreCase)) { queries.Add(a[2..]); continue; }
+            // `why:<path>` asks about ONE file rather than queueing it: what the index holds, what
+            // state it is in, what came out of it, and - with a q: beside it - what each of its
+            // vectors scores against that query and whether it cleared the floor. It reads and
+            // changes nothing, which is what separates it from handing the same path in bare.
+            if (a.StartsWith("why:", StringComparison.OrdinalIgnoreCase)) { explain.Add(a[4..]); continue; }
             if (Directory.Exists(a)) files.AddRange(Directory.EnumerateFiles(a, "*", SearchOption.AllDirectories).Take(200));
             else if (File.Exists(a)) files.Add(a);
             else Console.WriteLine($"no such file: {a}");
@@ -287,6 +387,8 @@ public static class SearchIndex
             }
             Console.WriteLine();
         }
+
+        if (explain.Count > 0) SearchIndexReport.Explain(db, explain, queries, exclusions);
 
         Console.WriteLine(SearchIndexReport.Render(Snapshot(db)));
 

@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.IO.MemoryMappedFiles;
@@ -204,6 +204,32 @@ public sealed class VectorStore : IDisposable
             }
         }
         return top;
+    }
+
+    /// <summary>
+    /// What ONE known row scores against a query, and which segment kind it holds.
+    ///
+    /// <para><see cref="Search"/> answers "what are the best rows", which cannot explain a row
+    /// that is not among them - and a file somebody is asking about is almost always a file that
+    /// did NOT come back. Without this, "why did this picture not match" had no answer that did
+    /// not involve reading source and guessing, which is the same gap <c>--searchprobe</c> exists
+    /// to close for the progress pill.</para>
+    ///
+    /// <para>A tombstoned row (kind 255) is reported as such rather than scored: its bytes are
+    /// still on the disk and dotting them would produce a confident number for a segment that no
+    /// longer belongs to anything.</para>
+    /// </summary>
+    public (float Score, byte Kind, bool Live) ScoreOf(long row, ReadOnlySpan<float> query)
+    {
+        if (_view is null || row < 0 || row >= _count) return (0f, 0, false);
+        byte kind = row < _kinds.Length ? _kinds[row] : (byte)0;
+        if (kind == 255) return (0f, kind, false);
+
+        var half = new Half[Dim];
+        var f = new float[Dim];
+        _view.ReadArray(HeaderBytes + row * RowBytes, half, 0, Dim);
+        TensorPrimitives.ConvertToSingle(half, f);
+        return (TensorPrimitives.Dot(query, f), kind, true);
     }
 
     private static void Insert(List<Match> top, Match m, int k)

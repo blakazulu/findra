@@ -133,7 +133,8 @@ public static class Program
         Console.Error.WriteLine("  --searchprobe [query]    the whole query path, end to end");
         Console.Error.WriteLine("  --searchtest             engine self-check");
         Console.Error.WriteLine("  --searchmodels           are the models present, do they load, and on which provider");
-        Console.Error.WriteLine("  --searchindex [file|folder|q:query]...   what is indexed, and what is queued");
+        Console.Error.WriteLine("  --searchindex [file|folder|q:query|why:path]...   what is indexed, what is queued,");
+        Console.Error.WriteLine("                           and why one file did or did not match");
         Console.Error.WriteLine("  --searchbench [out.md] [corpus]     measure it, and print numbers fit to publish");
         Console.Error.WriteLine("  --searchshot out.png <state> [palette]   render a surface, no screen required");
         Console.Error.WriteLine("                           palette defaults to the configured one, not a fixed built-in");
