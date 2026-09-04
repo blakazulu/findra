@@ -1,4 +1,4 @@
-﻿using System.Globalization;
+using System.Globalization;
 
 using Findra;
 using SkiaSharp;
@@ -67,7 +67,10 @@ public class CapsuleTests
     public void ThePillSaysNothingWhenThereIsNothingToSay()
     {
         // A permanently visible progress pill makes an idle widget feel busy, which is the thing
-        // spec 3 says the capsule must not do. Three states, one answer.
+        // spec 3 says the capsule must not do. Three states, one answer - and it is now the whole
+        // product's answer rather than the capsule's: the card asked the same composer a different
+        // question and drew four settled shapes of its own, and that argument is gone.
+        // TheCardDrawsThePillOnlyWhileThereIsWorkInHand holds the other end of it.
         Assert.False(IndexStatus.Pill(contentEnabled: false, "Doc", 1_000, 10, alive: true).Show);
         Assert.False(IndexStatus.Pill(contentEnabled: true, "Doc", 1_000, 10, alive: false).Show);
         Assert.False(IndexStatus.Pill(contentEnabled: true, "Doc", 0, 4_000, alive: true).Show);
