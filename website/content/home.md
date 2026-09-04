@@ -8,7 +8,7 @@ Free, open source, and nothing leaves your machine.
 - Source: https://github.com/blakazulu/findra
 - Licence: Apache-2.0
 - Platform: Windows 10 and 11, x64 and arm64
-- Version: 0.1.0 (the first release is not tagged yet)
+- Version: 0.1.0
 
 ## What it finds
 
@@ -70,7 +70,9 @@ Full text: https://findra-search.netlify.app/privacy/
 
 ## Install
 
-Building from source is the route that works today. It needs the .NET 10 SDK and nothing else.
+`winget install blakazulu.Findra` is the whole install, on x64 and arm64 alike, and every release
+carries an installer for each architecture. Building from source works too and needs the .NET 10
+SDK and nothing else.
 
 ```
 git clone https://github.com/blakazulu/findra
@@ -86,7 +88,6 @@ the volume:
 dotnet run --project src/Findra -- --names
 ```
 
-When the first release is tagged, the whole install becomes `winget install blakazulu.Findra`.
 Neither the installer nor the executables are signed yet, so Windows will warn about an unknown
 publisher until that changes.
 

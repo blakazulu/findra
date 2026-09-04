@@ -457,9 +457,16 @@ and the section under it is a Windows Search dialog failing to find a file. That
 and shipped - do not quietly correct it, and do not carry it back into the README or the
 manifest, where a test will catch it.
 
-**Nothing on it promises a release that does not exist.** The calls to action say Coming soon
-until there is a tag, and `winget install blakazulu.Findra` appears as the route that will work
-rather than as a download offered today.
+**Nothing on it promises a release that does not exist**, in either direction. Before the first
+tag the calls to action said Coming soon and winget appeared as the route that WOULD work; from
+0.1.0 they say Get Findra and winget is the install. The same sentence turns over on the README,
+`llms.txt` and `website/content/home.md`, and `ReadmeTests.TheReadmeDoesNotStillSayFindraIsNotReadyToInstall`
+is the only one of those that a test holds - **coupled to a numbered section in `CHANGELOG.md`**,
+which is the fact that actually moves when a release is cut. It was coupled to the winget
+manifest's placeholder hashes, and that was a coupling to something that never changes:
+`winget.yml` substitutes the real hashes into the manifests it SUBMITS and writes nothing back, on
+purpose, so `packaging/winget/*.yaml` keeps its sixty-four zeros for ever. The guard could not have
+fired. Pick the fact that moves.
 
 **One `h1`.** The page opens on the mark, the name and the results card, which runs off the right
 of the window on purpose; the ticket section below it is an `h2` and steps down in size, because

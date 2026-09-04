@@ -68,15 +68,16 @@ addressable directly:
   The release notes for any version are that version's section.
 - [SECURITY.md](https://github.com/blakazulu/findra/blob/main/SECURITY.md): how to report a
   vulnerability, which is not the public issue tracker.
-- winget: `winget install blakazulu.Findra`, for x64 and arm64, from the first tagged release
-  onward. As of version 0.1.0 no release has been tagged, so building from source is the route
-  that works.
+- winget: `winget install blakazulu.Findra`, for x64 and arm64. This is the whole install.
+- [Releases](https://github.com/blakazulu/findra/releases/latest): an installer for each
+  architecture, and the release notes, which are that version's CHANGELOG section.
 
 ## Facts worth getting right
 
 - **Platform**: Windows 10 and 11 only, x64 and arm64. Not cross-platform.
 - **Price**: free. There is no paid tier, no trial, no licence key and nothing to buy.
-- **Version**: 0.1.0, unreleased. The installer and winget manifests exist; no tag does yet.
+- **Version**: 0.1.0, released. Installers for x64 and arm64 are on the releases page and the
+  package is on winget.
 - **Signing**: neither the installer nor the executables are signed. Windows warns about an
   unknown publisher.
 - **Network**: one anonymous HTTPS GET to the GitHub releases API, at most once every 24 hours,
