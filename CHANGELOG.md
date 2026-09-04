@@ -516,6 +516,20 @@ into a numbered section on the first release.
 
 ### Fixed
 
+- **Only one Findra runs against one index.** Nothing stopped a second, and the two do not simply
+  coexist: each starts its own indexer, and the second cannot open the store the first is holding,
+  so it is restarted and fails again every five minutes for as long as both are open. The second
+  hotkey also lands on a fallback combination, and a download in either writes into the other's
+  half-finished files. A second launch now says which process is already running and how to reach
+  it.
+
+- **A file that crashes the indexer no longer stops everything behind it.** A file that merely
+  fails to read was always recorded and skipped, but one that takes the whole indexer down never
+  got that far: it was handed back to the restarted indexer, which died on it again, and the queue
+  stopped at that file for good. Each attempt is now counted before the file is opened, so the
+  count survives the crash, and after three the file is written off with a reason and the queue
+  moves on.
+
 - **The tray tooltip always fits what Windows can carry.** Its field holds 127 characters and the
   longest tooltip Findra can compose is 145: a long version, no hotkey, the index line at a
   seven-figure count, and an update line. Nothing measured it. It now drops from the end, so a

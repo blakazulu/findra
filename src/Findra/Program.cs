@@ -1,4 +1,4 @@
-using System.IO;
+﻿using System.IO;
 using Avalonia;
 
 namespace Findra;
@@ -92,6 +92,25 @@ public static class Program
     private static int RunUi()
     {
         Log.Info("startup", $"findra {Log.Version} starting");
+
+        // One interface per index, and the claim is held for the whole run. Two of them share one
+        // models folder and one index: the second's indexer child cannot open the vector store the
+        // first holds and is restarted for ever, the second hotkey lands on a fallback chord, and a
+        // download in either writes into part files the other is writing. See OnlyOne.
+        if (!Startup.OnlyOne.Take(out Startup.OnlyOne? claim))
+        {
+            string say = Startup.OnlyOne.AlreadyRunning(UiStatus.Read());
+            Log.Info("startup", "another Findra already has this index; this one is not starting");
+            Log.Flush();
+            // The interface does not attach to a console, so this reaches somebody only when they
+            // typed the name at a prompt - which is exactly when a silent exit is baffling. It
+            // costs nothing on the four launches that have no console.
+            ParentConsole.Borrow();
+            Console.Error.WriteLine(say);
+            return 0;   // not a fault: Findra IS running, which is what was asked for
+        }
+
+        using (claim)
         try
         {
             return AppBuilder.Configure<App>()
