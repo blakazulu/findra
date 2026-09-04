@@ -267,9 +267,12 @@ public static class Uninstall
             spare => StopAll(spare),
             deletes =>
             {
+                // Both lists, concatenated. The sweep's answer used to be dropped on the floor,
+                // so a ui.json still held open by an interface killed a moment earlier left the
+                // exit code at 0, never reached the loop that prints failures, and left standing
+                // the very folder the sweep exists to empty.
                 IReadOnlyList<Removal> removed = Delete(deletes, Roots());
-                SweepLooseFiles(Roots());
-                return removed;
+                return [.. removed, .. SweepLooseFiles(Roots())];
             },
             forgetTheWelcomeScreen: ForgetTheWelcomeScreen);
 
@@ -410,7 +413,14 @@ public static class Uninstall
 
         switch (Decide(elevated(), relaunched: parent > 0))
         {
-            case Route.Elevate: return Relaunch(args);
+            // The report goes out HERE, from the process somebody typed at, and the child's
+            // outcome is relayed when it returns. The elevated child is started through the UAC
+            // service, so its real parent is that service and not this shell: AttachConsole finds
+            // no console, every Console.Write in it is discarded, and the whole of `--uninstall`
+            // - the keep list, the "--purge to delete those too" line, the one instruction that
+            // finishes the job, and every failure - went nowhere at all. The mode that changes
+            // nothing talked and the mode that does the work was silent.
+            case Route.Elevate: return Relaunch(args, quiet ? "" : report, appFolder, quiet);
             case Route.Fail:
                 Console.Error.WriteLine("findra: this needs administrator rights to remove the scheduled task, " +
                                         "and the elevated run did not get them. Nothing was changed.");
@@ -446,12 +456,25 @@ public static class Uninstall
         // this with it.
         forgetTheWelcomeScreen();
 
-        // Then the data, only if asked, and only inside Findra's own folders.
+        // Then the data, only if asked, and only inside Findra's own folders. Logging stops first
+        // on a purge: every write recreates the log folder, so an uninstall that logged its own
+        // progress put back the directory it had just removed. See Log.Seal.
+        if (purge) Log.Seal();
         IReadOnlyList<Removal> removed = purge ? delete(plan.Deletes) : [];
 
         // Last, the one thing it cannot do.
         if (!quiet)
         {
+            // The TASK first, and it used to be missing entirely. Deletion failures were printed
+            // and the one failure that matters was not: an orphaned HighestAvailable logon task
+            // pointing at a binary that is about to be deleted is what the spec calls a defect
+            // rather than an inconvenience, and it reached only the log - in a folder the same
+            // run may have just deleted.
+            if (!taskGone)
+                Console.Error.WriteLine(
+                    "findra: the scheduled task 'Findra name index' could not be removed. It starts an " +
+                    "elevated helper at every sign-in and now points at a binary that is going away. " +
+                    "Remove it by hand: schtasks /delete /tn \"Findra name index\" /f");
             foreach (Removal r in removed.Where(r => !r.Removed))
                 Console.Error.WriteLine($"findra: {r.Label} was not removed - {r.Problem}: {r.Path}");
             Console.WriteLine($"findra: delete {appFolder} yourself to finish removing it.");
@@ -480,10 +503,15 @@ public static class Uninstall
         catch (Exception ex) { Log.Warn("uninstall", "could not read the elevation state: " + ex.Message); return false; }
     }
 
-    private static int Relaunch(string[] args)
+    /// <param name="report">What to print before the prompt, or empty on a quiet run. Printed by
+    /// THIS process because the elevated child has no console to print it to.</param>
+    /// <param name="appFolder">The folder the child cannot delete, named in the closing line.</param>
+    private static int Relaunch(string[] args, string report, string appFolder, bool quiet)
     {
         string exe = Environment.ProcessPath ?? "";
         if (exe.Length == 0) return 2;
+
+        if (report.Length > 0) Console.Write(report);
 
         // Verb = runas is the one UAC prompt. A cancelled prompt throws Win32Exception 1223, which
         // is a decision rather than a fault: say so and change nothing.
@@ -494,7 +522,18 @@ public static class Uninstall
             { UseShellExecute = true, Verb = "runas", CreateNoWindow = true });
             if (p is null) return 2;
             p.WaitForExit();
-            return p.ExitCode;
+            int code = p.ExitCode;
+            if (!quiet)
+            {
+                if (code == 0)
+                    Console.WriteLine($"findra: removed. Delete {appFolder} yourself to finish.");
+                else
+                    Console.Error.WriteLine(
+                        "findra: the elevated run did not finish cleanly (exit " +
+                        code.ToString(Fixed) + "). Some of the scheduled task, the autostart entry " +
+                        "or the data folders may still be there; run it again, or check the log.");
+            }
+            return code;
         }
         catch (System.ComponentModel.Win32Exception ex) when (ex.NativeErrorCode == 1223)
         {

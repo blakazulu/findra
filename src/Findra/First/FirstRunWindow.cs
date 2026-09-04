@@ -186,7 +186,7 @@ public sealed class FirstRunWindow : Window
             // The last question needs room that the download screen did not, so the window grows
             // here. Safe for the same reason the shrink was: no button is drawn while a download
             // runs, so there is nothing under the pointer for a resize to move out from under.
-            _owner.Height = FirstRunLayout.SettledHeight(Rows, LimitRow, Asking);
+            _owner.Height = FirstRunLayout.SurfaceHeight(_state);
             InvalidateVisual();
         }
 
@@ -196,7 +196,12 @@ public sealed class FirstRunWindow : Window
             FirstRunHit hit = FirstRunLayout.HitTest((float)p.X, (float)p.Y, Rows, LimitRow, Settled, Finished, Asking);
             if (hit.Target == _state.HoverTarget && hit.Index == _state.HoverIndex) return;
             _state = _state with { HoverTarget = hit.Target, HoverIndex = hit.Index };
-            Cursor = PointerCursor.Of(Pointers.ForFirstRun(hit.Target));
+            // The free "Words in documents" row is not a choice - Apply returns the state
+            // unchanged for it - and the painter already knows, suppressing its hover fill. The
+            // cursor did not, so the one row on the screen that cannot be ticked was the row the
+            // pointer offered to tick. The fill and the shape now read the same rule.
+            Cursor = PointerCursor.Of(FirstRun.Apply(_state, hit) == _state
+                ? PointerShape.Arrow : Pointers.ForFirstRun(hit.Target));
             InvalidateVisual();
         }
 
@@ -260,7 +265,7 @@ public sealed class FirstRunWindow : Window
                 // and no notes, and the fixed height left a large empty band under the summary.
                 // Here is the safe moment: a deliberate click on a button that then stops
                 // existing, with nothing left under the pointer to be hit.
-                _owner.Height = FirstRunLayout.SettledHeight(Rows, LimitRow, FirstRun.Asks(_state));
+                _owner.Height = FirstRunLayout.SurfaceHeight(_state);
                 InvalidateVisual();
 
                 Answered?.Invoke(answer);

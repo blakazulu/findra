@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Globalization;
@@ -124,8 +124,33 @@ public static class Log
         Write(level is "WARN" or "WARN " ? "WARN " : level is "ERROR" ? "ERROR" : "INFO ", cat, msg);
     }
 
+    /// <summary>
+    /// Stop writing to disk, for good, and throw away whatever is queued.
+    ///
+    /// <para>One caller: a purge, just before it deletes the log folder. Every write recreates
+    /// that folder - <see cref="Dir"/> is <c>Paths.Ensure</c> and <see cref="Append"/> goes
+    /// through it - so the delete removed the folder, the next flush a second later put it back
+    /// with a fresh file in it, and `--uninstall --purge` reported "removed logs" over a folder
+    /// that was still there. The uninstall logs its own progress, so it recreated the folder by
+    /// describing the act of deleting it, and the explicit flush at the end did it once more.
+    /// PRIVACY.md says a purge removes everything and names the log file as the thing holding
+    /// file names, so this is a promise the product was not keeping.</para>
+    ///
+    /// <para>Discards rather than flushes, which is the only choice that makes sense: flushing
+    /// is what recreates the folder, and lines about deleting a log nobody will read are the
+    /// least valuable bytes on the machine. The console still says what happened.</para>
+    /// </summary>
+    public static void Seal()
+    {
+        _sealed = true;
+        while (Queue.TryDequeue(out _)) { }
+    }
+
+    private static volatile bool _sealed;
+
     private static void Write(string level, string cat, string msg)
     {
+        if (_sealed) return;
         EnsureStarted();
         bool error = level == "ERROR";
         if (level == "WARN ") Interlocked.Increment(ref _warns);
@@ -198,7 +223,7 @@ public static class Log
 
     public static void Flush()
     {
-        if (Queue.IsEmpty || !_ready) return;
+        if (_sealed || Queue.IsEmpty || !_ready) return;
 
         // group by event day: a flush that straddles midnight writes to both days' files
         var byDay = new Dictionary<DateTime, StringBuilder>();

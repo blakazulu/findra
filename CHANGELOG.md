@@ -516,6 +516,85 @@ into a numbered section on the first release.
 
 ### Fixed
 
+- **The progress bar under the search card is visible again, on the card it exists for.** It hangs
+  below the card, so whether it is drawn decides how tall the window is - and nothing asked the
+  window to re-measure when it appeared. It turned on about a tenth of a second after the card
+  opened and was then drawn outside a window sized without it, so it was clipped away entirely.
+  Typing a character resized the card for another reason and it appeared, which is what made it
+  look intermittent.
+
+- **Upgrading actually re-reads your pictures.** The step that says images are read differently
+  queued every photo on the machine and re-read none of them: it handed the indexer the sentence
+  meant for the log instead of the word that means "read this again", and the indexer drops a
+  queued file untouched unless it is told that. The count went down, the log said "re-queued", and
+  the index was exactly as it had been. There is a new step that does it properly, because a
+  machine that already ran the broken one will never run it again.
+
+- **The indexer no longer reports itself dead while it is working.** Its heartbeat was written
+  after each file finished, so one long file - a thirty-minute recording, a large document, frames
+  out of a video - went fifteen seconds without one. The capsule's bar vanished, the card said
+  paused, and both diagnostics said nothing was running, during exactly the operation people ask
+  about most.
+
+- **Deleting a skipped folder now does something.** Adding one was honoured and removing one was
+  not: those files have no record to bring back, and the change journal only reports what changes,
+  so a folder of finished work is never looked at again. Removing an entry now asks for a fresh
+  pass over the drive.
+
+- **The card, the capsule and the tray agree about whether Findra is reading.** Two of them read
+  the setting and one read the switch the setting is actually written to, so during the first-run
+  download the card said reading was off while the tray said it was paused because Findra was
+  closed - with the welcome screen on the display.
+
+- **A paused index stops claiming to be paused once it is not.** The note the indexer leaves about
+  what it was doing is never cleared when it stops, so a session that paused and quit left it
+  behind for the next one.
+
+- **The welcome screen keeps its rounded corners when you answer it.** The window shrinks for the
+  second act and the card was still being drawn to the first act's height, so both bottom corners
+  fell off the bottom of the window.
+
+- **No empty band on the download screen.** The transcription-limit row is only drawn while the
+  question is on screen, but the space for it was reserved in every act, leaving a gap between two
+  rows for the whole download.
+
+- **Pressing "Everything" lights the "Everything" tile.** On machines not offered Hebrew the tile
+  selects three capabilities rather than four, and the highlight was still comparing against four -
+  so the tile somebody had just clicked was the only thing that did not respond.
+
+- **The pointer stops offering to click things that cannot be clicked.** Nine rows in Settings and
+  the free row on the welcome screen showed a pointing hand over controls that refuse every press.
+
+- **`--uninstall` says what it is doing again.** It relaunches itself with administrator rights,
+  and that copy has no console to write to, so the list of what is kept, the line telling you how
+  to finish, and every failure went nowhere. The mode that changes nothing talked and the mode
+  that does the work was silent.
+
+- **An uninstall that cannot remove the scheduled task now says so, in both places.** The installer
+  discarded the result and reported a clean removal, leaving a task that starts an elevated helper
+  at every sign-in pointing at a program that is gone.
+
+- **`--uninstall --purge` really empties the log folder.** Every log line recreated the folder, and
+  the uninstall logged its own progress, so it put back the directory it had just removed and
+  reported it deleted.
+
+- **The self-check stops calling an out-of-date index a broken build.** An older index is a
+  migration owed and runs the next time Findra opens; only a newer one, written by a later build,
+  is a fault.
+
+- **A hung `schtasks` no longer reports an unrelated error and leaks the process.** One of the four
+  places that runs it read the exit code without checking that the process had exited.
+
+- **A loose file that will not delete is reported.** The sweep's answer was dropped, so a purge
+  left the folder standing and still exited cleanly.
+
+- **`--searchindex` writes the drive letter the way everything else does, and honours your skipped
+  folders.** A lowercase path created a second entry for a file already indexed; pointing it at a
+  skipped folder indexed files the next launch immediately deleted.
+
+- **The indexer's fallback power setting matches the setting's own default** rather than running
+  flat out when the value is missing.
+
 - **The end-to-end check no longer stops half way through on a real machine.** It looked up
   Findra's uninstall entry by reading a property that some registry keys simply do not have - a
   patch entry, a half-written key, another vendor's bookkeeping - which is a terminating error, so

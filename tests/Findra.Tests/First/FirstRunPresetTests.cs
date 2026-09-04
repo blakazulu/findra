@@ -1,4 +1,4 @@
-using Findra;
+﻿using Findra;
 using Xunit;
 
 /// <summary>
@@ -29,6 +29,11 @@ public class FirstRunPresetTests
         FirstRunState after = FirstRun.Apply(Offered(hebrew: false), new FirstRunHit(FirstRunTarget.Preset, tile));
 
         Assert.DoesNotContain(Capability.Hebrew, after.Chosen);
+        // And the tile the person just pressed lights up. Presets.Match compares against the
+        // closed sets, and Everything holds Hebrew - so on a machine that is not offered it, the
+        // selection matched no preset, and the one thing on the screen that did not respond to the
+        // click was the tile that took it.
+        Assert.Equal((Preset)tile, FirstRun.Match(after.Chosen, hebrewOffered: false));
         // And every capability it DID select has a row somebody can see.
         var rows = FirstRun.Rows(after).Where(r => r.Capability is not null).Select(r => r.Capability!.Value).ToHashSet();
         foreach (Capability c in after.Chosen) Assert.Contains(c, rows);

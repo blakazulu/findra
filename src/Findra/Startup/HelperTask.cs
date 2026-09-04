@@ -1,4 +1,4 @@
-using System.Diagnostics;
+﻿using System.Diagnostics;
 using System.Globalization;
 using System.Security;
 using System.Security.Principal;
@@ -237,8 +237,20 @@ $"""
             var psi = new ProcessStartInfo("schtasks", $"/run /tn \"{TaskName}\"")
             { UseShellExecute = false, CreateNoWindow = true };
             using Process? p = Process.Start(psi);
-            p?.WaitForExit(10_000);
-            if (p?.ExitCode != 0) return false;
+            if (p is null) return false;
+            // The wait's own answer, not a discarded bool - the rule Register and RunSchtasks are
+            // both written under, and the one call site still breaking it. Reading ExitCode on a
+            // process that has not exited THROWS, so a schtasks hung for ten seconds was reported
+            // through the catch below as "could not start the helper" plus an InvalidOperation
+            // message naming neither the timeout nor the task, and the schtasks process was left
+            // running - alone among this file's callers.
+            if (!p.WaitForExit(10_000))
+            {
+                try { p.Kill(entireProcessTree: true); } catch { }
+                Log.Warn("startup", "schtasks /run did not answer within ten seconds; the helper may still be starting");
+                return false;
+            }
+            if (p.ExitCode != 0) return false;
         }
         catch (Exception ex) { Log.Warn("startup", "could not start the helper: " + ex.Message); return false; }
 

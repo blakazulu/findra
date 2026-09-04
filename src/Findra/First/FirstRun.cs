@@ -92,6 +92,24 @@ public static class FirstRun
         return without;
     }
 
+    /// <summary>
+    /// Which tile a selection IS, on this machine.
+    ///
+    /// <para><c>Presets.Match</c> compares against the closed sets, and Everything holds Hebrew -
+    /// so on a machine that is not offered Hebrew, pressing Everything produced a selection that
+    /// matched no preset at all and the tile the person had just clicked was the only thing on the
+    /// screen that did not respond: the rows ticked, the summary and the price updated, and no
+    /// tile took its fill or its outline. It is the same fix <see cref="PresetSize"/> needed, in
+    /// the one place it was not carried to.</para>
+    /// </summary>
+    public static Preset Match(IReadOnlySet<Capability> chosen, bool hebrewOffered)
+    {
+        ArgumentNullException.ThrowIfNull(chosen);
+        foreach (Preset p in new[] { Preset.JustNames, Preset.Recommended, Preset.Everything })
+            if (chosen.SetEquals(PresetChoice(p, hebrewOffered))) return p;
+        return Preset.Custom;
+    }
+
     /// <summary>What a preset would still cost on THIS machine. A tile that says 2.93 GB over a
     /// folder that already holds all of it is the same lie the rows told, and one that prices a
     /// capability this machine is not offered is the same lie in the other direction.</summary>

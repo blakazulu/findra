@@ -193,7 +193,20 @@ public sealed class CardWindow : Window
         // True until a reading says otherwise: a card that has not looked yet offers the pill, for
         // the same reason _contentIndexed starts at -1 rather than 0.
         private volatile bool _contentOffered = true;
-        private IndexProgress _progress;
+        // Written on the pool thread by ContentStatusLine and read on the interface thread by the
+        // tick. A four-field struct is not written atomically, so it goes through Volatile like
+        // every other field this class shares between those two threads - a torn read here is a
+        // label against another composition's count, and, since Show now decides the window's
+        // height, a torn Show is a resize that does not match what is drawn.
+        private IndexProgress _progressStore;
+
+        private IndexProgress Progress
+        {
+            get { lock (_progressGate) return _progressStore; }
+            set { lock (_progressGate) _progressStore = value; }
+        }
+
+        private readonly object _progressGate = new();
 
         private volatile SearchCardState _state = SearchCardState.Empty;
         private readonly SearchGate _gate = new();
@@ -228,7 +241,7 @@ public sealed class CardWindow : Window
             _derived = derived;
             Focusable = true;
 
-            _state = _state with { IndexLine = IndexLine(), ContentOffered = _contentOffered, Progress = _progress, OpenedAt = 0 };
+            _state = _state with { IndexLine = IndexLine(), ContentOffered = _contentOffered, Progress = Progress, OpenedAt = 0 };
 
             _timer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(66) };
             _timer.Tick += (_, _) =>
@@ -236,7 +249,20 @@ public sealed class CardWindow : Window
                 // the caret blinks and the index line moves; nothing else here needs frames -
                 // except the unfold, which wants them faster for a quarter of a second
                 PumpContentLine();
-                _state = _state with { Clock = _clock.Elapsed.TotalSeconds, IndexLine = IndexLine(), ContentOffered = _contentOffered, Progress = _progress };
+                IndexProgress progress = Progress;
+                // The progress pill hangs UNDER the card, so whether it is drawn decides the
+                // WINDOW's height - and this tick was the one place the pill could appear with
+                // nothing asking the window to re-measure. Resize runs once, in the constructor,
+                // when the pill is still default; the first status read lands a tick later and
+                // every settled arm of IndexStatus.Pill returns Show true, so on any machine with
+                // a content index the pill turned on within ~100 ms of opening and was then drawn
+                // outside a window sized without it - clipped away entirely by the draw op's own
+                // bounds. Not a gap, not a clipped pill: nothing at all, on the empty card, which
+                // is the one card this pill exists for. Typing a character raised CardResized for
+                // another reason and the pill appeared, which is what made it look intermittent.
+                bool grew = progress.Show != _state.Progress.Show;
+                _state = _state with { Clock = _clock.Elapsed.TotalSeconds, IndexLine = IndexLine(), ContentOffered = _contentOffered, Progress = progress };
+                if (grew) CardResized?.Invoke();
                 InvalidateVisual();
             };
             _timer.Start();
@@ -323,7 +349,12 @@ public sealed class CardWindow : Window
                 // by the counts alone, because zero queued and zero indexed is byte-for-byte what
                 // a finished index looks like.
                 contentOn = db.Get("index:paused") == "0";
-                state = db.Get("indexer:state") ?? "off";
+                // And the PAUSE comes from that same row, never from indexer:state. That row is
+                // the child's own note about what it was doing, and nothing clears it when the
+                // child stops - so a session that paused, wrote "paused" and quit left it behind,
+                // and the next session with reading back on and a backlog described itself as
+                // paused with nothing pausing it. One bit, one row, one writer.
+                state = contentOn ? db.Get("indexer:state") ?? "" : "paused";
                 beat = db.Get("indexer:beat") ?? "";
                 // The pid goes with the heartbeat, always. IndexStatus.Alive owns the rule that
                 // reads the two together, so this card, the capsule, --searchprobe and
@@ -351,7 +382,7 @@ public sealed class CardWindow : Window
             // capsule and the tray's tooltip use.
             // evenWhenSettled: this is a window somebody opened, and it owes an answer whether or
             // not there is work in hand. The capsule, which is on the desktop all day, does not.
-            _progress = IndexStatus.Pill(contentOn, db.Get("indexer:kind") ?? "", pending, indexed,
+            Progress = IndexStatus.Pill(contentOn, db.Get("indexer:kind") ?? "", pending, indexed,
                                          IndexStatus.Alive(beat, pid), evenWhenSettled: true);
             return IndexStatus.Line(contentOn, state, pending, indexed, IndexStatus.Alive(beat, pid), rebuilt);
         }

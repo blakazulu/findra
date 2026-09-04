@@ -251,6 +251,32 @@ public static class FirstRunLayout
     /// band and the button. The one resize happens on a deliberate click on a button that then
     /// stops existing, which is the moment nothing is under the pointer waiting to be hit.</para>
     /// </summary>
+    /// <summary>How tall this screen is RIGHT NOW: the choosing act's constant, or the settled
+    /// act's measured height. One expression, because the window resizes to it and the painter
+    /// draws the card's shape to it, and those two disagreeing is a card with no bottom.</summary>
+    public static float SurfaceHeight(FirstRunState s)
+    {
+        ArgumentNullException.ThrowIfNull(s);
+        if (s.Stage == FirstRunStage.Choosing) return Height;
+        return SettledHeight(FirstRun.Rows(s).Count, BandRow(s), FirstRun.Asks(s));
+    }
+
+    /// <summary>
+    /// Which row the transcription band sits under, or -1 for no band - and the ONE answer, read
+    /// by the painter that reserves the space and by the painter that draws it.
+    ///
+    /// <para>They used to be two. The space was reserved from <c>FirstRun.LimitRow</c> in every
+    /// act, and the band was only PAINTED while the screen was still the question, so a machine
+    /// offered Hebrew whose owner ticked Speech got a 64 px hole between Speech and Hebrew for the
+    /// whole download and the finished screen, with a window that much taller than its content.
+    /// Reserved and drawn are one decision.</para>
+    /// </summary>
+    public static int BandRow(FirstRunState s)
+    {
+        ArgumentNullException.ThrowIfNull(s);
+        return s.Stage == FirstRunStage.Choosing ? FirstRun.LimitRow(s) : -1;
+    }
+
     public static float SettledHeight(int rows, int limitRow = -1, bool asking = false) =>
         RowRect(rows - 1, limitRow).Bottom + RowsToSwitchesGap + SettledSummaryH
         + (asking ? AskH : 0f) + ButtonH + 40f;
@@ -439,7 +465,13 @@ public static class FirstRunPainter
 
         canvas.Clear(SKColors.Transparent);
 
-        var card = new SKRect(0, 0, FirstRunLayout.Width, FirstRunLayout.Height);
+        // The height the window ACTUALLY has, not the choosing act's constant. The window is
+        // resized when the screen is answered and again when the download ends, and the painter
+        // went on laying the round rect and its hairline out to 928: both bottom corners fell off
+        // the bottom of a 628 px window, so the welcome screen changed from a rounded card to a
+        // square-bottomed one the moment it was answered - on the one surface that is meant to
+        // read as the same object as the card and the settings window.
+        var card = new SKRect(0, 0, FirstRunLayout.Width, FirstRunLayout.SurfaceHeight(s));
         using (var fill = new SKPaint { Color = d.Ground, IsAntialias = true })
             canvas.DrawRoundRect(new SKRoundRect(card, FirstRunLayout.Radius), fill);
         // The card's own edge, to the pixel, the same accent-at-52 hairline the card and the
@@ -476,7 +508,8 @@ public static class FirstRunPainter
                 _ => "Names are searchable the moment Findra starts. Everything below is optional.",
             }, left, 70, Parts.LabelSize, face, d.Fade(170));
 
-        int limitRow = FirstRun.LimitRow(s);
+        // Reserved and drawn are one answer, read from one place. See FirstRunLayout.BandRow.
+        int limitRow = FirstRunLayout.BandRow(s);
 
         // The tiles and the rows are drawn in both acts: in the first they are the question, in
         // the second they are the record of what was asked for and how far each part of it has
@@ -571,7 +604,7 @@ public static class FirstRunPainter
 
     private static void Tiles(SKCanvas canvas, FirstRunState s, Derived d, SKTypeface face)
     {
-        Preset here = Presets.Match(s.Chosen);
+        Preset here = FirstRun.Match(s.Chosen, s.HebrewOffered);
         Preset[] presets = [Preset.JustNames, Preset.Recommended, Preset.Everything];
 
         for (int i = 0; i < presets.Length; i++)

@@ -214,6 +214,7 @@ public static class SearchIndex
         }
 
         using ContentDb db = ContentDb.OpenOrRebuild();
+        IReadOnlyList<string> exclusions = Config.LoadFromDisk().SearchExclusions;
 
         if (files.Count > 0)
         {
@@ -224,11 +225,21 @@ public static class SearchIndex
                 {
                     ResultKind kind = FileKinds.Classify(Path.GetFileName(f), isDirectory: false);
                     if (!FileKinds.HasContent(kind)) { Console.WriteLine($"  skip (not a content kind): {f}"); continue; }
+                    // And the exclusion list, which this used to ignore. Indexing a file inside a
+                    // skipped folder proves the decoder can read it and then throws the proof
+                    // away: the interface's next Reconcile walks the indexed rows and queues every
+                    // one of them for deletion.
+                    if (FileKinds.Excluded(f, exclusions)) { Console.WriteLine($"  skip (a skipped folder): {f}"); continue; }
                     ulong frn;
                     try { frn = FrnOf(f); }
                     catch (IOException ex) { Console.WriteLine($"  skip ({ex.Message}): {f}"); continue; }
+                    // Upper-cased, like every other writer of this column. items and pending are
+                    // keyed UNIQUE(vol, frn), so a lowercase path off a shell completion wrote a
+                    // SECOND row for a file the journal already held as ("C", frn): decoded twice,
+                    // two sets of segments, and a journal delete keyed on the upper-case pair that
+                    // leaves the other row answering searches for a file that is gone.
                     string? root = Path.GetPathRoot(f);
-                    string vol = root is { Length: > 0 } ? root[..1] : "?";
+                    string vol = root is { Length: > 0 } ? char.ToUpperInvariant(root[0]).ToString() : "?";
                     db.Enqueue(vol, frn, f, kind, "searchindex probe", tx);
                     Console.WriteLine($"  queued {kind,-8} frn {frn.ToString("X", CultureInfo.InvariantCulture)}  {f}");
                     queuedCount++;

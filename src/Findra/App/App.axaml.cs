@@ -1247,7 +1247,15 @@ internal sealed class Shell : ISettingsHost
         // are written by a one-shot drain in some other process, and by this one, and only the
         // recorded pid tells a live child from the last thing a finished drain left behind.
         bool alive = IndexStatus.Alive(db.Get("indexer:beat"), db.Get("indexer:pid"));
-        string line = IndexStatus.Line(_config.IndexContent, db.Get("indexer:state") ?? "off", pending, indexed,
+        // The ROW, not _config.IndexContent, and this is the same rule the card is written under.
+        // The real bit is `IndexContent && !_holdReading`, which is what PumpIndexer writes here -
+        // so during the first-run hold the card read the row and said reading was off while the
+        // capsule and the tray read the config and said it was on, or worse, that indexing was
+        // paused because Findra was closed while the welcome screen was on the display. Two
+        // surfaces, two answers, from the one place that is supposed to have one.
+        bool reading = db.Get("index:paused") == "0";
+        string state = reading ? db.Get("indexer:state") ?? "" : "paused";
+        string line = IndexStatus.Line(reading, state, pending, indexed,
                                        alive, db.WasRebuilt || db.Get("index:rebuilt") == "1");
 
         // Kept before the early return below. The settings window's Content sentence and the
@@ -1268,7 +1276,7 @@ internal sealed class Shell : ISettingsHost
         // The capsule's pill: the same facts as the line, laid out for a label / track / count
         // rather than a sentence. Nothing to show is `default`, which draws no pill at all - not a
         // bar at zero, which is what makes an idle widget feel busy.
-        IndexProgress pill = IndexStatus.Pill(_config.IndexContent, db.Get("indexer:kind") ?? "",
+        IndexProgress pill = IndexStatus.Pill(reading, db.Get("indexer:kind") ?? "",
                                               pending, indexed, alive);
 
         if (line == _capsuleLine && pill == _capsulePill) return;
