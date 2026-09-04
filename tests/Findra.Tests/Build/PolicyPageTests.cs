@@ -110,7 +110,15 @@ public class PolicyPageTests
         // line from the other side.
         Assert.DoesNotMatch(@"(?m)^\[UninstallRun\]", iss);
         Assert.Matches(@"procedure\s+CurUninstallStepChanged", iss);
-        Assert.Matches(@"if\s+Purge\s+then\s*\r?\n\s*Exec\(app,\s*'--uninstall --purge --quiet'", iss);
+        Assert.Matches(@"if\s+Purge\s+then\s*\r?\n\s*ok\s*:=\s*Exec\(app,\s*'--uninstall --purge --quiet'", iss);
+
+        // And the run's ANSWER is read. The code was assigned and dropped, so an uninstall that
+        // could not remove the scheduled task returned 1, Inno deleted the program folder anyway,
+        // and the person was told it had all gone - while a HighestAvailable logon task pointing
+        // at a deleted binary stayed behind. This is one of the two places a text assertion is
+        // right, because there is no code here to run.
+        Assert.Matches(@"if\s*\(not ok\)\s*or\s*\(code <> 0\)\s*then", iss);
+        Assert.Contains(@"schtasks /delete /tn ""Findra name index"" /f", iss, StringComparison.Ordinal);
     }
 
     [Fact]

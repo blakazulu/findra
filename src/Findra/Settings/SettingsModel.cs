@@ -189,6 +189,30 @@ public static class SettingsModel
 {
     private static readonly CultureInfo Fixed = CultureInfo.InvariantCulture;
 
+    /// <summary>
+    /// Would pressing here do anything at all? What the CURSOR is decided from, so the shape under
+    /// the pointer and the press it answers cannot disagree.
+    ///
+    /// <para><c>RailLayout.HitTest</c> cannot see a row's kind, so it answers <c>Control</c> for
+    /// every row in the pane and the pointing hand was drawn over rows that refuse every click:
+    /// About's version, updates, install source and removal notes, Opening's "registered" line,
+    /// every capability row already installed, and "Start reading now" while a backlog is being
+    /// read. The card solves the identical case at its own call site for the Content pill; this is
+    /// that mapping, for this surface.</para>
+    ///
+    /// <para>Answered by running <see cref="Apply"/> and comparing states, rather than by a second
+    /// list of which kinds are inert - a second list is how the two come to disagree, which is the
+    /// defect this removes.</para>
+    /// </summary>
+    public static bool Answers(SettingsState s, PanelHit hit)
+    {
+        ArgumentNullException.ThrowIfNull(s);
+        if (hit.Target is PanelTarget.None) return false;
+        if (hit.Target is not (PanelTarget.Control or PanelTarget.Option)) return true;
+        SettingsOutcome o = Apply(s, hit);
+        return o.Action != SettingsAction.None || o.State != s;
+    }
+
     public static IReadOnlyList<Control> Controls(SettingsState s)
     {
         ArgumentNullException.ThrowIfNull(s);

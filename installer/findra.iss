@@ -1,4 +1,4 @@
-; Findra's installer.
+﻿; Findra's installer.
 ;
 ; Five rules here are load-bearing and each has a test in
 ; tests/Findra.Tests/Build/InstallerScriptTests.cs:
@@ -398,6 +398,7 @@ procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
 var
   app: String;
   code: Integer;
+  ok: Boolean;
 begin
   if CurUninstallStep <> usUninstall then Exit;
 
@@ -410,7 +411,20 @@ begin
   // Keeping is the default and the silent answer. Spec 2a: reinstalling is common and
   // re-downloading gigabytes is expensive, so deleting is the thing somebody has to ask for.
   if Purge then
-    Exec(app, '--uninstall --purge --quiet', '', SW_HIDE, ewWaitUntilTerminated, code)
+    ok := Exec(app, '--uninstall --purge --quiet', '', SW_HIDE, ewWaitUntilTerminated, code)
   else
-    Exec(app, '--uninstall --quiet', '', SW_HIDE, ewWaitUntilTerminated, code);
+    ok := Exec(app, '--uninstall --quiet', '', SW_HIDE, ewWaitUntilTerminated, code);
+
+  // The exit code is READ. It was assigned and dropped, so a --uninstall that could not remove
+  // the scheduled task returned 1, Inno deleted the program folder, and the machine was left with
+  // a HighestAvailable logon task pointing at a binary that no longer exists - reported to the
+  // person as a clean uninstall. That is the defect spec 2a names rather than an inconvenience,
+  // and it reached only Findra's own log, in a folder this same run may have just deleted.
+  if (not ok) or (code <> 0) then
+    MsgBox('Findra was removed, but one part of it could not be undone: the scheduled task that '
+         + 'starts its name helper at every sign-in may still be registered, and it now points at '
+         + 'a program that is gone.' + #13#10#13#10
+         + 'To remove it, open a Command Prompt as administrator and run:' + #13#10
+         + 'schtasks /delete /tn "Findra name index" /f',
+           mbError, MB_OK);
 end;

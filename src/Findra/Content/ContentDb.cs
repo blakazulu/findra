@@ -53,7 +53,7 @@ public sealed class ContentDb : IDisposable
 
     /// <summary>The relational shape of this database. Bumped only when a change makes rows
     /// already on disk mean something different.</summary>
-    public const int SchemaVersion = 2;
+    public const int SchemaVersion = 3;
 
     /// <summary>One schema step. <c>InvalidatedKinds</c> is what that step made stale - and
     /// nothing else is re-queued. Re-indexing a finished disk because an upgrade did not look
@@ -86,6 +86,20 @@ public sealed class ContentDb : IDisposable
             // re-walk is for files that were never offered at all: a checkout's contents were
             // refused outright, so nothing about them is in the index to re-queue.
             ReWalk: true),
+
+        // Step 2 queued every photo on the machine and re-read none of them: it passed its own
+        // prose as the queue reason, and the indexer dequeues a row untouched unless the reason is
+        // Recheck. The bug was in the caller rather than in the step, so fixing it changes nothing
+        // on a machine that already stamped 2 - the step will not run again. This is that step,
+        // done properly, and it is the only way the photos on a machine that has already upgraded
+        // are ever looked at again.
+        //
+        // No ReWalk. Step 2's re-walk DID happen - clearing the journal positions was never
+        // conditioned on the reason - so every file a checkout used to hide is already in the
+        // index. Walking the whole disk a second time for rows that are all present is exactly the
+        // expensive mistake spec 2a names.
+        new(To: 3, InvalidatedKinds: [(int)ResultKind.Photo],
+            Reason: "pictures are read again, because the step that said so re-read none of them"),
     ];
 
     private readonly SqliteConnection _c;
@@ -221,7 +235,14 @@ CREATE TABLE IF NOT EXISTS opened(path TEXT PRIMARY KEY, count INTEGER NOT NULL,
             if (m.To <= from || m.To > SchemaVersion) continue;
             _migrationsRun.Add(m.Reason);
             if (m.ReWalk) ClearAllUsnPositions();
-            int n = RequeueKinds(m.InvalidatedKinds, m.Reason);
+            // Indexer.Recheck, NOT the migration's prose. RequeueKinds says it in its own note:
+            // the indexer dequeues a row untouched unless the reason is Recheck, the row is
+            // Skipped, or the file's bytes have moved. Passing the sentence meant for the log
+            // queued every photo on the machine and re-read none of them - the already-indexed
+            // ones, which are the whole point of a migration that changes how a kind is read,
+            // each came back "current" the moment they were taken. The pill counted them down,
+            // the log said "re-queued", and the index was exactly as it had been.
+            int n = RequeueKinds(m.InvalidatedKinds, Indexer.Recheck);
             Log.Info("index", $"schema {from} -> {m.To}: {m.Reason}, {n.ToString("N0", CultureInfo.InvariantCulture)} file(s) re-queued");
         }
         Set("schema", Stamp(SchemaVersion));

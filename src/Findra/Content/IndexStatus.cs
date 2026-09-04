@@ -201,17 +201,39 @@ public static class IndexStatus
     /// <c>--searchindex</c>. Three of them used to answer this question the weaker way. There is
     /// deliberately no overload that omits the pid - the point is that one answer exists.</para>
     /// </summary>
-    public static bool Alive(string? beat, string? pid, int thisProcess, long nowUnixSeconds)
+    public static bool Alive(string? beat, string? pid, int thisProcess, long nowUnixSeconds,
+                             Func<int, bool>? stillRunning = null)
     {
+        // An index written before this row existed has no pid to compare, and reading that as
+        // "it must have been me" would call every such index idle for ever.
+        bool haveePid = int.TryParse(pid, NumberStyles.Integer, Fixed, out int wrote);
+        if (haveePid && wrote == thisProcess) return false;
+
         if (!long.TryParse(beat, NumberStyles.Integer, Fixed, out long at)) return false;
         // A beat dated in the future is a clock that resynced under a running child, not a dead
         // one, so only an OLD beat counts as gone.
-        if (nowUnixSeconds - at > BeatStaleSeconds) return false;
+        if (nowUnixSeconds - at <= BeatStaleSeconds) return true;
 
-        // An index written before this row existed has no pid to compare, and reading that as
-        // "it must have been me" would call every such index idle for ever.
-        if (!int.TryParse(pid, NumberStyles.Integer, Fixed, out int wrote)) return true;
-        return wrote != thisProcess;
+        // A stale beat from a process that is STILL THERE is a busy child, not a dead one, and
+        // this is the difference between the two questions these rows answer. The beat is written
+        // between files; one long file - a thirty-minute recording, a 180 MB document, frames out
+        // of a long video - takes minutes with no chance to write anything, and fifteen seconds in
+        // the capsule's pill vanished, the card said "paused", the card's footer said indexing was
+        // paused because Findra was closed, and both diagnostics said no indexer was running. All
+        // four went quiet during exactly the operation people most often ask about, and they said
+        // it was not happening while it was happening.
+        return haveePid && (stillRunning ?? IsRunning)(wrote);
+    }
+
+    /// <summary>Is there a process with this id? Injected in tests; the real one asks the OS.
+    /// A pid can be reused, which is why it is asked ONLY about a stale beat that a live child
+    /// would otherwise have refreshed - never as the whole answer.</summary>
+    private static bool IsRunning(int pid)
+    {
+        try { using var p = System.Diagnostics.Process.GetProcessById(pid); return !p.HasExited; }
+        catch (ArgumentException) { return false; }        // no such process
+        catch (InvalidOperationException) { return false; }
+        catch (System.ComponentModel.Win32Exception) { return false; }
     }
 
     /// <summary>The same rule against this process and the wall clock now.</summary>

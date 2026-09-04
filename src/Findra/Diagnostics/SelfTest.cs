@@ -1,4 +1,4 @@
-using System.Globalization;
+﻿using System.Globalization;
 using SkiaSharp;
 
 namespace Findra.Diagnostics;
@@ -119,9 +119,27 @@ public static class SelfTest
             if (!File.Exists(ContentDb.DefaultPath)) { Console.WriteLine("        no index yet - nothing to check"); return null; }
             using var db = new ContentDb(ContentDb.DefaultPath, readOnly: true);
             string? v = db.Get("schema");
-            return v == ContentDb.SchemaVersion.ToString(CultureInfo.InvariantCulture)
-                ? null
-                : $"index schema is '{v}', this build wants {ContentDb.SchemaVersion.ToString(CultureInfo.InvariantCulture)}";
+            string want = ContentDb.SchemaVersion.ToString(CultureInfo.InvariantCulture);
+            if (v == want) return null;
+
+            // An OLDER index is a migration owed, not a fault. It is the ordinary state of every
+            // machine between installing a build that bumps the schema and next starting the
+            // interface, which runs the migration on the first open - and this check is read-only
+            // by design, so it must not be the thing that decides. Failing on it made
+            // Check-Diagnostics report a broken build whenever the developer's own live index was
+            // a version behind, which is exactly when a schema change is being tested.
+            if (int.TryParse(v, NumberStyles.Integer, CultureInfo.InvariantCulture, out int have)
+                && have < ContentDb.SchemaVersion)
+            {
+                Console.WriteLine($"        index schema is {v.ToString() ?? "?"}, this build wants {want} - " +
+                                  "the migration runs the next time the interface opens it");
+                return null;
+            }
+
+            // A NEWER one is the real fault, and it is unrecoverable rather than pending: an older
+            // binary cannot read an index a later one wrote, and nothing downgrades a schema.
+            return $"index schema is '{v}', this build wants {want}" +
+                   (v is null ? "" : " - this index was written by a newer Findra");
         });
 
         failed += Check("a document round-trips through a temporary index", () =>

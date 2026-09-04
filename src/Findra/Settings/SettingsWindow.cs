@@ -248,7 +248,12 @@ public sealed class SettingsWindow : Window
             if (hit.Target == _state.HoverTarget && hit.Row == _state.HoverRow && hit.Option == _state.HoverOption)
                 return;
             _state = _state with { HoverTarget = hit.Target, HoverRow = hit.Row, HoverOption = hit.Option };
-            Cursor = PointerCursor.Of(Pointers.ForPanel(hit.Target));
+            // A row that refuses every click gets the plain arrow, which is what the card already
+            // does for a Content pill that is not offering. The hit test cannot see a row's kind,
+            // so without this the pointing hand sat over About's four notes, the "registered"
+            // line, every installed capability row, and "Start reading now" mid-pass.
+            Cursor = PointerCursor.Of(SettingsModel.Answers(_state, hit)
+                ? Pointers.ForPanel(hit.Target) : PointerShape.Arrow);
             InvalidateVisual();
         }
 

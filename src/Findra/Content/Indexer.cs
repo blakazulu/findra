@@ -252,15 +252,26 @@ public sealed class Indexer
             }
             if (lastState != "indexing") { Log.Info("index", "indexer working"); lastState = "indexing"; }
 
+            // BEFORE the file is opened, not after it is finished. Status is the only writer of
+            // indexer:beat, and writing it afterwards meant the beat covering a file was written
+            // once the file was already read - so the row named the last thing finished rather
+            // than the thing being worked, and a slow file left both the name and the beat behind.
+            // Naming it first also means the capsule's pill says what is actually being read.
+            if (lastStatus.ElapsedMilliseconds > 1500) { Status("indexing", Path.GetFileName(item.Path), item.Kind); lastStatus.Restart(); UpdateRate(); }
+
             var busy = Stopwatch.StartNew();
             _ = Handle(item);
             stuck = item.Id;
             busy.Stop();
-            if (lastStatus.ElapsedMilliseconds > 1500) { Status("indexing", Path.GetFileName(item.Path), item.Kind); lastStatus.Restart(); UpdateRate(); }
             // The power setting is a duty cycle: at 50% the indexer rests as long as it worked, at
             // 25% three times as long. The rest is between files, where nothing is running, so it
             // shapes every part of the machine equally.
-            int power = int.TryParse(_db.Get("index:power"), NumberStyles.Integer, CultureInfo.InvariantCulture, out int pw) ? Math.Clamp(pw, 10, 100) : 100;
+            // The same default the setting has, not 100. A missing or unparseable row is a session
+            // where the interface's control write failed, or a hand-run `--index`, and answering
+            // "full duty cycle" there runs the machine flat out on the one path where nobody chose
+            // it. IndexPowerLevels.Default is the one place that number lives.
+            int power = int.TryParse(_db.Get("index:power"), NumberStyles.Integer, CultureInfo.InvariantCulture, out int pw)
+                ? Math.Clamp(pw, 10, 100) : IndexPowerLevels.Default;
             int rest = power >= 100 ? 30 : (int)Math.Min(8000, busy.ElapsedMilliseconds * (100.0 - power) / power) + 30;
             Thread.Sleep(rest);
         }

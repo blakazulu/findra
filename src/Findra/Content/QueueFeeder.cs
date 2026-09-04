@@ -465,6 +465,14 @@ public sealed class QueueFeeder : IDisposable
 
     // ---- reconcile -----------------------------------------------------------------------------
 
+    /// <summary>The exclusion list as the index last saw it. A stamp rather than a copy of the
+    /// setting, for the reason the suffix stamp is one: the question is only ever "has this
+    /// changed, and in which direction".</summary>
+    internal const string ExclusionsKey = "index:exclusions";
+
+    private static string Normalise(string fragment)
+        => (fragment ?? "").Trim().Replace('/', '\\').ToUpperInvariant();
+
     /// <summary>
     /// Bring the queue and the index back in line with rules that changed between launches.
     ///
@@ -472,7 +480,14 @@ public sealed class QueueFeeder : IDisposable
     /// exclude has to leave the queue, and what is already indexed under them has to be queued for
     /// removal. Returns how many rows it touched.
     ///
-    /// It does NOT clear a walk debt. Nothing but a completed pass may.
+    /// It does NOT clear a walk debt. Nothing but a completed pass may - but it may OWE one, and
+    /// that is the direction this method used to be blind in. Both of its loops run the same way:
+    /// drop what is now excluded, and queue a delete for what is now excluded and already indexed.
+    /// Nothing handled a fragment being REMOVED, so deleting a skipped folder in Settings did
+    /// nothing at all on a finished disk - those files have no row to re-queue, and the journal
+    /// only reports what changes, so a folder of finished work is never enumerated again. That
+    /// control is the whole remedy Findra offers for "my pictures are not being read", and it was
+    /// honoured for additions and inert for removals.
     /// </summary>
     public int Reconcile()
     {
@@ -483,6 +498,24 @@ public sealed class QueueFeeder : IDisposable
         int touched = 0;
 
         using ContentDb.Scope tx = _db.Begin();
+
+        // A fragment that has GONE means files that were refused may now be eligible, and only a
+        // fresh walk can reach them. Owed per volume, on the same terms the suffix stamp uses, and
+        // only when something was actually removed: adding an exclusion needs no walk, because the
+        // two loops below already cover every row it could affect.
+        string[] now = [.. exclusions.Select(Normalise).Where(s => s.Length > 0).Distinct().Order(StringComparer.Ordinal)];
+        string stamp = string.Join('\n', now);
+        string? before = _db.Get(ExclusionsKey);
+        if (before is not null && before != stamp)
+        {
+            var kept = new HashSet<string>(now, StringComparer.Ordinal);
+            if (before.Split('\n', StringSplitOptions.RemoveEmptyEntries).Any(f => !kept.Contains(f)))
+            {
+                foreach (char v in _db.KnownVolumes()) _db.SetWalkOwed(v, tx);
+                Log.Info("index", "a skipped folder was removed, so every volume owes a fresh walk");
+            }
+        }
+        _db.Set(ExclusionsKey, stamp, tx);
 
         foreach (ContentDb.Pending p in _db.PendingRows())
         {
