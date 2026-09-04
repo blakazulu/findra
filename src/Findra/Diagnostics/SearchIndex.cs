@@ -19,6 +19,12 @@ public sealed record IndexSnapshot(
     string IndexerState, string IndexerCurrent, string IndexerRate, string IndexerPid, bool IndexerAlive,
     long JournalDropped, long SessionFailures, string SessionFailure,
     IReadOnlyList<(string Path, string Error)> Failures,
+    // The files that were passed over rather than read, and WHY. Skipping is a normal state, so
+    // these are deliberately not failures - but the reason a skip carries had no reader anywhere,
+    // which made "waiting for a model", "too small to be a picture" and "no decoder for this
+    // format" one undifferentiated count. It is the first thing anybody asks when a file they can
+    // see is not findable, and the answer was in the index the whole time.
+    IReadOnlyList<(string Path, string Error)> Skips,
     // Whether anybody has asked for the contents of their files to be read at all. Taken from
     // the index's own `index:paused` row and never from config.json: this mode describes the
     // index it is looking at, and the settings of an interface that may not be running are a
@@ -178,6 +184,21 @@ public static class SearchIndexReport
             if (remaining > 0) Line($"  and {N(remaining)} more");
         }
 
+        if (s.Skipped > 0)
+        {
+            Line();
+            // "skipped", alone on its own line, for the reason "failures" is: the report's tests
+            // locate a section by splitting on its heading.
+            Line("skipped");
+            foreach ((string path, string reason) in s.Skips)
+            {
+                Line($"    {path}");
+                Line($"      {(reason.Length > 0 ? reason : "no reason recorded")}");
+            }
+            long left = s.Skipped - s.Skips.Count;
+            if (left > 0) Line($"  and {N(left)} more");
+        }
+
         return sb.ToString();
     }
 
@@ -286,7 +307,12 @@ public static class SearchIndex
 
             foreach (string q in queries)
             {
-                SearchResults results = ContentBranch.Search(db, q, 20, SearchSort.Best,
+                // The card's OWN depth, from the card's own constant. It asked for twenty, and the
+                // card asks for sixty-four and then lets a chip filter them - so the two answered
+                // different questions, and the diagnostic could not see the rows somebody had
+                // complained about. A diagnostic that asks the product a smaller question than the
+                // product asks itself is a shot taken with different data.
+                SearchResults results = ContentBranch.Search(db, q, SearchCardLayout.MaxRows * 8, SearchSort.Best,
                                                              semantic: semantic, installed: installed);
                 Console.WriteLine($"'{q}': {results.Rows.Count.ToString(CultureInfo.InvariantCulture)} hit(s) in {results.ContentMs.ToString("0", CultureInfo.InvariantCulture)} ms");
                 foreach (SearchResult r in results.Rows)
@@ -363,6 +389,7 @@ public static class SearchIndex
                                            CultureInfo.InvariantCulture, out long sf) ? sf : 0,
             SessionFailure: db.Get("index:sessionfailure") ?? "",
             Failures: db.RecentFailures(10),
+            Skips: db.RecentSkips(10),
             // Read exactly as the card reads it: an absent row is off, because an index nobody
             // has written that row for is an index nobody has asked anything of.
             ContentEnabled: db.Get("index:paused") == "0",

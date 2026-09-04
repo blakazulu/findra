@@ -1,4 +1,4 @@
-using System.Globalization;
+﻿using System.Globalization;
 using Findra;
 using Findra.Diagnostics;
 using Xunit;
@@ -19,7 +19,8 @@ public sealed class SearchIndexReportTests : IDisposable
     internal static IndexSnapshot Sample(
         IReadOnlyList<(string, string)>? failures = null,
         long failed = 2,
-        IReadOnlyDictionary<ResultKind, long>? byKind = null) => new(
+        IReadOnlyDictionary<ResultKind, long>? byKind = null,
+        IReadOnlyList<(string, string)>? skips = null) => new(
         Schema: 1, WasRebuilt: false,
         DbPath: @"C:\Users\liraz\AppData\Local\Findra\index\search.db",
         Stores: [("search.db", 12_582_912)],
@@ -35,6 +36,7 @@ public sealed class SearchIndexReportTests : IDisposable
         IndexerPid: "10052", IndexerAlive: true, JournalDropped: 0,
         SessionFailures: 0, SessionFailure: "",
         Failures: failures ?? [],
+        Skips: skips ?? [],
         ContentEnabled: true,
         Capabilities:
         [
@@ -221,7 +223,9 @@ public sealed class SearchIndexReportTests : IDisposable
         string s = SearchIndexReport.Render(Sample(failures: sample, failed: 3));
 
         Assert.Contains(@"C:\a\f3.pdf", s);
-        Assert.DoesNotContain("more", s.Split("failures")[^1]);
+        // The failures BLOCK, not everything after the word: the skipped section follows it and
+        // carries an "and N more" of its own, which is correct and is not this test's business.
+        Assert.DoesNotContain("more", s.Split("failures")[^1].Split("skipped")[0]);
     }
 
     [Fact]
