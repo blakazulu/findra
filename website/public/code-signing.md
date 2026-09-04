@@ -1,9 +1,10 @@
-# Code signing policy
+﻿# Code signing policy
 
-> **Not yet in force.** Findra has not been released, and the application to the SignPath
-> Foundation cannot be made until a release exists. This page is written in advance so that
-> the requirements are met on the day it is submitted, and the line below becomes true when
-> the application is accepted. Until then Findra ships unsigned and says so.
+> **Not yet in force.** Findra ships unsigned today, and Windows warns about an unknown
+> publisher because of it. The line below states the policy in advance, and it becomes true on
+> the day the application to the SignPath Foundation is accepted and not a day earlier. Until
+> then nothing here, on the site, in the installer or in a release claims a signature that does
+> not exist.
 
 Free code signing provided by [SignPath.io](https://about.signpath.io), certificate by
 [SignPath Foundation](https://signpath.org/).
