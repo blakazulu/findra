@@ -1,10 +1,11 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Net;
 using System.Net.Http;
 using System.Net.Http.Headers;
+using System.Net.Sockets;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -144,13 +145,26 @@ public static class ModelDownloader
         // a re-encoding proxy, and a handler that strips the header after decompressing all
         // produce that. The floor does not need the length: a file below MinBytes cannot be this
         // model whatever the server did or did not say about its size.
-        if ((total > 0 && done < total) || done < m.MinBytes)
+        //
+        // The floor ALONE is not enough, though, and that is the second half of the same lesson.
+        // MinBytes is deliberately generous - it is a "this cannot be the file" line, not a "this
+        // is the file" one - so with no length there is a window between the floor and the real
+        // size where a truncated file passes: 124 MB wide on the Hebrew model, 74 on Whisper. A
+        // file that lands in it is promoted under its real name, reads as installed on every
+        // surface, and then fails every file that needs it. So when the server did not say how
+        // long the file was, the declared size decides, on exactly the terms SizeMatchesDeclared
+        // already sets - which is the only place in the tree allowed to call a file the wrong size.
+        long floor = total > 0
+            ? m.MinBytes
+            : Math.Max(m.MinBytes, m.Bytes - ModelStore.SizeSlack(m.Bytes));
+
+        if ((total > 0 && done < total) || done < floor)
         {
             string problem = total > 0
                 ? $"the download ended at {done.ToString(CultureInfo.InvariantCulture)} of " +
                   $"{total.ToString(CultureInfo.InvariantCulture)} bytes"
                 : $"the download ended at {done.ToString(CultureInfo.InvariantCulture)} bytes, " +
-                  $"short of the {m.MinBytes.ToString(CultureInfo.InvariantCulture)} this file must have";
+                  $"short of the {floor.ToString(CultureInfo.InvariantCulture)} this file must have";
             Log.Warn("models", $"{m.File}: {problem} - keeping what arrived so the next run resumes");
             return new DownloadOutcome(m, false, done, problem);
         }
@@ -183,7 +197,31 @@ public static class ModelDownloader
         var outcomes = new List<DownloadOutcome>();
         foreach (Model m in set)
         {
-            DownloadOutcome o = await GetAsync(m, dir, fetch, progress, ct).ConfigureAwait(false);
+            DownloadOutcome o;
+            try
+            {
+                o = await GetAsync(m, dir, fetch, progress, ct).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException)
+            {
+                // Findra is quitting. The .part is on the disk and the next run resumes from it;
+                // an outcome would say the same thing less clearly than letting the caller see
+                // its own cancellation.
+                throw;
+            }
+            catch (Exception ex) when (ex is HttpRequestException or IOException or SocketException)
+            {
+                // A dropped connection mid-body, or a disk that filled while writing. Neither is
+                // caught inside GetAsync - only the final Move is - so both used to leave this
+                // method as an unhandled exception. On the first-run screen that is a progress bar
+                // that simply stops; from `--models install` it is a stack trace and whatever exit
+                // code the runtime picks, in place of the documented "what arrived is kept" and a
+                // code a script can read. What arrived IS kept either way: the file streams are in
+                // using blocks, so the .part survives and the next run resumes from it.
+                Log.Warn("models", $"{m.File}: the download stopped :: {ex.Message} - keeping what arrived so the next run resumes");
+                outcomes.Add(new DownloadOutcome(m, false, 0, ex.Message));
+                break;
+            }
             outcomes.Add(o);
             if (!o.Complete) break;
         }

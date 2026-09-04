@@ -1,4 +1,4 @@
-using System.Net.Http;
+﻿using System.Net.Http;
 using System.Text.Json;
 
 namespace Findra;
@@ -131,6 +131,20 @@ public static class UpdateCheck
             // unparseable tag is caught here, before the comparison, and reported as Unknown.
             Log.Warn("startup", $"update check: latest tag \"{latest}\" does not parse as a version");
             return new UpdateResult(UpdateState.Unknown, null, null, checkedConfig);
+        }
+
+        // And the same guard on the RUNNING version, which is the other half of the same hole.
+        // Compare answers 0 when EITHER side fails to parse, so an unparseable running version
+        // took the same route into "Current" that an unparseable tag did. BuildInfo says this in
+        // its own note - a version it cannot normalise reports Unknown, and Unknown is the truth -
+        // and only the tag was actually checked. The case is a build whose version carries
+        // anything Version.TryParse rejects, and the answer it gave was to tell somebody running
+        // an unknown build that they were up to date.
+        if (ParseVersion(Log.Version) is null)
+        {
+            Log.Warn("startup", $"update check: this build's own version {Log.Version} does not parse; " +
+                                $"the latest release is {latest} and the two cannot be compared");
+            return new UpdateResult(UpdateState.Unknown, latest, null, checkedConfig);
         }
 
         if (Compare(Log.Version, latest) >= 0)

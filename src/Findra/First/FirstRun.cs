@@ -68,16 +68,36 @@ public static class FirstRun
 
     public static IReadOnlyList<string> PresetTitles => ["Just names", "Recommended", "Everything"];
 
+    /// <summary>
+    /// What a preset selects on THIS machine, closed over the dependency graph.
+    ///
+    /// <para><b>Hebrew is dropped where its row is not drawn.</b> The rows hide it when it is not
+    /// offered, and <c>AlreadyChosen</c> has always dropped it for exactly this reason - but the
+    /// tiles did not, so pressing "Everything" on a machine that is not offered Hebrew selected it
+    /// anyway: the three visible rows added to 1.45 GB, the tile and the bottom line said 2.93 GB,
+    /// and the download then fetched a 1.5 GB model for a capability with nothing on screen to
+    /// name it, drawing a fourth progress bar for a row that did not exist.</para>
+    /// </summary>
+    public static IReadOnlySet<Capability> PresetChoice(Preset p, bool hebrewOffered)
+    {
+        IReadOnlySet<Capability> chosen = Capabilities.Close(p switch
+        {
+            Preset.Recommended => Presets.Recommended,
+            Preset.Everything => Presets.Everything,
+            _ => Presets.JustNames,
+        });
+        if (hebrewOffered || !chosen.Contains(Capability.Hebrew)) return chosen;
+        var without = new HashSet<Capability>(chosen);
+        without.Remove(Capability.Hebrew);
+        return without;
+    }
+
     /// <summary>What a preset would still cost on THIS machine. A tile that says 2.93 GB over a
-    /// folder that already holds all of it is the same lie the rows told.</summary>
-    public static string PresetSize(Preset p, IReadOnlySet<string>? onDisk = null) =>
+    /// folder that already holds all of it is the same lie the rows told, and one that prices a
+    /// capability this machine is not offered is the same lie in the other direction.</summary>
+    public static string PresetSize(Preset p, IReadOnlySet<string>? onDisk = null, bool hebrewOffered = true) =>
         Sizes.Human(ModelStore.TotalBytes(NotHereYet(
-            Capabilities.ModelsFor(p switch
-            {
-                Preset.Recommended => Presets.Recommended,
-                Preset.Everything => Presets.Everything,
-                _ => Presets.JustNames,
-            }),
+            Capabilities.ModelsFor(PresetChoice(p, hebrewOffered)),
             onDisk ?? new HashSet<string>(StringComparer.OrdinalIgnoreCase))));
 
     /// <summary>
@@ -333,12 +353,12 @@ public static class FirstRun
             case FirstRunTarget.Preset:
                 return s with
                 {
-                    Chosen = Capabilities.Close(hit.Index switch
+                    Chosen = PresetChoice(hit.Index switch
                     {
-                        1 => Presets.Recommended,
-                        2 => Presets.Everything,
-                        _ => Presets.JustNames,
-                    }),
+                        1 => Preset.Recommended,
+                        2 => Preset.Everything,
+                        _ => Preset.JustNames,
+                    }, s.HebrewOffered),
                     // ASSIGNED, not or-ed. Choosing "Just names" is the affirmative act of
                     // choosing nothing, and a latched switch would turn content indexing on for
                     // somebody who explored the presets and then declined - spec §6, PRIVACY.md.

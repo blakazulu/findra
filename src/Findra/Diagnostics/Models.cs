@@ -111,7 +111,7 @@ public static class ModelsCommand
         // the set.
         string Cost(Capability c) => installed.Has(c)
             ? "installed"
-            : Sizes.Human(Capabilities.MarginalBytes(c, have));
+            : Sizes.Human(Capabilities.MarginalBytes(c, installed));
 
         string Still(IReadOnlySet<Capability> want)
         {

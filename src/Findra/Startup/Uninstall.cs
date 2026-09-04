@@ -1,4 +1,4 @@
-using System.Diagnostics;
+﻿using System.Diagnostics;
 using System.Globalization;
 using System.Security.Principal;
 using System.Text;
@@ -346,8 +346,15 @@ public static class Uninstall
     private static void ForgetTheWelcomeScreen()
     {
         Config c = Config.LoadFromDisk();
-        if (!c.FirstRunDone) return;
-        (c with { FirstRunDone = false }).Save();
+        if (!c.FirstRunDone && string.IsNullOrWhiteSpace(c.InstallSource)) return;
+        // The install source goes with it, and for the same reason. It is recorded once and never
+        // looked at again, because how a COPY arrived cannot change - but an uninstall ends that
+        // copy, and the next one may arrive by a different route entirely. Kept, it outlives the
+        // thing it describes: somebody who built from source once, uninstalled, and then installed
+        // from winget is told for ever to read the release notes instead of running
+        // `winget upgrade`, and Settings reports the wrong source under About. Cleared, the next
+        // launch detects the copy actually running.
+        (c with { FirstRunDone = false, InstallSource = null }).Save();
     }
 
     /// <summary>

@@ -1,4 +1,4 @@
-using Findra;
+﻿using Findra;
 using Xunit;
 
 public class UpdateCheckTests
@@ -20,6 +20,26 @@ public class UpdateCheckTests
         // so anything we cannot read loses.
         Assert.True(UpdateCheck.Compare("1.0.0", "not-a-version") >= 0);
         Assert.True(UpdateCheck.Compare("not-a-version", "1.0.0") <= 0);
+    }
+
+    [Theory]
+    [InlineData("0.2.0-rc.1")]
+    [InlineData("?")]
+    [InlineData("")]
+    public void ABuildWhoseOwnVersionCannotBeReadIsUnknownRatherThanUpToDate(string running)
+    {
+        // Compare answers 0 when EITHER side fails to parse, and 0 was routed straight into
+        // "up to date" - a claim made on no information, which is the thing this check must never
+        // do. Only the LATEST tag was guarded; the running version took the same route home.
+        Assert.Equal(UpdateState.Unknown, UpdateMemory.Remembered(running, "1.2.0"));
+    }
+
+    [Fact]
+    public void AReadableBuildStillComparesNormally()
+    {
+        Assert.Equal(UpdateState.Available, UpdateMemory.Remembered("1.9.0", "1.10.0"));
+        Assert.Equal(UpdateState.Current, UpdateMemory.Remembered("1.10.0", "1.9.0"));
+        Assert.Equal(UpdateState.Unknown, UpdateMemory.Remembered("1.0.0", "not-a-version"));
     }
 
     [Fact]

@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
@@ -27,11 +27,39 @@ public readonly record struct Offer(Capability Capability, long MarginalBytes, s
 /// the first query instead of a quiet skip. The selection a user made is a setting; what arrived
 /// is not.</para>
 /// </summary>
-public readonly record struct CapabilitySet(IReadOnlySet<Capability> Have)
+public readonly record struct CapabilitySet(IReadOnlySet<Capability> Have, IReadOnlySet<string>? Files = null)
 {
     public static readonly CapabilitySet None = new(new HashSet<Capability>());
 
     public bool Has(Capability c) => Have is not null && Have.Contains(c);
+
+    /// <summary>
+    /// The model FILES this machine holds, by name, or an empty set where they were not read.
+    ///
+    /// <para>It is carried beside <see cref="Have"/> rather than derived from it because the two
+    /// answer different questions and a capability cannot answer the file one. A capability is
+    /// all-or-nothing: a folder holding whisper-turbo with no e5 pair beside it has Speech
+    /// uninstalled, so 550 MB of it counts for nothing, and every surface that priced the Speech
+    /// row from capabilities alone quoted 818 MB for a download that was really 270. That folder
+    /// is ordinary, not hypothetical - a download run carries on past a file that failed, so one
+    /// bad leg of a Speech install leaves exactly it.</para>
+    /// </summary>
+    /// <para>Where the files were not read - a set built by hand naming capabilities alone - they
+    /// are DERIVED from <see cref="Have"/>, because a set that says Meaning is installed is saying
+    /// its two e5 files are on the disk. That keeps the old arithmetic exactly where it was right
+    /// and fixes it only where a real disk disagrees with it, which is the half-installed folder
+    /// no capability can describe.</para>
+    public IReadOnlySet<string> OnDisk
+    {
+        get
+        {
+            if (Files is not null) return Files;
+            var derived = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            if (Have is not null)
+                foreach (Model m in Capabilities.ModelsFor(Have)) derived.Add(m.File);
+            return derived;
+        }
+    }
 
     /// <summary>Every capability whose whole closed model set is on disk. Closed, not own: a
     /// Whisper file with no e5 pair beside it cannot answer a search, because a transcript is
@@ -39,14 +67,21 @@ public readonly record struct CapabilitySet(IReadOnlySet<Capability> Have)
     public static CapabilitySet Installed(string? dir = null)
     {
         var have = new HashSet<Capability>();
+        // Read while the capabilities are being decided rather than in a second pass: these are
+        // the same seven files, and two passes are two answers if one arrives mid-download.
+        var files = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (Capability c in Capabilities.All)
+            foreach (Model m in Capabilities.OwnModels(c))
+                if (ModelStore.Present(m, dir)) files.Add(m.File);
+
         foreach (Capability c in Capabilities.All)
         {
             bool all = true;
             foreach (Model m in Capabilities.ModelsFor(Capabilities.Close([c])))
-                if (!ModelStore.Present(m, dir)) { all = false; break; }
+                if (!files.Contains(m.File)) { all = false; break; }
             if (all) have.Add(c);
         }
-        return new CapabilitySet(have);
+        return new CapabilitySet(have, files);
     }
 }
 
@@ -162,6 +197,39 @@ public static class Capabilities
         return TotalBytes(have) - before;
     }
 
+    /// <summary>
+    /// What adding one more capability would cost on a machine holding these FILES.
+    ///
+    /// <para>The overload above counts in capabilities, and a capability is all-or-nothing: a
+    /// machine holding whisper-turbo with no e5 pair beside it has Speech uninstalled, so that
+    /// 550 MB counts for nothing and Settings, the card's offer, <c>--models</c> and
+    /// <c>--searchmodels</c> all quote 818 MB for a download that is really 270. It is a
+    /// reachable disk, not a hypothetical one: a download run continues past a file that failed,
+    /// so one bad leg of a Speech install leaves exactly that folder - and
+    /// <c>--models install speech</c>, which prices by file, then disagrees with all four of
+    /// them.</para>
+    ///
+    /// <para>Counting in files is also the simpler statement of the question: what this row would
+    /// add is the size of the files its closed set needs and that are not already on the disk. The
+    /// first-run screen has always priced this way; this is the same arithmetic, named once.</para>
+    /// </summary>
+    public static long MarginalBytes(Capability add, IReadOnlySet<string> onDisk)
+    {
+        ArgumentNullException.ThrowIfNull(onDisk);
+        long bytes = 0;
+        foreach (Model m in ModelsFor([add]))
+            if (!onDisk.Contains(m.File)) bytes += m.Bytes;
+        return bytes;
+    }
+
+    /// <summary>The same, for a machine described by a <see cref="CapabilitySet"/>. This is the
+    /// overload every surface should call: the set carries the files it was built from, so the
+    /// half-installed folder above is priced at what is actually missing. A set built without
+    /// them - a test's, or <see cref="CapabilitySet.None"/> - has no files, and then every file
+    /// its closed set needs is counted, which is the right answer for an empty disk.</summary>
+    public static long MarginalBytes(Capability add, CapabilitySet installed)
+        => MarginalBytes(add, installed.OnDisk);
+
     /// <summary>The result kinds this capability can newly read - and therefore exactly what
     /// enabling it re-queues. Nothing else is touched.</summary>
     public static int[] KindsCovered(Capability c) => c switch
@@ -230,7 +298,7 @@ public static class Capabilities
         else if (q.HasNameTerms) want = Capability.Meaning;
         if (want is null || installed.Has(want.Value)) return null;
 
-        long marginal = MarginalBytes(want.Value, installed.Have ?? new HashSet<Capability>());
+        long marginal = MarginalBytes(want.Value, installed);
         string what = want.Value switch
         {
             Capability.Photos => "Searching inside photos and video",
