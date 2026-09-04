@@ -7,8 +7,14 @@ and Findra follows [Semantic Versioning](https://semver.org/spec/v2.0.0/).
 
 ## [Unreleased]
 
-Findra has not been released yet. Everything below is the work so far, and it moves
-into a numbered section on the first release.
+Nothing yet.
+
+## [0.1.0] - 2026-09-04
+
+The first release. Everything below is the whole of Findra as it stands: the three
+processes and the pipe between them, name search, content search and the capabilities
+behind it, the four painted surfaces, the installer, and the diagnostics that are how
+all of it gets verified without a screen.
 
 ### Added
 
@@ -1106,4 +1112,5 @@ into a numbered section on the first release.
 - The named pipe is restricted to the current user, and the interface verifies the
   owner before trusting a connection.
 
-[Unreleased]: https://github.com/blakazulu/findra/commits/main
+[Unreleased]: https://github.com/blakazulu/findra/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/blakazulu/findra/releases/tag/v0.1.0

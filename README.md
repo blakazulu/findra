@@ -58,8 +58,13 @@ Typing has a grammar, and there is a form for the parts of it nobody remembers.
 
 ## Install
 
-**There is no published release yet, and nothing has been submitted to the winget catalogue.**
-Building from source is the route that works today. It needs the .NET 10 SDK and nothing else.
+    winget install blakazulu.Findra
+
+That is the whole install, on x64 and arm64 alike. Every release also carries an installer built
+by `installer/findra.iss` for each architecture, on its
+[releases page](https://github.com/blakazulu/findra/releases/latest).
+
+Building from source works too, and needs the .NET 10 SDK and nothing else.
 
     git clone https://github.com/blakazulu/findra
     cd findra
@@ -72,11 +77,10 @@ needs administrator rights exactly once, to open the volume:
 
     dotnet run --project src/Findra -- --names
 
-The first release will ship an installer built by `installer/findra.iss` for x64 and arm64,
-and a winget package whose manifests are already in `packaging/winget/`. Once that release
-exists, `winget install blakazulu.Findra` is the command. Neither the installer nor the
-executables are signed yet, so Windows will warn about an unknown publisher until that
-changes; `docs/code-signing-policy.md` says where that stands.
+Neither the installer nor the executables are signed yet, so Windows will warn about an
+unknown publisher until that changes; `docs/code-signing-policy.md` says where that stands and
+the site carries the same page at
+[/code-signing/](https://findra-search.netlify.app/code-signing/).
 
 Findra never installs anything by itself. It checks whether a newer version exists and tells
 you; replacing a running executable and re-registering an elevated task are the two things

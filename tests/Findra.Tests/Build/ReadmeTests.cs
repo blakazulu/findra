@@ -313,15 +313,26 @@ public class ReadmeTests
         // it beside a winget listing and a published release is a different kind of wrong.
         //
         // The two phrases below were never in this file and never would be, so the test could not
-        // fail. What it is really about is the install section's opening paragraph, and the honest
-        // signal for whether that paragraph is still true is the manifest: while the installer
-        // manifest carries its placeholder hashes, nothing has shipped and the paragraph must say
-        // so; once real hashes go in, the paragraph is the first thing that becomes false.
+        // fail on them. What it is really about is the install section's opening paragraph, and
+        // the whole question is which fact in the tree says whether that paragraph is still true.
+        //
+        // It used to be the winget manifest's placeholder hashes, and that was a coupling to
+        // something that never changes. `winget.yml` reads `packaging/winget/*.yaml`, substitutes
+        // the two real hashes into the copy it SUBMITS, and writes nothing back - deliberately, so
+        // that the repository's manifests stay a template rather than a record. So the sixty-four
+        // zeros are permanent, `nothingHasShippedYet` was true for ever, and the README could not
+        // stop saying "no published release yet" without somebody editing an unrelated file for no
+        // reason but to satisfy this line. A guard that cannot change is not a guard.
+        //
+        // A section under a version number is the fact that really moves. It appears in
+        // CHANGELOG.md exactly when a release is cut - `Check-Release.ps1` refuses the tag without
+        // one, and its contents ARE the release notes - and before the first release there is
+        // nothing there but `## [Unreleased]`.
         Assert.DoesNotContain("not ready to install", Readme, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("being built in the open", Readme, StringComparison.OrdinalIgnoreCase);
 
-        bool nothingHasShippedYet = Repo.Read("packaging/winget/blakazulu.Findra.installer.yaml")
-                                        .Contains(new string('0', 64), StringComparison.Ordinal);
+        bool nothingHasShippedYet =
+            !Regex.IsMatch(Repo.Read("CHANGELOG.md"), @"(?m)^##\s+\[\d+\.\d+\.\d+\]");
         if (nothingHasShippedYet)
             Assert.Contains("no published release yet", Readme, StringComparison.OrdinalIgnoreCase);
         else
