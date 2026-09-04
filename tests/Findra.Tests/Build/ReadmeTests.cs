@@ -210,6 +210,31 @@ public class ReadmeTests
     }
 
     [Fact]
+    public void TheNumbersSayWhichHardwareHasActuallyRunThemAndWhichHasNot()
+    {
+        // Every measurement in this project comes from one desktop with a discrete NVIDIA card,
+        // plus the processor-only path on that same machine. No AMD or Intel GPU has run any of
+        // it, integrated or discrete, and neither has arm64. The vendor-neutral chains are a
+        // design decision meant to make those machines work; they are not evidence that they do,
+        // and the two must not be published as though they were the same thing.
+        //
+        // This is a text assertion because the README has no code to run, and it exists because
+        // of when the paragraph is most likely to be lost: the fragment below it is REPLACED
+        // wholesale every time the numbers are regenerated, and a disclosure sitting next to a
+        // block somebody is pasting over is a disclosure somebody pastes over.
+        Assert.Contains("AMD and Intel graphics have not been tested on real hardware",
+                        Readme, StringComparison.Ordinal);
+
+        // Above the fragment, not inside it. The fragment is quoted verbatim from the tool, and a
+        // hand-written paragraph in the middle of it makes "pasted without editing" untrue.
+        int disclosure = Readme.IndexOf("AMD and Intel graphics have not been tested",
+                                        StringComparison.Ordinal);
+        int fragment = Readme.IndexOf("## Findra benchmark", StringComparison.Ordinal);
+        Assert.True(disclosure < fragment,
+                    "the hardware disclosure belongs above the fragment, which is replaced wholesale");
+    }
+
+    [Fact]
     public void TheBenchmarkFragmentIsTheWholeOneAndNotTheFlatteringHalfOfIt()
     {
         // Every heading Bench.Fragment writes, in the order it writes them. The fragment is

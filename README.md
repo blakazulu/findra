@@ -1,4 +1,4 @@
-﻿# Findra
+# Findra
 
 Desktop search for Windows. A capsule sits on your desktop; click it, or press a global
 hotkey, and it unfolds into a results card. It finds files by name the second it starts, and
@@ -170,16 +170,6 @@ What follows was produced by `findra --searchbench readme-bench.md 10000` and pa
 editing. Ten thousand rather than the default 2,500, because a run of a second or two
 disagrees with itself by more than a published rate deserves.
 
-Two things to read honestly. The content index on this machine held ten documents at the time,
-so the full-text table measures the query path rather than a large corpus, and its hit counts
-say so. And the extraction row is measured over files the benchmark generates and then deletes,
-which is what makes it reproducible on your machine rather than a fact about this one.
-
-## Findra benchmark
-
-Produced by `findra --searchbench`. Every number below was measured on the machine
-named here, by this build, and re-running that command reproduces the whole page.
-
 **One machine, and it has an NVIDIA card.** These numbers come from a single desktop with a
 discrete NVIDIA GPU, so they say what Findra does there and nothing about anywhere else.
 Findra is built to run on AMD and Intel processors, on AMD, Intel and NVIDIA graphics,
@@ -188,6 +178,17 @@ only this configuration and the processor-only path have actually been measured.
 **AMD and Intel graphics have not been tested on real hardware.** The vendor-neutral paths
 are chosen precisely so that they should work there; that is a design decision, not a
 measurement, and it is written here as one.
+
+Two things to read honestly. The full-text table was measured against this machine's own
+content index - 6,257 files and 73,591 text segments, read from a real disk - so its slowest
+query is in there beside its fastest. And the extraction row is measured over files the
+benchmark generates and then deletes, which is what makes it reproducible on your machine
+rather than a fact about this one.
+
+## Findra benchmark
+
+Produced by `findra --searchbench`. Every number below was measured on the machine
+named here, by this build, and re-running that command reproduces the whole page.
 
 ### Machine
 
@@ -198,50 +199,50 @@ measurement, and it is written here as one.
 | RAM | 47.1 GB |
 | Disk | NVMe SSD |
 | Windows | Windows 11 Pro 10.0.26200.9168 |
-| Accelerator | ONNX: DirectML · Whisper: not loaded |
+| Accelerator | ONNX: DirectML · Whisper: Vulkan |
 | Findra | 0.1.0 |
 
 ### Volumes
 
 | Volume | Names | Name index resident | Cold-start enumeration | Journal position |
 |---|---|---|---|---|
-| C: | 1,573,675 | 73.1 MB | 2,769 ms | 29,755,440,672 |
+| C: | 1,580,424 | 73.7 MB | 2,386 ms | 30,437,665,416 |
 
 ### Name query latency
 
 | Query | Round trip p50 | Round trip p95 | Index scan p50 | Pipe share p50 | Worst | Hits | Samples |
 |---|---|---|---|---|---|---|---|
-| report | 0.54 ms | 0.61 ms | 0.16 ms | 0.38 ms | 1.31 ms | 50 | n=50 |
-| invoice | 2.53 ms | 5.04 ms | 2.13 ms | 0.40 ms | 5.42 ms | 45 | n=50 |
-| sunset | 3.99 ms | 4.43 ms | 3.55 ms | 0.44 ms | 5.20 ms | 35 | n=50 |
-| readme | 1.00 ms | 1.06 ms | 0.51 ms | 0.49 ms | 1.33 ms | 50 | n=50 |
-| config | 0.50 ms | 0.54 ms | 0.06 ms | 0.45 ms | 0.56 ms | 50 | n=50 |
+| report | 0.42 ms | 0.48 ms | 0.10 ms | 0.32 ms | 0.55 ms | 50 | n=50 |
+| invoice | 1.68 ms | 2.12 ms | 1.29 ms | 0.39 ms | 2.28 ms | 46 | n=50 |
+| sunset | 2.07 ms | 2.26 ms | 1.71 ms | 0.35 ms | 2.63 ms | 35 | n=50 |
+| readme | 0.50 ms | 0.57 ms | 0.20 ms | 0.31 ms | 0.58 ms | 50 | n=50 |
+| config | 0.31 ms | 0.35 ms | 0.03 ms | 0.29 ms | 0.38 ms | 50 | n=50 |
 
 ### Full-text query latency
 
 | Query | p50 | p95 | Worst | Hits | Samples |
 |---|---|---|---|---|---|
-| lease | 0.31 ms | 0.41 ms | 0.79 ms | 3 | n=50 |
-| agreement | 0.20 ms | 0.22 ms | 0.26 ms | 4 | n=50 |
-| invoice | 0.18 ms | 0.20 ms | 0.23 ms | 3 | n=50 |
-| total | 0.35 ms | 0.45 ms | 0.79 ms | 5 | n=50 |
-| report | 0.69 ms | 0.91 ms | 0.95 ms | 8 | n=50 |
+| lease | 1.42 ms | 1.61 ms | 2.67 ms | 50 | n=50 |
+| agreement | 2.26 ms | 2.32 ms | 2.35 ms | 50 | n=50 |
+| invoice | 0.67 ms | 0.77 ms | 1.74 ms | 30 | n=50 |
+| total | 8.81 ms | 9.47 ms | 10.52 ms | 50 | n=50 |
+| report | 17.16 ms | 17.78 ms | 18.90 ms | 50 | n=50 |
 
 ### Document extraction
 
 | Kind | Files | Seconds | files/min | MB/s |
 |---|---|---|---|---|
-| Doc | 11,000 | 11.49 | 57,464 | 6.89 |
+| Doc | 11,000 | 11.28 | 58,501 | 7.02 |
 
 ### Stores
 
 | Store | Path | Size |
 |---|---|---|
-| search.db | %LOCALAPPDATA%\Findra\index\search.db | 1.8 MB |
-| search.db-wal | %LOCALAPPDATA%\Findra\index\search.db-wal | 0 B |
+| search.db | %LOCALAPPDATA%\Findra\index\search.db | 124.3 MB |
+| search.db-wal | %LOCALAPPDATA%\Findra\index\search.db-wal | 10.3 MB |
 | search.db-shm | %LOCALAPPDATA%\Findra\index\search.db-shm | 32.0 KB |
 
-Indexed items: 10. Text segments: 924.
+Indexed items: 6,257. Text segments: 73,591.
 
 Corpus for the extraction row: 10,000 generated .txt of 8 KB and 1,000 generated .docx of 1 KB, indexed into a throwaway database with no model loaded, and deleted.
 
