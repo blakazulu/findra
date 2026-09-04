@@ -685,6 +685,18 @@ td.no { color: var(--ink-faint); }
   word-break: break-word;
 }
 
+/* The status note at the top of the signing policy: a box, not the opening
+   paragraph. It is the one block on these pages that is meant to be deleted one
+   day - when signing is arranged - and a callout can be lifted out without
+   leaving a hole where a lead paragraph used to be. */
+.doc blockquote {
+  margin: 0; padding: 15px 18px; border-radius: var(--r-sm);
+  border: 1px solid var(--line-soft); border-left: 2px solid var(--accent-line);
+  background: var(--accent-soft);
+}
+.doc blockquote p { margin-top: 0; font-size: 15.6px; line-height: 1.7; color: var(--ink-dim); }
+.doc blockquote p + p { margin-top: 12px; }
+
 .doc ul { margin: 16px 0 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 11px; }
 .doc li { position: relative; padding-left: 22px; font-size: 15.6px; line-height: 1.66; }
 .doc li::before {

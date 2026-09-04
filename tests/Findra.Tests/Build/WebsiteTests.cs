@@ -29,12 +29,13 @@ public class WebsiteTests
 
     /// <summary>Every generated page, with the Markdown it is generated from and the Markdown twin
     /// published beside it. This list is the same one <c>build/Make-Pages.mjs</c> holds; if a
-    /// fourth page is added there and not here, the sitemap test below is what notices.</summary>
+    /// further page is added there and not here, the sitemap test below is what notices.</summary>
     public static TheoryData<string, string> Generated => new()
     {
         { "privacy", "PRIVACY.md" },
         { "about", "website/content/about.md" },
         { "contact", "website/content/contact.md" },
+        { "code-signing", "docs/code-signing-policy.md" },
     };
 
     // ------------------------------------------------------------------ the pages say their source
@@ -255,7 +256,7 @@ public class WebsiteTests
             .ToHashSet(StringComparer.Ordinal);
 
         HashSet<string> onDisk = new(StringComparer.Ordinal) { $"{Site}/" };
-        foreach (string slug in new[] { "privacy", "about", "contact" })
+        foreach (string slug in new[] { "privacy", "about", "contact", "code-signing" })
         {
             Assert.True(Repo.Exists($"website/public/{slug}/index.html"), $"/{slug}/ is missing");
             onDisk.Add($"{Site}/{slug}/");
@@ -282,6 +283,7 @@ public class WebsiteTests
     {
         foreach (string href in new[]
                  { "\"/\"", "\"/about/\"", "\"/contact/\"", "\"/privacy/\"",
+                   "\"/code-signing/\"",
                    "\"/llms.txt\"", "\"/sitemap.xml\"", "\"/robots.txt\"" })
         {
             Assert.Contains($"href={href}", NotFound, StringComparison.Ordinal);
@@ -313,6 +315,16 @@ public class WebsiteTests
         Assert.Contains(@"<a href=""/about/"">About</a>", Index, StringComparison.Ordinal);
         Assert.Contains(@"<a href=""/contact/"">Contact</a>", Index, StringComparison.Ordinal);
         Assert.DoesNotContain("blob/main/PRIVACY.md", Index, StringComparison.Ordinal);
+
+        // The SignPath Foundation's terms require the TERM "Code signing policy" on the project's
+        // home page and on its download page, as a section header or a link to a dedicated page.
+        // Both are links here and both are asserted, because this page is hand-written while every
+        // other page's footer comes out of build/Make-Pages.mjs - so the front page is the one
+        // place the two can fall out of step. The download half sits in the install section,
+        // beside the sentence saying Findra is not signed yet.
+        Assert.Contains(@"<a href=""/code-signing/"">Code signing policy</a>", Index,
+                        StringComparison.Ordinal);
+        Assert.Equal(2, Regex.Matches(Index, "Code signing policy").Count);
     }
 
     // ------------------------------------------------------------------ what agents are told
@@ -363,7 +375,8 @@ public class WebsiteTests
 
         foreach ((string path, string twin) in new[]
                  { ("/", "/index.md"), ("/about/", "/about.md"),
-                   ("/contact/", "/contact.md"), ("/privacy/", "/privacy.md") })
+                   ("/contact/", "/contact.md"), ("/privacy/", "/privacy.md"),
+                   ("/code-signing/", "/code-signing.md") })
         {
             Assert.Contains($"'{path}': '{twin}'", edge, StringComparison.Ordinal);
             Assert.True(Repo.Exists($"website/public{twin}"), $"{twin} is declared but not published");
@@ -518,6 +531,11 @@ public class WebsiteTests
         string text = Regex.Replace(markdown, @"(?m)^```.*$", " " + Break + " ");
         text = Regex.Replace(text, @"(?m)^#{1,6}\s+(.*)$", " " + Break + " $1 " + Break + " ");
         text = Regex.Replace(text, @"(?m)^[-*]\s+", " " + Break + " ");
+        // A block quote's marker, on every line of it. The generator renders the quote as an
+        // ordinary paragraph inside a <blockquote>, so the page carries no marker at all;
+        // leaving it here would put a stray ">" in the middle of every sentence of the one
+        // paragraph the signing policy opens with, and none of them would ever match.
+        text = Regex.Replace(text, @"(?m)^>\s?", "");
         text = Regex.Replace(text, @"(?m)^\|[\s|:-]+\|\s*$", " ");   // a table's rule row
         text = Regex.Replace(text, @"\n[ \t]*\n", " " + Break + " ");
         // A link is its text. The page renders `[a](mailto:a)` as "a", so leaving the target in

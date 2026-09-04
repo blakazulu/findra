@@ -47,6 +47,8 @@ addressable directly:
 - [Privacy as Markdown](https://findra-search.netlify.app/privacy.md): what is stored, where, and
   the one request Findra makes on its own. This file is the same one served in the repository as
   PRIVACY.md.
+- [Code signing policy as Markdown](https://findra-search.netlify.app/code-signing.md): the team
+  roles behind a release, and what Findra changes on the machine.
 
 ## Pages
 
@@ -56,6 +58,8 @@ addressable directly:
   elevated name helper, the interface and the content indexer, and why they are three processes.
 - [Contact](https://findra-search.netlify.app/contact/): no contact form, deliberately.
 - [Privacy](https://findra-search.netlify.app/privacy/): the full policy.
+- [Code signing policy](https://findra-search.netlify.app/code-signing/): who writes Findra, who
+  approves a release and who signs it. Nothing is signed yet, and the page says so.
 
 ## Source and packages
 
