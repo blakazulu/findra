@@ -524,6 +524,17 @@ into a numbered section on the first release.
 
 ### Fixed
 
+- **The accelerated speech runtime has to transcribe something before Findra will use it.** It was
+  accepted as soon as it loaded, and the known failure on AMD integrated graphics happens after a
+  clean load: everything initialises and then the transcript comes back as garbage. Findra would
+  have stored that as a finished transcript and never looked at the file again. It now runs a
+  one-second sample through it first and falls back to the processor if what comes back is
+  malformed.
+
+- **`--searchmodels` checks that the picture model loads on the processor too**, not only on
+  whatever accelerator the machine happens to have. Running well on a graphics card says nothing
+  about the machines that have none, and those are the ones that cannot afford a surprise.
+
 - **Searching photos stops returning things that merely are not black.** The threshold below which
   a picture counted as unrelated was set at less than half the value of a real match, so it sat
   inside the noise rather than above it. Measured over a 3,097-picture library: pictures that

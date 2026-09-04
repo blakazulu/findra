@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Runtime.Versioning;
@@ -100,6 +100,97 @@ public static class Media
     }
 
     /// <summary>
+    /// Make a freshly-opened factory actually transcribe, and throw if what comes back is not
+    /// structurally sane.
+    ///
+    /// <para><b>Why a load is not proof.</b> The accelerated rung was accepted the moment
+    /// <c>WhisperFactory.FromPath</c> returned - but the known integrated-GPU failures happen at
+    /// TRANSCRIPTION time, after Vulkan has initialised cleanly, the shaders have compiled and the
+    /// device has registered. whisper.cpp issue #2596 is exactly the hardware Findra ships to: an
+    /// AMD 780M, the integrated GPU in a whole generation of Ryzen laptops, on Windows 11, where
+    /// everything loads and then the output is garbled text with nonsense timestamps. In a debug
+    /// build it asserts; in a release build it simply returns rubbish.</para>
+    ///
+    /// <para>And Findra would keep the rubbish. It would be embedded through e5 and written into
+    /// the index as a finished transcript, and nothing re-reads a file that succeeded. That is the
+    /// same defect as opening the Hebrew model and calling the capability ready, one level up:
+    /// what was proved was that the thing STARTS.</para>
+    ///
+    /// <para><b>It asserts shape, never words.</b> A second of a synthesised tone has no correct
+    /// transcript - a healthy Whisper returns nothing at all, or one short hallucination - so
+    /// requiring particular text would fail on working machines. What the documented failure
+    /// produces is broken STRUCTURE: timestamps that are not finite, run backwards or sit outside
+    /// the audio, and text carrying control characters. That is what is checked, against audio
+    /// generated here rather than a sample file, so nothing has to be shipped, licensed, or kept
+    /// in step with the models.</para>
+    ///
+    /// <para>The failure direction is deliberate. A false rejection drops that machine to the
+    /// processor runtime, which is slower and correct. A false acceptance writes nonsense into
+    /// somebody's index for ever.</para>
+    /// </summary>
+    public static void ProveItTranscribes(WhisperFactory factory)
+    {
+        ArgumentNullException.ThrowIfNull(factory);
+        float[] probe = ProbeAudio();
+        var lines = new List<Line>();
+
+        using (var proc = factory.CreateBuilder().WithLanguage("en").WithThreads(2).Build())
+            foreach (var seg in proc.ProcessAsync(probe).ToBlockingEnumerable())
+                lines.Add(new Line(seg.Start.TotalSeconds, seg.End.TotalSeconds, seg.Text ?? "", seg.Language ?? ""));
+
+        string? wrong = WhatIsWrongWith(lines, probe.Length / (double)SampleRate);
+        if (wrong is not null)
+            throw new InvalidOperationException(
+                "this runtime loaded but did not transcribe correctly (" + wrong +
+                "), which is the documented integrated-GPU failure; falling back");
+    }
+
+    /// <summary>The probe: a second of a quiet tone that rises, so it is neither silence nor
+    /// noise. Generated rather than shipped - there is no sample file to license, to keep beside
+    /// the models, or to lose.</summary>
+    public static float[] ProbeAudio()
+    {
+        var a = new float[SampleRate];
+        for (int i = 0; i < a.Length; i++)
+        {
+            double t = i / (double)SampleRate;
+            a[i] = (float)(0.05 * Math.Sin(2 * Math.PI * (220 + 180 * t) * t));
+        }
+        return a;
+    }
+
+    /// <summary>What is structurally wrong with a transcript, or null when nothing is. Pure, so
+    /// every arm of the judgement is testable without a GPU - which is the only way any of this
+    /// can be tested at all.</summary>
+    /// <summary>The three control characters a transcript may legitimately carry. Named
+    /// rather than escaped so this comparison cannot be broken by an editing accident.</summary>
+    private const char Lf = (char)10, Cr = (char)13, Tab = (char)9;
+
+    public static string? WhatIsWrongWith(IReadOnlyList<Line> lines, double seconds)
+    {
+        ArgumentNullException.ThrowIfNull(lines);
+        // No segments at all is a PASS. A second of a tone says nothing, and a healthy model is
+        // entitled to report exactly that.
+        double last = double.NegativeInfinity;
+        foreach (Line l in lines)
+        {
+            if (!double.IsFinite(l.T0) || !double.IsFinite(l.T1)) return "a timestamp is not a number";
+            if (l.T1 < l.T0) return "a segment ends before it starts";
+            if (l.T0 < -1 || l.T0 > seconds + 30) return "a timestamp is outside the audio";
+            // Whisper emits segments in order, so a later one starting EARLIER is broken output.
+            // The half-second of slack is for float noise at a boundary, not for reordering;
+            // a whole second was loose enough to let an obviously reversed pair through.
+            if (l.T0 < last - 0.5) return "the segments run backwards";
+            last = l.T0;
+
+            foreach (char c in l.Text)
+                if (char.IsControl(c) && c != Lf && c != Cr && c != Tab)
+                    return "the text carries control characters";
+        }
+        return null;
+    }
+
+    /// <summary>
     /// Whether a transcript line is whisper hearing something in silence rather than speech.
     ///
     /// <para>A stretch with nothing in it produces bracketed sound effects and the musical-note
@@ -176,7 +267,13 @@ public static class Media
                 // not start, and the two want different sentences in the report.
                 Providers.RequireAcceleratedSpeechRuntime();
                 RuntimeOptions.RuntimeLibraryOrder = [RuntimeLibrary.Vulkan];
-                return WhisperFactory.FromPath(path);
+                WhisperFactory made = WhisperFactory.FromPath(path);
+                // AND IT HAS TO TRANSCRIBE SOMETHING. See ProveItTranscribes: on this rung a
+                // successful load proves nothing, because the failure being guarded against
+                // happens after a clean init.
+                try { ProveItTranscribes(made); }
+                catch { made.Dispose(); throw; }
+                return made;
             }),
             ("CPU", () =>
             {
