@@ -40,8 +40,31 @@ public static class TrayText
         };
         if (state is not null) lines.Add(state);
 
-        return string.Join(Environment.NewLine, lines);
+        // Bounded, and this is not defensive tidying. Windows carries a tray tooltip in
+        // NOTIFYICONDATAW.szTip, which is a fixed 128-character field, and the worst case here
+        // reaches 135: a three-part version, "No hotkey could be registered", the longest index
+        // sentence at a seven-figure count, an update line, and three separators. What a
+        // marshaller does with an over-long string is not something this code should depend on -
+        // silently truncating loses the tail, and throwing would come out of the refresh that runs
+        // once a second, on the interface thread. So the string that leaves here always fits.
+        //
+        // Dropped from the END, which is why the order above is the order it is: the update state
+        // is the same all day and the index line moves, so a tooltip that cannot hold everything
+        // loses the still thing rather than the moving one.
+
+
+        while (lines.Count > 1 && Length(lines) > MaxTooltip) lines.RemoveAt(lines.Count - 1);
+
+        string text = string.Join(Environment.NewLine, lines);
+        return text.Length <= MaxTooltip ? text : text[..MaxTooltip];
+
+        static int Length(List<string> parts)
+            => parts.Sum(p => p.Length) + (parts.Count - 1) * Environment.NewLine.Length;
     }
+
+    /// <summary>What Windows will carry. <c>NOTIFYICONDATAW.szTip</c> is 128 wide and the last
+    /// character is the terminator, so 127 is the most a tooltip can actually say.</summary>
+    public const int MaxTooltip = 127;
 }
 
 /// <summary>

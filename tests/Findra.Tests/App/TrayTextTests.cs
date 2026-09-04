@@ -125,4 +125,43 @@ public class UpdateMemoryTests
             Assert.Equal(2, TrayText.Tooltip("1.2.0", "Alt+Space", UpdateState.NotDue, null, nothing)
                                     .Split(Environment.NewLine).Length);
     }
+
+}
+
+/// <summary>
+/// What Windows can actually carry in a tray tooltip. NOTIFYICONDATAW.szTip is a fixed
+/// 128-character field, and nothing here measured a length - the worst case reaches 145.
+/// </summary>
+public class TrayTooltipLengthTests
+{
+    [Fact]
+    public void TheTooltipAlwaysFitsWhatWindowsCanCarry()
+    {
+        // NOTIFYICONDATAW.szTip is 128 wide. The worst case reaches 135 without a bound: a
+        // three-part version, no hotkey, the longest index sentence at a seven-figure count, an
+        // update line, and three separators. Measured from IndexStatus itself rather than from a
+        // sentence written out here, so the day that line grows this fails rather than the tray.
+        string worst = IndexStatus.Line(contentEnabled: true, state: "", pending: 12_345_678,
+                                        indexed: 87_654_321, alive: false, rebuilt: false);
+
+        string tip = TrayText.Tooltip("1.10.0-something", null, UpdateState.Available, "v1.10.0", worst);
+
+        Assert.True(tip.Length <= TrayText.MaxTooltip,
+            $"the tooltip is {tip.Length} characters against the {TrayText.MaxTooltip} Windows carries");
+        // And it keeps the line that MOVES. An update state is the same all day; the index line is
+        // the reason somebody hovers the icon at all.
+        Assert.Contains("Findra", tip, StringComparison.Ordinal);
+        Assert.DoesNotContain("Update available", tip, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void AnOrdinaryTooltipKeepsEveryLine()
+    {
+        string tip = TrayText.Tooltip("1.0.0", "Alt+Space", UpdateState.Available, "v1.1.0", "index up to date");
+
+        Assert.Contains("Alt+Space", tip, StringComparison.Ordinal);
+        Assert.Contains("Index up to date", tip, StringComparison.Ordinal);
+        Assert.Contains("Update available", tip, StringComparison.Ordinal);
+        Assert.True(tip.Length <= TrayText.MaxTooltip);
+    }
 }

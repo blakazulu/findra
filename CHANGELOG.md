@@ -516,6 +516,12 @@ into a numbered section on the first release.
 
 ### Fixed
 
+- **The tray tooltip always fits what Windows can carry.** Its field holds 127 characters and the
+  longest tooltip Findra can compose is 145: a long version, no hotkey, the index line at a
+  seven-figure count, and an update line. Nothing measured it. It now drops from the end, so a
+  tooltip that cannot hold everything loses the update state, which is the same all day, rather
+  than the indexing line, which is why somebody hovered it.
+
 - **The progress bar under the search card is visible again, on the card it exists for.** It hangs
   below the card, so whether it is drawn decides how tall the window is - and nothing asked the
   window to re-measure when it appeared. It turned on about a tenth of a second after the card
