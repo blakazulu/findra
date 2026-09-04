@@ -12,6 +12,14 @@ into a numbered section on the first release.
 
 ### Added
 
+- **`findra --searchindex why:<path>` explains one file.** Every other diagnostic describes the
+  whole index; none of them could say anything about a single file, which is the only thing anybody
+  asks about. It says whether the file is on the disk, whether anything about its kind or your
+  skipped folders stops it being read, whether the index has it, what state it is in, what came out
+  of it, and whether it has been edited since. Put a `q:` beside it and it scores that file's own
+  vectors against the query and says whether each cleared the threshold the search actually uses.
+  It reads and changes nothing.
+
 - **Search by name across NTFS volumes.** An elevated helper reads the Master File
   Table and the change journal and holds the name index in memory; the interface runs
   unelevated and asks over a local named pipe. Exactly one call needs administrator
