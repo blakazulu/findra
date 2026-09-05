@@ -1,4 +1,4 @@
-using System.Reflection;
+﻿using System.Reflection;
 using Findra;
 using Xunit;
 
@@ -103,7 +103,11 @@ public class ConfigTests
         // Reads the same as the IndexPaused assertion it replaces and means the OPPOSITE:
         // false now means "do not read inside files", not "do not pause".
         Assert.False(c.IndexContent);
-        Assert.Equal(50, c.IndexPower);
+        // Three quarters, not half. The first pass is the one time the work is urgent and it
+        // happens once; holding the machine back by half doubles the wait for somebody's own
+        // files to become searchable, and the Content screen has a control for anyone who
+        // would rather it stayed out of the way.
+        Assert.Equal(75, c.IndexPower);
     }
 
     [Fact]

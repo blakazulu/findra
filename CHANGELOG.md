@@ -9,6 +9,11 @@ and Findra follows [Semantic Versioning](https://semver.org/spec/v2.0.0/).
 
 ### Changed
 
+- **Indexing takes three quarters of its duty cycle by default, up from half.** The first pass is
+  the one time the work is genuinely urgent and it only happens once, so holding the machine back
+  by half was doubling the wait for somebody's own files to become searchable. Settings, under
+  Content, still offers 25, 50, 75 and 100 for anyone who would rather it stayed out of the way.
+
 - **The README's numbers were measured again, on a machine that has really used Findra.** The old
   ones came from a debug build against a content index holding ten documents, so the full-text
   table measured the query path rather than a corpus. This run is the released build, with every
