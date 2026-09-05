@@ -1180,6 +1180,33 @@ public class WebsiteTests
         Assert.DoesNotContain(key, script, StringComparison.Ordinal);
     }
 
+
+    /// <summary>
+    /// The Search Console verification file sits where Netlify actually serves it.
+    ///
+    /// <para>Google hands you a file named for its own contents and checks for it at the root of
+    /// the site. It arrived in <c>docs/</c>, which this repository never publishes - only
+    /// <c>website/public</c> is deployed - so it would have 404ed and verification would have
+    /// failed with nothing on the page looking wrong.</para>
+    ///
+    /// <para>The lasting risk is not the first placement but the quiet one: a file nobody
+    /// references, moved or tidied away years later, takes Search Console with it and the only
+    /// symptom is that the reports stop. Google's instruction is not to modify it, so this
+    /// asserts the bytes it shipped with.</para>
+    /// </summary>
+    [Fact]
+    public void TheSearchConsoleVerificationFileIsWhereGoogleLooksForIt()
+    {
+        string[] found = Directory.GetFiles(Repo.Path_("website/public"), "google*.html")
+            .Select(Path.GetFileName)
+            .ToArray()!;
+
+        Assert.True(found.Length == 1, $"expected one Search Console verification file at the publish root, found {found.Length}");
+
+        // Named for its own contents, which is the whole of Google's format.
+        Assert.Equal($"google-site-verification: {found[0]}", Repo.Read($"website/public/{found[0]}").Trim());
+    }
+
     private static string WithoutComments(string html) =>
         Regex.Replace(html, "<!--.*?-->", " ", RegexOptions.Singleline);
 

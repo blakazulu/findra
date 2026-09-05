@@ -493,6 +493,13 @@ and compare it to the key in the submission, a mismatch is rejected silently, an
 down twice is a key that will one day be written down differently. `TheIndexNowKeyFileIsNamedForWhatItContains`
 holds the file to its own name and asserts the key appears nowhere in the script.
 
+**Search Console's verification file lives at the publish root, not in `docs/`.** Google names the
+file for its own contents and fetches it from the root of the site; `docs/` is not deployed, so a
+copy there 404s and verification fails with nothing on the page looking wrong. It is referenced by
+no page and linked from nowhere, which is what makes it easy to tidy away years later and take the
+reports with it, so `TheSearchConsoleVerificationFileIsWhereGoogleLooksForIt` holds it in place and
+to the bytes Google issued - their instruction is not to modify it.
+
 **The screenshots are delivered through Netlify's Image CDN and the files behind them are
 untouched.** Each shot sits in a `<picture>` offering AVIF and WebP at two widths through
 `/.netlify/images`, with the original PNG left as the `<img>` fallback - 104 KB becomes about 15 KB
