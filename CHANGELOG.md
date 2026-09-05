@@ -217,6 +217,9 @@ and Findra follows [Semantic Versioning](https://semver.org/spec/v2.0.0/).
   actually writes.** Both were missing from the command list, which is the one place somebody
   looks before running anything.
 
+- **Search Console can verify the site.** Google's verification file is served from the root of
+  the site, where Google looks for it, rather than from a folder that is never published.
+
 - **The website stopped telling machines that Findra cannot be downloaded yet.** The structured
   data the page carries for search engines and assistants still said the release was a pre-order
   and pointed its download link at the repository root rather than at the releases page. Neither
