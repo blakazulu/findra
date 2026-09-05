@@ -164,17 +164,41 @@ public static class UpdateCheck
     /// first response from <c>api.github.com</c> sets a tracking cookie (<c>_octo</c>), and a
     /// default client would echo it straight back on every check after the first, which is
     /// exactly the kind of identifier spec 9b promises never to send. This client turns both
-    /// off, and caps the buffered response at 64 KB - comfortably larger than a release JSON
-    /// payload - so a captive portal or a MITM response cannot buffer unboundedly inside the
-    /// fetch's own 10 second timeout.</summary>
+    /// off, and caps the buffered response at <see cref="ResponseCap"/> so a captive portal or a
+    /// MITM response cannot buffer unboundedly inside the fetch's own 10 second timeout.</summary>
     public static HttpClient CreateClient() => new(new SocketsHttpHandler
     {
         UseCookies = false,
         AllowAutoRedirect = false,
     })
     {
-        MaxResponseContentBufferSize = 64 * 1024,
+        MaxResponseContentBufferSize = ResponseCap,
     };
+
+    /// <summary>
+    /// How much of the releases API's answer Findra is willing to hold.
+    ///
+    /// <para>This was 64 KB, under a comment calling it "comfortably larger than a release JSON
+    /// payload". That was a guess about somebody else's response, and it was wrong on the very
+    /// first release. <c>/releases/latest</c> carries the release BODY; <c>release.yml</c> puts
+    /// the matching <c>CHANGELOG.md</c> section into that body verbatim; 0.1.0's section is 82,552
+    /// bytes inside a 90,086 byte payload. So every single launch logged</para>
+    ///
+    /// <code>update check failed: Cannot write more bytes to the buffer than the configured
+    /// maximum buffer size: 65536</code>
+    ///
+    /// <para>and no installed copy could ever learn that a newer version existed. The one network
+    /// feature Findra has, broken from its first release by the size of its own release notes -
+    /// and self-reinforcing, because the more there was to tell somebody about, the more certainly
+    /// they were not told.</para>
+    ///
+    /// <para>Four megabytes is still a cap and still bounded: the point of the limit is that a
+    /// captive portal cannot make this buffer without end, not that it should be tight. What must
+    /// never come back is a number chosen by guessing at a payload nobody measured -
+    /// <c>TheCapIsBiggerThanThisRepositorysOwnReleaseNotes</c> measures the real CHANGELOG
+    /// instead, which is the thing that actually decides how big the answer is.</para>
+    /// </summary>
+    public const long ResponseCap = 4L * 1024 * 1024;
 
     /// <summary>The real fetch (spec 9b): a single anonymous GET to the GitHub Releases API
     /// for this repository, User-Agent only, no query parameters, no machine or install

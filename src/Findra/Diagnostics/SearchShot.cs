@@ -24,6 +24,7 @@ public static class SearchShot
         "capsule", "empty", "indexing", "contentmode", "contentwaiting", "typing", "results",
         "noresults", "many", "adv", "opening", "openingempty",
         "settings", "settingsopening", "settingssearches", "settingscontent", "settingsabout",
+        "settingsuptodate", "settingsupdate", "settingsasking",
         "firstrun", "firstruninstalled", "firstrunspeech", "firstrundownloading", "firstrunfinished",
         "firstrunready",
     ];
@@ -136,8 +137,22 @@ public static class SearchShot
             "settingsopening" => Section.Opening,
             "settingssearches" => Section.Searches,
             "settingscontent" => Section.Content,
-            "settingsabout" => Section.About,
+            // The three prompt states are About with a panel over it: the panel is only ever
+            // raised by the button that lives there, so any other section behind it would be a
+            // picture of something that cannot happen.
+            "settingsabout" or "settingsuptodate" or "settingsupdate" or "settingsasking" => Section.About,
             _ => Section.Look,
+        };
+
+        // Each of the three answers the panel can give, because they are three different shapes -
+        // two buttons and news, one button and reassurance, and no button at all while the request
+        // is out. A surface reviewed in only one of them is a painter branch nobody has looked at.
+        UpdatePromptState prompt = state switch
+        {
+            "settingsuptodate" => UpdatePromptState.UpToDate,
+            "settingsupdate" => UpdatePromptState.Available,
+            "settingsasking" => UpdatePromptState.Asking,
+            _ => UpdatePromptState.None,
         };
 
         var config = Config.Default with
@@ -165,6 +180,13 @@ public static class SearchShot
             Installed = new CapabilitySet(new HashSet<Capability> { Capability.Meaning }),
             Version = BuildInfo.Version, Update = UpdateState.Available, Latest = "1.4.0",
             HoverTarget = PanelTarget.Section, HoverRow = 1,
+            Prompt = prompt,
+            // Hovered on purpose, on the button somebody would actually press: the hover fill is
+            // half of what makes a pill read as pressable, and a state that never hovers one
+            // proves only its resting colour.
+            PromptHover = prompt == UpdatePromptState.Available ? UpdatePromptTarget.Go
+                        : prompt == UpdatePromptState.None ? UpdatePromptTarget.None
+                        : UpdatePromptTarget.Close,
         };
 
         int w = (int)Math.Ceiling(RailLayout.Width), h = (int)Math.Ceiling(RailLayout.Height);

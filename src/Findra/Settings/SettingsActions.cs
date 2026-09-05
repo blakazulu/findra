@@ -1,7 +1,7 @@
 namespace Findra;
 
 /// <summary>
-/// The nine things a settings click can ask the machine for. An interface rather than a switch
+/// The ten things a settings click can ask the machine for. An interface rather than a switch
 /// inside the window, so the last link from a click to the operating system has a test.
 /// </summary>
 public interface ISettingsHost
@@ -13,6 +13,11 @@ public interface ISettingsHost
     void PickFolder();
     void InstallCapability(Capability capability);
     void CheckNow();
+
+    /// <summary>Start the upgrade. Never by replacing anything itself: winget in a visible
+    /// window for a winget copy, the releases page for anything else.</summary>
+    void UpdateNow();
+
     void RecentreCapsule();
     void StartIndexing();
 }
@@ -38,6 +43,7 @@ public static class SettingsActions
             case SettingsAction.RegisterHelper: host.RegisterHelper(); return;
             case SettingsAction.PickFolder: host.PickFolder(); return;
             case SettingsAction.CheckNow: host.CheckNow(); return;
+            case SettingsAction.UpdateNow: host.UpdateNow(); return;
             case SettingsAction.RecentreCapsule: host.RecentreCapsule(); return;
             case SettingsAction.StartIndexing: host.StartIndexing(); return;
 

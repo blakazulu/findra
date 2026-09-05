@@ -1786,6 +1786,43 @@ internal sealed class Shell : ISettingsHost
             _ => Waiting(ControlId.Capability, false), TaskScheduler.Default);
     }
 
+    void ISettingsHost.UpdateNow()
+    {
+        // Findra replaces nothing. This starts the upgrade the way the person would have started
+        // it themselves, and then gets out of the way - spec 9b's rule is about WHO does the
+        // replacing, and the answer stays winget or the installer. Replacing a running executable
+        // and re-registering an elevated logon task are the two operations most likely to leave a
+        // machine broken, and winget already solves both correctly.
+        string source = (_config.InstallSource ?? "unknown").ToLowerInvariant();
+        try
+        {
+            if (source == "winget")
+            {
+                // A window they can watch, deliberately. UseShellExecute with cmd /k leaves the
+                // console up after winget finishes, so a failure is readable rather than a flash -
+                // and the UAC prompt Windows raises for a machine-scope package is theirs to
+                // answer, not something Findra should be trying to hide.
+                Process.Start(new ProcessStartInfo("cmd.exe", "/k winget upgrade blakazulu.Findra")
+                {
+                    UseShellExecute = true,
+                });
+            }
+            else
+            {
+                Process.Start(new ProcessStartInfo("https://github.com/blakazulu/findra/releases/latest")
+                {
+                    UseShellExecute = true,
+                });
+            }
+        }
+        catch (Exception ex)
+        {
+            Log.Warn("startup", "could not start the update: " + ex.Message);
+        }
+
+        SettingsWindow.Open?.ShowUpdatePrompt(UpdatePromptState.None);
+    }
+
     void ISettingsHost.CheckNow()
     {
         // The row says "Asking..." while the request is out and goes back to "Check" whatever
@@ -1794,6 +1831,7 @@ internal sealed class Shell : ISettingsHost
         // - Findra never installs anything itself, so the answer is words and an action to take,
         // never a button that does it for you.
         Waiting(ControlId.CheckNow, true);
+        SettingsWindow.Open?.ShowUpdatePrompt(UpdatePromptState.Asking);
         _ = RunUpdateCheck(force: true).ContinueWith(
             _ => Waiting(ControlId.CheckNow, false), TaskScheduler.Default);
     }
@@ -2017,7 +2055,10 @@ internal sealed class Shell : ISettingsHost
 
                 // And the same answer in About, which is the other place a person can ask for one.
                 // Without this, "Check now" makes a request and changes nothing anybody can see.
-                SettingsWindow.Open?.NoteUpdate(result.State, result.Latest);
+                // `force` is the whole condition: the daily background check must never put a
+                // panel over anything, because a person who asked nothing is not waiting for an
+                // answer. Only a press of Check now, or the tray's own item, raises it.
+                SettingsWindow.Open?.NoteUpdate(result.State, result.Latest, raise: force);
 
                 RefreshTooltip();
                 if (result.Advice is { } advice) Log.Info("startup", advice);

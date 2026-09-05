@@ -82,7 +82,7 @@ findra.exe --searchmodels             # are models present, do they load, do the
 findra.exe --searchindex [file|folder|q:query|why:path]...   # what is indexed, what is queued;
                                       # given paths it queues and drains them, given q: it queries,
                                       # given why:<path> it explains ONE file and changes nothing
-findra.exe --searchshot out.png <state> [palette]   # twenty-three states, listed below
+findra.exe --searchshot out.png <state> [palette]   # twenty-six states, listed below
 findra.exe --searchtest               # engine self-check
 findra.exe --searchbench [out.md] [corpus]   # measured numbers, as a pasteable Markdown
                                       # fragment; `corpus` is how many files it generates
@@ -90,12 +90,13 @@ findra.exe --version                  # print the version and log location, then
 ```
 
 The `--searchshot` states are `SearchShot.States`, and that list is the only definition of them.
-Twelve draw the card, five the settings window and six the first-run screen:
+Twelve draw the card, eight the settings window and six the first-run screen:
 
 ```
 capsule  empty  indexing  contentmode  contentwaiting  typing  results  noresults  many  adv
 opening  openingempty
 settings  settingsopening  settingssearches  settingscontent  settingsabout
+settingsuptodate  settingsupdate  settingsasking
 firstrun  firstruninstalled  firstrunspeech  firstrundownloading
 firstrunfinished  firstrunready
 ```
@@ -259,6 +260,32 @@ index silently not existing.
   bottom edge of the window they were painted in: no hover, no cursor, nothing clickable, on the
   one screen that has to be answered. It never showed in a shot, in CI or on a machine with no
   Hebrew row, because there Speech is the last row and the two answers agree.
+
+## The update panel
+
+Pressing **Check now** in Settings raises a panel over the pane. It exists because the answer used
+to land in a text row three lines above the button that asked for it, which is the quietest place
+in the window to put the only news this product ever has.
+
+- **Only the button raises it.** `RunUpdateCheck(force)` passes `force` through to
+  `NoteUpdate(..., raise:)`, and the daily background check on startup passes false. A person who
+  asked nothing is not waiting for an answer, and a dialog that appears on its own is the
+  idle-widget-being-loud that spec §3 forbids the capsule.
+- **Findra still installs nothing itself.** "Update now" runs `winget upgrade blakazulu.Findra` in
+  a **visible** console for a winget copy and opens the releases page for anything else; winget or
+  the installer replaces the binary, never Findra. `UpdatePrompt.GoLabel` and `Body` switch on the
+  install source, because offering a winget command to somebody who built from source is worse
+  than offering nothing. Spec §9b's rule is about WHO does the replacing, and the answer is
+  unchanged.
+- **`Disabled` has an arm of its own.** `UpdateCheck.CheckAsync` short-circuits when the switch is
+  off *even when forced*, so pressing Check now with updates off makes no request at all -
+  answering that with silence is the exact defect the panel exists to remove.
+- **While it is up it is the only thing on the surface.** The hit test refuses the scrim, the
+  panel's own body, the pane behind and the window's own close cross. A dimmed control that still
+  takes a press is the worst of both, and a click on a question must not answer it.
+- **`SettingsState.Prompt` is a field, not something derived from `Update`.** `Update` is what the
+  last check FOUND whenever it ran; `Prompt` is whether somebody is standing in front of a question
+  they asked. Deriving one from the other is how the background check ends up shouting.
 
 ## The card's pill column
 

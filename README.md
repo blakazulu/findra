@@ -154,7 +154,7 @@ these, and every image above was drawn by the same painter the window uses.
     findra --content on               start reading inside files
     findra --uninstall --dry-run      what removing Findra would do, without doing it
 
-`findra --searchshot` draws twenty-three surfaces in any of the six palettes, which is how the
+`findra --searchshot` draws twenty-six surfaces in any of the six palettes, which is how the
 images on this page are made and how they are regenerated. The command under each image is
 the whole recipe.
 
