@@ -14,7 +14,7 @@ public static class Sizes
     private const long Gb = Mb * 1024L;
 
     /// <summary>Whole megabytes below a gigabyte, two decimals above it with trailing zeros
-    /// trimmed. The two-decimal form is not decoration: spec §6 says "2.93 GB is the number for
+    /// trimmed. The two-decimal form is not decoration: spec §6 says a two-decimal gigabyte is the number for
     /// the README", and one decimal would print 2.9, which is the conservative floor's total
     /// rather than the measured one.</summary>
     public static string Human(long bytes)

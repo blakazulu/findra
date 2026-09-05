@@ -9,6 +9,21 @@ and Findra follows [Semantic Versioning](https://semver.org/spec/v2.0.0/).
 
 ### Added
 
+- **The site answers the questions people actually ask before installing.** A Questions section on
+  the front page, and the same answers in the Markdown the site serves to agents: what Findra is,
+  whether it reads inside files, how fast it is, what leaves your machine, how to install it,
+  whether it can find a photo by description or search what was said in a recording, and how much
+  disk the optional models need. Every answer stands on its own and every number in one is a
+  measured number with its machine named.
+
+- **A section saying how Findra differs from the search Windows already has**, in four points that
+  can each be checked on your own machine. No number is quoted against any other named product.
+
+- **The four written pages carry structured data.** About, Contact, Privacy and the code signing
+  policy now say, in a form a machine reads, which product they belong to, who wrote them and when
+  they were last looked at. They had none, so each was an orphan next to a front page that
+  described the whole product.
+
 - **Check now answers you.** Pressing it in Settings brings up a panel that says either "You have
   the latest version" with a Close button, or names the new version with Not now and Update now.
   Update now runs the upgrade the way you would have run it yourself - `winget upgrade
@@ -17,6 +32,59 @@ and Findra follows [Semantic Versioning](https://semver.org/spec/v2.0.0/).
   above the button, which almost nobody noticed.
 
 ### Changed
+
+- **The website quotes the current benchmark run.** The front page, the Markdown it serves to
+  agents and the share image were still showing a measurement taken against a debug build with ten
+  documents in the index: a filename came back in 0.33 ms and the page said 0.50, the slowest query
+  median was 2.05 ms and the page said 3.99. The site was understating the product while promising that
+  no number on it was one you could not reproduce.
+
+- **The About page no longer says the first release has not been tagged.** It has been tagged since
+  4 September. That page is the one a search engine reads for whether a product exists yet, and it
+  was telling everybody to build from source.
+
+- **The download sizes agree with each other everywhere.** The summary the site serves to agents
+  still totalled the models at 2.9 GB and priced the meaning model at 270 MB, both of which stopped
+  being true when that model went to full precision. It is 3.7 GB and 1.04 GB, and a test now holds
+  every surface to the same figures.
+
+- **The first-run screen's pricing is described the right way round.** The page said the sizes
+  shown there are counted against what you have already picked. They are not, deliberately: each
+  row is priced at its own files so the number does not move when you tick it, and the line along
+  the bottom is what the selection costs. Settings is the surface that prices the other way.
+
+- **The type loads sooner.** The two typefaces were fetched by an instruction inside the stylesheet,
+  which cannot start until the whole stylesheet has arrived - four round trips before the first
+  letter was drawn in the right font. They are requested from the page itself now, with the
+  connections opened early.
+
+- **The screenshots below the fold load when you reach them**, rather than all six at once with the
+  one at the top, and the first-run picture is declared at the size it actually is. It had grown
+  taller without its measurement following, so the page jumped when it arrived.
+
+- **The install section is ordered by what works**: the installer first, winget second as
+  pending, and building from source last.
+
+- **The 404 page's footer lists everything the other footers list.** It had quietly fallen two
+  links behind.
+
+- **The install command says it is not in the catalogue yet.** `winget install blakazulu.Findra` is
+  printed on every surface as the whole install, and the manifest is still waiting on a moderator
+  at Microsoft, so the command does not work yet. Each place that prints it now says so and points
+  at the installer on the releases page, which does. This comes back out when the manifest merges.
+
+- **The hardware caveat mentions arm64.** Findra ships an arm64 installer and recommends it in the
+  same breath as x64, and no arm64 machine has ever started it. The caveat said so about AMD and
+  Intel graphics and stopped there.
+
+- **Two questions that existed only in the version for machines now appear on the page**: whether
+  Findra needs a graphics card, and whether it needs administrator rights. So does the sentence
+  saying Findra is not made by Microsoft and is not a version of Windows Search, which had been
+  everywhere except the page a person reads.
+
+- **The comparison with Windows Search is in the Markdown the site serves to agents**, not only in
+  the page. It was the answer to one of the highest-intent questions this product can be asked and
+  it was missing from all three machine-readable surfaces.
 
 - **The update check works at all.** It has never once succeeded: it capped the reply from GitHub
   at 64 KB, and a Findra release announcement is its whole changelog section, which is larger than
@@ -27,13 +95,113 @@ and Findra follows [Semantic Versioning](https://semver.org/spec/v2.0.0/).
   by half was doubling the wait for somebody's own files to become searchable. Settings, under
   Content, still offers 25, 50, 75 and 100 for anyone who would rather it stayed out of the way.
 
+- **Findra reads inside documents about three times faster.** The model that works out what a
+  document means now runs on your graphics card instead of your processor, where it had always run
+  for no recorded reason. Measured on one desktop, 134 text segments a second became 408. Searching
+  still runs on the processor, and one content search costs about 4 ms more than it did.
+
+- **The meaning model is a bigger, more accurate download: 270 MB becomes 1.04 GB.** The small
+  version was a compressed one, and compressed models do not give the same answer on a graphics
+  card as they do on a processor - far enough apart that a document stored by one and searched by
+  the other would score wrongly, and would start scoring differently again after a driver update.
+  The full-size model gives an identical answer on both. Taking everything Findra offers is now
+  3.7 GB rather than 2.93 GB, and `findra --searchmodels` prints the agreement it measured.
+
 - **The README's numbers were measured again, on a machine that has really used Findra.** The old
   ones came from a debug build against a content index holding ten documents, so the full-text
   table measured the query path rather than a corpus. This run is the released build, with every
-  model installed and 6,257 files read off a real disk, and both accelerators loaded. A filename
-  now comes back in 0.31 to 0.50 ms where it was 0.50 to 1.00.
+  model installed and 6,258 files read off a real disk, and both accelerators loaded. A filename
+  now comes back in 0.33 to 2.05 ms median across five measured name queries, where the old run
+  said 0.50 to 3.99.
 
 ### Fixed
+
+- **The keyboard can reach the copy buttons.** The two install commands copy on click and were not
+  reachable by keyboard at all. Everything focusable now shows where the focus is, which nothing on
+  the site did, and two pieces of small print were too faint to pass a contrast check.
+
+- **Markdown responses carry the same security headers as the pages.** Asking a page for its
+  Markdown got an answer with the referrer, framing and permissions policies missing, because that
+  reply was built from scratch rather than from the one the rest of the site gets.
+
+- **The sitemap's dates are generated rather than typed.** All five said the same hand-written day
+  and nothing updated them, which is the state in which a search engine stops believing them.
+
+- **The install command is drawn in the right typeface again.** Making it reachable by keyboard
+  reset its font to the body face at the wrong size, and focusing any button squared its corners.
+  Both were introduced in this same pass.
+
+- **The second copy button is a button too.** One of the two was converted and the other was left
+  as it was, so the command in the closing section still could not be reached without a mouse.
+
+- **The headline figure was still the old one in six places**, including the description every
+  shared link shows, the ticker, and two lines of prose that called it measured.
+
+- **The headline speed is a range now, not the best case.** "0.33 ms median" replaced "under a
+  millisecond" and was worse: 0.33 ms is the fastest of five measured queries, where the sentence
+  it replaced was at least true of three. Every surface that prints it without naming the query
+  now says 0.33 to 2.05 ms across five measured queries, and the share image says the same.
+
+- **The install command is qualified on every surface, not four of nine.** The About page, both
+  Install sections, the README and the answer an agent reads first still called winget the whole
+  install, and two files contradicted themselves sixty lines apart.
+
+- **The hardware caveat sits beside the numbers**, not only inside an answer far below them, on
+  every surface that prints them.
+
+- **The copy confirmation can be announced.** It was a live region nested inside a button, which
+  ARIA prunes, so the copy succeeded silently for a screen reader. The visible chip stays; the
+  announcement moved beside it. The chip also failed contrast by four hundredths, and the second
+  button's visible text was not part of its accessible name, so speech input could not activate it.
+
+- **The skip link works on the 404 page too**, which was the one page the previous pass missed.
+
+- **The install instruction leads with the route that works.** Every place Findra says how to
+  install it opened with `winget install blakazulu.Findra`, which prints "No package found" until
+  the submitted manifest clears moderation, and put the correction in the sentence after. Anything
+  that quotes a paragraph keeps the opening and drops the caveat, so the most-quoted answer the
+  product has was an instruction to run something that fails. The installer on the releases page
+  is named first now, with its address, and winget is named second as pending.
+
+- **The speed claim says it is a median.** "0.33 to 2.05 ms" is the range of five medians and the
+  worst single sample is above it, so the range stood unqualified on eleven surfaces while the
+  table below it disagreed.
+
+- **The stat card no longer credits one query with another query's worst case.** It named "config"
+  and then gave 2.48 ms, which is sunset's; config's worst was 0.44.
+
+- **The mock window shows measured numbers.** Three invented latencies sat in the page text under
+  a sentence promising every number on the page is reproducible.
+
+- **The benchmark figures are held by tests wherever they appear.** The upper end of the range and
+  the worst sample were in fifteen places, including a baked share image and the ticker, with
+  nothing tying any of them to the README. Re-running the benchmark would have updated the tables
+  and left the rest stale, silently.
+
+- **The speed answer gives the range, not the best case.** "How fast is Findra?" opened with the
+  fastest of five queries and then quoted the worst single sample, so the two read as one
+  measurement's low and high. It gives both ends of the range now and names the query at each end.
+
+- **The mock window stops timing a photo search.** Two of its three rows carried name-query
+  timings, one of them on a match found by what a photograph shows, which is a speed Findra has
+  never measured. One query returns its rows in one round trip, so there is one time on the row
+  that earned it.
+
+- **The front page renders without JavaScript.** Most of it was invisible until a script ran,
+  while the file that tells agents how to read the site said every page is readable without one.
+
+- **The share image cannot go stale unnoticed.** The line drawn into it is written out beside it
+  in the same pass, so a test can tell whether the picture was really redrawn rather than only
+  the constant edited.
+
+- **The site ships the icons a browser actually asks for.** Only an SVG was published, so anything
+  that will not use one requested `/favicon.ico` by path and got the 404 page, and an iPhone
+  saving Findra to its home screen had no icon at all. Both come out of the same drawing as every
+  other copy of the mark, and a test holds them to it.
+
+- **The three footers list the small print in the same order.** They carried the same eight links
+  in three different sequences, so the licence moved as you walked between pages. The guard that
+  existed compared three link texts on one page; it compares the whole ordered list on all six now.
 
 - **The website stopped telling machines that Findra cannot be downloaded yet.** The structured
   data the page carries for search engines and assistants still said the release was a pre-order
@@ -66,19 +234,25 @@ all of it gets verified without a screen.
   Table and the change journal and holds the name index in memory; the interface runs
   unelevated and asks over a local named pipe. Exactly one call needs administrator
   rights, and it is the one that opens the volume.
+
 - **A query grammar** covering words, phrases, globs, negation, `ext:`, `type:`,
   `in:`, `size:`, `modified:`, `created:`, `accessed:`, `case:`, whole-word, regular
   expressions, and alternatives.
+
 - **The results card and the desktop capsule**, drawn directly with Skia. The card
   unfolds from the capsule, takes the keyboard, opens a result, and drags a row into
   Explorer.
+
 - **Six palettes**, three dark and three light, derived from four colours each. The
   pair you choose follows the Windows light and dark setting, or pins to either.
   `%APPDATA%\Findra\palettes.json` accepts your own.
+
 - **A global hotkey with a fallback chain**, because the first combination is already
   taken on some machines. Findra says which one it registered, and says so plainly if
   none could be.
+
 - **A tray icon** carrying the version, the hotkey, and the update state.
+
 - **An application icon.** Findra's mark - a lens with the capsule's own search field cut
   out of it - on the taskbar, in Alt-Tab, on the Start-menu and desktop shortcuts, in
   Explorer, on the installer, and in the Add and Remove Programs entry. It ships at every
@@ -86,11 +260,14 @@ all of it gets verified without a screen.
   scaling, and the smallest sizes are drawn differently rather than shrunk. The tray paints
   the same mark in whichever palette is in force, and the website carries it as its favicon
   and in its header. One set of numbers produces all of them.
+
 - **A version check**: one anonymous request to the GitHub releases API, at most once
   a day, in the background. It never installs anything, and switching it off means no
   request is made.
+
 - **Settings** in `%APPDATA%\Findra\config.json`, which cannot stop the application
   starting however badly they are edited.
+
 - **Six diagnostic modes** so the product can be verified without a screen:
   `--searchprobe`, `--searchtest`, `--searchshot`, `--searchindex`, `--searchmodels`,
   `--searchbench`, plus `--version`. All six run, and every one of them reports on
@@ -98,9 +275,11 @@ all of it gets verified without a screen.
   card uses without mangling them, whatever code page the console was left on.
   `--searchprobe` reports the state of the pipe whether it answered or not, so the
   line that says which way it went is there to read either way.
+
 - **The content store**: a SQLite full-text index with a recorded schema version, a
   resumable work queue, and a consumed journal position per volume, so an interrupted
   index continues rather than starting over.
+
 - **A memory-mapped vector store** for meaning-based search: every embedded photo,
   document chunk or transcript segment is a half-precision row tagged with its kind,
   appended by the indexer and ranked by a normalised dot product over the whole file -
@@ -484,18 +663,27 @@ all of it gets verified without a screen.
   switch that starts reading inside files can be reached from the thing you are looking at.
   Until now Settings opened from the tray icon's menu or a right-click on the capsule, and
   nothing on any surface said so.
+
 - **"Start now", in Settings under Content.** A toggle states a preference; this says begin, and
   the sentence above it changes to say that reading has started. It works whether the switch was
   off or already on, because Findra only reads while it is open.
+
 - **"Indexing power", in Settings under Content**, at 25, 50, 75 or 100 per cent. It is how much
   of the machine reading may take, the indexer has honoured it since it was written, and until
   now the only way to change it was to edit `config.json` by hand.
+
 - **The pointer says what each surface is.** The capsule takes the four-way move cursor, which is
   the first time anything has said out loud that it can be dragged; the search field takes the
   I-beam; every button, pill, chip and row on the card, in Settings and on the welcome screen
   takes the hand. Nothing that answers a click offers to move anything.
+
 - **`--searchshot firstrunfinished`**, an eighteenth surface. The end of a first-run download
   had its own title, its own sentence and both bars full, and no command had ever drawn it.
+
+- **A code signing policy page on the website**, at `/code-signing/`, saying who writes Findra, who
+  approves a release and who signs it, and what the program changes on the machine. It is generated
+  from the same `docs/code-signing-policy.md` the repository already carried, so there is one
+  document and not two. Nothing is signed yet and the page opens by saying so.
 
 ### Changed
 
@@ -521,23 +709,28 @@ all of it gets verified without a screen.
   like somebody else's business. The Speech row now says it transcribes recordings and videos,
   and the limit carries a note: one number for audio and video, and a video longer than the
   limit is still found by its frames if you took Photos - only its words are skipped.
+
 - **"Look inside my files" now explains itself.** It was a bare switch label while the update
   check under it carried a paragraph, which put the longest explanation on the smallest choice
   and none at all on the largest. It now says that names are searchable either way, that Findra
   walks your drives and reads them and that this can take hours, that it happens only while
   Findra is open, and that the text it reads is kept in an index in your user profile which is
   not encrypted. The same row in Settings says where the text goes too, in every state.
+
 - **The welcome screen stops being a form once the download starts.** The tiles, the rows, the
   transcription limit and the three switches were all still live while files were arriving,
   acting on a selection that had already been handed over. The second act is now a download and
   a way out of it: nothing but the Close button answers a click, the settings are no longer
   drawn as controls, and the sentence that reports progress follows the list it is about.
+
 - **The welcome screen says it is downloading.** It reported "2 of 4 done", which could have
   been anything - and content indexing, a different and far longer job, may be starting on the
   same machine. It now names what it is doing, and a finished run says it has finished and
   points at the way out.
+
 - **The README links to the project's own page** at https://findra-search.netlify.app, whose
   screenshots are the same renders from the same commands.
+
 - **The size beside a capability on the first screen is that capability's download, and it
   stays put.** It used to be the marginal figure - what the row would add to what was already
   ticked - so ticking a row turned its number into "0 MB" and the size you were weighing
@@ -545,9 +738,11 @@ all of it gets verified without a screen.
   is also the only pricing where the four of them add up to the 2.93 GB quoted above them. The
   line along the bottom is still what the whole selection costs, and it is where a shared file
   is counted once.
+
 - **That line is now the headline of the first screen**, set larger and in bold rather than in
   the same small grey as the notes above it. Since the rows stopped moving, it is the only place
   the download as a whole is stated.
+
 - **The first screen asks how long a recording is worth transcribing.** Ticking Speech is what
   signs you up for transcription, and the limit defaults to five minutes - enough for a voice
   memo and not for a lecture. The control now appears under the Speech row the moment Speech is
@@ -562,23 +757,15 @@ all of it gets verified without a screen.
 - **Content indexing is off until you ask for it**, including the free full-text search of
   documents. Searching by name is always on and costs nothing. Reading inside files walks
   every drive and opens every document, so Findra no longer starts that uninvited.
+
 - **One setting decides how long a recording is worth transcribing**, covering audio and
   video together. It defaults to short clips of about five minutes, offers longer presets
   and no limit at all, and accepts a number of minutes typed in. A recording over the limit
   is skipped rather than failed, so raising the limit later picks up exactly those files.
+
 - **Findra now needs Windows 10 version 2004 (build 19041) or newer.** Reading words out of
   pictures, transcribing speech and pulling frames out of video all use decoders Windows only
   publishes from that build onwards, so the whole application is built against it.
-
-
-### Added
-
-- **A code signing policy page on the website**, at `/code-signing/`, saying who writes Findra, who
-  approves a release and who signs it, and what the program changes on the machine. It is generated
-  from the same `docs/code-signing-policy.md` the repository already carried, so there is one
-  document and not two. Nothing is signed yet and the page opens by saying so.
-
-### Changed
 
 - **The progress bar under the results card appears only while Findra is actually reading files.**
   It used to stay there once a pass had finished, resting at 100% and saying "up to date", along
@@ -959,6 +1146,7 @@ all of it gets verified without a screen.
   palette you had chosen, which put a pale mark on a light Windows taskbar, and it was drawn
   at a size the shell then had to enlarge. It is now always the dark Mond mark, rendered at a
   size the shell scales down from rather than up.
+
 - **Findra's own icon appears in the taskbar.** The settings window and the first screen were
   showing Windows' placeholder icon instead.
 
@@ -1031,6 +1219,7 @@ all of it gets verified without a screen.
 
 - **Uninstalling leaves nothing behind.** A file the installer wrote itself survived removal,
   and kept the program folder alive with it.
+
 - **The uninstall prompt was written for a terminal.** It wrapped the measured sizes out of
   their columns and ended with a command-line instruction sitting above the checkbox that
   does the same thing. It now says what it will keep, and offers to free the measured total.
@@ -1090,22 +1279,27 @@ all of it gets verified without a screen.
 - **The licence and the attribution notice are installed with Findra**, not just kept in
   the repository. Apache-2.0 requires the notice to travel with every copy, and it is the
   reason Findra is under Apache rather than MIT.
+
 - **The installer builds for both architectures.** The Arm64 build named an architecture
   Inno Setup does not have, which would have failed the release for Intel and Arm alike.
 
 - **The scheduled task no longer tells you Findra does not work without it.** Its description,
   which is what Windows shows in Task Scheduler, said exactly that; without the task Findra runs
   perfectly well and has no file names to search, which is what it says now.
+
 - **An uninstall that cannot remove a folder now names the folder.** It reported which of the four
   it was and what went wrong, and left you to work out where it is.
+
 - **The privacy page no longer says that deleting Findra's two folders by hand removes
   everything.** Two things live outside them: the scheduled task that starts the name helper
   at sign-in, and the start-at-sign-in entry. The page now names both and says to run
   `findra.exe --uninstall`, or use the uninstaller, to remove them.
+
 - **The uninstaller can no longer hang while removing the scheduled task.** It read the two
   streams `schtasks` writes one after the other, which stops dead the moment either fills up -
   inside an elevated uninstall, with no timeout that can rescue it and no way out but the task
   manager.
+
 - **A registration prompt nobody answers is now reported as what it is.** If the elevation
   prompt for the scheduled task was left on screen, Findra logged an unrelated error, called it
   a registration failure, and left a temporary file behind in `%TEMP%`.
@@ -1147,10 +1341,12 @@ all of it gets verified without a screen.
   and never a byte of a file. Every decoder runs in the unelevated indexer, because
   decoders read arbitrary files found on disk and are the most likely thing a
   malformed file could exploit.
+
 - Every decoder added for photos, speech and meaning runs in the unelevated indexer child:
   the two neural-network runtimes, the speech model, the media pipeline that decodes sound
   and video, the picture codecs, and the text recognisers. All five read files somebody else
   put on the disk, which is precisely why none of them is reachable from the elevated helper.
+
 - The named pipe is restricted to the current user, and the interface verifies the
   owner before trusting a connection.
 

@@ -1,7 +1,8 @@
 # Findra
 
 Desktop search for Windows. A capsule sits on your desktop; click it, or press a global
-hotkey, and it unfolds into a results card. It finds files by name the second it starts, and
+hotkey, and it unfolds into a results card. It finds files by name the second it starts - 0.33 to 2.05 ms median across five
+measured queries, on the machine named under The numbers - and
 it can be taught to find them by what is written inside them, by what a photo shows, and by
 what was said in a recording.
 
@@ -45,7 +46,7 @@ million and a half files. Reading inside files walks every drive and can run for
 never starts on its own. `findra --content on` starts it and `findra --content off` stops it
 without throwing away anything already read.
 
-Everything Findra can install is 2.93 GB of model files, and that is the number if you take
+Everything Findra can install is 3.7 GB of model files, and that is the number if you take
 all of them. Take none and Findra still searches every name on the machine. Take one and you
 pay for one. `findra --models` prints what each capability would add given what is already
 there, which is the question that matters once some of them are.
@@ -58,11 +59,14 @@ Typing has a grammar, and there is a form for the parts of it nobody remembers.
 
 ## Install
 
+The install that works today is the installer on the
+[releases page](https://github.com/blakazulu/findra/releases/latest), which carries one for x64 and one for arm64,
+built by `installer/findra.iss`.
+
     winget install blakazulu.Findra
 
-That is the whole install, on x64 and arm64 alike. Every release also carries an installer built
-by `installer/findra.iss` for each architecture, on its
-[releases page](https://github.com/blakazulu/findra/releases/latest).
+becomes the whole install once the submitted manifest clears moderation in the Microsoft
+catalogue. It is awaiting a moderator, so the command does not resolve yet.
 
 Building from source works too, and needs the .NET 10 SDK and nothing else.
 
@@ -90,7 +94,7 @@ most likely to leave a machine broken, and it declines to do either behind your 
 
 The first screen asks one question and then gets out of the way. Take a preset, take one
 capability, or take nothing at all. Each row is priced at its own download and that number
-never moves, so the four of them add up to the 2.93 GB the Everything tile quotes. The line
+never moves, so the four of them add up to the 3.7 GB the Everything tile quotes. The line
 along the bottom is what your selection actually costs, and it is smaller than the rows added
 together whenever two capabilities share a file: Speech is searched like a document, so taking
 it takes the document models with it, and you are never charged twice for the same download.
@@ -175,12 +179,14 @@ discrete NVIDIA GPU, so they say what Findra does there and nothing about anywhe
 Findra is built to run on AMD and Intel processors, on AMD, Intel and NVIDIA graphics,
 on integrated graphics, and on machines with no usable accelerator at all - but of those,
 only this configuration and the processor-only path have actually been measured.
-**AMD and Intel graphics have not been tested on real hardware.** The vendor-neutral paths
+**AMD and Intel graphics have not been tested on real hardware, and neither has an arm64
+machine** - the arm64 build ships because keeping it reachable costs nothing, not because it has
+been run. The vendor-neutral paths
 are chosen precisely so that they should work there; that is a design decision, not a
 measurement, and it is written here as one.
 
 Two things to read honestly. The full-text table was measured against this machine's own
-content index - 6,257 files and 73,591 text segments, read from a real disk - so its slowest
+content index - 6,258 files and 73,602 text segments, read from a real disk - so its slowest
 query is in there beside its fastest. And the extraction row is measured over files the
 benchmark generates and then deletes, which is what makes it reproducible on your machine
 rather than a fact about this one.
@@ -206,43 +212,43 @@ named here, by this build, and re-running that command reproduces the whole page
 
 | Volume | Names | Name index resident | Cold-start enumeration | Journal position |
 |---|---|---|---|---|
-| C: | 1,580,424 | 73.7 MB | 2,386 ms | 30,437,665,416 |
+| C: | 1,580,825 | 73.7 MB | 2,571 ms | 30,473,563,096 |
 
 ### Name query latency
 
 | Query | Round trip p50 | Round trip p95 | Index scan p50 | Pipe share p50 | Worst | Hits | Samples |
 |---|---|---|---|---|---|---|---|
-| report | 0.42 ms | 0.48 ms | 0.10 ms | 0.32 ms | 0.55 ms | 50 | n=50 |
-| invoice | 1.68 ms | 2.12 ms | 1.29 ms | 0.39 ms | 2.28 ms | 46 | n=50 |
-| sunset | 2.07 ms | 2.26 ms | 1.71 ms | 0.35 ms | 2.63 ms | 35 | n=50 |
-| readme | 0.50 ms | 0.57 ms | 0.20 ms | 0.31 ms | 0.58 ms | 50 | n=50 |
-| config | 0.31 ms | 0.35 ms | 0.03 ms | 0.29 ms | 0.38 ms | 50 | n=50 |
+| report | 0.41 ms | 0.49 ms | 0.08 ms | 0.33 ms | 0.59 ms | 50 | n=50 |
+| invoice | 1.72 ms | 2.16 ms | 1.31 ms | 0.40 ms | 2.37 ms | 46 | n=50 |
+| sunset | 2.05 ms | 2.42 ms | 1.70 ms | 0.35 ms | 2.48 ms | 35 | n=50 |
+| readme | 0.52 ms | 0.67 ms | 0.21 ms | 0.31 ms | 0.93 ms | 50 | n=50 |
+| config | 0.33 ms | 0.37 ms | 0.03 ms | 0.30 ms | 0.44 ms | 50 | n=50 |
 
 ### Full-text query latency
 
 | Query | p50 | p95 | Worst | Hits | Samples |
 |---|---|---|---|---|---|
-| lease | 1.42 ms | 1.61 ms | 2.67 ms | 50 | n=50 |
-| agreement | 2.26 ms | 2.32 ms | 2.35 ms | 50 | n=50 |
-| invoice | 0.67 ms | 0.77 ms | 1.74 ms | 30 | n=50 |
-| total | 8.81 ms | 9.47 ms | 10.52 ms | 50 | n=50 |
-| report | 17.16 ms | 17.78 ms | 18.90 ms | 50 | n=50 |
+| lease | 1.52 ms | 1.84 ms | 2.62 ms | 50 | n=50 |
+| agreement | 2.42 ms | 2.54 ms | 2.73 ms | 50 | n=50 |
+| invoice | 0.72 ms | 0.80 ms | 1.54 ms | 30 | n=50 |
+| total | 9.32 ms | 10.34 ms | 10.90 ms | 50 | n=50 |
+| report | 17.36 ms | 18.29 ms | 20.01 ms | 50 | n=50 |
 
 ### Document extraction
 
 | Kind | Files | Seconds | files/min | MB/s |
 |---|---|---|---|---|
-| Doc | 11,000 | 11.28 | 58,501 | 7.02 |
+| Doc | 11,000 | 10.23 | 64,529 | 7.74 |
 
 ### Stores
 
 | Store | Path | Size |
 |---|---|---|
-| search.db | %LOCALAPPDATA%\Findra\index\search.db | 124.3 MB |
-| search.db-wal | %LOCALAPPDATA%\Findra\index\search.db-wal | 10.3 MB |
+| search.db | %LOCALAPPDATA%\Findra\index\search.db | 124.0 MB |
+| search.db-wal | %LOCALAPPDATA%\Findra\index\search.db-wal | 10.5 MB |
 | search.db-shm | %LOCALAPPDATA%\Findra\index\search.db-shm | 32.0 KB |
 
-Indexed items: 6,257. Text segments: 73,591.
+Indexed items: 6,258. Text segments: 73,602.
 
 Corpus for the extraction row: 10,000 generated .txt of 8 KB and 1,000 generated .docx of 1 KB, indexed into a throwaway database with no model loaded, and deleted.
 

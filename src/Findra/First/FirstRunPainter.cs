@@ -377,7 +377,7 @@ public static class FirstRunLayout
         // While the download runs this screen answers NOTHING. It is a status screen and the
         // chooser behind it is settled, so a control that still took a click would be answering a
         // question that has already been given. The way out during a download is the window's own
-        // close, which stays live and is what the summary points at - a 2.93 GB fetch on a slow
+        // close, which stays live and is what the summary points at - a 3.7 GB fetch on a slow
         // line is long enough that a screen with no exit at all would be a trap rather than a
         // safeguard. Only when it has finished does a button appear, because only then is there
         // something for it to mean.

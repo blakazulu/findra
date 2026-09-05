@@ -85,6 +85,12 @@ export default async function handler(request: Request, context: Context): Promi
     return response;
   }
 
+  // This branch builds its own response, so Netlify's [[headers]] rules for /* never reach it -
+  // the two pass-through branches above mutate the origin response and keep them, and this one
+  // started from a blank object and silently dropped every one. The site's whole argument is that
+  // the policy holds; "except on the negotiated branch" is not a policy anyone can reason about.
+  // The Content-Security-Policy is deliberately not among them: default-src constrains nothing on
+  // a text/markdown body, and a second copy of it here is a second policy to keep in step.
   return new Response(await source.text(), {
     status: 200,
     headers: {
@@ -92,6 +98,9 @@ export default async function handler(request: Request, context: Context): Promi
       'Vary': 'Accept, Accept-Encoding',
       'Cache-Control': 'public, max-age=0, must-revalidate',
       'X-Content-Type-Options': 'nosniff',
+      'Referrer-Policy': 'strict-origin-when-cross-origin',
+      'X-Frame-Options': 'DENY',
+      'Permissions-Policy': 'camera=(), microphone=(), geolocation=(), interest-cohort=()',
       'Link': `<${twin}>; rel="alternate"; type="text/markdown"`,
     },
   });

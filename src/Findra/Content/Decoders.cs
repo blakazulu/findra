@@ -508,7 +508,21 @@ public sealed class Decoders : IDecoders
 
     private ClipImageEncoder Vision() => _vision ??= new ClipImageEncoder(wantAccelerator: true, _dir);
 
-    private E5Encoder E5() => _e5 ??= new E5Encoder(wantAccelerator: false, _dir);
+    /// <summary>
+    /// On the accelerator, which is the largest single lever on how long a first pass takes.
+    ///
+    /// <para>Measured on one desktop: 134 segments a second on the processor against 408 on
+    /// DirectML. Everything else in a content pass is cheap beside it - the benchmark's extraction
+    /// row reports 58,501 files a minute with no model loaded, and a real first pass runs at tens
+    /// of files a minute with one.</para>
+    ///
+    /// <para>Safe only because <see cref="ModelStore.E5Base"/> is full precision. The query side
+    /// stays on the processor and the two vectors are compared to each other, so this pairing works
+    /// by the two providers agreeing rather than by a threshold absorbing the difference. With the
+    /// quantised file it did not agree, and <c>ProviderAgreementTests</c> is what keeps that
+    /// true.</para>
+    /// </summary>
+    private E5Encoder E5() => _e5 ??= new E5Encoder(wantAccelerator: true, _dir);
 
     private static SKBitmap? LoadBitmap(string path, int maxDim)
     {

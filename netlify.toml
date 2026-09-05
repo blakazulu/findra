@@ -23,6 +23,20 @@
     X-Frame-Options = "DENY"
     Permissions-Policy = "camera=(), microphone=(), geolocation=(), interest-cohort=()"
 
+# styles.css and app.js are on every page and were revalidated on every navigation, which is
+# two conditional requests per view with the stylesheet on the critical path. An hour of staleness
+# after a deploy is the trade; neither filename is fingerprinted and there is no build step here
+# that could fingerprint one.
+[[headers]]
+  for = "/styles.css"
+  [headers.values]
+    Cache-Control = "public, max-age=3600"
+
+[[headers]]
+  for = "/app.js"
+  [headers.values]
+    Cache-Control = "public, max-age=3600"
+
 [[headers]]
   for = "/shots/*"
   [headers.values]
@@ -43,11 +57,50 @@
     Vary = "Accept, Accept-Encoding"
     Cache-Control = "public, max-age=0, must-revalidate"
 
+# The Markdown twins are the same prose as the pages, at a second URL, both crawlable and both
+# 200. rel="alternate" is a discovery hint and does not consolidate anything, so each twin names
+# the page it belongs to. A robots disallow would be the wrong tool: a blocked URL cannot be
+# crawled, so this header would never be read, and the twins exist for the agents it would block.
+[[headers]]
+  for = "/index.md"
+  [headers.values]
+    Link = "<https://findra-search.netlify.app/>; rel=\"canonical\""
+
+[[headers]]
+  for = "/about.md"
+  [headers.values]
+    Link = "<https://findra-search.netlify.app/about/>; rel=\"canonical\""
+
+[[headers]]
+  for = "/contact.md"
+  [headers.values]
+    Link = "<https://findra-search.netlify.app/contact/>; rel=\"canonical\""
+
+[[headers]]
+  for = "/privacy.md"
+  [headers.values]
+    Link = "<https://findra-search.netlify.app/privacy/>; rel=\"canonical\""
+
+[[headers]]
+  for = "/code-signing.md"
+  [headers.values]
+    Link = "<https://findra-search.netlify.app/code-signing/>; rel=\"canonical\""
+
 [[headers]]
   for = "/llms.txt"
   [headers.values]
     Content-Type = "text/markdown; charset=utf-8"
     Cache-Control = "public, max-age=3600"
+
+[[headers]]
+  for = "/favicon.ico"
+  [headers.values]
+    Cache-Control = "public, max-age=604800"
+
+[[headers]]
+  for = "/apple-touch-icon.png"
+  [headers.values]
+    Cache-Control = "public, max-age=604800"
 
 [[headers]]
   for = "/*.svg"

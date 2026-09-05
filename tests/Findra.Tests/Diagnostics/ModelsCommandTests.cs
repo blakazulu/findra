@@ -33,7 +33,7 @@ public class ModelsCommandTests
         string withDocs = ModelsCommand.RenderList(Set(Capability.Meaning), hebrewOffered: false);
 
         Assert.Contains("629 MB", bare, StringComparison.Ordinal);      // photos
-        Assert.Contains("818 MB", bare, StringComparison.Ordinal);      // speech, from nothing
+        Assert.Contains("1.57 GB", bare, StringComparison.Ordinal);      // speech, from nothing
         Assert.Contains("547 MB", withDocs, StringComparison.Ordinal);  // speech, beside meaning
     }
 
@@ -72,7 +72,7 @@ public class ModelsCommandTests
     [Fact]
     public void TheListingSaysWhatEverythingWouldCostAltogether()
     {
-        Assert.Contains("2.93 GB", ModelsCommand.RenderList(CapabilitySet.None, hebrewOffered: true),
+        Assert.Contains("3.7 GB", ModelsCommand.RenderList(CapabilitySet.None, hebrewOffered: true),
                         StringComparison.Ordinal);
         // Added while mutation testing: on a BARE machine every column that could carry this
         // number carries it, so a total computed by adding the rows up - the mistake this test
@@ -80,7 +80,7 @@ public class ModelsCommandTests
         // green off the preset column beside it. With photos already here, every marginal figure
         // in the listing has moved and the whole-set total is the only line that can still say
         // 2.93 GB.
-        Assert.Contains("2.93 GB", ModelsCommand.RenderList(Set(Capability.Photos), hebrewOffered: true),
+        Assert.Contains("3.7 GB", ModelsCommand.RenderList(Set(Capability.Photos), hebrewOffered: true),
                         StringComparison.Ordinal);
     }
 

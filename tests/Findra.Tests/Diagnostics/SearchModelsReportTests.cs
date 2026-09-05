@@ -12,12 +12,12 @@ public class SearchModelsReportTests
         [
             new ModelRow("siglip2-vision.onnx", "photos and video frames", anyPresent, 372_034_764, anyPresent ? 372_034_764 : 0),
             new ModelRow("siglip2-text-q.onnx", "what you type", false, 283_430_092, 0),
-            new ModelRow("e5-base-q.onnx", "meaning", false, 278_606_643, 0),
+            new ModelRow("e5-base.onnx", "meaning", false, 1_110_043_033, 0),
         ],
         Capabilities:
         [
             new CapabilityRow(Capability.Photos, false, anyPresent ? 1 : 0, 3, 659_659_160),
-            new CapabilityRow(Capability.Meaning, false, 0, 2, 283_639_807),
+            new CapabilityRow(Capability.Meaning, false, 0, 2, 1_115_055_717),
         ],
         Onnx:
         [
@@ -36,7 +36,7 @@ public class SearchModelsReportTests
 
         Assert.Contains("siglip2-vision.onnx", text, StringComparison.Ordinal);
         Assert.Contains("siglip2-text-q.onnx", text, StringComparison.Ordinal);
-        Assert.Contains("e5-base-q.onnx", text, StringComparison.Ordinal);
+        Assert.Contains("e5-base.onnx", text, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -80,7 +80,7 @@ public class SearchModelsReportTests
                 new ModelRow("siglip2-vision.onnx", "photos", true, 372_036_403, 371_992_072),   // 44,331 smaller
                 new ModelRow("siglip2-text-q.onnx", "what you type", true, 283_430_092, 283_438_275),
                 new ModelRow("siglip2.spm", "its vocabulary", true, 4_194_304, 4_241_003),       // 46,699 larger
-                new ModelRow("e5-base-q.onnx", "meaning", true, 278_601_728, 278_647_662),
+                new ModelRow("e5-base.onnx", "meaning", true, 278_601_728, 278_647_662),
                 new ModelRow("e5-small.spm", "their vocabulary", true, 5_033_164, 5_069_051),
             ],
         };
@@ -101,7 +101,7 @@ public class SearchModelsReportTests
         // comparison, because it looks like one.
         ModelsSnapshot s = Sample() with
         {
-            Models = [new ModelRow("e5-base-q.onnx", "meaning", true, 278_601_728, 260_000_000)],
+            Models = [new ModelRow("e5-base.onnx", "meaning", true, 278_601_728, 260_000_000)],
         };
 
         string text = ModelsReport.Render(s);
@@ -126,7 +126,7 @@ public class SearchModelsReportTests
     {
         string text = ModelsReport.Render(Sample());
         Assert.Contains("629 MB", text, StringComparison.Ordinal);
-        Assert.Contains("270 MB", text, StringComparison.Ordinal);
+        Assert.Contains("1.04 GB", text, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -169,7 +169,7 @@ public class SearchModelsReportTests
         string text = ModelsReport.Render(Sample(anyPresent: false));
 
         Assert.Contains("siglip2-vision.onnx", text, StringComparison.Ordinal);
-        Assert.Contains("2.93 GB", text, StringComparison.Ordinal);    // what everything would cost
+        Assert.Contains("3.7 GB", text, StringComparison.Ordinal);    // what everything would cost
         Assert.DoesNotContain("ERROR", text, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("FAIL", text, StringComparison.OrdinalIgnoreCase);
     }

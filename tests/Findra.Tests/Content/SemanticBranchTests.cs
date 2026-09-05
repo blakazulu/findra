@@ -95,7 +95,7 @@ public class SemanticBranchTests : IDisposable
                                                installed: CapabilitySet.None);
 
         Assert.Empty(r.Rows);
-        Assert.Contains("270 MB", r.Note, StringComparison.Ordinal);
+        Assert.Contains("1.04 GB", r.Note, StringComparison.Ordinal);
     }
 
     [Fact]

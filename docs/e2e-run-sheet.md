@@ -335,7 +335,7 @@ the three surfaces and nothing else.
   five pills answer, the rows below move down rather than being drawn over, and the number chosen
   here is the one `--content` reports afterwards;
 - every row's size stays the same number when it is ticked, and the four of them add up to the
-  2.93 GB the Everything tile quotes;
+  3.7 GB the Everything tile quotes;
 - the Hebrew row is on the screen only on a machine with Hebrew installed;
 - press **"Not now"**: **one** administrator prompt, the screen goes, and it does **not** come back
   at the next launch;

@@ -41,10 +41,13 @@ takes it apart and never speaks to me again.
 
 ## Where it is
 
-Version 0.1.0. The installer is written, the winget manifests are in the repository for both x64
-and arm64, and the first release has not been tagged yet, so building from source is the route
-that works today. Neither the installer nor the executables are signed, and nothing in the
-product, the repository or on this site claims otherwise.
+Version 0.1.0, released on 4 September 2026. The install that works today is the installer on the
+[releases page](https://github.com/blakazulu/findra/releases/latest), which carries one for x64 and one
+for arm64. `winget install blakazulu.Findra` becomes the whole install once the submitted manifest
+clears moderation in the Microsoft catalogue; it is awaiting a moderator and does not resolve yet.
+Building from source still works and needs the .NET 10 SDK and nothing else.
+Neither the installer nor the executables are signed, and nothing in the product, the repository
+or on this site claims otherwise.
 
 ## What it will not do
 

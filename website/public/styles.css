@@ -4,7 +4,6 @@
    Quicksand. Nothing here invents a colour the product does not use.
    ========================================================================== */
 
-@import url('https://fonts.googleapis.com/css2?family=Quicksand:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap');
 
 :root {
   --ground: #08090c;
@@ -362,7 +361,7 @@ main, header, footer { position: relative; z-index: 1; }
 }
 .ticker-track {
   display: flex; width: max-content; gap: 46px; white-space: nowrap;
-  font-family: var(--mono); font-size: 12.5px; letter-spacing: 0.09em; color: var(--ink-faint);
+  font-family: var(--mono); font-size: 12.5px; letter-spacing: 0.09em; color: var(--ink-dim);
   animation: ticker 46s linear infinite;
 }
 .ticker-track .d { color: var(--accent); }
@@ -374,7 +373,7 @@ section { padding: clamp(56px, 7vw, 88px) 0; }
 .sec-head { display: flex; flex-direction: column; gap: 12px; margin-bottom: 32px; max-width: 780px; }
 .kicker { font-family: var(--mono); font-size: 11px; letter-spacing: 0.22em; color: var(--accent); }
 .sec-head h2 { font-size: clamp(28px, 3.4vw, 42px); line-height: 1.1; }
-.sec-head p { font-size: 17px; color: var(--ink-faint); }
+.sec-head p { font-size: 17px; color: var(--ink-dim); }
 
 .sec-head-row {
   display: flex; align-items: flex-end; justify-content: space-between; gap: 32px;
@@ -405,7 +404,7 @@ section { padding: clamp(56px, 7vw, 88px) 0; }
 }
 .log-head .left { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
 .log-head .title { font-size: 16px; font-weight: 600; color: var(--ink); }
-.log-head .path, .log-head .count { font-family: var(--mono); font-size: 12px; color: var(--ink-faint); }
+.log-head .path, .log-head .count { font-family: var(--mono); font-size: 12px; color: var(--ink-dim); }
 
 .log-row {
   display: grid; grid-template-columns: 124px 86px 186px minmax(0, 1fr);
@@ -415,7 +414,7 @@ section { padding: clamp(56px, 7vw, 88px) 0; }
 .log-row > * { padding: 16px 0; }
 .log-row > *:first-child { padding-left: 26px; }
 .log-row > *:last-child { padding-right: 26px; }
-.log-row.head > * { padding-top: 12px; padding-bottom: 12px; font-family: var(--mono); font-size: 11px; letter-spacing: 0.12em; color: var(--ink-faint); }
+.log-row.head > * { padding-top: 12px; padding-bottom: 12px; font-family: var(--mono); font-size: 11px; letter-spacing: 0.12em; color: var(--ink-dim); }
 .log-row.head { border-bottom-color: rgba(235,219,192,0.08); }
 .log-lvl.err { color: var(--red); }
 .log-lvl.warn { color: var(--amber); }
@@ -430,6 +429,7 @@ section { padding: clamp(56px, 7vw, 88px) 0; }
 /* ---------- excuse cards ------------------------------------------------ */
 
 .grid-4 { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 18px; }
+.grid-2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; }
 .excuse {
   border: 1px solid var(--line); border-radius: var(--r-md); padding: 24px;
   background: var(--card); display: flex; flex-direction: column; gap: 12px;
@@ -457,7 +457,7 @@ section { padding: clamp(56px, 7vw, 88px) 0; }
 .shot-cap h3 { font-size: 16.5px; font-weight: 600; color: #f0e8da; }
 .shot-cap p { font-size: 14.5px; color: #948b7f; line-height: 1.5; }
 .shot-cap code {
-  font-family: var(--mono); font-size: 11.5px; color: var(--ink-faint);
+  font-family: var(--mono); font-size: 11.5px; color: var(--ink-dim);
   background: rgba(235,219,192,0.04); border: 1px solid var(--line-soft);
   border-radius: 6px; padding: 6px 9px; overflow-wrap: anywhere;
 }
@@ -469,13 +469,13 @@ table { width: 100%; border-collapse: collapse; min-width: 620px; }
 th, td { text-align: left; padding: 14px 20px; border-bottom: 1px solid var(--line-soft); font-size: 14.5px; }
 th {
   font-family: var(--mono); font-size: 11px; letter-spacing: 0.12em;
-  color: var(--ink-faint); font-weight: 500; background: rgba(235,219,192,0.03);
+  color: var(--ink-dim); font-weight: 500; background: rgba(235,219,192,0.03);
 }
 td { color: #c9c0b0; }
 tr:last-child td { border-bottom: 0; }
 td.num { font-family: var(--mono); color: var(--accent); white-space: nowrap; }
 td.yes { color: var(--accent); }
-td.no { color: var(--ink-faint); }
+td.no { color: var(--ink-dim); }
 
 /* ---------- numbers ----------------------------------------------------- */
 
@@ -491,7 +491,7 @@ td.no { color: var(--ink-faint); }
 .machine {
   display: flex; flex-wrap: wrap; gap: 10px 26px; padding: 18px 22px; margin-top: 20px;
   border: 1px solid var(--line); border-radius: var(--r-md); background: rgba(235,219,192,0.02);
-  font-family: var(--mono); font-size: 12px; color: var(--ink-faint);
+  font-family: var(--mono); font-size: 12px; color: var(--ink-dim);
 }
 .machine b { color: var(--ink-dim); font-weight: 500; }
 
@@ -519,7 +519,7 @@ td.no { color: var(--ink-faint); }
   font-family: var(--mono); font-size: 10.5px; letter-spacing: 0.12em;
 }
 .badge.now { background: var(--accent-soft); border: 1px solid var(--accent-line); color: #ffb566; }
-.badge.soon { background: rgba(235,219,192,0.05); border: 1px solid var(--line); color: var(--ink-faint); }
+.badge.soon { background: rgba(235,219,192,0.05); border: 1px solid var(--line); color: var(--ink-dim); }
 
 .cmd {
   display: flex; align-items: center; gap: 12px; padding: 13px 16px;
@@ -528,9 +528,10 @@ td.no { color: var(--ink-faint); }
   color: #c9c0b0; cursor: pointer; transition: border-color 0.2s ease;
 }
 .cmd:hover { border-color: var(--accent-line); }
+button.cmd { border-width: 1px; border-style: solid; text-align: left; width: 100%; line-height: 1.4; }
 .cmd .p { color: var(--accent); flex-shrink: 0; }
 .cmd .t { flex-grow: 1; overflow-wrap: break-word; }
-.cmd .c { flex-shrink: 0; color: var(--ink-ghost); font-size: 10.5px; letter-spacing: 0.1em; }
+.cmd .c { flex-shrink: 0; color: var(--ink-dim); font-size: 10.5px; letter-spacing: 0.1em; }
 .cmd.copied .c { color: var(--accent); }
 .cmd.copied { border-color: var(--accent); background: rgba(250, 126, 0, 0.12); }
 
@@ -561,7 +562,7 @@ td.no { color: var(--ink-faint); }
 .final h2 { font-size: clamp(28px, 3.6vw, 44px); line-height: 1.08; color: #faf4e9; }
 .final p { font-size: 17px; line-height: 1.6; color: var(--ink-dim); }
 .final .actions { position: relative; display: flex; flex-direction: column; gap: 12px; min-width: 280px; }
-.final .fine { text-align: center; font-size: 12.5px; color: var(--ink-faint); }
+.final .fine { text-align: center; font-size: 12.5px; color: var(--ink-dim); }
 
 /* ---------- footer ------------------------------------------------------ */
 
@@ -574,7 +575,7 @@ td.no { color: var(--ink-faint); }
 .foot .col a:hover { color: var(--accent); }
 .foot .col strong {
   font-family: var(--mono); font-size: 10.5px; letter-spacing: 0.18em;
-  color: var(--ink-ghost); font-weight: 500; margin-bottom: 3px;
+  color: var(--ink-faint); font-weight: 500; margin-bottom: 3px;
 }
 
 /* ---------- reveal on scroll -------------------------------------------- */
@@ -604,6 +605,7 @@ td.no { color: var(--ink-faint); }
 }
 
 @media (max-width: 860px) {
+  .grid-2 { grid-template-columns: minmax(0, 1fr); }
   /* narrow screens get the level, the id and the source as one meta strip, with the
      description on its own line under them - a four-column table does not narrow */
   .log-row { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; padding: 15px 20px; }
@@ -618,7 +620,7 @@ td.no { color: var(--ink-faint); }
 }
 
 @media (max-width: 620px) {
-  .grid-4, .stat-row { grid-template-columns: minmax(0, 1fr); }
+  .grid-4, .grid-2, .stat-row { grid-template-columns: minmax(0, 1fr); }
   /* the cards grow taller as they narrow, so the offsets have to grow with them,
      or each dialog swallows the punchline of the one behind it */
   .stack { min-height: 790px; }
@@ -634,7 +636,7 @@ td.no { color: var(--ink-faint); }
          scrollbar-width: none; -ms-overflow-style: none; }
   .cmd::-webkit-scrollbar { display: none; }
   .cmd .t { white-space: nowrap; overflow-wrap: normal; }
-  .cmd .c { display: none; }
+  .cmd .c { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
   .final .actions { min-width: 100%; }
 }
 
@@ -734,3 +736,17 @@ td.no { color: var(--ink-faint); }
   .doc { padding-top: 26px; }
   .doc-meta { gap: 9px; }
 }
+
+/* Findra paints its own everything, and a near-black ground is the worst place to
+   rely on whatever focus ring the browser happens to draw. One rule, one colour,
+   measured: --accent-hi is 9.41:1 on the ground and 8.90:1 on a card. */
+:focus-visible { outline: 2px solid var(--accent-hi); outline-offset: 3px; }
+
+/* A keyboard reader should not have to walk the nav on every page. */
+.skip { position: absolute; left: -9999px; }
+.skip:focus { left: 12px; top: 12px; z-index: 100; padding: 10px 16px; background: var(--card-solid);
+  border: 1px solid var(--accent); border-radius: 8px; color: var(--ink); }
+
+/* The copy confirmation. A live region nested inside a button is pruned from the
+   accessibility tree by ARIA's children-presentational rule, so it sits beside one. */
+.said { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }

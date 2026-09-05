@@ -39,7 +39,7 @@ public sealed record FirstRunState
     /// printed its capability's full size and the summary printed the whole closed selection,
     /// while <see cref="FirstRun.Wanted"/> - which is what actually fetches - asked the disk and
     /// skipped what was there. So somebody who kept their models through an uninstall was offered
-    /// 2.93 GB, pressed the button, and watched every bar fill at once.</para>
+    /// the whole set, pressed the button, and watched every bar fill at once.</para>
     ///
     /// <para>By FILE and not by capability, because a half-present capability is an ordinary state:
     /// a resumed download, or Speech on a machine that already took Meaning and so already has the
@@ -74,7 +74,7 @@ public static class FirstRun
     /// <para><b>Hebrew is dropped where its row is not drawn.</b> The rows hide it when it is not
     /// offered, and <c>AlreadyChosen</c> has always dropped it for exactly this reason - but the
     /// tiles did not, so pressing "Everything" on a machine that is not offered Hebrew selected it
-    /// anyway: the three visible rows added to 1.45 GB, the tile and the bottom line said 2.93 GB,
+    /// anyway: the three visible rows added to 2.19 GB, the tile and the bottom line said 3.7 GB,
     /// and the download then fetched a 1.5 GB model for a capability with nothing on screen to
     /// name it, drawing a fourth progress bar for a row that did not exist.</para>
     /// </summary>
@@ -110,7 +110,7 @@ public static class FirstRun
         return Preset.Custom;
     }
 
-    /// <summary>What a preset would still cost on THIS machine. A tile that says 2.93 GB over a
+    /// <summary>What a preset would still cost on THIS machine. A tile that says 3.7 GB over a
     /// folder that already holds all of it is the same lie the rows told, and one that prices a
     /// capability this machine is not offered is the same lie in the other direction.</summary>
     public static string PresetSize(Preset p, IReadOnlySet<string>? onDisk = null, bool hebrewOffered = true) =>
@@ -143,7 +143,7 @@ public static class FirstRun
                 // would add to what is already ticked - turns into "0 MB" the moment the row is
                 // ticked, so the number somebody is weighing disappears exactly when they decide
                 // on it. Own files also make the column add up: 629 + 270 + 547 + 1549 MB is the
-                // 2.93 GB on the Everything tile, where the closed sets would total 4.08 GB.
+                // 3.7 GB on the Everything tile, where the closed sets would total 6.31 GB.
                 // What the whole selection costs is the summary's job, and it is closed there.
                 AlreadyHere(c, s.OnDisk)
                     ? InstalledLabel

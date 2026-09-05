@@ -75,9 +75,24 @@ public static class ModelStore
     public static double Siglip2Probability(double cosine)
         => 1.0 / (1.0 + Math.Exp(-(Siglip2Scale * cosine + Siglip2Bias)));
 
-    public static readonly Model E5Base = new("e5-base-q.onnx",
-        "https://huggingface.co/Xenova/multilingual-e5-base/resolve/main/onnx/model_quantized.onnx",
-        250_000_000, Mib(265.7), "the meaning of documents, and of transcripts");
+    /// <summary>
+    /// Full precision, and the size is the point rather than a regret.
+    ///
+    /// <para>This was <c>model_quantized.onnx</c>, 265.7 MiB. A quantised model does not mean the
+    /// same thing on the two execution providers: measured against DirectML on one desktop it came
+    /// back at 0.970 cosine, with elements 0.8 apart, where the processor against itself is exactly
+    /// 1 and no graph optimisation setting closes the gap. Findra embeds documents on the
+    /// accelerator and embeds the query on the processor, and compares the two, so a model that
+    /// answers differently depending on which silicon ran it is a systematic error injected into
+    /// every score - and one that moves when somebody's driver changes.</para>
+    ///
+    /// <para>fp32 agrees to 1.000000. It is also FASTER than the fp16 export on the processor -
+    /// 10.9 ms against 27.7 for one query - because processors do fp32 natively and emulate fp16,
+    /// and search runs on the processor. <c>ProviderAgreementTests</c> holds this to that.</para>
+    /// </summary>
+    public static readonly Model E5Base = new("e5-base.onnx",
+        "https://huggingface.co/Xenova/multilingual-e5-base/resolve/main/onnx/model.onnx",
+        900_000_000, Mib(1058.6), "the meaning of documents, and of transcripts");
 
     public static readonly Model E5Spm = new("e5-small.spm",
         "https://huggingface.co/Xenova/multilingual-e5-small/resolve/main/sentencepiece.bpe.model",

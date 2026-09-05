@@ -1,3 +1,19 @@
+# Everything is allowed on purpose, and this comment is the decision rather than a default.
+#
+# Findra is free, Apache-2.0, and completely unknown. Being read, indexed, trained on and cited is
+# the entire objective; there is no content here to protect and nothing to sell. Blocking a
+# retrieval-time agent - OAI-SearchBot, ChatGPT-User, Claude-SearchBot, Claude-User,
+# PerplexityBot, Perplexity-User, Google-Extended - does not protect anything. It removes Findra
+# from that assistant's answers permanently, which is the opposite of what this site is for.
+# Blocking a training agent - GPTBot, ClaudeBot, CCBot, Applebot-Extended, meta-externalagent -
+# keeps Findra out of the corpora that decide whether a model has ever heard of it.
+#
+# Named per-agent blocks are deliberately absent: the wildcard already covers every agent,
+# including the ones that do not exist yet, and a roster is a list to forget to update.
+#
+# The one file worth pointing an agent at is /llms.txt, which says what Findra is, what it is
+# NOT, and where every page's Markdown lives.
+
 User-agent: *
 Allow: /
 

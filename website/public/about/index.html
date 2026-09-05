@@ -6,9 +6,9 @@
 <title>About - Findra</title>
 <meta name="description" content="Findra is a desktop search widget for Windows built on .NET 10, Avalonia, SkiaSharp and SQLite, by one person, under Apache-2.0.">
 <link rel="canonical" href="https://findra-search.netlify.app/about/">
-<meta property="og:type" content="article">
+<meta property="og:type" content="website">
 <meta property="og:site_name" content="Findra">
-<meta property="og:locale" content="en">
+<meta property="og:locale" content="en_US">
 <meta property="og:url" content="https://findra-search.netlify.app/about/">
 <meta property="og:title" content="About - Findra">
 <meta property="og:description" content="Findra is a desktop search widget for Windows built on .NET 10, Avalonia, SkiaSharp and SQLite, by one person, under Apache-2.0.">
@@ -16,14 +16,91 @@
 <meta property="og:image:type" content="image/png">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
-<meta property="og:image:alt" content="Findra. Windows Search, but it works. 0.50 ms to a filename, straight from RAM.">
+<meta property="og:image:alt" content="Findra. Windows Search, but it works. Filenames in 0.33 to 2.05 ms median, straight from RAM. Nothing leaves your machine.">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="theme-color" content="#08090c">
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="icon" href="/favicon.ico" sizes="32x32">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
 <link rel="alternate" type="text/markdown" href="/about.md" title="About - Findra as Markdown">
+<link rel="alternate" type="text/markdown" href="/llms.txt" title="Findra for language models">
+<!-- Preconnected and linked rather than @import-ed from inside styles.css: an @import cannot
+     begin until the whole stylesheet has arrived, which put four serial round trips in front of
+     the first painted glyph. Both origins are already the only two the CSP permits. -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Quicksand:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap">
 <link rel="stylesheet" href="/styles.css">
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "AboutPage",
+      "@id": "https://findra-search.netlify.app/about/#page",
+      "url": "https://findra-search.netlify.app/about/",
+      "name": "About - Findra",
+      "description": "Findra is a desktop search widget for Windows built on .NET 10, Avalonia, SkiaSharp and SQLite, by one person, under Apache-2.0.",
+      "inLanguage": "en",
+      "dateModified": "2026-09-05",
+      "isPartOf": {
+        "@id": "https://findra-search.netlify.app/#site"
+      },
+      "about": {
+        "@id": "https://findra-search.netlify.app/#findra"
+      },
+      "author": {
+        "@id": "https://findra-search.netlify.app/#blakazulu"
+      },
+      "publisher": {
+        "@id": "https://findra-search.netlify.app/#blakazulu"
+      },
+      "breadcrumb": {
+        "@id": "https://findra-search.netlify.app/about/#crumbs"
+      }
+    },
+    {
+      "@id": "https://findra-search.netlify.app/#findra",
+      "@type": "SoftwareApplication",
+      "name": "Findra",
+      "url": "https://findra-search.netlify.app/"
+    },
+    {
+      "@id": "https://findra-search.netlify.app/#blakazulu",
+      "@type": "Person",
+      "name": "Liraz Amir",
+      "alternateName": "blakazulu"
+    },
+    {
+      "@id": "https://findra-search.netlify.app/#site",
+      "@type": "WebSite",
+      "name": "Findra",
+      "url": "https://findra-search.netlify.app/"
+    },
+    {
+      "@type": "BreadcrumbList",
+      "@id": "https://findra-search.netlify.app/about/#crumbs",
+      "itemListElement": [
+        {
+          "@type": "ListItem",
+          "position": 1,
+          "name": "Findra",
+          "item": "https://findra-search.netlify.app/"
+        },
+        {
+          "@type": "ListItem",
+          "position": 2,
+          "name": "About",
+          "item": "https://findra-search.netlify.app/about/"
+        }
+      ]
+    }
+  ]
+}
+</script>
 </head>
 <body>
+<a class="skip" href="#top">Skip to content</a>
 
 <div class="bg" aria-hidden="true">
   <div class="bg-blob a"></div>
@@ -46,13 +123,13 @@
   </div>
 </header>
 
-<main id="top">
+<main id="top" tabindex="-1">
   <div class="wrap">
     <section class="doc-head">
       <span class="kicker">ABOUT</span>
       <h1>One person, one repository, no company behind it.</h1>
       <div class="doc-meta">
-        <span class="d">Findra 0.1.0 &middot; last reviewed 2026-09-03</span>
+        <span class="d">Findra 0.1.0 &middot; last reviewed 2026-09-05</span>
         <a class="doc-chip on" href="/about.md">Read as Markdown</a>
         <a class="doc-chip" href="https://github.com/blakazulu/findra/blob/main/website/content/about.md" rel="noopener">History on GitHub</a>
       </div>
@@ -85,7 +162,7 @@
 
       <h2>Where it is</h2>
 
-      <p>Version 0.1.0. The installer is written, the winget manifests are in the repository for both x64 and arm64, and the first release has not been tagged yet, so building from source is the route that works today. Neither the installer nor the executables are signed, and nothing in the product, the repository or on this site claims otherwise.</p>
+      <p>Version 0.1.0, released on 4 September 2026. The install that works today is the installer on the <a href="https://github.com/blakazulu/findra/releases/latest">releases page</a>, which carries one for x64 and one for arm64. <code>winget install blakazulu.Findra</code> becomes the whole install once the submitted manifest clears moderation in the Microsoft catalogue; it is awaiting a moderator and does not resolve yet. Building from source still works and needs the .NET 10 SDK and nothing else. Neither the installer nor the executables are signed, and nothing in the product, the repository or on this site claims otherwise.</p>
 
       <h2>What it will not do</h2>
 
@@ -118,6 +195,8 @@
       <a href="/code-signing/">Code signing policy</a>
       <a href="https://github.com/blakazulu/findra/blob/main/SECURITY.md" rel="noopener">Security</a>
       <a href="https://github.com/blakazulu/findra/blob/main/LICENSE" rel="noopener">Apache-2.0</a>
+      <a href="https://github.com/blakazulu/findra/blob/main/NOTICE" rel="noopener">Notice</a>
+      <a href="/llms.txt">For language models</a>
     </div>
     <div class="col">
       <strong>ATTRIBUTION</strong>

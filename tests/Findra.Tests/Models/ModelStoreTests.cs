@@ -23,7 +23,7 @@ public class ModelStoreTests : IDisposable
     {
         Assert.Equal(7, ModelStore.All.Count);
         Assert.Equal(
-            new[] { "siglip2-vision.onnx", "siglip2-text-q.onnx", "siglip2.spm", "e5-base-q.onnx",
+            new[] { "siglip2-vision.onnx", "siglip2-text-q.onnx", "siglip2.spm", "e5-base.onnx",
                     "e5-small.spm", "whisper-turbo-q5.bin", "whisper-ivrit.bin" },
             ModelStore.All.Select(m => m.File).ToArray());
     }
@@ -43,8 +43,8 @@ public class ModelStoreTests : IDisposable
     [Fact]
     public void TheWholeSetIsTwoPointNineThreeGigabytes()
     {
-        Assert.Equal(3_141_848_265L, ModelStore.TotalBytes(ModelStore.All));
-        Assert.Equal("2.93 GB", Sizes.Human(ModelStore.TotalBytes(ModelStore.All)));
+        Assert.Equal(3_973_264_175L, ModelStore.TotalBytes(ModelStore.All));
+        Assert.Equal("3.7 GB", Sizes.Human(ModelStore.TotalBytes(ModelStore.All)));
     }
 
     [Fact]
@@ -120,10 +120,9 @@ public class ModelStoreTests : IDisposable
     [Theory]
     [InlineData(0L, "0 MB")]
     [InlineData(659_659_160L, "629 MB")]          // photos
-    [InlineData(283_639_807L, "270 MB")]          // meaning in documents
-    [InlineData(943_298_967L, "900 MB")]          // the Recommended preset - rounds UP to 900
+    [InlineData(1_115_055_717L, "1.04 GB")]       // meaning in documents
     [InlineData(1_624_558_796L, "1.51 GB")]       // the Hebrew fine-tune
-    [InlineData(3_141_848_265L, "2.93 GB")]       // everything
+    [InlineData(3_973_264_175L, "3.7 GB")]        // everything
     public void SizesReadTheWayThePersonPayingForThemWouldWriteThem(long bytes, string want)
         => Assert.Equal(want, Sizes.Human(bytes));
 
@@ -137,8 +136,8 @@ public class ModelStoreTests : IDisposable
         try
         {
             System.Threading.Thread.CurrentThread.CurrentCulture = new CultureInfo("de-DE");
-            Assert.Equal("2.93 GB", Sizes.Human(3_141_848_265L));
-            Assert.Equal("900 MB", Sizes.Human(943_298_967L));
+            Assert.Equal("3.7 GB", Sizes.Human(3_973_264_175L));
+            Assert.Equal("629 MB", Sizes.Human(659_659_160L));
         }
         finally { System.Threading.Thread.CurrentThread.CurrentCulture = was; }
     }

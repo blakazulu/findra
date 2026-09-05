@@ -231,7 +231,7 @@ public static class SelfTest
             }
             // The measured total is what the README and the winget manifest quote.
             long all = Capabilities.TotalBytes(Capabilities.All);
-            return Sizes.Human(all) == "2.93 GB" ? null : $"the whole model set measures {Sizes.Human(all)}";
+            return Sizes.Human(all) == "3.7 GB" ? null : $"the whole model set measures {Sizes.Human(all)}";
         });
 
         failed += Check("every installed capability loads", () =>

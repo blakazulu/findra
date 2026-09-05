@@ -572,8 +572,8 @@ there is a dependency graph:
 ```
 words in documents  ─  free, opt-in (FTS5, no model)
 photos & video      ─  siglip2 vision + text + spm            629 MB
-meaning in docs     ─  e5-base + e5-spm                       270 MB
-speech              ─  whisper-turbo + [e5 pair]              550 MB (+270 if e5 not taken)
+meaning in docs     ─  e5-base + e5-spm                      1.04 GB
+speech              ─  whisper-turbo + [e5 pair]              550 MB (+1.04 GB if e5 not taken)
   └ hebrew          ─  whisper-ivrit, requires speech         1.5 GB
 ```
 
@@ -581,16 +581,32 @@ speech              ─  whisper-turbo + [e5 pair]              550 MB (+270 if 
 - Hebrew needs the general Whisper model: turbo runs first for language detection, and only
   files it calls Hebrew are re-run through the fine-tune. Hebrew is a second pass, never an
   alternative.
-- **Everything is 2.9 GB** - measured file sizes, not the conservative minimum-byte floors.
+- **Everything is 3.7 GB** - measured file sizes, not the conservative minimum-byte floors.
+- **The meaning model is FULL PRECISION, and the size is the point rather than a regret.** It was
+  `model_quantized.onnx` at 265.7 MiB. A quantised model does not mean the same thing on the two
+  execution providers: measured against DirectML on this machine it came back at 0.970 cosine with
+  elements 0.8 apart, where the processor against itself is exactly 1, and no graph optimisation
+  setting closes the gap - it survives `ORT_DISABLE_ALL`. Findra embeds documents on the
+  accelerator and embeds the query on the processor and compares the two, so a model that answers
+  differently depending on which silicon ran it is a systematic error in every score, and one that
+  MOVES when somebody's driver changes. fp32 agrees to 1.000000. It is also faster than the fp16
+  export on the processor - 10.9 ms against 27.7 for one query, because processors do fp32 natively
+  and emulate fp16 - and search runs on the processor. `ProviderAgreementTests` holds the file to
+  that floor and `--searchmodels` prints the measured cosine.
+- **Documents are embedded on the ACCELERATOR and queries on the PROCESSOR.**
+  `Decoders.E5()` asks for the accelerator, `ContentBranch` does not, and that pairing is the
+  largest single lever on how long a first pass takes: 134 segments a second against 408. It is
+  safe by the two providers AGREEING rather than by a threshold absorbing the difference, which is
+  why the line above is not an optimisation note.
 - **`Capabilities.MarginalBytes` is what the settings window and `--models` quote**, because
   there the question really is what one more capability would add to what is already on disk.
   **The first-run rows do not**: each is priced at its own files through
   `Capabilities.OwnModels`, and that number never moves. A marginal figure turns into "0 MB" the
   moment a row is ticked, so the number somebody is weighing disappears exactly when they decide
-  on it - and own files are the only pricing where the column adds up, 629 + 270 + 547 + 1549 MB
-  being the 2.93 GB on the Everything tile where the closed sets would total 4.08 GB. What the
+  on it - and own files are the only pricing where the column adds up, 629 MB + 1.04 GB + 547 MB
+  + 1.51 GB being the 3.7 GB on the Everything tile where the closed sets would total 6.31 GB. What the
   whole selection costs is the summary's job: it is `TotalBytes(Close(chosen))`, so ticking Speech
-  alone shows 547 MB on the row and 818 MB along the bottom, and the bottom line is the one that
+  alone shows 547 MB on the row and 1.57 GB along the bottom, and the bottom line is the one that
   tells the truth about the download.
 - **A missing model is a normal state, not an error state.** Every capability degrades
   silently when its model is absent: the indexer skips that kind, content search contributes
@@ -670,7 +686,7 @@ speech              ─  whisper-turbo + [e5 pair]              550 MB (+270 if 
   and the rows, the preset tiles, the summary and the button's own label all read it through
   `FirstRun.NotHereYet`. Without it the screen quoted a download that was never going to happen:
   an uninstall keeps the models unless the purge box is ticked, so a reinstall met a full folder,
-  was offered 2.93 GB, and filled every bar the instant it was pressed. A capability whose own
+  was offered the whole 3.7 GB, and filled every bar the instant it was pressed. A capability whose own
   files are all present reads `installed` - the same word Settings uses for the same fact - and a
   half-present one is priced at the half that is missing, because a resumed download and Speech
   over an existing e5 pair are ordinary states rather than edge cases. **The number still never
@@ -679,20 +695,21 @@ speech              ─  whisper-turbo + [e5 pair]              550 MB (+270 if 
 - **`FirstRun.PresetChoice` drops Hebrew where its row is not drawn**, and the tiles go through it.
   `AlreadyChosen` had always dropped it for this reason and the three preset tiles had not, so
   "Everything" on a machine that reads no Hebrew selected a capability with nothing on screen to
-  name it: the visible rows added to 1.45 GB, the tile and the bottom line said 2.93 GB, and the
+  name it: the visible rows added to 2.19 GB, the tile and the bottom line said 3.7 GB, and the
   download drew a fourth progress bar for a row that did not exist. A selection holding a
   capability with no row prices a download nobody can see - and then fetches it.
 - **`FirstRun.AlreadyChosen` ticks what is already there**, closed over the dependency graph. An
   unticked row beside a model that is present was a control whose two positions meant the same
   thing: the selection decides what is FETCHED and nothing else, and what Findra can read is read
   from the files. Closed rather than a bare presence test, so a machine holding Whisper but not the
-  e5 pair opens with Speech ticked, its dependency ticked with it, and 270 MB priced - which is
+  e5 pair opens with Speech ticked, its dependency ticked with it, and 1.04 GB priced - which is
   the truth. Hebrew is dropped where it is not offered: its row is not drawn there, and a selection
   holding a capability with no row prices a download nobody can see.
 - **`CapabilitySet` carries the FILES it was built from, and every price is read from those.**
   A capability is all-or-nothing, so a folder holding whisper-turbo with no e5 pair beside it has
   Speech uninstalled and 550 MB counting for nothing: Settings, the card's offer, `--models` and
-  `--searchmodels` all quoted 818 MB for a 270 MB download while `--models install`, which prices
+  `--searchmodels` all quoted the closed set's total for a Meaning-only download while
+  `--models install`, which prices
   by file, said 270. That folder is ordinary - a download run carries on past a file that failed,
   so one bad leg of a Speech install leaves exactly it. A set built by hand with no files derives
   them from its capabilities, which keeps the old arithmetic where it was right.
@@ -769,21 +786,29 @@ the hardware most likely to break is precisely the hardware never tested.
 
   | | fp32 (shipped) | fp16 |
   |---|---|---|
-  | CPU | 40.3 ms | **will not load at all** |
+  | CPU | 40.3 ms | throws at `ORT_ENABLE_ALL`, loads below it |
   | DirectML | 8.7 ms | 7.5 ms |
 
   The fp16 export of the same checkpoint throws inside ONNX Runtime's own graph optimiser on the
-  CPU provider (`SimplifiedLayerNormFusion` against an inserted precision-free cast) while running
+  CPU provider - `SimplifiedLayerNormFusion` against an inserted precision-free cast - while running
   perfectly on DirectML. **Two separate research passes recommended swapping to it** - it halves a
   354.8 MB download and is a URL change - and it would have taken photo indexing away from every
   machine with no usable GPU, reporting the capability as installed the whole time. Only running
-  it found that. `--searchmodels` now opens the vision tower on the processor as well and says so,
+  it found that. `--searchmodels` opens the vision tower on the processor as well and says so,
   which is the one place anybody looks before filing that report.
 
-  The embeddings themselves are interchangeable - fp32 against fp16 is a cosine of 0.99999, so the
-  artifact is not the objection and a per-provider split remains the right eventual answer. It is
-  now MANDATORY design work rather than an optimisation: an fp16 file cannot simply be the one
-  artifact for everybody.
+  **"Will not load at all" was this file's own overstatement and is corrected here.** It will not
+  load with every fusion enabled; at `ORT_ENABLE_EXTENDED` and below the same file loads and runs.
+  Confirmed twice - e5's fp16 export fails with the byte-identical error and then loads once the
+  optimiser is turned down. A per-provider artifact split was called MANDATORY design work on the
+  strength of the stronger claim, and that conclusion goes with it: measurement since says one
+  full-precision file agrees on both providers, loads on both, and needs no per-machine reasoning
+  at all. See `docs/superpowers/specs/2026-09-05-e5-full-precision-design.md`.
+
+  Full precision is also what makes the two providers agree. fp32 against fp16 is a cosine of
+  0.99999 for the same file, but a QUANTISED file against itself across providers is 0.970 - which
+  is the finding that moved the meaning model to fp32 and is written up beside the capability
+  table above.
 - **`--searchmodels` reports the chosen provider and every one it rejected, with reasons.**
   "It's slow on my laptop" is unanswerable; "DirectML failed to initialise, fell back to
   CPU" is a bug report.
