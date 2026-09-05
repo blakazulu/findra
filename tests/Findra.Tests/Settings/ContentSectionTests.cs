@@ -1,3 +1,5 @@
+﻿using System.Linq;
+
 using Findra;
 using Xunit;
 
@@ -37,6 +39,20 @@ public class ContentSectionTests
         Assert.Equal(4, row.Options.Count);
         Assert.Equal([25, 50, 75, 100], IndexPowerLevels.Presets);
         Assert.Equal([false, false, true, false], row.OptionOn);
+    }
+
+    [Fact]
+    public void TheDefaultPowerIsOneOfTheFourLevelsAndTheListHasNoDuplicate()
+    {
+        // The list is written with Default inside it, so moving Default onto a number the list
+        // already spells out produces two identical pills - a control with four options, two of
+        // which are the same, and a row whose OptionOn lights twice.
+        Assert.Equal(IndexPowerLevels.Presets.Count, IndexPowerLevels.Presets.Distinct().Count());
+
+        // And a default outside the four is a Settings screen that opens with nothing selected.
+        Assert.Contains(IndexPowerLevels.Default, IndexPowerLevels.Presets);
+        Assert.Equal(IndexPowerLevels.Default, Config.Default.IndexPower);
+        Assert.Single(Row(State(Config.Default), ControlId.IndexPower).OptionOn, on => on);
     }
 
     [Fact]
