@@ -40,7 +40,8 @@ public readonly record struct CapabilitySet(IReadOnlySet<Capability> Have, IRead
     /// answer different questions and a capability cannot answer the file one. A capability is
     /// all-or-nothing: a folder holding whisper-turbo with no e5 pair beside it has Speech
     /// uninstalled, so 550 MB of it counts for nothing, and every surface that priced the Speech
-    /// row from capabilities alone quoted 818 MB for a download that was really 270. That folder
+    /// row from capabilities alone quoted the closed total for a download that was really Meaning's
+    /// alone. That folder
     /// is ordinary, not hypothetical - a download run carries on past a file that failed, so one
     /// bad leg of a Speech install leaves exactly it.</para>
     /// </summary>
@@ -113,7 +114,7 @@ public static class Presets
 /// second pass, never an alternative (spec §6).</para>
 ///
 /// <para>Every size this type produces is MARGINAL - what adding one costs given what is already
-/// chosen. Nothing anywhere may hold a fixed per-capability number: Speech is 818 MB alone and
+/// chosen. Nothing anywhere may hold a fixed per-capability number: Speech is 1.57 GB alone and
 /// 547 MB beside documents, and a fixed table makes the first-run total visibly fail to add
 /// up.</para>
 /// </summary>
@@ -203,7 +204,7 @@ public static class Capabilities
     /// <para>The overload above counts in capabilities, and a capability is all-or-nothing: a
     /// machine holding whisper-turbo with no e5 pair beside it has Speech uninstalled, so that
     /// 550 MB counts for nothing and Settings, the card's offer, <c>--models</c> and
-    /// <c>--searchmodels</c> all quote 818 MB for a download that is really 270. It is a
+    /// <c>--searchmodels</c> all quote the closed total for a download that is really smaller. It is a
     /// reachable disk, not a hypothetical one: a download run continues past a file that failed,
     /// so one bad leg of a Speech install leaves exactly that folder - and
     /// <c>--models install speech</c>, which prices by file, then disagrees with all four of

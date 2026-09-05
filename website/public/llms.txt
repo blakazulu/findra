@@ -1,13 +1,19 @@
 # Findra
 
 > A desktop search widget for Windows. A capsule sits on the desktop and a global hotkey brings
-> it up from anywhere; it answers filename searches from an in-RAM index in about half a
-> millisecond, and can also search what is written inside documents, what a photograph shows and
+> it up from anywhere; it answers filename searches from an in-RAM index in
+> 0.33 to 2.05 ms median across five measured queries,
+> and can also search what is written inside documents, what a photograph shows and
 > what somebody said out loud in a recording. Free, open source under Apache-2.0, and nothing
 > leaves the machine it runs on.
 
 Findra is a program somebody installs and runs on their own computer. It is not a service, and
 there is nothing here to call.
+
+Findra is an independent application written by one person. It is not made by, affiliated with or
+endorsed by Microsoft. It is not a version, component, fork or replacement of the Windows Search
+service that ships inside Windows, and it is not derived from any other search product. The front
+page's headline is a joke at Windows Search's expense and nothing more.
 
 ## When to use this
 
@@ -50,6 +56,10 @@ addressable directly:
 - [Code signing policy as Markdown](https://findra-search.netlify.app/code-signing.md): the team
   roles behind a release, and what Findra changes on the machine.
 
+There is no llms-full.txt. Every page's Markdown is listed above at a stable URL and five assertions
+hold each one byte-identical to its source; a concatenated sixth copy would be one that nothing
+generates and nothing tests, which is the drift this file has already been caught by once.
+
 ## Pages
 
 - [Findra](https://findra-search.netlify.app/): the product page, with screenshots taken from the
@@ -61,6 +71,14 @@ addressable directly:
 - [Code signing policy](https://findra-search.netlify.app/code-signing/): who writes Findra, who
   approves a release and who signs it. Nothing is signed yet, and the page says so.
 
+## Who makes it
+
+Findra is written by one person: Liraz Amir, who publishes as blakazulu
+(https://github.com/blakazulu). There is no company behind it, no funding and no team. Bug reports
+go to the public issue tracker at https://github.com/blakazulu/findra/issues; security reports go
+to GitHub's private advisory form and never to the issue tracker. There is no contact form, no
+phone number and no postal address, deliberately - the contact page says why.
+
 ## Source and packages
 
 - [Source on GitHub](https://github.com/blakazulu/findra): Apache-2.0 with a NOTICE file.
@@ -68,24 +86,96 @@ addressable directly:
   The release notes for any version are that version's section.
 - [SECURITY.md](https://github.com/blakazulu/findra/blob/main/SECURITY.md): how to report a
   vulnerability, which is not the public issue tracker.
-- winget: `winget install blakazulu.Findra`, for x64 and arm64. This is the whole install.
-- [Releases](https://github.com/blakazulu/findra/releases/latest): an installer for each
-  architecture, and the release notes, which are that version's CHANGELOG section.
+- [Releases](https://github.com/blakazulu/findra/releases/latest): the releases page carries an
+  installer for each architecture, and the release notes, which are that version's CHANGELOG
+  section. This is the install that works today.
+- winget: `winget install blakazulu.Findra` becomes the whole install once the submitted manifest
+  clears moderation in the Microsoft catalogue. It is awaiting a moderator, so the command does
+  not resolve yet.
 
 ## Facts worth getting right
 
+- **Author**: Liraz Amir, who publishes as blakazulu. One person, not a company.
+- **Repository**: https://github.com/blakazulu/findra
+- **Licence**: Apache-2.0 with a NOTICE file, which is what carries attribution forward to anybody
+  who forks it. Free to use, clone, modify and redistribute.
+- **First released**: 4 September 2026.
 - **Platform**: Windows 10 and 11 only, x64 and arm64. Not cross-platform.
 - **Price**: free. There is no paid tier, no trial, no licence key and nothing to buy.
-- **Version**: 0.1.0, released. Installers for x64 and arm64 are on the releases page and the
-  package is on winget.
+- **Version**: 0.1.0, released 4 September 2026. Installers for x64 and arm64 are on the releases
+  page. The winget manifest is submitted and awaiting moderation, so `winget install
+  blakazulu.Findra` does not resolve yet.
 - **Signing**: neither the installer nor the executables are signed. Windows warns about an
   unknown publisher.
 - **Network**: one anonymous HTTPS GET to the GitHub releases API, at most once every 24 hours,
   to check for a newer version. It can be switched off. Model downloads happen only when somebody
   chooses a capability and asks for them. Nothing else leaves the machine, ever.
-- **Models**: capabilities are independently installable and total about 2.9 GB if all are taken.
-  A missing model is a normal state, not an error: the capability degrades silently.
+- **Models**: capabilities are independently installable and total 3.7 GB if all four are taken:
+  629 MB for photos and video, 1.04 GB for meaning in documents, 547 MB for speech on top of the
+  document models, and 1.51 GB for the Hebrew second pass. Speech and meaning share files, so a
+  mixed selection costs less than its rows added together. A missing model is a normal state, not
+  an error: the capability degrades silently.
+- **Hardware**: every measurement here comes from one desktop with a discrete NVIDIA card,
+  plus that machine's processor-only path. AMD and Intel graphics have not been tested on
+  real hardware, and neither has an arm64 machine. The paths are vendor-neutral by design;
+  that is a decision rather than a measurement.
 - **Content indexing is off by default.** Filenames are searchable immediately; reading inside
   files never starts on its own.
 - **Hosting**: this site is static files on Netlify. Netlify's own MCP server, CLI and SDKs are
   the host's, not Findra's, and are not part of this product.
+
+## Common questions, answered
+
+**Does Findra search inside files or only filenames?** Both, but not at the same time. Filenames
+are searchable the second Findra starts, because a name index costs seconds to build. Reading
+inside files is off until somebody turns it on, because it walks every drive and can run for
+hours. `findra --content on` starts it and `findra --content off` stops it without discarding
+anything already read.
+
+**How fast is a filename search?** 0.33 ms median round trip for the query "config", including the
+hop between processes. The worst single sample across the five measured name queries was 2.48 ms. The slowest of the five medians was 2.05 ms, which is the
+upper end of the range quoted at the top of this file. 1,580,825 names were
+enumerated off the volume in 2.6 seconds at sign-in and held in 73.7 MB of RAM. Measured with
+`findra --searchbench` on an AMD Ryzen 9 9900X3D, 47.1 GB of RAM, an NVMe SSD, Windows 11 Pro
+10.0.26200.9168. Yours will differ.
+
+**Does it need a graphics card?** No. Findra tries DirectML for the picture and meaning models and
+Vulkan for speech, and falls back to the processor when neither answers. The processor is a
+supported configuration rather than a failure state: only the first pass through the files is
+slower, because a query embeds one short string. `findra --searchmodels` prints which provider it
+chose and every one it turned down, with reasons. Everything has been measured on one desktop with
+a discrete NVIDIA card and on that machine's processor-only path; AMD and Intel graphics have not
+been tested on real hardware, and neither has an arm64 machine. The arm64 build ships because
+keeping it reachable costs nothing, not because it has been run.
+
+**Does it need administrator rights?** Once, for one call. A helper process opens the NTFS volume
+to read the file table, which is the only thing in Findra that needs them. Everything else runs at
+normal integrity, including the part that opens and decodes files, so a malformed document never
+meets an elevated process. Uninstalling always removes that elevated logon task.
+
+**Can I find a photo by describing what is in it?** Yes, if the picture capability is installed,
+which is a 629 MB download of model files that run on the machine itself. No image is ever
+uploaded to be understood.
+
+**Can I search recordings by what was said in them?** Yes, if the speech capability is installed.
+Findra transcribes audio and video on the machine and searches the transcript exactly as it
+searches a document, which is why speech brings the document models with it: 547 MB on top of
+them. One number, in minutes, sets how long a recording is worth transcribing, five by default,
+and raising it later goes back for exactly the files it passed over.
+
+**How is it different from the search Windows already has?** Four things, each checkable on your
+own machine. The names live in RAM rather than a database, read off the NTFS file table at sign-in,
+so there is no overnight pass and no index to rebuild and a file saved a minute ago is findable
+now. Reading inside a PDF needs no filter installed and no file type registered. A file-table index
+is fast because names are all it holds, where Findra holds the table and then, only if you ask, the
+words in a document, what a photograph shows and what was said in a recording. And nothing is sent
+anywhere to make any of it work.
+
+**How do I install it?** Today, the installer on the releases page:
+https://github.com/blakazulu/findra/releases/latest, for x64 and arm64 alike. `winget install
+blakazulu.Findra` becomes the whole install once the submitted manifest clears moderation in the
+Microsoft catalogue; it does not resolve yet. Building from source needs the .NET 10 SDK
+and nothing else. Neither the installer nor the executables are signed, so Windows warns about an
+unknown publisher.
+
+Last updated: 5 September 2026, for Findra 0.1.0.

@@ -76,7 +76,7 @@ public class CapabilityTests
         IReadOnlySet<Capability> after = Capabilities.Drop(
             [Capability.Meaning, Capability.Speech], Capability.Speech);
         Assert.Equal([Capability.Meaning], after.ToArray());
-        Assert.Equal(283_639_807L, Capabilities.TotalBytes(after));
+        Assert.Equal(1_115_055_717L, Capabilities.TotalBytes(after));
     }
 
     // ---- the arithmetic ----
@@ -87,9 +87,9 @@ public class CapabilityTests
         // The whole reason the spec forbids a fixed per-row table: Speech costs 818 MB on its
         // own and 547 MB once documents have already brought the e5 pair in. A fixed table
         // shows one of those two numbers and makes the total visibly fail to add up.
-        Assert.Equal(857_630_309L, Capabilities.MarginalBytes(Capability.Speech, []));
+        Assert.Equal(1_689_046_219L, Capabilities.MarginalBytes(Capability.Speech, []));
         Assert.Equal(573_990_502L, Capabilities.MarginalBytes(Capability.Speech, [Capability.Meaning]));
-        Assert.Equal("818 MB", Sizes.Human(Capabilities.MarginalBytes(Capability.Speech, [])));
+        Assert.Equal("1.57 GB", Sizes.Human(Capabilities.MarginalBytes(Capability.Speech, [])));
         Assert.Equal("547 MB", Sizes.Human(Capabilities.MarginalBytes(Capability.Speech, [Capability.Meaning])));
     }
 
@@ -105,7 +105,7 @@ public class CapabilityTests
     {
         Assert.Equal(1_624_558_796L, Capabilities.MarginalBytes(Capability.Hebrew, [Capability.Speech]));
         // and from nothing it is the fine-tune plus everything Speech drags in
-        Assert.Equal(1_624_558_796L + 857_630_309L, Capabilities.MarginalBytes(Capability.Hebrew, []));
+        Assert.Equal(1_624_558_796L + 1_689_046_219L, Capabilities.MarginalBytes(Capability.Hebrew, []));
     }
 
     [Fact]
@@ -114,16 +114,16 @@ public class CapabilityTests
         // Adding the numbers shown beside the rows is the arithmetic a person does in their
         // head and it is WRONG here, because Meaning and Speech share 270 MB. The total is the
         // union of the files, not the sum of the rows.
-        Assert.Equal(857_630_309L, Capabilities.TotalBytes([Capability.Meaning, Capability.Speech]));
-        Assert.NotEqual(283_639_807L + 857_630_309L,
+        Assert.Equal(1_689_046_219L, Capabilities.TotalBytes([Capability.Meaning, Capability.Speech]));
+        Assert.NotEqual(1_115_055_717L + 1_689_046_219L,
                         Capabilities.TotalBytes([Capability.Meaning, Capability.Speech]));
     }
 
     [Fact]
     public void EverythingIsTheNumberOnTheReadme()
     {
-        Assert.Equal(3_141_848_265L, Capabilities.TotalBytes(Capabilities.All));
-        Assert.Equal("2.93 GB", Sizes.Human(Capabilities.TotalBytes(Capabilities.All)));
+        Assert.Equal(3_973_264_175L, Capabilities.TotalBytes(Capabilities.All));
+        Assert.Equal("3.7 GB", Sizes.Human(Capabilities.TotalBytes(Capabilities.All)));
     }
 
     // ---- the presets ----
@@ -136,10 +136,10 @@ public class CapabilityTests
 
         Assert.Equal([Capability.Photos, Capability.Meaning],
                      Presets.Recommended.OrderBy(c => (int)c).ToArray());
-        Assert.Equal("900 MB", Sizes.Human(Capabilities.TotalBytes(Presets.Recommended)));
+        Assert.Equal("1.65 GB", Sizes.Human(Capabilities.TotalBytes(Presets.Recommended)));
 
         Assert.Equal(4, Presets.Everything.Count);
-        Assert.Equal("2.93 GB", Sizes.Human(Capabilities.TotalBytes(Presets.Everything)));
+        Assert.Equal("3.7 GB", Sizes.Human(Capabilities.TotalBytes(Presets.Everything)));
     }
 
     [Fact]
@@ -214,7 +214,7 @@ public class CapabilityTests
         Offer? bare = Capabilities.OfferFor(new SearchQuery("what she said type:audio"), CapabilitySet.None);
         Offer? withDocs = Capabilities.OfferFor(new SearchQuery("what she said type:audio"), Set(Capability.Meaning));
         Assert.Equal(Capability.Speech, bare!.Value.Capability);
-        Assert.Contains("818 MB", bare.Value.Text, StringComparison.Ordinal);
+        Assert.Contains("1.57 GB", bare.Value.Text, StringComparison.Ordinal);
         Assert.Contains("547 MB", withDocs!.Value.Text, StringComparison.Ordinal);
     }
 

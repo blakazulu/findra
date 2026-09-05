@@ -53,7 +53,7 @@ public sealed class ContentDb : IDisposable
 
     /// <summary>The relational shape of this database. Bumped only when a change makes rows
     /// already on disk mean something different.</summary>
-    public const int SchemaVersion = 3;
+    public const int SchemaVersion = 4;
 
     /// <summary>One schema step. <c>InvalidatedKinds</c> is what that step made stale - and
     /// nothing else is re-queued. Re-indexing a finished disk because an upgrade did not look
@@ -100,6 +100,24 @@ public sealed class ContentDb : IDisposable
         // expensive mistake spec 2a names.
         new(To: 3, InvalidatedKinds: [(int)ResultKind.Photo],
             Reason: "pictures are read again, because the step that said so re-read none of them"),
+
+        // Every e5 vector in the index was computed by a different model. The meaning model went
+        // from a quantised export to a full-precision one, and the two are not interchangeable -
+        // the same passage embedded by each comes back 0.974 apart, which is a different vector
+        // space rather than a rounding difference. A stored vector from the old file scored against
+        // a query from the new one is a number with nothing behind it.
+        //
+        // Documents, recordings and video, because those are the kinds that carry an e5 vector -
+        // Decoders.Document embeds chunks and Speech.Merge embeds transcript lines. Photos do not:
+        // their vectors come from SigLIP-2's vision tower, which has not changed, and re-reading
+        // every picture on a disk for a change that cannot touch them is the expensive mistake
+        // spec 2a names.
+        //
+        // No ReWalk. WHICH files are eligible is unchanged; only what is stored about the ones
+        // already known. Every row that needs re-reading is already in the index to be re-queued.
+        new(To: 4, InvalidatedKinds:
+                [(int)ResultKind.Document, (int)ResultKind.Audio, (int)ResultKind.Video],
+            Reason: "the meaning model is full precision now, so every vector it wrote is stale"),
     ];
 
     private readonly SqliteConnection _c;

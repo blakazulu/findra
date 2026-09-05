@@ -60,4 +60,16 @@ public static class Repo
             ?? throw new InvalidOperationException(
                 $"no Findra.sln above '{here}' - the build tests cannot find the repository");
     }
+
+    /// <summary>
+    /// Whether blakazulu.Findra is in the winget catalogue yet.
+    ///
+    /// <para>False while microsoft/winget-pkgs holds the submission unmerged, which makes
+    /// `winget install blakazulu.Findra` print "No package found matching input criteria" on
+    /// every machine. It cannot be checked from a test - the catalogue is somebody else's
+    /// repository and the suite runs offline - so it is one constant, flipped by hand on the day
+    /// the manifest merges. <c>EverySurfaceThatPrintsTheWingetCommandSaysWhetherItResolves</c>
+    /// then requires the opposite of every surface, so the hedge cannot outlive its reason.</para>
+    /// </summary>
+    public static readonly bool WingetIsInTheCatalogue = false;
 }

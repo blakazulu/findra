@@ -626,7 +626,7 @@ const INK_FAINT = hex('#7e786d');
 const ACCENT_RGB = hex(ACCENT);
 
 const HEADLINE = ['WINDOWS SEARCH.', 'BUT IT WORKS.'];
-const SUBLINE = ['0.50 ms to a filename, straight from RAM.', 'Nothing leaves your machine.'];
+const SUBLINE = ['Filenames in 0.33 to 2.05 ms median, straight from RAM.', 'Nothing leaves your machine.'];
 const FINE = 'WINDOWS 10 AND 11   /   APACHE-2.0   /   FREE';
 
 /// The 1200 by 630 card: the headline on the left, the lockup on the right.
@@ -728,6 +728,16 @@ put('assets/icon/findra.svg', Buffer.from(svg(true), 'utf8'));
 put('assets/icon/findra-flat.svg', Buffer.from(svg(false), 'utf8'));
 put('website/public/favicon.svg', Buffer.from(svg(true), 'utf8'));
 
+// The site's raster icons. A browser that cannot use the SVG asks for /favicon.ico by path
+// whether or not the page names it, and gets the 404 page with a 404 status when it is absent;
+// iOS saves a home-screen shortcut with no icon at all unless an apple-touch-icon exists. Both
+// come out of the same rasteriser as everything else here, so there is still one mark.
+put('website/public/favicon.ico', ico(images));
+
+// 180 is what iOS asks for, and it is drawn rather than scaled - but it is deliberately NOT in
+// SIZES, because SIZES is what goes inside findra.ico and Windows never asks for 180.
+put('website/public/apple-touch-icon.png', png(180, raster(180)));
+
 // The installer wizard's small image, in the corner of every page. A separate file rather than
 // the .ico because Inno wants a bitmap it can scale, and 128 is the size it reads at 250% display
 // scaling - above that it is scaling up, and below it is throwing pixels away.
@@ -737,6 +747,7 @@ put('assets/icon/findra-wizard.png', images.find((i) => i.size === 128).data);
 // carry the mark, and the whole reason this file exists is that there is one copy of the mark.
 mkdirSync(join(ROOT, 'website', 'public', 'share'), { recursive: true });
 put('website/public/share/card.png', pngOf(shareCard()));
+put('website/public/share/card.txt', Buffer.from(SUBLINE.join(' ') + '\n', 'utf8'));
 put('website/public/share/square.png', pngOf(shareSquare()));
 
 console.log(`findra.ico carries ${SIZES.join(', ')}`);

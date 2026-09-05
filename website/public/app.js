@@ -31,7 +31,7 @@
       'ONE FILE FOUND, IT WAS THE SHORTCUT',
       'THE FILE WAS IN DOWNLOADS THE ENTIRE TIME',
       'NVMe AT 100% ACTIVE TIME FOR SIX MINUTES',
-      'FINDRA: 0.5 MS, NO INDEX REBUILD, NO 3 AM'
+      'FINDRA: 0.33-2.05 MS MEDIAN, NO INDEX REBUILD, NO 3 AM'
     ];
     var html = lines.map(function (line) {
       return '<span>' + line + '</span><span class="d">&#9670;</span>';
@@ -45,17 +45,28 @@
     var label = el.querySelector('.c');
     var original = label ? label.textContent : '';
 
+    var pending = null;
+
     el.addEventListener('click', function () {
       var text = el.getAttribute('data-copy');
       if (!navigator.clipboard) return;
 
       navigator.clipboard.writeText(text).then(function () {
         if (!label) return;
+        if (pending) clearTimeout(pending);
         el.classList.add('copied');
         label.textContent = 'COPIED';
-        setTimeout(function () {
+
+        // The chip itself is aria-hidden and lives inside the button, where ARIA's
+        // children-presentational rule prunes it. The announcement is a sibling.
+        var said = el.parentNode ? el.parentNode.querySelector('.said') : null;
+        if (said) said.textContent = 'Copied';
+
+        pending = setTimeout(function () {
           el.classList.remove('copied');
           label.textContent = original;
+          // Cleared, so a second copy is a change and announces again.
+          if (said) said.textContent = '';
         }, 1600);
       }).catch(function () {
         /* a browser that says no is not an error worth shouting about */

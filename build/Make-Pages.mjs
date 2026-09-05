@@ -19,7 +19,8 @@
 // The second is the shell. The navigation and the footer are the same on every page, and four
 // hand-maintained copies of a footer is four chances to link the wrong privacy policy.
 
-import { writeFileSync, mkdirSync, readFileSync, copyFileSync } from 'node:fs';
+import { writeFileSync, mkdirSync, readFileSync, copyFileSync, statSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -43,9 +44,10 @@ const PAGES = [
     description:
       'What Findra stores, where it stores it, and the single anonymous request it makes on ' +
       'its own. No account, no cloud, no analytics, no telemetry.',
-    reviewed: '2026-09-03',
+    reviewed: '2026-09-05',
     // The Markdown twin is published beside the page so an agent asking for text/markdown, and a
     // person who would rather read the file, both get the real thing rather than a rewrite.
+    ogType: 'website',
     markdown: 'privacy.md',
   },
   {
@@ -57,7 +59,8 @@ const PAGES = [
     description:
       'Findra is a desktop search widget for Windows built on .NET 10, Avalonia, SkiaSharp and ' +
       'SQLite, by one person, under Apache-2.0.',
-    reviewed: '2026-09-03',
+    reviewed: '2026-09-05',
+    ogType: 'website',
     markdown: 'about.md',
   },
   {
@@ -77,7 +80,8 @@ const PAGES = [
     description:
       'The team roles behind a Findra release, what the program changes on the machine, and ' +
       'what it never sends anywhere. Findra is not signed yet; this is the policy for when it is.',
-    reviewed: '2026-09-04',
+    reviewed: '2026-09-05',
+    ogType: 'website',
     markdown: 'code-signing.md',
   },
   {
@@ -89,7 +93,8 @@ const PAGES = [
     description:
       'How to report a bug, report a security problem, or ask something else about Findra. ' +
       'No contact form, because Findra collects nothing and a form would.',
-    reviewed: '2026-09-03',
+    reviewed: '2026-09-05',
+    ogType: 'website',
     markdown: 'contact.md',
   },
 ];
@@ -233,6 +238,8 @@ const FOOTER = `
       <a href="/code-signing/">Code signing policy</a>
       <a href="https://github.com/blakazulu/findra/blob/main/SECURITY.md" rel="noopener">Security</a>
       <a href="https://github.com/blakazulu/findra/blob/main/LICENSE" rel="noopener">Apache-2.0</a>
+      <a href="https://github.com/blakazulu/findra/blob/main/NOTICE" rel="noopener">Notice</a>
+      <a href="/llms.txt">For language models</a>
     </div>
     <div class="col">
       <strong>ATTRIBUTION</strong>
@@ -245,6 +252,49 @@ const FOOTER = `
 
 const MARK = `<span class="brand-mark" aria-hidden="true"></span>`;
 
+function structuredData(page, url) {
+  // The four generated pages carried no structured data at all, so nothing said which product
+  // they were about, who wrote them, or when they were last looked at. Every value below is one
+  // this file already holds - the @id references reach into the front page's own graph, so the
+  // five pages resolve as one entity and nothing new is claimed here.
+  // There is no PrivacyPolicy class in schema.org - the WebPage subtypes are AboutPage,
+  // CheckoutPage, CollectionPage, ContactPage, FAQPage, ItemPage, MedicalWebPage, ProfilePage,
+  // QAPage, RealEstateListing and SearchResultsPage. The privacy signal already lives where a
+  // consumer looks for it, on SoftwareApplication.privacyPolicy.
+  const types = { about: 'AboutPage', contact: 'ContactPage' };
+  const graph = [
+    {
+      '@type': types[page.slug] ?? 'WebPage',
+      '@id': `${url}#page`,
+      url,
+      name: page.title,
+      description: page.description,
+      inLanguage: 'en',
+      dateModified: page.reviewed,
+      isPartOf: { '@id': `${SITE}/#site` },
+      about: { '@id': `${SITE}/#findra` },
+      author: { '@id': `${SITE}/#blakazulu` },
+      publisher: { '@id': `${SITE}/#blakazulu` },
+      breadcrumb: { '@id': `${url}#crumbs` },
+    },
+    { '@id': `${SITE}/#findra`, '@type': 'SoftwareApplication', name: 'Findra', url: `${SITE}/` },
+    { '@id': `${SITE}/#blakazulu`, '@type': 'Person', name: 'Liraz Amir', alternateName: 'blakazulu' },
+    { '@id': `${SITE}/#site`, '@type': 'WebSite', name: 'Findra', url: `${SITE}/` },
+    {
+      '@type': 'BreadcrumbList',
+      '@id': `${url}#crumbs`,
+      itemListElement: [
+        { '@type': 'ListItem', position: 1, name: 'Findra', item: `${SITE}/` },
+        { '@type': 'ListItem', position: 2, name: page.kicker, item: url },
+      ],
+    },
+  ];
+  return `<script type="application/ld+json">
+${JSON.stringify({ '@context': 'https://schema.org', '@graph': graph }, null, 2)}
+</script>
+`;
+}
+
 function shell(page, content) {
   const url = `${SITE}/${page.slug}/`;
   return `<!doctype html>
@@ -255,9 +305,9 @@ function shell(page, content) {
 <title>${page.title}</title>
 <meta name="description" content="${escape(page.description)}">
 <link rel="canonical" href="${url}">
-<meta property="og:type" content="article">
+<meta property="og:type" content="${page.ogType ?? 'article'}">
 <meta property="og:site_name" content="Findra">
-<meta property="og:locale" content="en">
+<meta property="og:locale" content="en_US">
 <meta property="og:url" content="${url}">
 <meta property="og:title" content="${escape(page.title)}">
 <meta property="og:description" content="${escape(page.description)}">
@@ -265,14 +315,24 @@ function shell(page, content) {
 <meta property="og:image:type" content="image/png">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
-<meta property="og:image:alt" content="Findra. Windows Search, but it works. 0.50 ms to a filename, straight from RAM.">
+<meta property="og:image:alt" content="Findra. Windows Search, but it works. Filenames in 0.33 to 2.05 ms median, straight from RAM. Nothing leaves your machine.">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="theme-color" content="#08090c">
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="icon" href="/favicon.ico" sizes="32x32">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
 <link rel="alternate" type="text/markdown" href="/${page.markdown}" title="${escape(page.title)} as Markdown">
+<link rel="alternate" type="text/markdown" href="/llms.txt" title="Findra for language models">
+<!-- Preconnected and linked rather than @import-ed from inside styles.css: an @import cannot
+     begin until the whole stylesheet has arrived, which put four serial round trips in front of
+     the first painted glyph. Both origins are already the only two the CSP permits. -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Quicksand:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap">
 <link rel="stylesheet" href="/styles.css">
-</head>
+${structuredData(page, url)}</head>
 <body>
+<a class="skip" href="#top">Skip to content</a>
 
 <div class="bg" aria-hidden="true">
   <div class="bg-blob a"></div>
@@ -293,7 +353,7 @@ ${NAV_LINKS.map(([href, label]) => `    <a href="${href}">${label}</a>`).join('\
   </div>
 </header>
 
-<main id="top">
+<main id="top" tabindex="-1">
   <div class="wrap">
     <section class="doc-head">
       <span class="kicker">${escape(page.kicker.toUpperCase())}</span>
@@ -348,6 +408,38 @@ for (const page of PAGES) {
 copyFileSync(join(ROOT, 'website', 'content', 'home.md'),
              join(ROOT, 'website', 'public', 'index.md'));
 wrote.push('  website/public/index.md - copied from website/content/home.md');
+
+
+// The sitemap is emitted here rather than hand-kept, for the reason the footer is: a date typed
+// by hand is a date nobody updates. lastmod for a generated page is that page's own reviewed
+// date; the front page takes the last commit that touched the file that is served, or today
+// while that file is still uncommitted. changefreq and
+// priority are deliberately absent - Google has said it ignores both, and two more hand-kept
+// values that can only be wrong is the defect this replaces, not a feature.
+const indexPath = join(ROOT, 'website', 'public', 'index.html');
+const homeMod = (() => {
+  try {
+    // A committed date cannot see the working tree, so an edited-but-uncommitted front page
+    // would be stamped with the commit before it. Dirty means it changed today.
+    const dirty = execFileSync('git', ['status', '--porcelain', '--', 'website/public/index.html'],
+                               { cwd: ROOT, encoding: 'utf8' }).trim().length > 0;
+    if (dirty) return new Date().toISOString().slice(0, 10);
+    return execFileSync('git', ['log', '-1', '--format=%cs', '--', 'website/public/index.html'],
+                        { cwd: ROOT, encoding: 'utf8' }).trim()
+        || statSync(indexPath).mtime.toISOString().slice(0, 10);
+  } catch {
+    return statSync(indexPath).mtime.toISOString().slice(0, 10);
+  }
+})();
+const entries = [{ loc: `${SITE}/`, mod: homeMod }]
+  .concat(PAGES.map((p) => ({ loc: `${SITE}/${p.slug}/`, mod: p.reviewed })));
+const sitemap = `<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+${entries.map((e) => `  <url>\n    <loc>${e.loc}</loc>\n    <lastmod>${e.mod}</lastmod>\n  </url>`).join('\n')}
+</urlset>
+`;
+writeFileSync(join(ROOT, 'website', 'public', 'sitemap.xml'), sitemap);
+wrote.push('  website/public/sitemap.xml');
 
 console.log(`Findra ${VERSION}`);
 for (const line of wrote) console.log(line);

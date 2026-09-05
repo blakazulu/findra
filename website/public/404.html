@@ -8,9 +8,18 @@
 <meta name="robots" content="noindex">
 <meta name="theme-color" content="#08090c">
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="icon" href="/favicon.ico" sizes="32x32">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<!-- Preconnected and linked rather than @import-ed from inside styles.css: an @import cannot
+     begin until the whole stylesheet has arrived, which put four serial round trips in front of
+     the first painted glyph. Both origins are already the only two the CSP permits. -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Quicksand:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap">
 <link rel="stylesheet" href="/styles.css">
 </head>
 <body>
+<a class="skip" href="#top">Skip to content</a>
 
 <!-- Netlify serves this file, with a real 404 status, for any path that does not exist. Before
      it existed the platform's own default page was served instead, which said nothing about
@@ -46,7 +55,7 @@
   </div>
 </header>
 
-<main id="top">
+<main id="top" tabindex="-1">
   <div class="wrap">
     <section class="doc-head">
       <span class="kicker">404 &middot; NOT FOUND</span>
@@ -114,6 +123,11 @@
       <a href="/about/">About</a>
       <a href="/contact/">Contact</a>
       <a href="/privacy/">Privacy</a>
+      <a href="/code-signing/">Code signing policy</a>
+      <a href="https://github.com/blakazulu/findra/blob/main/SECURITY.md" rel="noopener">Security</a>
+      <a href="https://github.com/blakazulu/findra/blob/main/LICENSE" rel="noopener">Apache-2.0</a>
+      <a href="https://github.com/blakazulu/findra/blob/main/NOTICE" rel="noopener">Notice</a>
+      <a href="/llms.txt">For language models</a>
     </div>
     <div class="col">
       <strong>ATTRIBUTION</strong>

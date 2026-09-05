@@ -1,0 +1,1 @@
+Filenames in 0.33 to 2.05 ms median, straight from RAM. Nothing leaves your machine.

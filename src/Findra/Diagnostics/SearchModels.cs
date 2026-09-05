@@ -151,6 +151,12 @@ public static class ModelsReport
 // and a real fault.
 public static class SearchModels
 {
+    /// <summary>The one passage the two providers are asked to agree about. Prose rather than
+    /// a token pattern: a quantised model's error is not uniform across inputs, and the worst
+    /// disagreement measured was on ordinary sentences rather than on anything unusual.</summary>
+    private const string AgreementProbe =
+        "passage: The tenant shall pay the rent monthly in advance on the first day of each month.";
+
     public static int Run(string[] args)
     {
         string dir = ModelStore.Dir;
@@ -218,6 +224,43 @@ public static class SearchModels
                     catch (Exception ex)
                     {
                         notes.Add("the picture model loads with an accelerator but NOT on the processor: " +
+                                  $"{ex.GetType().Name}: {ex.Message.Split((char)10)[0]}");
+                        aPresentModelFailedToLoad = true;
+                    }
+                }
+
+                // And the meaning model has to give the SAME ANSWER on both, because it is asked
+                // on both: the indexer embeds documents on the accelerator and the card embeds the
+                // query on the processor, and those two vectors are then compared to each other.
+                // A quantised export does not - the one Findra used to ship came back 0.970 cosine
+                // between the two, which is a systematic error in every score rather than a
+                // failure anybody would see. The session above is the processor's; this opens the
+                // accelerator's and asks whether they agree.
+                //
+                // Reported rather than thrown: a machine where they disagree still works, slightly
+                // worse, and this is the one place somebody would look to find out why a search
+                // that should match does not.
+                if (e5Ready && e5 is not null)
+                {
+                    try
+                    {
+                        using var onGpu = new E5Encoder(wantAccelerator: true, dir);
+                        if (onGpu.Provider != e5.Provider)
+                        {
+                            float[] a = e5.EncodePassage(AgreementProbe);
+                            float[] b = onGpu.EncodePassage(AgreementProbe);
+                            double dot = 0;
+                            for (int i = 0; i < a.Length && i < b.Length; i++) dot += a[i] * b[i];
+                            notes.Add(dot >= 0.9999
+                                ? $"the meaning model agrees on {e5.Provider} and {onGpu.Provider} (cosine {dot:F6})"
+                                : $"the meaning model DISAGREES between {e5.Provider} and {onGpu.Provider} " +
+                                  $"(cosine {dot:F6}) - documents are embedded on one and queries on the " +
+                                  "other, so every score carries that error");
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        notes.Add("the meaning model loads on the processor but NOT with an accelerator: " +
                                   $"{ex.GetType().Name}: {ex.Message.Split((char)10)[0]}");
                         aPresentModelFailedToLoad = true;
                     }

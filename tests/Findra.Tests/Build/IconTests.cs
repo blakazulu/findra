@@ -202,6 +202,69 @@ public class IconTests
         Assert.Equal(Repo.Read(Svg), Repo.Read("website/public/favicon.svg"));
     }
 
+    /// <summary>
+    /// The site ships the raster icons a browser asks for by path, and they are the same mark.
+    ///
+    /// <para>A browser that will not use the SVG requests <c>/favicon.ico</c> whether or not any
+    /// page names it, and on this site an absent one is answered by the custom 404 - a 404 status
+    /// and an HTML body where an icon should be. iOS saves a home-screen shortcut with no icon at
+    /// all without an <c>apple-touch-icon</c>. Both now come out of <c>build/Make-Icon.mjs</c>, so
+    /// this test exists for the same reason as the one above it: to notice the day one copy of the
+    /// mark stops matching the others.</para>
+    ///
+    /// <para>The 180 px raster is drawn at 180, not scaled from 128, and is deliberately outside
+    /// the <c>SIZES</c> list - that list is what goes inside <c>findra.ico</c>, and Windows never
+    /// asks for 180.</para>
+    /// </summary>
+    [Fact]
+    public void TheSiteShipsTheSameMarkAsAnIcoAndAsATouchIcon()
+    {
+        // Byte-identical, not merely present: the .ico the linker compiles into the executable and
+        // the one the site serves are the same file, emitted in the same pass.
+        Assert.Equal(File.ReadAllBytes(Repo.Path_(Ico)),
+                     File.ReadAllBytes(Repo.Path_("website/public/favicon.ico")));
+
+        byte[] touch = File.ReadAllBytes(Repo.Path_("website/public/apple-touch-icon.png"));
+        Assert.True(touch.Length > 512, "apple-touch-icon.png is too small to be a rendered icon");
+
+        using SKBitmap bitmap = SKBitmap.Decode(touch);
+        Assert.NotNull(bitmap);
+        Assert.Equal(180, bitmap.Width);
+        Assert.Equal(180, bitmap.Height);
+
+        // The same named pixels the .ico entries are held to, in the same 256-space coordinates,
+        // so a blank or mis-rendered square fails here rather than on somebody's home screen.
+        Assert.Equal(0, bitmap.GetPixel(0, 0).Alpha);
+
+        SKColor ground = At(bitmap, 200, 60);
+        Assert.Equal(255, ground.Alpha);
+        Assert.True(Nearer(ground, Plate, Accent), "the touch icon's plate is not the Mond ground");
+
+        SKColor lens = At(bitmap, 110, 72);
+        Assert.Equal(255, lens.Alpha);
+        Assert.True(Nearer(lens, Accent, Plate), "the touch icon's lens is not drawn");
+
+        SKColor handle = At(bitmap, 188, 186);
+        Assert.Equal(255, handle.Alpha);
+        Assert.True(Nearer(handle, Accent, Plate), "the touch icon's handle is not drawn");
+    }
+
+    /// <summary>Every page declares both raster icons, not only the SVG.</summary>
+    [Theory]
+    [InlineData("website/public/index.html")]
+    [InlineData("website/public/404.html")]
+    [InlineData("website/public/about/index.html")]
+    [InlineData("website/public/contact/index.html")]
+    [InlineData("website/public/privacy/index.html")]
+    [InlineData("website/public/code-signing/index.html")]
+    public void EveryPageDeclaresTheRasterIconsAsWellAsTheSvg(string path)
+    {
+        string html = Repo.Read(path);
+        Assert.Contains(@"<link rel=""icon"" href=""/favicon.svg"" type=""image/svg+xml"">", html, StringComparison.Ordinal);
+        Assert.Contains(@"<link rel=""icon"" href=""/favicon.ico"" sizes=""32x32"">", html, StringComparison.Ordinal);
+        Assert.Contains(@"<link rel=""apple-touch-icon"" href=""/apple-touch-icon.png"">", html, StringComparison.Ordinal);
+    }
+
     [Fact]
     public void TheHeaderMarkAndBothSvgsCarryTheOneLensPath()
     {

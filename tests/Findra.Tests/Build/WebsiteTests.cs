@@ -1,4 +1,5 @@
-﻿using System.Text.Json;
+﻿using System.Net;
+using System.Text.Json;
 using System.Text.RegularExpressions;
 
 using Xunit;
@@ -147,6 +148,7 @@ public class WebsiteTests
     [InlineData("website/public/privacy/index.html")]
     [InlineData("website/public/about/index.html")]
     [InlineData("website/public/contact/index.html")]
+    [InlineData("website/public/code-signing/index.html")]
     public void EveryPageCarriesTheWholeOpenGraphSet(string path)
     {
         string html = Repo.Read(path);
@@ -239,7 +241,11 @@ public class WebsiteTests
         foreach (string path in new[]
                  { "website/public/index.html", "website/public/contact/index.html",
                    "website/public/about/index.html", "website/public/privacy/index.html",
-                   "website/public/llms.txt" })
+                   "website/public/llms.txt", "website/public/code-signing/index.html",
+                   "website/public/404.html", "website/public/index.md", "website/public/about.md",
+                   "website/public/contact.md", "website/public/privacy.md",
+                   "website/public/code-signing.md", "website/content/home.md",
+                   "website/content/about.md", "website/content/contact.md" })
         {
             // Comments only. The structured data is deliberately NOT stripped: an address added
             // to the JSON-LD is exactly the thing this test exists to catch, and a check that read
@@ -457,7 +463,12 @@ public class WebsiteTests
     {
         foreach (string path in new[]
                  { "website/content/about.md", "website/content/contact.md",
-                   "website/content/home.md", "website/public/llms.txt", "website/public/404.html" })
+                   "website/content/home.md", "website/public/llms.txt", "website/public/404.html",
+                   "website/public/index.html", "PRIVACY.md", "docs/code-signing-policy.md",
+                   "website/public/about/index.html", "website/public/contact/index.html",
+                   "website/public/privacy/index.html", "website/public/code-signing/index.html",
+                   "website/public/index.md", "website/public/about.md", "website/public/contact.md",
+                   "website/public/privacy.md", "website/public/code-signing.md" })
         {
             string text = Repo.Read(path);
             foreach (string name in Repo.Competitors)
@@ -495,6 +506,598 @@ public class WebsiteTests
     /// carrying one, and neither is a comment recording what this file replaced. Everything else,
     /// the structured data included, stays - because that is where such a thing would appear.
     /// </summary>
+
+    // ------------------------------------------------------------------ the site quotes the repository
+
+    /// <summary>
+    /// The site's benchmark table is the README's benchmark table.
+    ///
+    /// <para>Both are pasted from the same <c>--searchbench</c> run and both say so on the page.
+    /// Two copies of one measurement is two answers waiting to differ, and they did: a run taken
+    /// against a debug build with ten documents in the content index went on being served from the
+    /// front page, the Markdown twin and the share card for as long as it took somebody to read
+    /// both pages side by side. The README is the source, because that is where the whole fragment
+    /// is pasted whole; the site quotes five rows out of it.</para>
+    ///
+    /// <para>The direction of the error is worth recording: the stale numbers UNDERSTATED the
+    /// product. A wrong number that flatters is caught by the person it embarrasses; one that does
+    /// not is caught by nobody, which is what a test is for.</para>
+    /// </summary>
+    [Fact]
+    public void TheSiteQuotesTheReadmesOwnBenchmarkNumbers()
+    {
+        string readme = Repo.Read("README.md");
+        string home = Repo.Read("website/content/home.md");
+
+        foreach (string query in new[] { "config", "report", "readme", "invoice", "sunset" })
+        {
+            // Every column, not the first one. Guarding p50 alone left p95, the index scan, the
+            // worst case and the hit count free to say anything at all.
+            Match row = Regex.Match(
+                readme,
+                $@"(?m)^\|\s{query}\s\|\s([\d.]+) ms\s\|\s([\d.]+) ms\s\|\s([\d.]+) ms\s\|\s[\d.]+ ms\s\|\s([\d.]+) ms\s\|\s(\d+)\s\|");
+            Assert.True(row.Success, $"the README's name-query table has no row for {query}");
+
+            string p50 = row.Groups[1].Value, p95 = row.Groups[2].Value;
+            string scan = row.Groups[3].Value, worst = row.Groups[4].Value, hits = row.Groups[5].Value;
+
+            Assert.Contains($"| {query} | {p50} ms | {p95} ms | {scan} ms | {worst} ms | {hits} |",
+                            home, StringComparison.Ordinal);
+
+            // The whole ROW, not just the number. ">0.33 ms<" also matches the stat card above the
+            // table, so a table cell left behind at the old figure passed while the card carried
+            // the new one - which is the same two-copies-of-one-number defect one level down.
+            Assert.Contains(
+                $@"<tr><td>{query}</td><td class=""num"">{p50} ms</td><td class=""num"">{p95} ms</td>" +
+                $@"<td class=""num"">{scan} ms</td><td class=""num"">{worst} ms</td><td>{hits}</td></tr>",
+                Index, StringComparison.Ordinal);
+        }
+
+        // The headline figure is repeated in prose, in the share card the icon generator bakes,
+        // in the alt text the page generator emits, and in the file agents read first. The share
+        // card is the copy that actually went stale, and nothing was reading it.
+        string headline = Regex.Match(readme, @"(?m)^\|\sconfig\s\|\s([\d.]+) ms").Groups[1].Value;
+        string p50Headline = headline;
+
+        // The range and the worst sample are derived, never typed. The five name-query rows give
+        // both: the slowest median is the top of the published range, and the largest Worst cell
+        // is the figure the prose calls the worst single sample.
+        MatchCollection rows = Regex.Matches(
+            readme,
+            @"(?m)^\|\s\w+\s\|\s([\d.]+) ms\s\|\s[\d.]+ ms\s\|\s[\d.]+ ms\s\|\s[\d.]+ ms\s\|\s([\d.]+) ms\s\|");
+        Assert.Equal(5, rows.Count);
+
+        double[] medians = rows.Select(m => double.Parse(m.Groups[1].Value)).ToArray();
+        double[] worsts = rows.Select(m => double.Parse(m.Groups[2].Value)).ToArray();
+        string range = $"{medians.Min():0.00} to {medians.Max():0.00} ms";
+        string worstSample = $"{worsts.Max():0.00} ms";
+        foreach (string path in new[]
+                 { "build/Make-Icon.mjs", "build/Make-Pages.mjs",
+                   "website/public/llms.txt", "website/public/index.md" })
+        {
+            Assert.Contains(headline, Repo.Read(path), StringComparison.Ordinal);
+        }
+
+        // Every surface that publishes the range publishes the derived one. app.js is in the
+        // list because the ticker now carries the figures and no test read that file at all.
+        foreach (string path in new[]
+                 { "website/public/index.html", "website/content/home.md", "website/public/index.md",
+                   "website/public/llms.txt", "build/Make-Icon.mjs", "build/Make-Pages.mjs" })
+        {
+            // With the word, not just the figures: "0.33 to 2.05 ms" is a range of MEDIANS and
+            // the worst sample sits above it, so the bare range is the claim that was retired.
+            Assert.Contains($"{range} median", Regex.Replace(Repo.Read(path), @"\s+", " "),
+                            StringComparison.Ordinal);
+        }
+
+        Assert.Contains($"{range.Replace(" to ", "-")} MEDIAN".ToUpperInvariant(),
+                        Repo.Read("website/public/app.js").ToUpperInvariant(), StringComparison.Ordinal);
+
+        foreach (string path in new[]
+                 { "website/public/index.html", "website/content/home.md",
+                   "website/public/index.md", "website/public/llms.txt" })
+        {
+            Assert.Contains($"worst single sample across the five measured name queries was {worstSample}",
+                            Regex.Replace(Repo.Read(path), @"\s+", " "), StringComparison.Ordinal);
+        }
+
+        Assert.Contains($"The slowest of the five medians was {medians.Max():0.00} ms",
+                        Regex.Replace(Index, @"\s+", " "), StringComparison.Ordinal);
+
+        // The four stat cards sit above the table and were bound by nothing, which is precisely
+        // where the last drift landed: 2.8 s, 73.1 MB and 1,573,675 all lived here.
+        Match volumes = Regex.Match(readme, @"(?m)^\|\sC:\s\|\s([\d,]+)\s\|\s([\d.]+) MB\s\|\s([\d,]+) ms\s\|");
+        Assert.True(volumes.Success, "the README has no volumes row");
+
+        string names = volumes.Groups[1].Value, resident = volumes.Groups[2].Value;
+        double seconds = double.Parse(volumes.Groups[3].Value.Replace(",", "")) / 1000.0;
+
+        string cards = Between(Index, @"<div class=""stat-row"">", "</div>\n\n      <div class=\"table-wrap");
+        Assert.Contains($"{names} names", cards, StringComparison.Ordinal);
+        Assert.Contains($@"<span class=""v"">{p50Headline} ms</span>", cards, StringComparison.Ordinal);
+
+        // The stat card names one query. Whatever else it says, it must not go on to credit that
+        // query with a figure drawn from the whole set - which is exactly how it read before.
+        Assert.DoesNotMatch($@"""config""[^.]*{Regex.Escape(worstSample)}", Regex.Replace(cards, @"\s+", " "));
+
+        // Every latency the page prints in the mock window is one the benchmark produced. Three
+        // invented figures lived there under a heading promising the opposite.
+        foreach (Match shown in Regex.Matches(Index, @"<span class=""ms"">([\d.]+) ms</span>"))
+        {
+            Assert.Contains(shown.Groups[1].Value, medians.Select(m => $"{m:0.00}"));
+        }
+        Assert.Contains($@"<span class=""v"">{resident} MB</span>", Index, StringComparison.Ordinal);
+        Assert.Contains($@"<span class=""v"">{seconds:0.0} s</span>", Index, StringComparison.Ordinal);
+
+        // index.md is a copy of home.md that build/Make-Pages.mjs makes. Nothing asserted it.
+        Assert.Equal(home, Repo.Read("website/public/index.md"));
+    }
+
+    /// <summary>
+    /// No surface still says Findra is unreleased once a release exists.
+    ///
+    /// <para>The README is already coupled to this fact by
+    /// <c>ReadmeTests.TheReadmeDoesNotStillSayFindraIsNotReadyToInstall</c>, and the structured
+    /// data by <c>availability</c> above. The About page was not, and so it went on telling every
+    /// reader and every crawler that the first release had not been tagged and that building from
+    /// source was the route that worked - on the page an entity resolver reads for status, weeks
+    /// after the tag. The fact that moves is a numbered section in the changelog, which is the
+    /// same fact the other two are keyed off.</para>
+    /// </summary>
+    [Fact]
+    public void NoPageStillSaysTheFirstReleaseHasNotBeenTagged()
+    {
+        bool released = Regex.IsMatch(Repo.Read("CHANGELOG.md"), @"(?m)^##\s+\[\d+\.\d+\.\d+\]");
+        if (!released)
+        {
+            return;
+        }
+
+        foreach (string path in new[]
+                 { "website/content/about.md", "website/content/home.md", "website/public/about.md",
+                   "website/public/index.md", "website/public/llms.txt", "website/public/index.html" })
+        {
+            string text = Repo.Read(path);
+            Assert.DoesNotContain("has not been tagged", text, StringComparison.OrdinalIgnoreCase);
+            Assert.DoesNotContain("not been released", text, StringComparison.OrdinalIgnoreCase);
+            Assert.DoesNotContain("coming soon", text, StringComparison.OrdinalIgnoreCase);
+
+            // A blocklist only catches the three phrasings somebody happened to think of;
+            // "not yet released" or "until the first tag" would walk straight through it.
+            // Asserting the positive fact cannot be routed around by rewording.
+            Assert.Contains("winget install blakazulu.Findra", text, StringComparison.Ordinal);
+        }
+    }
+
+    /// <summary>
+    /// Every capability size the site quotes is the size the model store actually holds.
+    ///
+    /// <para>The meaning model moved from a quantised export to full precision and its download
+    /// went from 270 MB to 1.04 GB. The front page followed; the Markdown twin, <c>home.md</c> and
+    /// <c>llms.txt</c> did not, so the machine-readable half of the site - the half an answer
+    /// engine ingests first - understated the total download by 28% and one capability by four
+    /// times, while the human-readable half beside it was right.</para>
+    ///
+    /// <para>The figures are asserted as strings rather than recomputed from
+    /// <c>Capabilities.OwnModels</c> on purpose: what is being guarded is that the four surfaces
+    /// agree with each other and with the README, and a test that recomputed them would pass on a
+    /// day when every surface was equally wrong.</para>
+    /// </summary>
+    [Fact]
+    public void EverySurfaceQuotesTheSameCapabilitySizes()
+    {
+        string[] surfaces = { "website/content/home.md", "website/public/index.md",
+                              "website/public/llms.txt", "website/public/index.html" };
+
+        foreach (string path in surfaces)
+        {
+            string text = Repo.Read(path);
+            foreach (string size in new[] { "629 MB", "1.04 GB", "547 MB", "1.51 GB", "3.7 GB" })
+            {
+                Assert.Contains(size, text, StringComparison.Ordinal);
+            }
+
+            // The two figures the fp32 change invalidated. Either one appearing beside a
+            // capability name means a surface was left behind again.
+            Assert.DoesNotContain("270 MB", text, StringComparison.Ordinal);
+            Assert.DoesNotContain("2.9 GB", text, StringComparison.Ordinal);
+            Assert.DoesNotContain("2.93 GB", text, StringComparison.Ordinal);
+        }
+
+        // Presence is not attachment: with the five figures merely present, swapping the photo
+        // and speech numbers over left every assertion above satisfied. Each number is bound to
+        // the capability it prices, in whichever shape that surface writes it.
+        foreach (string path in new[] { "website/public/index.html", "website/public/llms.txt" })
+        {
+            // Collapsed: llms.txt wraps its prose, and a phrase split over two lines is not a
+            // different phrase.
+            string text = Regex.Replace(Repo.Read(path), @"\s+", " ");
+            Assert.Contains("629 MB for photos and video", text, StringComparison.Ordinal);
+            Assert.Contains("1.04 GB for meaning in documents", text, StringComparison.Ordinal);
+            Assert.Contains("547 MB for speech", text, StringComparison.Ordinal);
+            Assert.Contains("1.51 GB for the Hebrew", text, StringComparison.Ordinal);
+
+            // The same figures again in the answers, where they were unbound on these two
+            // surfaces while being bound on the Markdown twins.
+            Assert.Contains("629 MB download", text, StringComparison.Ordinal);
+            Assert.Contains("547 MB on top of them", text, StringComparison.Ordinal);
+        }
+
+        foreach (string path in new[] { "website/content/home.md", "website/public/index.md" })
+        {
+            string text = Regex.Replace(Repo.Read(path), @"\s+", " ");
+
+            // These files carry the figures twice: once in the table and once in the answers.
+            // Only the table was bound, so "1.51 GB for meaning in documents" in a paragraph
+            // satisfied every assertion above.
+            Assert.Contains("629 MB download", text, StringComparison.Ordinal);
+            Assert.Contains("547 MB on top of them", text, StringComparison.Ordinal);
+            Assert.Contains("1.04 GB for meaning in documents", text, StringComparison.Ordinal);
+            Assert.Contains("1.51 GB for the Hebrew", text, StringComparison.Ordinal);
+
+            Assert.Contains("| Photos and video | SigLIP-2 vision, text and spm | 629 MB |", text, StringComparison.Ordinal);
+            Assert.Contains("| Meaning in documents | e5-base and e5-spm | 1.04 GB |", text, StringComparison.Ordinal);
+            Assert.Contains("| Speech | Whisper turbo, plus the e5 pair | 547 MB |", text, StringComparison.Ordinal);
+            Assert.Contains("| Hebrew speech | whisper-ivrit, requires speech | 1.51 GB |", text, StringComparison.Ordinal);
+        }
+    }
+
+    /// <summary>
+    /// Every screenshot the front page shows is declared at the size it actually is.
+    ///
+    /// <para><c>TheShareCardIsTheSizeThePageDeclaresAndTheSizeThePlatformsCropTo</c> already makes
+    /// this argument for the share image, and the reasoning is the same one: a declared size that
+    /// disagrees with the file is worse than none at all, because the browser reserves a box from
+    /// the wrong aspect ratio and then reflows the page when the real image decodes. The first-run
+    /// render grew from 820x820 to 820x928 and its attribute did not follow, which is 108 pixels
+    /// of layout shift on the one metric a static page can fail without anybody noticing.</para>
+    /// </summary>
+    [Fact]
+    public void EveryScreenshotIsDeclaredAtTheSizeItActuallyIs()
+    {
+        MatchCollection tags = Regex.Matches(
+            Index, @"<img src=""(?<src>shots/[^""]+)""[^>]*?width=""(?<w>\d+)"" height=""(?<h>\d+)""");
+        // Counting the images independently and requiring equality. ">= 6" against seven images
+        // meant that deleting one image's width/height, or reversing them, dropped it out of the
+        // match set and the test went on passing - for exactly the image it exists to check.
+        int shown = Regex.Matches(Index, @"<img\s[^>]*?src=""shots/").Count;
+        Assert.Equal(shown, tags.Count);
+        Assert.True(tags.Count >= 6, $"expected every shot to declare a size, found {tags.Count}");
+
+        foreach (Match tag in tags)
+        {
+            string relative = $"website/public/{tag.Groups["src"].Value}";
+            (int width, int height) = PngSize(relative);
+
+            Assert.True(width == int.Parse(tag.Groups["w"].Value) &&
+                        height == int.Parse(tag.Groups["h"].Value),
+                        $"{relative} is {width}x{height} on disk and is declared " +
+                        $"{tag.Groups["w"].Value}x{tag.Groups["h"].Value} on the page");
+        }
+    }
+
+
+
+    /// <summary>
+    /// The front page and its Markdown twin ask the same questions, and answer them the same way.
+    ///
+    /// <para>Both are hand-written, so nothing generated holds them together - and they had
+    /// already parted in the commit that created them, the Markdown carrying two questions the
+    /// visible page did not. One of the two was whether Findra needs administrator rights, which
+    /// is the largest install objection a Windows utility has, and it existed only in the layer a
+    /// reader does not read.</para>
+    ///
+    /// <para>The generated pages have <c>EverySentenceInTheMarkdownReachesThePage</c> for this
+    /// and the front page had nothing, because it is the one page the generator does not write.
+    /// That is a reason to test it, not a reason to leave it alone.</para>
+    /// </summary>
+    [Fact]
+    public void TheFrontPageAndItsMarkdownTwinAskTheSameQuestions()
+    {
+        string section = Between(Index, @"<section id=""questions"">", "<!-- ================= install");
+
+        List<string> onThePage = Regex.Matches(section, @"<h3>(.*?)</h3>")
+            .Select(m => WebUtility.HtmlDecode(m.Groups[1].Value).Trim())
+            .ToList();
+
+        List<string> inTheMarkdown = Regex.Matches(Repo.Read("website/content/home.md"), @"(?m)^### (.+)$")
+            .Select(m => m.Groups[1].Value.Trim())
+            .ToList();
+
+        Assert.Equal(inTheMarkdown, onThePage);
+
+        // And the structured data says what the prose says, rather than a third version of it.
+        Match block = Regex.Match(
+            Index, @"<script type=""application/ld\+json"">(?<json>.*?)</script>", RegexOptions.Singleline);
+        using JsonDocument document = JsonDocument.Parse(block.Groups["json"].Value);
+        JsonElement faq = document.RootElement.GetProperty("@graph")
+            .EnumerateArray().Single(n => n.GetProperty("@type").GetString() == "FAQPage");
+
+        Assert.Equal(onThePage,
+                     faq.GetProperty("mainEntity").EnumerateArray()
+                        .Select(q => q.GetProperty("name").GetString()!).ToList());
+
+        // And the ANSWERS, which is what the summary above promises and what the first version of
+        // this test did not do - so the structured copy of the answer that disclaims any Microsoft
+        // relationship silently lost a paragraph while this passed.
+        List<string> answersOnThePage = Regex
+            .Matches(section, @"<article class=""excuse reveal"">\s*<h3>.*?</h3>\s*(.*?)\s*</article>",
+                     RegexOptions.Singleline)
+            .Select(m => Flatten(m.Groups[1].Value))
+            .ToList();
+
+        List<string> answersInTheGraph = faq.GetProperty("mainEntity").EnumerateArray()
+            .Select(q => Flatten(q.GetProperty("acceptedAnswer").GetProperty("text").GetString()!))
+            .ToList();
+
+        Assert.Equal(answersOnThePage, answersInTheGraph);
+
+        // And the Markdown twin's answers, which were compared to nothing at all - so the copy an
+        // agent fetches could say something the page does not, which is what it had begun to do.
+        string markdown = Repo.Read("website/content/home.md");
+        string questionsBlock = Between(markdown, "## Questions people ask before they install it", "## Privacy");
+
+        List<string> answersInTheMarkdown = Regex
+            .Split(questionsBlock, @"(?m)^### .+$")
+            .Skip(1)
+            .Select(body => FlattenMarkdown(body))
+            .ToList();
+
+        Assert.Equal(answersOnThePage, answersInTheMarkdown);
+    }
+
+    /// <summary>Markup and runs of whitespace out, so two spellings of the same sentence compare
+    /// equal and two different sentences do not.</summary>
+    private static string Flatten(string fragment)
+    {
+        string text = Regex.Replace(WebUtility.HtmlDecode(Regex.Replace(fragment, "<[^>]+>", " ")), @"\s+", " ").Trim();
+        // Removing an inline element leaves a space in front of whatever punctuation followed it.
+        return Regex.Replace(text, @"\s+([.,;:])(?=\s|$)", "$1");
+    }
+
+    /// <summary>The same flattening for Markdown: inline code fences and bold markers out, so a
+    /// sentence written for a reader compares equal to the same sentence written for a page.</summary>
+    private static string FlattenMarkdown(string text) =>
+        Regex.Replace(
+            Regex.Replace(Regex.Replace(text, @"`([^`]*)`", "$1"), @"\*\*([^*]*)\*\*", "$1"),
+            @"\s+", " ").Trim();
+
+    /// <summary>The text between two markers, so a section can be read without a parser.</summary>
+    private static string Between(string text, string start, string end)
+    {
+        int from = text.IndexOf(start, StringComparison.Ordinal);
+        Assert.True(from >= 0, $"{start} is not on the page");
+        int to = text.IndexOf(end, from, StringComparison.Ordinal);
+        Assert.True(to >= 0, $"{end} does not follow {start}");
+        return text[from..to];
+    }
+
+
+    /// <summary>
+    /// Every surface that prints the winget command says the catalogue does not carry it yet.
+    ///
+    /// <para>`winget install blakazulu.Findra` is the primary call to action on six surfaces and
+    /// it returns "No package found matching input criteria": the manifest is submitted and
+    /// waiting on a moderator. An assistant repeating the command sends somebody to an error,
+    /// which reads as an abandoned product rather than an unlisted one.</para>
+    ///
+    /// <para><see cref="Repo.WingetIsInTheCatalogue"/> is the one edit that retires this. Flip it
+    /// the day the manifest merges and this test starts requiring the opposite - that no surface
+    /// still hedges - so the qualification cannot be left behind either.</para>
+    /// </summary>
+    [Fact]
+    public void EverySurfaceThatPrintsTheWingetCommandSaysWhetherItResolves()
+    {
+        string[] surfaces =
+        {
+            "README.md", "website/public/index.html", "website/content/home.md",
+            "website/public/index.md", "website/content/about.md", "website/public/about.md",
+            "website/public/about/index.html", "website/public/llms.txt",
+        };
+
+        foreach (string path in surfaces)
+        {
+            // Collapsed first: llms.txt wraps the command across a line break twice, and a
+            // literal search skips every occurrence it has wrapped.
+            // Comments stripped: a hedge nobody can read is not a hedge. Phrases rather than
+            // the stem "moderat", which also matches "a moderate view of unsigned installers".
+            string text = Regex.Replace(WithoutComments(Repo.Read(path)), @"\s+", " ");
+
+            foreach (Match printed in Regex.Matches(text, @"winget install blakazulu\.Findra"))
+            {
+                // Beside the command, not merely somewhere in the file. A hedge in a footer nine
+                // hundred lines below a bare call to action is not a qualification of it.
+                int from = Math.Max(0, printed.Index - 200);
+                int to = Math.Min(text.Length, printed.Index + printed.Length + 400);
+                string near = text[from..to];
+
+                bool hedged = near.Contains("clears moderation", StringComparison.OrdinalIgnoreCase)
+                           || near.Contains("awaiting a moderator", StringComparison.OrdinalIgnoreCase)
+                           || near.Contains("awaiting moderation", StringComparison.OrdinalIgnoreCase)
+                           || near.Contains("does not resolve", StringComparison.OrdinalIgnoreCase);
+
+                Assert.True(hedged == !Repo.WingetIsInTheCatalogue,
+                            Repo.WingetIsInTheCatalogue
+                                ? $"{path} still hedges the winget command at offset {printed.Index}, and the manifest has merged"
+                                : $"{path} prints the winget command at offset {printed.Index} without saying it is not in the catalogue yet");
+            }
+        }
+    }
+
+    /// <summary>
+    /// The site says which hardware has actually run the numbers, on every surface that prints them.
+    ///
+    /// <para><c>ReadmeTests.TheNumbersSayWhichHardwareHasActuallyRunThemAndWhichHasNot</c> holds
+    /// the README to this and nothing held the site, though CLAUDE.md asks for both. The benchmark
+    /// block gets pasted over wholesale on both, and the disclosure is what stops a reader on a
+    /// machine none of it has been tried on believing the figures are theirs.</para>
+    /// </summary>
+    [Theory]
+    [InlineData("website/public/index.html")]
+    [InlineData("website/content/home.md")]
+    [InlineData("website/public/index.md")]
+    [InlineData("website/public/llms.txt")]
+    public void EverySurfaceThatPrintsTheNumbersSaysWhichHardwareRanThem(string path)
+    {
+        // Collapsed, because these files wrap their prose and the sentence spans a line break
+        // in three of the four.
+        string text = Regex.Replace(WithoutComments(Repo.Read(path)), @"\s+", " ");
+        Assert.Contains("AMD and Intel graphics have not been tested on real hardware",
+                        text, StringComparison.Ordinal);
+        Assert.Contains("neither has an arm64 machine", text, StringComparison.Ordinal);
+
+        // Beside the numbers, not merely in the file. A disclosure a reader meets a screen after
+        // the table it qualifies is one an extractor will never carry with the figures.
+        int[] caveats = Regex.Matches(text, "AMD and Intel graphics have not been tested")
+                             .Select(m => m.Index).ToArray();
+        int[] machines = Regex.Matches(text, "AMD Ryzen 9 9900X3D").Select(m => m.Index).ToArray();
+        if (machines.Length > 0)
+        {
+            // Both strings appear more than once - the machine in the structured data and again
+            // under the table, the caveat in an answer and again beside the numbers. What has to
+            // be true is that SOME pair of them is close enough to be read together, in either
+            // direction: llms.txt states the caveat in its facts list above the answer naming the
+            // machine, and index.html names the machine before the table the caveat sits under.
+            int gap = caveats.Min(c => machines.Min(m => Math.Abs(m - c)));
+            Assert.True(gap < 2000,
+                        $"{path} never states the caveat within 2000 characters of the machine; nearest pair is {gap} apart");
+        }
+    }
+
+
+    /// <summary>
+    /// The share image's baked-in line, the alt text that describes it, and the page all say the
+    /// same thing.
+    ///
+    /// <para>The card is drawn by <c>build/Make-Icon.mjs</c> from a constant, and the earlier
+    /// guard read that constant - the generator, not the artefact - which is the same shape of
+    /// mistake as reading a test's own source. It could not fail for somebody editing the
+    /// constant and never running node. Binding the constant to the alt text at least makes the
+    /// three written copies move together; the remaining risk, an un-regenerated PNG, is what
+    /// <c>IconTests</c> covers for the mark and is called out here rather than pretended away.</para>
+    /// </summary>
+    [Fact]
+    public void TheShareCardsLineAndTheAltTextThatDescribesItAgree()
+    {
+        string subline = Regex.Match(Repo.Read("build/Make-Icon.mjs"),
+                                     @"const SUBLINE = \['([^']*)', '([^']*)'\];") is { Success: true } m
+            ? $"{m.Groups[1].Value} {m.Groups[2].Value}"
+            : throw new Xunit.Sdk.XunitException("build/Make-Icon.mjs has no SUBLINE pair");
+
+        // The four generated pages, not only the generator that writes them: editing the template
+        // and never running node leaves four shipped pages disagreeing with the card.
+        // The sidecar exists only if node actually ran: Make-Icon.mjs writes it beside the PNG
+        // in the same pass. Binding the constant to it closes the one hole the earlier version of
+        // this guard admitted to - an edited SUBLINE with a stale card.
+        Assert.Equal(subline, Repo.Read("website/public/share/card.txt").Trim());
+
+        foreach (string path in new[]
+                 { "website/public/index.html", "build/Make-Pages.mjs",
+                   "website/public/about/index.html", "website/public/contact/index.html",
+                   "website/public/privacy/index.html", "website/public/code-signing/index.html" })
+        {
+            string alt = Regex.Match(Repo.Read(path), @"og:image:alt"" content=""([^""]+)""").Groups[1].Value;
+            Assert.True(alt.Length > 0, $"{path} declares no og:image:alt");
+            // The whole string, so the middle cannot drift between the ends.
+            Assert.Equal($"Findra. Windows Search, but it works. {subline}", alt);
+        }
+    }
+
+
+    /// <summary>
+    /// Wherever Findra says how to install it, the route that works is named first.
+    ///
+    /// <para>Three separate reviews found the same thing: the hedge guard checks that a
+    /// qualification exists NEAR the command and can say nothing about ORDER, so every install
+    /// section on the site led with `winget install blakazulu.Findra` - a command that prints
+    /// "No package found matching input criteria" - and put the correction in the sentence after.
+    /// An extractive summariser keeps the lead and drops the caveat, so the most-quoted answer
+    /// the product has was an instruction to run something that fails.</para>
+    ///
+    /// <para>Keyed to the same <see cref="Repo.WingetIsInTheCatalogue"/> flag as the hedge,
+    /// so one edit retires both on the day the manifest merges.</para>
+    /// </summary>
+    [Fact]
+    public void WhereverFindraSaysHowToInstallItTheRouteThatWorksIsNamedFirst()
+    {
+        if (Repo.WingetIsInTheCatalogue)
+        {
+            return;
+        }
+
+        foreach (string path in new[]
+                 { "README.md", "website/public/index.html", "website/content/home.md",
+                   "website/public/index.md", "website/content/about.md", "website/public/about.md",
+                   "website/public/about/index.html", "website/public/llms.txt" })
+        {
+            string text = Regex.Replace(WithoutComments(Repo.Read(path)), @"\s+", " ");
+
+            // EVERY occurrence, the way the hedge guard does it. Reading only the first meant
+            // index.html was judged on its JSON-LD copy, leaving the visible install section free
+            // to lead with the command that fails.
+            foreach (Match printed in Regex.Matches(text, @"winget install blakazulu\.Findra"))
+            {
+                // The releases page has to be named before the command is, in the same breath -
+                // 600 characters is the width of the install paragraph on the widest surface.
+                string before = text[Math.Max(0, printed.Index - 600)..printed.Index];
+                Assert.True(before.Contains("releases page", StringComparison.OrdinalIgnoreCase),
+                            $"{path} names the winget command at offset {printed.Index} before it names the installer that works today");
+            }
+        }
+    }
+
+
+    /// <summary>
+    /// Every footer lists the same links, in the same order.
+    ///
+    /// <para>There are three copies of this footer and there have to be: <c>index.html</c> and
+    /// <c>404.html</c> are hand-written and the other four pages come out of
+    /// <c>build/Make-Pages.mjs</c>. They have drifted twice - once by two missing links, once by
+    /// an Apache-2.0 link pointing at apache.org on one page and at the repository's own LICENCE
+    /// on the other five - and the guard that existed asserted three link texts on one page.</para>
+    ///
+    /// <para>Order, not just membership. A set comparison passes on three footers listing the same
+    /// eight things in three different sequences, which is what they were doing: a reader moving
+    /// between pages found the licence in a different place each time, and it is the cheapest
+    /// possible thing to keep identical.</para>
+    /// </summary>
+    [Fact]
+    public void EveryFooterListsTheSameLinksInTheSameOrder()
+    {
+        string[] pages =
+        {
+            "website/public/index.html", "website/public/404.html",
+            "website/public/about/index.html", "website/public/contact/index.html",
+            "website/public/privacy/index.html", "website/public/code-signing/index.html",
+        };
+
+        List<(string Text, string Href)>? expected = null;
+        string? from = null;
+
+        foreach (string path in pages)
+        {
+            string column = Between(Repo.Read(path), "<strong>THE SMALL PRINT</strong>", "</div>");
+            List<(string Text, string Href)> links = Regex
+                .Matches(column, @"<a href=""(?<href>[^""]+)""[^>]*>(?<text>[^<]+)</a>")
+                .Select(m => (m.Groups["text"].Value.Trim(), m.Groups["href"].Value))
+                .ToList();
+
+            Assert.True(links.Count >= 8, $"{path} lists only {links.Count} small-print links");
+
+            if (expected is null)
+            {
+                expected = links;
+                from = path;
+                continue;
+            }
+
+            Assert.True(expected.SequenceEqual(links),
+                        $"{path} lists the small print differently from {from}:\n" +
+                        $"  {from}: {string.Join(", ", expected.Select(l => l.Text))}\n" +
+                        $"  {path}: {string.Join(", ", links.Select(l => l.Text))}");
+        }
+    }
+
     private static string WithoutComments(string html) =>
         Regex.Replace(html, "<!--.*?-->", " ", RegexOptions.Singleline);
 

@@ -226,6 +226,11 @@ public class ReadmeTests
         Assert.Contains("AMD and Intel graphics have not been tested on real hardware",
                         Readme, StringComparison.Ordinal);
 
+        // The arm64 half, which the site is held to and this file was not - though the README is
+        // the surface whose benchmark block is replaced wholesale on every regeneration.
+        Assert.Contains("neither has an arm64 machine",
+                        Regex.Replace(Readme, @"\s+", " "), StringComparison.Ordinal);
+
         // Above the fragment, not inside it. The fragment is quoted verbatim from the tool, and a
         // hand-written paragraph in the middle of it makes "pasted without editing" untrue.
         int disclosure = Readme.IndexOf("AMD and Intel graphics have not been tested",

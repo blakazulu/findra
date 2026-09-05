@@ -92,7 +92,7 @@ public static class ModelsCommand
     /// content indexing to be turned on.</para>
     ///
     /// <para>Every size is MARGINAL given <paramref name="installed"/> -
-    /// <see cref="Capabilities.MarginalBytes"/>, never a fixed number. Speech is 818 MB on a bare
+    /// <see cref="Capabilities.MarginalBytes"/>, never a fixed number. Speech is 1.57 GB on a bare
     /// machine and 547 MB beside documents' meaning, and a fixed table makes the total visibly
     /// fail to add up.</para>
     ///
