@@ -1098,6 +1098,88 @@ public class WebsiteTests
         }
     }
 
+
+    /// <summary>
+    /// Every shot is delivered through the Image CDN, and every transformed URL names the same
+    /// file the fallback does.
+    ///
+    /// <para>The six grid shots and the hero are 820px PNGs rendered into a slot about 360px wide
+    /// on a phone, so they go out through Netlify's Image CDN as AVIF and WebP at two widths, with
+    /// the original PNG left as the <c>&lt;img&gt;</c> fallback. That last part is deliberate and
+    /// is what keeps two other promises intact: the bytes under <c>website/public/shots</c> are
+    /// untouched, so <c>SiteShotTests</c> still holds them byte-identical to <c>docs/shots</c>,
+    /// and the page's claim that running the printed <c>--searchshot</c> command reproduces the
+    /// picture stays true - what the CDN changes is the encoding on the wire, not the render.</para>
+    ///
+    /// <para>The failure this guards against is a source pointing at a different shot from the
+    /// img beside it: a reader would see one picture and a crawler would fetch another, and
+    /// nothing about the page would look wrong.</para>
+    /// </summary>
+    [Fact]
+    public void EveryShotIsServedThroughTheImageCdnAndNamesItsOwnFile()
+    {
+        MatchCollection pictures = Regex.Matches(Index, "<picture>(?<body>.*?)</picture>", RegexOptions.Singleline);
+
+        int shots = Regex.Matches(Index, @"<img\s[^>]*?src=""shots/").Count;
+        Assert.Equal(shots, pictures.Count);
+        Assert.True(shots >= 7, $"expected every shot to be wrapped, found {shots}");
+
+        foreach (Match picture in pictures)
+        {
+            string body = picture.Groups["body"].Value;
+
+            string file = Regex.Match(body, @"<img\s[^>]*?src=""shots/(?<name>[^""]+)""").Groups["name"].Value;
+            Assert.True(file.Length > 0, "a <picture> carries no <img> pointing at shots/");
+
+            // Both formats, so a browser without AVIF still gets something smaller than the PNG.
+            foreach (string format in new[] { "avif", "webp" })
+            {
+                Assert.Contains($@"<source type=""image/{format}""", body, StringComparison.Ordinal);
+            }
+
+            // Every transformed URL is the same file as the fallback.
+            MatchCollection urls = Regex.Matches(body, @"/\.netlify/images\?url=/shots/(?<name>[^&]+)&amp;w=(?<w>\d+)&amp;fm=(?<fm>\w+)");
+            Assert.True(urls.Count >= 4, $"{file} offers {urls.Count} transformed URLs, expected two per format");
+
+            foreach (Match url in urls)
+            {
+                Assert.Equal(file, url.Groups["name"].Value);
+            }
+
+            // And the widest one is the real width, so the CDN is never asked to upscale.
+            int declared = int.Parse(Regex.Match(body, @"<img\s[^>]*?width=""(?<w>\d+)""").Groups["w"].Value);
+            Assert.Equal(declared, urls.Select(u => int.Parse(u.Groups["w"].Value)).Max());
+        }
+    }
+
+    /// <summary>
+    /// The IndexNow key file is named for what it contains, and the sitemap is what gets submitted.
+    ///
+    /// <para>The engines fetch <c>https://findra-search.netlify.app/&lt;key&gt;.txt</c> and compare
+    /// its contents to the key in the submission; a mismatch is rejected silently, which is the
+    /// worst shape a failure can take for something run by hand a few times a year. The key exists
+    /// in one place - the file - and <c>build/Ping-IndexNow.mjs</c> reads it from there rather than
+    /// holding a second copy.</para>
+    /// </summary>
+    [Fact]
+    public void TheIndexNowKeyFileIsNamedForWhatItContains()
+    {
+        string[] keys = Directory.GetFiles(Repo.Path_("website/public"), "*.txt")
+            .Select(Path.GetFileName)
+            .Where(name => Regex.IsMatch(name!, "^[0-9a-f]{8,128}\\.txt$"))
+            .ToArray()!;
+
+        Assert.True(keys.Length == 1, $"expected exactly one IndexNow key file, found {keys.Length}");
+
+        string key = keys[0]!.Replace(".txt", string.Empty);
+        Assert.Equal(key, Repo.Read($"website/public/{keys[0]}").Trim());
+
+        // The submitter reads the key off disk. If it ever gains a literal of its own, this is the
+        // assertion that notices before the engines do.
+        string script = Repo.Read("build/Ping-IndexNow.mjs");
+        Assert.DoesNotContain(key, script, StringComparison.Ordinal);
+    }
+
     private static string WithoutComments(string html) =>
         Regex.Replace(html, "<!--.*?-->", " ", RegexOptions.Singleline);
 
