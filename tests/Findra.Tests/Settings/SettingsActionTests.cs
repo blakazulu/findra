@@ -21,6 +21,7 @@ public class SettingsActionTests
         public void PickFolder() => Calls.Add("folder");
         public void InstallCapability(Capability c) => Calls.Add("install:" + c);
         public void CheckNow() => Calls.Add("check");
+        public void UpdateNow() => Calls.Add("update");
         public void RecentreCapsule() => Calls.Add("recentre");
         public void StartIndexing() => Calls.Add("start");
     }
@@ -31,7 +32,7 @@ public class SettingsActionTests
         // Driven off the enum itself, so an action added later without an arm fails here on the
         // commit that adds it rather than on somebody's desktop.
         //
-        // Counting the calls is not enough, and the name of this test says so: six of the nine
+        // Counting the calls is not enough, and the name of this test says so: six of the ten
         // arms could have been cross-wired to any other host method and the count stayed at one.
         // What each action must reach is written down here, beside the enum, so a swapped arm is a
         // failure rather than a surprise on a stranger's machine.
@@ -45,6 +46,7 @@ public class SettingsActionTests
             [SettingsAction.PickFolder] = "folder",
             [SettingsAction.InstallCapability] = "install:Photos",
             [SettingsAction.CheckNow] = "check",
+            [SettingsAction.UpdateNow] = "update",
             [SettingsAction.RecentreCapsule] = "recentre",
             [SettingsAction.StartIndexing] = "start",
         };

@@ -1,4 +1,7 @@
-﻿using Findra;
+﻿using System.Text;
+using System.Text.RegularExpressions;
+
+using Findra;
 using Xunit;
 
 public class UpdateCheckTests
@@ -138,8 +141,55 @@ public class UpdateCheckTests
         // UseCookies and AllowAutoRedirect live on the SocketsHttpHandler passed to the
         // HttpClient constructor; HttpClient does not re-expose either once wrapped, so this
         // asserts the one setting that is observable from the outside.
+        //
+        // The cap must still BE a cap - the point of it is that a captive portal or a MITM
+        // cannot make Findra buffer unboundedly inside the fetch's ten second timeout.
         using HttpClient client = UpdateCheck.CreateClient();
-        Assert.Equal(64 * 1024, client.MaxResponseContentBufferSize);
+        Assert.True(client.MaxResponseContentBufferSize > 0, "there is no cap at all");
+        Assert.True(client.MaxResponseContentBufferSize <= 16 * 1024 * 1024,
+                    "a cap this large is not a cap");
+    }
+
+    [Fact]
+    public void TheCapIsBiggerThanThisRepositorysOwnReleaseNotes()
+    {
+        // The cap was 64 KB, under a comment calling that "comfortably larger than a release JSON
+        // payload". That was a guess about somebody else's response and it was wrong on the very
+        // first release. /releases/latest carries the release BODY; release.yml puts the matching
+        // CHANGELOG section in the body verbatim; 0.1.0's section is 82,552 bytes inside a 90,086
+        // byte payload. So every launch logged
+        //
+        //     update check failed: Cannot write more bytes to the buffer than the configured
+        //     maximum buffer size: 65536
+        //
+        // and no installed copy could ever learn that a newer version existed. Findra's one
+        // network feature, broken from the first release by the size of its own release notes -
+        // and self-reinforcing, because the more there is to tell somebody about, the more surely
+        // they are not told.
+        //
+        // The cap is coupled to the fact that decides the payload rather than to a guess about it.
+        // Every `## [...]` section is measured, Unreleased included, because that one becomes the
+        // next release's body.
+        string changelog = Repo.Read("CHANGELOG.md");
+        MatchCollection heads = Regex.Matches(changelog, @"(?m)^##\s+\[[^\]]+\]");
+        Assert.True(heads.Count > 0, "CHANGELOG.md has no sections, so this measured nothing");
+
+        int biggest = 0;
+        for (int i = 0; i < heads.Count; i++)
+        {
+            int from = heads[i].Index;
+            int to = i + 1 < heads.Count ? heads[i + 1].Index : changelog.Length;
+            biggest = Math.Max(biggest, Encoding.UTF8.GetByteCount(changelog[from..to]));
+        }
+
+        using HttpClient client = UpdateCheck.CreateClient();
+
+        // Four times over, because the body is JSON-escaped inside a payload that also carries
+        // the author, the assets and their URLs - and because a section only ever grows.
+        Assert.True(client.MaxResponseContentBufferSize > (long)biggest * 4,
+            $"the largest CHANGELOG section is {biggest:N0} bytes and the response cap is " +
+            $"{client.MaxResponseContentBufferSize:N0}. The release body is that section, so the " +
+            "update check would fail on every launch and nobody would hear about a new version.");
     }
 
     [Fact]

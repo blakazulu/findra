@@ -71,6 +71,10 @@ public static class SettingsPainter
                    chosen: false, hovered: s.HoverTarget == PanelTarget.Close, d, face);
         CardText.Draw(canvas, "Changes are saved as you make them.",
                       RailLayout.Pad + 8, RailLayout.Height - 24, 11.5f, face, d.Fade(140));
+
+        // Last, and over everything: a question the person asked, with the pane still visible
+        // behind it so they do not lose their place. None means there is nothing to draw.
+        if (s.Prompt != UpdatePromptState.None) Prompt(canvas, s, d, face);
     }
 
     private static void Row(SKCanvas canvas, Control c, int i, IReadOnlyList<int> notes,
@@ -147,5 +151,49 @@ public static class SettingsPainter
                           r.Left + 8, r.MidY + 4, 12f, face, d.Fade(180));
             CardText.Draw(canvas, "×", r.Right - 16, r.MidY + 4, 13f, face, d.Fade(150));
         }
+    }
+
+    /// <summary>
+    /// The update panel, over everything else and drawn last.
+    ///
+    /// <para>The scrim is what makes it a question rather than a decoration: the pane behind is
+    /// still visible, so nobody loses their place, and it is plainly not the thing being asked.
+    /// The hit test refuses everything behind it for the same reason, so the two agree about what
+    /// is live - a dimmed control that still takes a press is the worst of both.</para>
+    /// </summary>
+    private static void Prompt(SKCanvas canvas, SettingsState s, Derived d, SKTypeface face)
+    {
+        string title = UpdatePrompt.Title(s.Prompt, s.Latest);
+        string body = UpdatePrompt.Body(s.Prompt, s.Version, s.Latest, s.Config.InstallSource);
+        int buttons = UpdatePrompt.Buttons(s.Prompt);
+
+        int lines = Parts.Wrap(body, face, Parts.NoteSize, UpdatePrompt.Width - 2 * UpdatePrompt.Pad).Count;
+        SKRect panel = UpdatePrompt.Panel(RailLayout.Width, RailLayout.Height, lines, buttons);
+
+        using (var scrim = new SKPaint { Color = d.Ground.WithAlpha(196), IsAntialias = true })
+            canvas.DrawRoundRect(new SKRoundRect(new SKRect(0, 0, RailLayout.Width, RailLayout.Height),
+                                                 RailLayout.Radius), scrim);
+
+        using (var fill = new SKPaint { Color = d.Tile, IsAntialias = true })
+            canvas.DrawRoundRect(new SKRoundRect(panel, UpdatePrompt.Radius), fill);
+        using (var edge = new SKPaint
+        { Color = d.Accent.WithAlpha(96), IsAntialias = true, Style = SKPaintStyle.Stroke, StrokeWidth = 1.4f })
+            canvas.DrawRoundRect(new SKRoundRect(panel, UpdatePrompt.Radius), edge);
+
+        float x = panel.Left + UpdatePrompt.Pad;
+        CardText.Draw(canvas, title, x, panel.Top + UpdatePrompt.Pad + UpdatePrompt.TitleSize,
+                      UpdatePrompt.TitleSize, face, d.Ink);
+        Parts.Note(canvas, body,
+                   new SKRect(x, panel.Top + UpdatePrompt.Pad + UpdatePrompt.TitleSize + 14f,
+                              panel.Right - UpdatePrompt.Pad, panel.Bottom - UpdatePrompt.Pad),
+                   d, face);
+
+        if (buttons >= 1)
+            Parts.Pill(canvas, UpdatePrompt.Button(panel, 0, buttons), UpdatePrompt.CloseLabel(s.Prompt),
+                       chosen: buttons == 1, hovered: s.PromptHover == UpdatePromptTarget.Close, d, face);
+        if (buttons == 2)
+            Parts.Pill(canvas, UpdatePrompt.Button(panel, 1, buttons),
+                       UpdatePrompt.GoLabel(s.Prompt, s.Config.InstallSource),
+                       chosen: true, hovered: s.PromptHover == UpdatePromptTarget.Go, d, face);
     }
 }

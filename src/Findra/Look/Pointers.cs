@@ -51,6 +51,16 @@ public static class Pointers
         _ => throw new ArgumentOutOfRangeException(nameof(target), target, "no pointer shape for this panel target"),
     };
 
+    /// <summary>The update panel's two buttons. Its own map rather than PanelTarget's, because
+    /// the panel is drawn OVER the pane rather than in it - sharing the enum would mean a row
+    /// underneath could claim a shape for a click it will never receive.</summary>
+    public static PointerShape ForPrompt(UpdatePromptTarget target) => target switch
+    {
+        UpdatePromptTarget.None => PointerShape.Arrow,
+        UpdatePromptTarget.Close or UpdatePromptTarget.Go => PointerShape.Hand,
+        _ => throw new ArgumentOutOfRangeException(nameof(target), target, "no pointer shape for this prompt target"),
+    };
+
     public static PointerShape ForFirstRun(FirstRunTarget target) => target switch
     {
         FirstRunTarget.None => PointerShape.Arrow,

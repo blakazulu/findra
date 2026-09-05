@@ -7,7 +7,20 @@ and Findra follows [Semantic Versioning](https://semver.org/spec/v2.0.0/).
 
 ## [Unreleased]
 
+### Added
+
+- **Check now answers you.** Pressing it in Settings brings up a panel that says either "You have
+  the latest version" with a Close button, or names the new version with Not now and Update now.
+  Update now runs the upgrade the way you would have run it yourself - `winget upgrade
+  blakazulu.Findra` in a window you can watch, or the releases page if you installed some other
+  way. Findra still never replaces itself. The answer used to appear in a line of text three rows
+  above the button, which almost nobody noticed.
+
 ### Changed
+
+- **The update check works at all.** It has never once succeeded: it capped the reply from GitHub
+  at 64 KB, and a Findra release announcement is its whole changelog section, which is larger than
+  that. Every launch failed quietly and no copy could ever have told you a new version existed.
 
 - **Indexing takes three quarters of its duty cycle by default, up from half.** The first pass is
   the one time the work is genuinely urgent and it only happens once, so holding the machine back

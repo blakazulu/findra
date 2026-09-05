@@ -43,6 +43,12 @@ public enum SettingsAction
     InstallCapability,
     CheckNow,
 
+    /// <summary>Start the upgrade the way the person would have started it: winget in a window
+    /// they can watch, or the releases page. Findra still replaces nothing itself - spec 9b's
+    /// rule is about who does the replacing, and the answer stays winget or the installer.
+    /// </summary>
+    UpdateNow,
+
     /// <summary>Put the capsule back where it can be seen, NOW, not at the next launch.
     ///
     /// <para>Clearing <c>CapsuleX</c>/<c>CapsuleY</c> is only half of it: the capsule window is
@@ -160,6 +166,25 @@ public sealed record SettingsState(Config Config)
     public PanelTarget HoverTarget { get; init; } = PanelTarget.None;
     public int HoverRow { get; init; } = -1;
     public int HoverOption { get; init; } = -1;
+
+    /// <summary>
+    /// The update panel, or <see cref="UpdatePromptState.None"/> when there is not one.
+    ///
+    /// <para>A field of its own rather than something derived from <see cref="Update"/>, because
+    /// the two answer different questions. <c>Update</c> is what the last check FOUND, whenever it
+    /// ran; this is whether somebody is standing in front of a question they asked. The background
+    /// check runs on startup at most once a day and must never raise a panel over anything - a
+    /// person who asked nothing is not waiting for an answer.</para>
+    ///
+    /// <para>Transient, like <see cref="Busy"/>: it belongs to this window's session and is never
+    /// written to the configuration.</para>
+    /// </summary>
+    public UpdatePromptState Prompt { get; init; } = UpdatePromptState.None;
+
+    /// <summary>Which button in the panel the pointer is over. Separate from
+    /// <see cref="HoverTarget"/> because the panel is over the pane rather than in it, and a row
+    /// underneath must not light up through it.</summary>
+    public UpdatePromptTarget PromptHover { get; init; } = UpdatePromptTarget.None;
 }
 
 /// <summary>
