@@ -203,6 +203,16 @@ and Findra follows [Semantic Versioning](https://semver.org/spec/v2.0.0/).
   in three different sequences, so the licence moved as you walked between pages. The guard that
   existed compared three link texts on one page; it compares the whole ordered list on all six now.
 
+- **The screenshots go out as AVIF and WebP, at the size they are shown.** They were 820-pixel PNGs
+  sent whole to a phone that renders them about a third that wide, which is most of what the page
+  weighs. The files in the repository are untouched and the original PNG is still the fallback, so
+  the pictures are the same renders and the printed command still reproduces them.
+
+- **Findra tells the search engines when the site changes.** A new page on a four-day-old address
+  with nothing linking to it waits a long time to be found. `node build/Ping-IndexNow.mjs` says
+  what it would submit and sends nothing; `--send` submits. It is run by hand, like the other
+  generators, because a submission is a claim that the pages really changed.
+
 - **The website stopped telling machines that Findra cannot be downloaded yet.** The structured
   data the page carries for search engines and assistants still said the release was a pre-order
   and pointed its download link at the repository root rather than at the releases page. Neither
