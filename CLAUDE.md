@@ -61,11 +61,21 @@ pwsh -File build/Make-Shots.ps1 -Exe publish/win-x64/findra.exe   # redraw every
                                                # README; keeping a second list is the bug.
 node build/Make-Icon.mjs                       # regenerate the mark - the .ico compiled into the
                                                # exe, both SVGs, the installer's wizard image, the
-                                               # site's favicon and the two share images. By hand,
-                                               # when the mark changes; nothing in the build runs it.
+                                               # site's favicon.svg, favicon.ico and 180px
+                                               # apple-touch-icon, and the two share images with the
+                                               # card's own subline written out beside them as
+                                               # share/card.txt. By hand, when the mark changes;
+                                               # nothing in the build runs it.
 node build/Make-Pages.mjs                      # regenerate /about/, /contact/ and /privacy/ from
                                                # their Markdown, and copy each source verbatim
                                                # beside its page. By hand, when the prose changes.
+node build/Ping-IndexNow.mjs [--send]          # tell Bing and Yandex the site changed, instead
+                                               # of waiting to be discovered. Prints the URLs and
+                                               # sends nothing without --send. By hand, AFTER the
+                                               # deploy carrying the change is live - a submission
+                                               # is a claim that these pages really changed, and
+                                               # firing one on every push is how a site teaches an
+                                               # engine to stop believing its signal.
 node tests/edge/markdown.test.mjs               # the site's Accept negotiation, as a table. The
                                                # one thing in this repository CI runs node for.
 ```
@@ -468,6 +478,31 @@ page lie about itself.
   place.
 - **Every number is a `--searchbench` measurement** beside the machine that produced it, as in
   the README.
+
+**IndexNow is not the page reaching out, and the distinction is the whole point.** Findra's site
+is days old on a shared subdomain with nothing linking to it, so the ordinary route to being
+crawled - somebody else pointing at it - is not available. `build/Ping-IndexNow.mjs` submits the
+sitemap's URLs to Bing and Yandex, and Bing is the one that matters, because Copilot answers out of
+Bing's index. It runs from a developer's machine, by hand, after a deploy; nothing on the page and
+nothing in the browser makes that request, so the policy below is untouched by it. Two things about
+it are load-bearing. **`--send` is required**, because a submission asserts that the pages really
+changed, and one fired on every push - including the pushes that only touch a test - trains the
+engine to discount the signal. And **the key exists only in the file the engines fetch**,
+`website/public/<key>.txt`, which the script reads rather than holding a copy of: they GET that file
+and compare it to the key in the submission, a mismatch is rejected silently, and a key written
+down twice is a key that will one day be written down differently. `TheIndexNowKeyFileIsNamedForWhatItContains`
+holds the file to its own name and asserts the key appears nowhere in the script.
+
+**The screenshots are delivered through Netlify's Image CDN and the files behind them are
+untouched.** Each shot sits in a `<picture>` offering AVIF and WebP at two widths through
+`/.netlify/images`, with the original PNG left as the `<img>` fallback - 104 KB becomes about 15 KB
+at phone width. Leaving the PNG in place is what keeps two promises true at once: `SiteShotTests`
+still holds `website/public/shots` byte-identical to `docs/shots`, and the section headed "Every
+picture below is the product" still means it, because what the CDN changes is the encoding on the
+wire rather than the render. `/.netlify/images` is same-origin, so the policy below does not move.
+`EveryShotIsServedThroughTheImageCdnAndNamesItsOwnFile` requires every transformed URL to name the
+same file as the `<img>` beside it, which is the failure worth catching: a reader would see one
+picture while a crawler fetched another, and nothing about the page would look wrong.
 
 **The content security policy is a promise the page makes about itself.** A page selling
 "nothing leaves your machine" must not itself be reaching out, so `netlify.toml` permits

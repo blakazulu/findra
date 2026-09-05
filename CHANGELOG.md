@@ -213,6 +213,10 @@ and Findra follows [Semantic Versioning](https://semver.org/spec/v2.0.0/).
   what it would submit and sends nothing; `--send` submits. It is run by hand, like the other
   generators, because a submission is a claim that the pages really changed.
 
+- **The contributor guide lists the script that submits the site, and what the mark generator
+  actually writes.** Both were missing from the command list, which is the one place somebody
+  looks before running anything.
+
 - **The website stopped telling machines that Findra cannot be downloaded yet.** The structured
   data the page carries for search engines and assistants still said the release was a pre-order
   and pointed its download link at the repository root rather than at the releases page. Neither
