@@ -33,6 +33,13 @@ and Findra follows [Semantic Versioning](https://semver.org/spec/v2.0.0/).
 
 ### Changed
 
+- **Passages too short to mean anything no longer out-rank real answers.** A sentence or two
+  embeds to a point near the middle of the model's idea of meaning, which is close to every
+  possible search at once - so a stray "Payment complete. Thank you for subscribing." beat the
+  documents that answered the question, for unrelated questions. Almost every document ends in a
+  fragment like that. Those chunks stay stored and stay searchable by their words; they simply
+  stop claiming to have a meaning. Nothing is skipped and nothing became unfindable.
+
 - **Reading inside documents is faster on a graphics card.** The card was being asked to prepare
   fresh machinery for nearly every batch, because the batch's shape was whatever that document's
   chunks happened to be. Shapes are rounded now, so the same machinery is reused.

@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.IO.Compression;
@@ -261,6 +261,59 @@ public static class DocText
             pos = Math.Max(pos + 1, end - overlap);
         }
         return chunks;
+    }
+
+    /// <summary>Whether a chunk is allowed to claim a meaning.
+    ///
+    /// <para>A passage embeds to a point, and a passage too short to say one thing rather than
+    /// another lands near the middle of the space - which is close to every query at once. Such a
+    /// chunk does not score badly against unrelated words; it scores WELL against all of them, and
+    /// it out-ranks the documents that actually answer the question. Ordinary English sentences do
+    /// this: "Payment complete. Thank you for subscribing." is not junk, it simply does not mean
+    /// one thing. Nearly every document ends in one, because <see cref="Chunk"/> keeps anything
+    /// over forty characters.</para>
+    ///
+    /// <para><b>Nothing is skipped by this.</b> The chunk is still stored and still full-text
+    /// indexed, exactly as the words read out of a picture are - so every word in it stays
+    /// findable and only the vector is withheld. That is the whole difference between this and a
+    /// rule that decides on somebody's behalf what is worth reading.</para>
+    ///
+    /// <para>Three thresholds, because each catches a shape the others let through: sixty short
+    /// words can be under four hundred characters, four hundred characters can be nine long ones,
+    /// and a boilerplate footer repeated down a page clears both while saying one word.</para>
+    /// </summary>
+    public const int MinEmbedChars = 400, MinEmbedWords = 60, MinEmbedDistinct = 25;
+
+    public static bool WorthEmbedding(string chunk)
+    {
+        if (string.IsNullOrWhiteSpace(chunk) || chunk.Length < MinEmbedChars) return false;
+
+        int words = 0;
+        var distinct = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        int start = -1;
+        for (int i = 0; i <= chunk.Length; i++)
+        {
+            bool part = i < chunk.Length && (char.IsLetterOrDigit(chunk[i]) || chunk[i] == '\'');
+            if (part && start < 0) start = i;
+            else if (!part && start >= 0)
+            {
+                words++;
+                distinct.Add(chunk[start..i]);
+                start = -1;
+            }
+        }
+        if (words < MinEmbedWords || distinct.Count < MinEmbedDistinct) return false;
+
+        // What is left of a component template after its tags are stripped: button labels and
+        // interpolation markers. `.html` is a document extension because people save articles, and
+        // on a machine whose work lives in repositories it is mostly Angular and Vue - which the
+        // kind table already refuses in every other form it comes in.
+        //
+        // A DENSITY, never the presence of the characters. A document explaining template syntax
+        // is a document, and refusing it would be this same defect one level along.
+        int markers = 0;
+        for (int i = 1; i < chunk.Length; i++) if (chunk[i] == '{' && chunk[i - 1] == '{') markers++;
+        return markers * 200 <= chunk.Length;
     }
 
     private static int LastBreak(string s, int from, int to)

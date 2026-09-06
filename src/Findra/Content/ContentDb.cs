@@ -53,7 +53,7 @@ public sealed class ContentDb : IDisposable
 
     /// <summary>The relational shape of this database. Bumped only when a change makes rows
     /// already on disk mean something different.</summary>
-    public const int SchemaVersion = 4;
+    public const int SchemaVersion = 5;
 
     /// <summary>One schema step. <c>InvalidatedKinds</c> is what that step made stale - and
     /// nothing else is re-queued. Re-indexing a finished disk because an upgrade did not look
@@ -118,6 +118,22 @@ public sealed class ContentDb : IDisposable
         new(To: 4, InvalidatedKinds:
                 [(int)ResultKind.Document, (int)ResultKind.Audio, (int)ResultKind.Video],
             Reason: "the meaning model is full precision now, so every vector it wrote is stale"),
+
+        // A chunk too short to mean one thing lands near the centre of the embedding space, which
+        // is close to every query at once - so it does not score badly against unrelated words, it
+        // scores WELL against all of them and out-ranks the documents that answer the question.
+        // Every document written before this step has such a chunk at its end, because Chunk()
+        // keeps anything over forty characters.
+        //
+        // Documents only. A transcript line is short by its nature and is embedded one line at a
+        // time; holding speech to a length written for prose would take meaning search away from
+        // recordings entirely, which is a bigger loss than the one being fixed. That is a decision
+        // rather than an oversight.
+        //
+        // No ReWalk: which files are eligible has not changed, only what is stored about the ones
+        // already known.
+        new(To: 5, InvalidatedKinds: [(int)ResultKind.Document],
+            Reason: "chunks too short to mean one thing no longer carry a vector"),
     ];
 
     private readonly SqliteConnection _c;
