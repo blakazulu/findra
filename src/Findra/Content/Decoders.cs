@@ -336,13 +336,28 @@ public sealed class Decoders : IDecoders
         }
 
         E5Encoder e5 = E5();
-        for (int i = 0; i < chunks.Count; i += 16)
+        var rows = new long[chunks.Count];
+        Array.Fill(rows, -1L);
+
+        // Only the chunks long enough to say one thing are embedded. The rest keep Vec = -1, which
+        // is the same shape a document indexed without Meaning has: stored, full-text indexed,
+        // every word findable, no claim to a meaning. See DocText.WorthEmbedding for why a short
+        // passage is not merely a weak match but a strong one against everything.
+        var worth = new List<int>(chunks.Count);
+        for (int i = 0; i < chunks.Count; i++) if (DocText.WorthEmbedding(chunks[i])) worth.Add(i);
+
+        for (int i = 0; i < worth.Count; i += E5Encoder.Batch)
         {
-            List<string> batch = chunks.GetRange(i, Math.Min(16, chunks.Count - i));
-            float[][] vs = e5.EncodePassages(batch.ConvertAll(c => E5Encoder.Passage(path, c)));
-            for (int k = 0; k < batch.Count; k++)
-                segs.Add(new ContentDb.Segment(ContentDb.SegText, -1, -1, Append(vs[k], ContentDb.SegText), batch[k]));
+            int n = Math.Min(E5Encoder.Batch, worth.Count - i);
+            var batch = new List<string>(n);
+            for (int k = 0; k < n; k++) batch.Add(E5Encoder.Passage(path, chunks[worth[i + k]]));
+            float[][] vs = e5.EncodePassages(batch);
+            for (int k = 0; k < n; k++) rows[worth[i + k]] = Append(vs[k], ContentDb.SegText);
         }
+
+        // In the document's own order, embedded or not: the stored text is what a result shows.
+        for (int i = 0; i < chunks.Count; i++)
+            segs.Add(new ContentDb.Segment(ContentDb.SegText, -1, -1, rows[i], chunks[i]));
         return new KindResult(segs, null);
     }
 

@@ -697,6 +697,23 @@ speech              ─  whisper-turbo + [e5 pair]              550 MB (+1.04 GB
   list whose only job is arguing with a rule nobody asked for. What a checkout really buries an
   index with is already in `FileKinds.DefaultExclusions` - `node_modules`, `.git`, `bin`, `obj`,
   `packages`, `site-packages` - where each is a line the person it belongs to can read and delete.
+- **A passage has to be long enough to mean one thing before it may claim a meaning.**
+  `DocText.WorthEmbedding` withholds the vector from a chunk under 400 characters, 60 words or 25
+  distinct words. The reason is not that such a chunk matches badly - it is that it matches
+  everything: a short passage embeds near the centre of the model's space, which is close to every
+  query at once, and it out-ranks the documents that actually answer the question. Ordinary English
+  does this. "Payment complete. Thank you for subscribing." is not junk, and nearly every document
+  ends in one, because `Chunk` keeps anything over forty characters. Three thresholds because each
+  catches what the others let through: sixty short words fit in under 400 characters, 400 characters
+  can be nine long ones, and a footer repeated down a page clears both while saying one word.
+  **Nothing is skipped by this** - the chunk is stored and full-text indexed exactly as the words
+  read out of a picture are, so every word stays findable and only the vector is withheld, which is
+  the whole difference between this and a rule that decides what somebody is allowed to find. It is
+  also what makes `.html` safe to keep as a document extension: what survives tag-stripping from a
+  component template is button labels, and a binding DENSITY (never the presence of a brace, or a
+  document explaining template syntax would be refused) covers the rest. **Transcripts are exempt on
+  purpose**: a spoken line is short by nature, and holding speech to a length written for prose
+  would take meaning search away from recordings entirely.
 - **Sequence and batch shapes are rounded, because DirectML compiles per SHAPE.**
   `E5Encoder.Bucket` rounds a length up to a multiple of 32 and `BatchBucket` rounds a batch up to a
   power of two, so the indexer's whole vocabulary is 80 shapes rather than thousands. Unrounded, a
