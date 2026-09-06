@@ -33,6 +33,15 @@ and Findra follows [Semantic Versioning](https://semver.org/spec/v2.0.0/).
 
 ### Changed
 
+- **Findra picks which graphics chip does the work, instead of taking whichever one was listed
+  first.** On a laptop, and on any machine whose monitors plug into the motherboard, the one
+  listed first is the built-in graphics - which for reading pictures is around ninety times slower
+  than a real graphics card, and for transcribing speech is slower than the processor. Nothing
+  about it looked wrong: the right software was in use, every file was read correctly, and only
+  the clock knew. Findra now picks the card with its own memory, never a software renderer, and
+  `findra --searchmodels` names every chip it found and marks the one it chose - with no models
+  installed, which is when people ask.
+
 - **The website quotes the current benchmark run.** The front page, the Markdown it serves to
   agents and the share image were still showing a measurement taken against a debug build with ten
   documents in the index: a filename came back in 0.33 ms and the page said 0.50, the slowest query

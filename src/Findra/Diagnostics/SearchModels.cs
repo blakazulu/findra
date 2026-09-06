@@ -38,6 +38,22 @@ public sealed record ModelsSnapshot(
     /// says what the block is.</para>
     /// </summary>
     public IReadOnlyList<string> Probe { get; init; } = [];
+
+    /// <summary>
+    /// Every graphics adapter on the machine, and which one the accelerated work was sent to.
+    ///
+    /// <para>"DirectML" and "Vulkan" answer which API and say nothing about which chip, and the
+    /// chip is the whole question: an integrated GPU is close to two orders of magnitude slower
+    /// than a card for a vision tower, and slower than the processor for speech. Both of those
+    /// report success at every step. Init properties with an empty default because a snapshot
+    /// built by hand in a test is about the model table and should not have to know about DXGI.
+    /// </para>
+    /// </summary>
+    public string Adapters { get; init; } = "";
+
+    /// <summary>The same for the speech runtime, which has its own device list and its own
+    /// numbering. They usually agree and there is no rule that says they must.</summary>
+    public string SpeechDevices { get; init; } = "";
 }
 
 /// <summary>
@@ -115,11 +131,16 @@ public static class ModelsReport
         Line("  onnx execution provider (SigLIP-2, e5):");
         if (s.Onnx.Count == 0) Line("    not tried - no model is on disk to open");
         else foreach (ProviderTry t in s.Onnx) Line($"    {t.Name}{(t.Chosen ? Chosen : Rejected + t.Reason)}");
+        // WHICH chip, under the API that was chosen. Printed even when no model was opened,
+        // because a machine with nothing installed yet is exactly where somebody asks what Findra
+        // would use, and the adapters are readable without a single model on disk.
+        if (s.Adapters.Length > 0) Line($"    on {s.Adapters}");
         Line();
 
         Line("  whisper execution provider (speech):");
         if (s.Whisper.Count == 0) Line("    not tried - no model is on disk to open");
         else foreach (ProviderTry t in s.Whisper) Line($"    {t.Name}{(t.Chosen ? Chosen : Rejected + t.Reason)}");
+        if (s.SpeechDevices.Length > 0) Line($"    on {s.SpeechDevices}");
 
         // After the report, under a heading of its own. A run with nothing on disk probed
         // nothing, and a heading over no lines would read as a probe that found nothing rather
@@ -292,6 +313,8 @@ public static class SearchModels
         var snapshot = new ModelsSnapshot(dir, modelRows, capRows, onnxTried, whisperTried, notes)
         {
             Probe = probe,
+            Adapters = GpuAdapter.Describe(),
+            SpeechDevices = VulkanAdapter.Describe(),
         };
         Console.WriteLine(ModelsReport.Render(snapshot));
 
