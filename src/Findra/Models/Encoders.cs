@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -27,16 +27,26 @@ public static class Onnx
     {
         var chain = new List<(string, Func<InferenceSession>)>();
         if (wantAccelerator)
-            chain.Add(("DirectML", () =>
+        {
+            // WHICH adapter, decided rather than inherited. Device 0 is whatever DXGI listed
+            // first, which on a laptop and on any machine whose display hangs off the motherboard
+            // is the integrated GPU - and that is not a little slower for a vision tower, it is
+            // close to two orders of magnitude. The failure says nothing: the provider really is
+            // DirectML and every answer is correct. Null means one adapter or none, and then this
+            // is device 0 exactly as it was.
+            GpuChoice? gpu = GpuAdapter.Best();
+            string name = gpu is null ? "DirectML" : $"DirectML ({gpu.Name})";
+            chain.Add((name, () =>
             {
                 var o = new SessionOptions { GraphOptimizationLevel = GraphOptimizationLevel.ORT_ENABLE_ALL };
                 o.LogSeverityLevel = OrtLoggingLevel.ORT_LOGGING_LEVEL_ERROR;
                 // DirectML needs sequential execution and no memory-pattern planning.
                 o.ExecutionMode = ExecutionMode.ORT_SEQUENTIAL;
                 o.EnableMemoryPattern = false;
-                o.AppendExecutionProvider_DML(0);
+                o.AppendExecutionProvider_DML(gpu?.Index ?? 0);
                 return new InferenceSession(path, o);
             }));
+        }
         chain.Add(("CPU", () =>
         {
             var o = new SessionOptions { GraphOptimizationLevel = GraphOptimizationLevel.ORT_ENABLE_ALL };

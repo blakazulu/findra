@@ -65,10 +65,26 @@ public sealed class IndexerHost : IDisposable
             }
             try
             {
-                _proc = Process.Start(new ProcessStartInfo(exe, $"--index {Environment.ProcessId.ToString(CultureInfo.InvariantCulture)}")
+                var start = new ProcessStartInfo(exe, $"--index {Environment.ProcessId.ToString(CultureInfo.InvariantCulture)}")
                 {
                     UseShellExecute = false, CreateNoWindow = true, WindowStyle = ProcessWindowStyle.Hidden,
-                });
+                };
+
+                // Which Vulkan device transcribes, decided HERE because it cannot be decided
+                // anywhere later. The speech runtime takes the first device it is shown, which on
+                // a machine with integrated graphics beside a card is the integrated one - and for
+                // this workload that is slower than the processor the chain skipped to reach it.
+                // The only lever is which devices exist at all, and the environment a process
+                // reads is fixed before it starts: setting this from inside the child would update
+                // the runtime's own copy and not the block the native code reads.
+                string? visible = VulkanAdapter.Visible();
+                if (visible is not null)
+                {
+                    start.Environment[VulkanAdapter.VisibleDevices] = visible;
+                    Log.Info("index", $"speech devices: {VulkanAdapter.Describe()}");
+                }
+
+                _proc = Process.Start(start);
                 _lastStart = DateTime.UtcNow;
 
                 // Assigned immediately, and the answer is written down. "The child outlived me"

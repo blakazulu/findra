@@ -858,6 +858,48 @@ the hardware most likely to break is precisely the hardware never tested.
 - **Never assume x64** - no hardcoded RID in source, no x64-only intrinsics. x64 ships
   first; keeping arm64 reachable costs nothing now and a lot later.
 
+## Which chip does the work
+
+Choosing the API is not choosing the silicon, and for a long time this file said DirectML and
+Vulkan as though it were. **A device index is not a choice**: `AppendExecutionProvider_DML(0)` and
+the speech runtime's own default both take whatever the system listed first, and what that is
+depends on which chip drives the display, what the power settings say, and what virtual display
+drivers somebody installed. On a laptop, and on any desktop whose monitors hang off the
+motherboard, first is the integrated GPU.
+
+**The failure reports success at every step.** The provider really is DirectML, every model loads,
+every answer is correct, and only the clock disagrees - with nothing to compare it against. For a
+vision tower an integrated GPU is close to two orders of magnitude slower than a card; for speech
+it is slower than the **processor** the chain skipped in order to reach it, so the accelerated rung
+wins the race by being tried first and then loses the work.
+
+- **`GpuAdapter.Best()` picks by the most dedicated video memory**, and that is the whole rule. It
+  is the one property that separates a card from integrated graphics without knowing any vendor's
+  name - integrated graphics carve their working memory out of system RAM - which keeps it inside
+  the no-vendor-preference rule above. A list of known-good device names would be exactly the thing
+  §7 forbids. A software rasteriser is never chosen: it loads, it initialises, it answers
+  correctly, and it is slower than the CPU provider it would silently be picked over.
+- **`VulkanAdapter` decides the speech device by hiding the others**, through
+  `GGML_VK_VISIBLE_DEVICES` **on the indexer child's `ProcessStartInfo`**, and both halves of that
+  are load-bearing. The managed wrapper's device option is accepted and ignored, and
+  `Environment.SetEnvironmentVariable` updates the runtime's own copy rather than the block native
+  code reads - so an in-process version of this sets the value, reads it back correctly, logs
+  success and changes nothing. The environment a process reads is fixed before it starts, which is
+  why the choice is made in `IndexerHost` and nowhere later.
+- **Both fail soft, and that is deliberate.** No DXGI, no Vulkan loader, one adapter, or an
+  enumeration that throws returns null and leaves the decision exactly where it was. Nothing may
+  fail to start because a chip could not be named, and restricting the speech runtime to a device
+  it would itself have rejected costs the accelerated rung and falls back to the processor - which
+  on that workload is the faster of the two wrong answers.
+- **`--searchmodels` names the chips, and prints them with no model on disk.** A machine with
+  nothing installed yet is exactly where somebody asks what Findra would use, and adapters are
+  readable without a single file. "DirectML" answers which API; it has never answered the question
+  anybody was asking.
+- **This machine is not evidence.** Measured here, DXGI lists the discrete card at 0 and Vulkan
+  lists it at 0, so Findra was already on the right chip and the change moved nothing. It is a
+  portability fix for machines ordered the other way, and no such machine has run it - the same
+  caveat everything else in this section carries.
+
 ## Palettes
 
 A palette is `name`, `accent`, `ink`, `ground`, `light`. Everything else - fills, rows, tiles,
