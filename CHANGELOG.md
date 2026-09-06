@@ -33,6 +33,29 @@ and Findra follows [Semantic Versioning](https://semver.org/spec/v2.0.0/).
 
 ### Changed
 
+- **Pictures no longer out-rank the documents that answer the question.** The two kinds of match
+  were scored on scales that did not mean the same thing, so a picture matching about as well as
+  a picture can scored far higher than a document matching about as well as a document can - and
+  a screenshot came top for "invoice payment terms", above the page that explained the invoicing
+  and payment terms. Both scales are now anchored to what was actually measured on a real index
+  of 6,165 files. Searching for a privacy policy now returns the privacy policy first, where it
+  was fourth.
+
+- **Unrelated documents stop turning up as matches.** The cut-off for "this means something like
+  what you typed" had been set at the average score of completely unrelated text, so half of
+  everything on the disk cleared it. A search with no answer on this machine returned 64 results;
+  it now returns 10. Real answers keep their place: the one video that matched "balcony with my
+  dog" is still first, and the noise beneath it dropped by a third.
+
+- **Findra picks which graphics chip does the work, instead of taking whichever one was listed
+  first.** On a laptop, and on any machine whose monitors plug into the motherboard, the one
+  listed first is the built-in graphics - which for reading pictures is around ninety times slower
+  than a real graphics card, and for transcribing speech is slower than the processor. Nothing
+  about it looked wrong: the right software was in use, every file was read correctly, and only
+  the clock knew. Findra now picks the card with its own memory, never a software renderer, and
+  `findra --searchmodels` names every chip it found and marks the one it chose - with no models
+  installed, which is when people ask.
+
 - **Passages too short to mean anything no longer out-rank real answers.** A sentence or two
   embeds to a point near the middle of the model's idea of meaning, which is close to every
   possible search at once - so a stray "Payment complete. Thank you for subscribing." beat the
@@ -43,15 +66,6 @@ and Findra follows [Semantic Versioning](https://semver.org/spec/v2.0.0/).
 - **Reading inside documents is faster on a graphics card.** The card was being asked to prepare
   fresh machinery for nearly every batch, because the batch's shape was whatever that document's
   chunks happened to be. Shapes are rounded now, so the same machinery is reused.
-
-- **Findra picks which graphics chip does the work, instead of taking whichever one was listed
-  first.** On a laptop, and on any machine whose monitors plug into the motherboard, the one
-  listed first is the built-in graphics - which for reading pictures is around ninety times slower
-  than a real graphics card, and for transcribing speech is slower than the processor. Nothing
-  about it looked wrong: the right software was in use, every file was read correctly, and only
-  the clock knew. Findra now picks the card with its own memory, never a software renderer, and
-  `findra --searchmodels` names every chip it found and marks the one it chose - with no models
-  installed, which is when people ask.
 
 - **The website quotes the current benchmark run.** The front page, the Markdown it serves to
   agents and the share image were still showing a measurement taken against a debug build with ten

@@ -806,6 +806,21 @@ speech              ─  whisper-turbo + [e5 pair]              550 MB (+1.04 GB
   measurement was taken over icons and screenshots, which are out of distribution for a model
   trained on photographs - the case matters on a desktop, but photographs need measuring
   separately before the same numbers are assumed.
+- **The WORDS scale had never been measured, and both of its numbers were wrong.** The comment
+  said "e5 puts unrelated text near 0.75 and a paraphrase near 0.9". Measured over an index of
+  6,165 real files: unrelated text runs 0.757-0.798 across 31 samples with a **mean of 0.780**,
+  and the best answer to a hand-checked query runs 0.838-0.868 across seven. Nothing reaches 0.9.
+  So `TextFloor` was sitting exactly on the mean of the noise - half of every unrelated document
+  in the index cleared it - and `TextSpan` of 0.12 ended at a number nothing could reach, which is
+  the part that actually broke ranking. **The two scales are only comparable if each ends just
+  past its own best real match**, and they did not: the best document this index can produce
+  scored 0.66 while the best picture scored 0.92, so a screenshot out-ranked the one document that
+  answered the question. It is 0.81 and 0.06 now, both spans 0.06 for that reason. Measured
+  effect on the same index, same query, vectors unchanged: the real privacy policy went from
+  fourth at 0.84 to first at 0.98, and a query with no answer in the corpus went from 64 hits to
+  10. `ScoreScaleTests` carries every one of those numbers, so changing either model fails a test
+  rather than quietly re-breaking the ranking. **The ceilings were deliberately left alone** -
+  0.90 against 0.92 is a two-point edge to pictures that no measurement here speaks to.
 - **A file's size on disk never equals the declared size in the table.** That table is the
   spec's figure in megabytes to one decimal place; real files miss it by tens of kilobytes,
   mostly upward. `ModelStore.SizeSlack` is the only place that width is decided, and nothing
