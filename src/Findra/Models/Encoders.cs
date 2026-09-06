@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -294,6 +294,42 @@ public sealed class E5Encoder : IDisposable
     private long[] Ids(string text, int max)
         => ShiftIds(_tok.EncodeToIds(text, addBeginningOfSentence: false, addEndOfSentence: false), max);
 
+    /// <summary>The width the tensor is actually built at, rounded up from the text's own length.
+    ///
+    /// <para><b>DirectML compiles per input SHAPE.</b> A chunk is whatever length it happened to
+    /// be cut at and a transcript line is whatever somebody said, so an unrounded indexer hands
+    /// the provider a shape it has never seen for nearly every call and pays a fresh compile
+    /// around each inference - a cost several times the work it wraps. Sixteen widths is the whole
+    /// vocabulary after this.</para>
+    ///
+    /// <para>The padding costs nothing that matters: the attention mask is zero over it and the
+    /// pooling counts only real tokens, so the vector is unchanged. <see cref="Step"/> below the
+    /// cap the tokenizer already truncates to.</para></summary>
+    public const int Step = 32, MaxLen = 512;
+
+    public static int Bucket(int length)
+    {
+        if (length >= MaxLen) return MaxLen;
+        int rounded = ((Math.Max(1, length) + Step - 1) / Step) * Step;
+        return Math.Min(rounded, MaxLen);
+    }
+
+    /// <summary>The same, for the batch dimension, which churns for its own reason: a document's
+    /// last batch is whatever is left over.
+    ///
+    /// <para>Powers of two rather than one fixed width. Padding every batch up to
+    /// <see cref="Batch"/> would leave a single shape and compute fifteen dead rows for a document
+    /// with seventeen chunks; this costs at most double and still leaves five shapes.</para>
+    /// </summary>
+    public const int Batch = 16;
+
+    public static int BatchBucket(int n)
+    {
+        int b = 1;
+        while (b < n && b < Batch) b <<= 1;
+        return b;
+    }
+
     public float[] EncodeQuery(string text) => Encode("query: " + text);
     public float[] EncodePassage(string text) => Encode("passage: " + text);
 
@@ -304,23 +340,35 @@ public sealed class E5Encoder : IDisposable
         ArgumentNullException.ThrowIfNull(texts);
         int n = texts.Count;
         var ids = new long[n][];
-        int T = 0;
-        for (int i = 0; i < n; i++) { ids[i] = Ids("passage: " + texts[i], 512); T = Math.Max(T, ids[i].Length); }
-        var input = new DenseTensor<long>(new[] { n, T });
-        var mask = new DenseTensor<long>(new[] { n, T });
-        for (int i = 0; i < n; i++)
+        int longest = 0;
+        for (int i = 0; i < n; i++) { ids[i] = Ids("passage: " + texts[i], MaxLen); longest = Math.Max(longest, ids[i].Length); }
+
+        // Both dimensions are rounded up, because both of them churn: the width with whatever the
+        // longest chunk in this batch happens to be, the height with a document's leftover batch.
+        // An unrounded pair is a fresh DirectML compile around nearly every call.
+        int T = Bucket(longest);
+        int N = BatchBucket(n);
+        var input = new DenseTensor<long>(new[] { N, T });
+        var mask = new DenseTensor<long>(new[] { N, T });
+        for (int i = 0; i < N; i++)
+        {
+            // A padding ROW repeats the first row rather than being left empty: a row masked out
+            // entirely is a softmax over nothing, and what a given export does with that is not
+            // worth finding out on somebody else's machine. Its output is never read.
+            long[] row = i < n ? ids[i] : ids[0];
             for (int t = 0; t < T; t++)
             {
-                bool real = t < ids[i].Length;
-                input[i, t] = real ? ids[i][t] : 1;   // <pad>
+                bool real = t < row.Length;
+                input[i, t] = real ? row[t] : 1;   // <pad>
                 mask[i, t] = real ? 1 : 0;
             }
+        }
         var inputs = new List<NamedOnnxValue>
         {
             NamedOnnxValue.CreateFromTensor("input_ids", input),
             NamedOnnxValue.CreateFromTensor("attention_mask", mask),
         };
-        if (_wantsTypeIds) inputs.Add(NamedOnnxValue.CreateFromTensor("token_type_ids", new DenseTensor<long>(new[] { n, T })));
+        if (_wantsTypeIds) inputs.Add(NamedOnnxValue.CreateFromTensor("token_type_ids", new DenseTensor<long>(new[] { N, T })));
         using IDisposableReadOnlyCollection<DisposableNamedOnnxValue> results = _s.Run(inputs);
         Tensor<float> hidden = Onnx.Hidden(results);
         int H = hidden.Dimensions[2];
@@ -341,12 +389,20 @@ public sealed class E5Encoder : IDisposable
 
     private float[] Encode(string text)
     {
-        long[] ids = Ids(text, 512);
-        int T = ids.Length;
+        long[] ids = Ids(text, MaxLen);
+        // Bucketed for the same reason the batch path is: a transcript line is whatever somebody
+        // said, and this is the call the indexer makes for every one of them.
+        int T = Bucket(ids.Length);
         var input = new DenseTensor<long>(new[] { 1, T });
         var mask = new DenseTensor<long>(new[] { 1, T });
         var maskArr = new long[T];
-        for (int i = 0; i < T; i++) { input[0, i] = ids[i]; mask[0, i] = 1; maskArr[i] = 1; }
+        for (int i = 0; i < T; i++)
+        {
+            bool real = i < ids.Length;
+            input[0, i] = real ? ids[i] : 1;   // <pad>
+            mask[0, i] = real ? 1 : 0;
+            maskArr[i] = real ? 1 : 0;
+        }
         var inputs = new List<NamedOnnxValue>
         {
             NamedOnnxValue.CreateFromTensor("input_ids", input),
