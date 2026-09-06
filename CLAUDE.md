@@ -697,6 +697,15 @@ speech              ─  whisper-turbo + [e5 pair]              550 MB (+1.04 GB
   list whose only job is arguing with a rule nobody asked for. What a checkout really buries an
   index with is already in `FileKinds.DefaultExclusions` - `node_modules`, `.git`, `bin`, `obj`,
   `packages`, `site-packages` - where each is a line the person it belongs to can read and delete.
+- **Sequence and batch shapes are rounded, because DirectML compiles per SHAPE.**
+  `E5Encoder.Bucket` rounds a length up to a multiple of 32 and `BatchBucket` rounds a batch up to a
+  power of two, so the indexer's whole vocabulary is 80 shapes rather than thousands. Unrounded, a
+  chunk is whatever length it was cut at and a document's last batch is whatever is left over, so
+  nearly every call paid a fresh kernel compile around the inference it wrapped. The padding is free
+  rather than merely cheap: the attention mask is zero over it and the pooling counts only real
+  tokens, so the vector is unchanged. A padding ROW repeats the first row rather than being left
+  empty, because a row masked out entirely is a softmax over nothing and what a given export does
+  with that is not worth finding out on somebody else's machine.
 - **A migration that changes WHICH FILES are eligible sets `ReWalk`.** `RequeueKinds` moves rows
   that exist; a file that was never offered to the queue has no row to move, and nothing else will
   reach it - the journal reports what changes, and a folder of finished work never changes again.

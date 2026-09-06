@@ -33,6 +33,10 @@ and Findra follows [Semantic Versioning](https://semver.org/spec/v2.0.0/).
 
 ### Changed
 
+- **Reading inside documents is faster on a graphics card.** The card was being asked to prepare
+  fresh machinery for nearly every batch, because the batch's shape was whatever that document's
+  chunks happened to be. Shapes are rounded now, so the same machinery is reused.
+
 - **Findra picks which graphics chip does the work, instead of taking whichever one was listed
   first.** On a laptop, and on any machine whose monitors plug into the motherboard, the one
   listed first is the built-in graphics - which for reading pictures is around ninety times slower
