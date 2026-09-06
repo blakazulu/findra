@@ -146,10 +146,38 @@ public static class ContentBranch
     /// </summary>
     public const float PhotoFloor = 0.09f, PhotoSpan = 0.06f, PhotoCeiling = 0.92f;
 
-    /// <summary>e5 puts unrelated text near 0.75 and a paraphrase near 0.9, so the interesting
-    /// range is narrow and high. A floor of 0 would make every document a weak match for
-    /// everything.</summary>
-    public const float TextFloor = 0.78f, TextSpan = 0.12f, TextCeiling = 0.9f;
+    /// <summary>
+    /// The words scale, measured the way the picture scale above was.
+    ///
+    /// <para>These were a guess, and the comment that stood here said so without meaning to: "e5
+    /// puts unrelated text near 0.75 and a paraphrase near 0.9". Measured over an index of 6,165
+    /// real files, unrelated text runs <b>0.757 to 0.798</b> across 31 samples with a mean of
+    /// 0.780, and the best answer to a hand-checked query runs <b>0.838 to 0.868</b> across seven.
+    /// Nothing reaches 0.9.</para>
+    ///
+    /// <para><b>The old floor was the mean of the noise.</b> 0.780 sat exactly in the middle of the
+    /// unrelated band, so half of every unrelated document in the index cleared it and arrived
+    /// carrying a score. 0.81 is in the empty band between 0.798 and 0.838, nearer the bottom of
+    /// it: losing a real answer costs more than admitting a weak one the words branch would have
+    /// found anyway.</para>
+    ///
+    /// <para><b>The span mattered more than the floor.</b> At 0.12 the band ended at 0.90, which
+    /// nothing ever reached, so the best document this index can produce scored 0.66 while the best
+    /// picture scored 0.92 - and a screenshot out-ranked the one document that answered the
+    /// question. Both spans are 0.06 now, each ending just past the best real match its own model
+    /// produces, so "as good as this kind of match gets" is the same number on both scales.</para>
+    ///
+    /// <para>The ceilings are deliberately left as they are. 0.90 against 0.92 leaves pictures a
+    /// two-point edge at the very top, which is small beside what was wrong here and is not
+    /// something the measurement above has anything to say about. Changing it is a separate
+    /// decision that would need its own evidence.</para>
+    ///
+    /// <para>Same caveat as the pictures, and it is the whole reason these are written down: a
+    /// floor belongs to the model it was measured on. Re-measure both ends whenever either model
+    /// changes; <c>ScoreScaleTests</c> carries the numbers and will fail if one end moves without
+    /// the other.</para>
+    /// </summary>
+    public const float TextFloor = 0.81f, TextSpan = 0.06f, TextCeiling = 0.9f;
 
     /// <summary>What a file found by BOTH its words and its meaning gains. Exact words are what
     /// the person typed; without this a paraphrase can outrank the actual phrase.</summary>
