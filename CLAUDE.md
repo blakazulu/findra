@@ -1124,6 +1124,31 @@ running it, and shipping a page that still says the old thing.
   stores an absolute path to `findra.exe`, so a versioned directory points an elevated logon task
   at a binary that no longer exists after every upgrade.
 
+## The log
+
+**A line per poll is a line per second, for as long as the machine is on.** The journal tail walks
+every volume about once a second and used to write what it found each time. Measured on a real
+install: 50,248 lines in 14 hours, 83% of them reporting that nothing was applied, **99.5% of
+everything in the log**, about 9 MB a day that never stops growing.
+
+The cost is not the disk. It is that the log stops being readable - finding the four warnings that
+mattered on that machine meant filtering fifty thousand lines out of the way first - and a log
+nobody can read is the same as no log at all, on the one day somebody needs it.
+
+- **`JournalDigest` sums rather than throttles, and that is the whole reason it is not
+  `Log.Repeat`.** The throttle would print one poll's numbers with "412 more since the last line"
+  after them: a true number describing a four-hundredth of the interval it appears to summarise.
+  What a reader wants from the journal is how much went past and how much of it mattered, and both
+  are sums.
+- **A quiet window says nothing.** A poll that saw no records is not news, and a heartbeat whose
+  entire content is "nothing happened" is what this removes. Whether the tail is alive is a
+  question `--searchindex` answers, with the position each volume has reached, and a tail that dies
+  says so through its own warning.
+- **The first activity on a volume is still reported at once.** Holding it for five minutes would
+  read as a tail that never started.
+- The general rule, for anything else written from inside a loop: **ask what the line costs per
+  day, not per occurrence.**
+
 ## Data locations
 
 Config roams, bulk does not - 2.9 GB of models must never sit in a roaming profile, and models

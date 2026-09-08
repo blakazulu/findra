@@ -150,6 +150,13 @@ and Findra follows [Semantic Versioning](https://semver.org/spec/v2.0.0/).
 
 ### Fixed
 
+- **The log is readable again.** The part of Findra that watches for file changes was writing
+  a line every second for as long as the machine was on - 50,248 lines in 14 hours on a real
+  install, 99.5% of everything in the log, about 9 MB a day, and 83% of them reporting that
+  nothing had happened. It now writes one summary every five minutes, carrying the totals for the
+  period rather than one second's worth, and writes nothing at all while there is nothing to
+  report. Anything that actually went wrong is no longer buried under fifty thousand lines.
+
 - **The keyboard can reach the copy buttons.** The two install commands copy on click and were not
   reachable by keyboard at all. Everything focusable now shows where the focus is, which nothing on
   the site did, and two pieces of small print were too faint to pass a contrast check.
