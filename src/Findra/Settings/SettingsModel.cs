@@ -21,7 +21,7 @@ public enum ControlId
     Hotkey, ShowCapsule, ResetCapsule, Autostart, Helper,
     Drives, AddFolder,
     IndexContent, StartIndexing, IndexPower, Transcribe, Capability,
-    Version, Updates, CheckUpdates, CheckNow, InstalledVia, Removing,
+    Version, Updates, CheckUpdates, CheckNow, InstalledVia, Logs, Removing,
 }
 
 /// <summary>
@@ -42,6 +42,11 @@ public enum SettingsAction
     PickFolder,
     InstallCapability,
     CheckNow,
+
+    /// <summary>Open the folder holding the log files, in whatever the shell uses for folders.
+    /// The folder rather than today's file: "it stopped working last night" is answered by
+    /// yesterday's log, and a folder reaches both.</summary>
+    OpenLogs,
 
     /// <summary>Start the upgrade the way the person would have started it: winget in a window
     /// they can watch, or the releases page. Findra still replaces nothing itself - spec 9b's
@@ -513,6 +518,11 @@ public static class SettingsModel
         Control.Plain(ControlId.CheckNow, ControlKind.Button, "Check now",
                       s.Waiting(ControlId.CheckNow) ? "Asking..." : "Check"),
         Control.Plain(ControlId.InstalledVia, ControlKind.Text, "Installed via", s.Config.InstallSource ?? "unknown"),
+        // The FOLDER, not today's file. "It stopped working last night" is answered by yesterday's
+        // log, and a folder reaches both. It sits here because a person who has come to About is
+        // already looking for what to send somebody, and the Removing note stays last because it
+        // is a closing statement rather than a control.
+        Control.Plain(ControlId.Logs, ControlKind.Button, "Logs", "Open folder"),
         Control.Plain(ControlId.Removing, ControlKind.Note, "",
             note: "Removing Findra: the uninstaller, or findra --uninstall, which also removes the scheduled task. " +
                   "It keeps your index and your models unless you ask it not to."),
@@ -630,6 +640,7 @@ public static class SettingsModel
             ControlId.CheckUpdates =>
                 SettingsOutcome.Changed(s with { Config = c with { CheckForUpdates = !c.CheckForUpdates } }),
             ControlId.CheckNow => SettingsOutcome.Ask(s, SettingsAction.CheckNow),
+            ControlId.Logs => SettingsOutcome.Ask(s, SettingsAction.OpenLogs),
 
             _ => SettingsOutcome.Nothing(s),
         };

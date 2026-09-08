@@ -1870,6 +1870,16 @@ internal sealed class Shell : ISettingsHost
     /// thread. A session with no content loop yet answers 0 and logs it - the loop's own pump
     /// starts the child a second later off the configuration this click has already saved.</para>
     /// </summary>
+    void ISettingsHost.OpenLogs()
+    {
+        // Through Paths.Ensure, so a machine that has somehow never written a line opens an empty
+        // folder rather than an Explorer error about a path that does not exist. Opening the
+        // folder rather than today's file is the point: "it stopped working last night" is
+        // answered by yesterday's.
+        try { Process.Start(new ProcessStartInfo(Log.Dir) { UseShellExecute = true }); }
+        catch (Exception ex) { Log.Warn("settings", "could not open the log folder: " + ex.Message); }
+    }
+
     void ISettingsHost.StartIndexing()
     {
         Log.Info("index", "reading inside files was started from settings");

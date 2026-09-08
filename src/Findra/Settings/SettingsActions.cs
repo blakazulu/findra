@@ -1,4 +1,4 @@
-namespace Findra;
+﻿namespace Findra;
 
 /// <summary>
 /// The ten things a settings click can ask the machine for. An interface rather than a switch
@@ -20,6 +20,11 @@ public interface ISettingsHost
 
     void RecentreCapsule();
     void StartIndexing();
+
+    /// <summary>Open the folder the log files are in, not today's file. Yesterday's is what
+    /// somebody reporting "it stopped working last night" actually needs, and a folder reaches
+    /// both.</summary>
+    void OpenLogs();
 }
 
 public static class SettingsActions
@@ -46,6 +51,7 @@ public static class SettingsActions
             case SettingsAction.UpdateNow: host.UpdateNow(); return;
             case SettingsAction.RecentreCapsule: host.RecentreCapsule(); return;
             case SettingsAction.StartIndexing: host.StartIndexing(); return;
+            case SettingsAction.OpenLogs: host.OpenLogs(); return;
 
             case SettingsAction.InstallCapability:
                 // The argument crossed a string boundary. A parse that falls back to the first
