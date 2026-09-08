@@ -201,6 +201,10 @@ public static class JournalTail
     {
         var changes = new List<NtfsVolume.Change>();
 
+        // One line per poll is one line per second for as long as the machine is on. See
+        // JournalDigest for the measurement that ended that and why a sum rather than a throttle.
+        var digest = new JournalDigest();
+
         while (!ct.IsCancellationRequested)
         {
             foreach ((NtfsVolume vol, VolumeView view) in volumes)
@@ -267,9 +271,8 @@ public static class JournalTail
                         foreach (JournalEvent e in slice) bus.Publish(e);
                     }
 
-                    Log.Info("journal", string.Create(CultureInfo.InvariantCulture,
-                        $"{vol.Letter}: {changes.Count} journal records, {applied} applied, " +
-                        $"now at usn {vol.NextUsn}"));
+                    if (digest.Add(vol.Letter, changes.Count, applied, vol.NextUsn, DateTime.UtcNow) is { } line)
+                        Log.Info("journal", line);
                 }
                 catch (OperationCanceledException) { return; }
                 catch (Exception ex)
