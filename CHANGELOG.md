@@ -9,6 +9,11 @@ and Findra follows [Semantic Versioning](https://semver.org/spec/v2.0.0/).
 
 ### Added
 
+- **Settings can open the log folder.** Under About, beside the version and how Findra was
+  installed, there is now an Open folder button. The logs were only reachable by knowing that
+  `findra --version` prints their location, which is not something anybody knows at the moment
+  they need it. It opens the folder rather than today's file, so last night's is there too.
+
 - **The site answers the questions people actually ask before installing.** A Questions section on
   the front page, and the same answers in the Markdown the site serves to agents: what Findra is,
   whether it reads inside files, how fast it is, what leaves your machine, how to install it,

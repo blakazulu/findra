@@ -1146,6 +1146,10 @@ nobody can read is the same as no log at all, on the one day somebody needs it.
   says so through its own warning.
 - **The first activity on a volume is still reported at once.** Holding it for five minutes would
   read as a tail that never started.
+- **Settings > About opens the folder.** The path was printed by `--version`, which is a command
+  somebody has to already know exists, typed into a terminal they have to already have open. The
+  place a person goes when something is wrong is Settings. It opens the FOLDER rather than today's
+  file, because "it stopped working last night" is answered by yesterday's.
 - The general rule, for anything else written from inside a loop: **ask what the line costs per
   day, not per occurrence.**
 

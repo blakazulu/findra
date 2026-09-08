@@ -1,4 +1,4 @@
-using Findra;
+﻿using Findra;
 using Xunit;
 
 /// <summary>
@@ -24,6 +24,7 @@ public class SettingsActionTests
         public void UpdateNow() => Calls.Add("update");
         public void RecentreCapsule() => Calls.Add("recentre");
         public void StartIndexing() => Calls.Add("start");
+        public void OpenLogs() => Calls.Add("logs");
     }
 
     [Fact]
@@ -49,6 +50,7 @@ public class SettingsActionTests
             [SettingsAction.UpdateNow] = "update",
             [SettingsAction.RecentreCapsule] = "recentre",
             [SettingsAction.StartIndexing] = "start",
+            [SettingsAction.OpenLogs] = "logs",
         };
 
         foreach (SettingsAction action in Enum.GetValues<SettingsAction>())
