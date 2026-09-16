@@ -409,4 +409,131 @@ public sealed class IndexerTests : IDisposable
         Assert.Equal(1, db.ResetAttempts([(int)ResultKind.Video]));
         Assert.Equal(0, db.TakeNext()!.Value.Attempts);
     }
+
+    /// <summary>Counts which of the two decode entry points was called, and can answer
+    /// <c>DecodeFrames</c> with a given skip reason - the seam that proves a reframe row takes the
+    /// frames-only path rather than reopening the whole file, and that the reason it reports is
+    /// not silently dropped.</summary>
+    private sealed class TrackingDecoders(CapabilitySet installed, string? framesSkip = null) : IDecoders
+    {
+        public CapabilitySet Installed { get; } = installed;
+        public int DecodeCalls, DecodeFramesCalls;
+
+        public bool CanRead(ResultKind kind) => Decoders.Covers(kind, Installed);
+
+        public KindResult Decode(ResultKind kind, string path, long bytes)
+        {
+            DecodeCalls++;
+            return new KindResult([new ContentDb.Segment(ContentDb.SegFrame, 0, 0, 900, "")], null);
+        }
+
+        public KindResult DecodeFrames(string path)
+        {
+            DecodeFramesCalls++;
+            return framesSkip is null
+                ? new KindResult([new ContentDb.Segment(ContentDb.SegFrame, 0, 0, 901, "")], null)
+                : new KindResult([], framesSkip);
+        }
+
+        public void Flush() { }
+        public void Release(IReadOnlyList<long> rows) { }
+        public void Dispose() { }
+    }
+
+    [Fact]
+    public void AReframeRowOnAnUnchangedFileIsReReadRatherThanDequeuedUntouched()
+    {
+        // The freshness check's own defect, once already: a queue reason it does not recognise is
+        // dequeued as "current" with nothing read - which happened for real to an earlier photo
+        // migration and queued every picture on the machine while re-reading none of them. Reframe
+        // has to be a recognised reason too, or a schema step that means "read this again" reads
+        // nothing on every unchanged file it touches. It also proves the other half at once: the
+        // full Decode is never called for a reframe row, only DecodeFrames.
+        string video = Under("clip.mkv");
+        File.WriteAllBytes(video, new byte[64]);
+        long mtime = new FileInfo(video).LastWriteTimeUtc.Ticks;
+
+        using ContentDb db = Open();
+        using (var tx = db.Begin())
+        {
+            db.Upsert("C", 1, video, ResultKind.Video, mtime, 64, ContentDb.StateIndexed, null,
+                      [new ContentDb.Segment(ContentDb.SegFrame, 0, 0, 7, "")], tx);
+            tx.Commit();
+        }
+        db.Enqueue("C", 1, video, ResultKind.Video, Indexer.Reframe);
+
+        var d = new TrackingDecoders(new CapabilitySet(new HashSet<Capability> { Capability.Photos }));
+        Indexer.DrainOnce(db, _ => { }, d);
+
+        Assert.Equal(1, d.DecodeFramesCalls);
+        Assert.Equal(0, d.DecodeCalls);
+        Assert.Equal(0, db.PendingCount());
+    }
+
+    [Fact]
+    public void AVideoStillBlockedOnItsCodecKeepsItsTranscriptAndStaysFindableByTheCount()
+    {
+        // Exactly the file this migration exists for: an HEVC video the old decoder filled with
+        // black frames. The new reader refuses it with the same reason the ordinary path already
+        // uses, and that reason must not vanish into a quietly successful, pictureless video - it
+        // has to survive where both the count Settings prints and the codec-arrival re-queue can
+        // find it, and the transcript already held must not be touched.
+        string video = Under("hevc.mkv");
+        File.WriteAllBytes(video, new byte[64]);
+
+        using ContentDb db = Open();
+        var frame = new ContentDb.Segment(ContentDb.SegFrame, 10, 10, 7, "");
+        var speech = new ContentDb.Segment(ContentDb.SegSpeech, 0, 5, 9, "hello there");
+        using (var tx = db.Begin())
+        {
+            db.Upsert("C", 1, video, ResultKind.Video, 1, 64, ContentDb.StateIndexed, null,
+                      [frame, speech], tx);
+            tx.Commit();
+        }
+        db.Enqueue("C", 1, video, ResultKind.Video, Indexer.Reframe);
+
+        string reason = Decoders.NoVideoCodec + " (HEVC)";
+        var d = new TrackingDecoders(new CapabilitySet(new HashSet<Capability> { Capability.Photos }), reason);
+        Indexer.DrainOnce(db, _ => { }, d);
+
+        ContentDb.ItemRow row = db.ItemByPath(video)!.Value;
+        Assert.Equal(ContentDb.StateIndexed, row.State);          // the transcript still answers
+        Assert.Equal(reason, row.Error);
+
+        var kinds = db.SegmentsOf(row.Id).Select(s => (s.SegKind, s.Vec)).ToList();
+        Assert.Contains((ContentDb.SegSpeech, 9L), kinds);        // untouched
+        Assert.DoesNotContain((ContentDb.SegFrame, 7L), kinds);   // the stale frame is gone
+
+        Assert.Equal(1, db.BlockedVideoCodecs().Single(c => c.Codec == "HEVC").Count);
+        Assert.Equal(1, db.RequeueKinds([(int)ResultKind.Video], Indexer.Recheck,
+                                        onlyBecauseStartingWith: [Decoders.NoVideoCodec]));
+    }
+
+    [Fact]
+    public void AVideoWithNoOtherSegmentsDropsToSkippedWhenItsFramesFail()
+    {
+        // The other half of the same rule: when nothing else answers for the file - no
+        // transcript, nothing - a reframe failure is a genuine skip, not a quietly indexed file
+        // carrying no segments at all.
+        string video = Under("silent.mkv");
+        File.WriteAllBytes(video, new byte[64]);
+
+        using ContentDb db = Open();
+        using (var tx = db.Begin())
+        {
+            db.Upsert("C", 1, video, ResultKind.Video, 1, 64, ContentDb.StateIndexed, null,
+                      [new ContentDb.Segment(ContentDb.SegFrame, 0, 0, 7, "")], tx);
+            tx.Commit();
+        }
+        db.Enqueue("C", 1, video, ResultKind.Video, Indexer.Reframe);
+
+        var d = new TrackingDecoders(new CapabilitySet(new HashSet<Capability> { Capability.Photos }),
+                                     Decoders.NoFrames);
+        Indexer.DrainOnce(db, _ => { }, d);
+
+        ContentDb.ItemRow row = db.ItemByPath(video)!.Value;
+        Assert.Equal(ContentDb.StateSkipped, row.State);
+        Assert.Equal(Decoders.NoFrames, row.Error);
+        Assert.Empty(db.SegmentsOf(row.Id));
+    }
 }

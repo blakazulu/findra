@@ -35,6 +35,7 @@ public class DecoderGateTests : IDisposable
     {
         public CapabilitySet Installed { get; } = installed;
         public List<(ResultKind Kind, string Path)> Asked { get; } = [];
+        public List<string> FramesAsked { get; } = [];
         public List<long> Released { get; } = [];
         public int Flushes;
         public long NextRow = 100;
@@ -48,7 +49,10 @@ public class DecoderGateTests : IDisposable
         }
 
         public KindResult DecodeFrames(string path)
-            => new([new ContentDb.Segment(ContentDb.SegFrame, -1, -1, NextRow++, "")], null);
+        {
+            FramesAsked.Add(path);
+            return new KindResult([new ContentDb.Segment(ContentDb.SegFrame, -1, -1, NextRow++, "")], null);
+        }
 
         public void Flush() => Flushes++;
         public void Release(IReadOnlyList<long> vectorRows) => Released.AddRange(vectorRows);
@@ -568,6 +572,31 @@ public class DecoderGateTests : IDisposable
 
         Assert.Equal(Decoders.TooLong, r.Skip);
         Assert.Empty(r.Segments);
+    }
+
+    // ---- reframe: the frames-only path ----
+
+    [Fact]
+    public void AReframeRowCallsDecodeFramesAndNeverTheFullDecode()
+    {
+        // The whole point of the frames-only path: a video queued to retake its pictures must
+        // never go through Decode, which would reopen the sound track and re-transcribe a
+        // recording whose transcript is already held.
+        using ContentDb db = Open();
+        string video = File_("clip.mkv");
+        using (var tx = db.Begin())
+        {
+            db.Upsert("C", 1, video, ResultKind.Video, 1, 64, ContentDb.StateIndexed, null,
+                      [new ContentDb.Segment(ContentDb.SegFrame, 0, 0, 7, "")], tx);
+            tx.Commit();
+        }
+        db.Enqueue("C", 1, video, ResultKind.Video, Indexer.Reframe);
+
+        var d = new Fake(Set(Capability.Photos));
+        Indexer.DrainOnce(db, _ => { }, d);
+
+        Assert.Empty(d.Asked);                 // Decode was never called
+        Assert.Equal([video], d.FramesAsked);
     }
 
     // ---- the size gates, applied ----
