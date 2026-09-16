@@ -581,6 +581,13 @@ public sealed class IndexerTests : IDisposable
         Assert.Contains(db.Fts("hello", 10), h => h.Path == video);
         Assert.NotEqual("", row.Error);            // it says what happened
         Assert.Equal(0, db.PendingCount());        // and the queue moved on
+
+        // And the stale frames go, even though nothing replaced them. They were written by the
+        // decoder this whole step exists to replace, and the reason recorded on this path is not
+        // one of the codec prefixes any re-queue watches for - so nothing will ever offer this row
+        // again, and keeping them means keeping pictures known to be suspect for the life of the
+        // index. The transcript asserted above is what this path protects; the frames are not.
+        Assert.DoesNotContain(db.SegmentsOf(row.Id), s => s.SegKind == ContentDb.SegFrame);
     }
 
     [Fact]
@@ -612,5 +619,39 @@ public sealed class IndexerTests : IDisposable
         ContentDb.ItemRow row = db.ItemByPath(video)!.Value;
         Assert.Equal(ContentDb.StateIndexed, row.State);
         Assert.Equal("", row.Error);
+    }
+
+    [Fact]
+    public void AReframeOnAMachineWithoutThePictureModelKeepsTheFramesItCannotReplace()
+    {
+        // The same machine as the test above - Speech installed, Photos gone - and the half that
+        // matters more. DecodeFrames answers NoModel with an empty segment list, and writing that
+        // through ReplaceSegments DELETES every frame the file had and tombstones its vectors. The
+        // note is then correctly withheld, so the row reads as a perfectly good indexed video that
+        // has quietly lost its pictures, on a machine that once had Photos and could not put them
+        // back. A migration must not delete what it knows it cannot replace.
+        string video = Under("stillnophotos.mkv");
+        File.WriteAllBytes(video, new byte[64]);
+
+        using ContentDb db = Open();
+        var frame = new ContentDb.Segment(ContentDb.SegFrame, 0, 0, 7, "");
+        var speech = new ContentDb.Segment(ContentDb.SegSpeech, 0, 5, 9, "hello there");
+        using (var tx = db.Begin())
+        {
+            db.Upsert("C", 1, video, ResultKind.Video, 1, 64, ContentDb.StateIndexed, null,
+                      [frame, speech], tx);
+            tx.Commit();
+        }
+        db.Enqueue("C", 1, video, ResultKind.Video, Indexer.Reframe);
+
+        var d = new TrackingDecoders(new CapabilitySet(new HashSet<Capability> { Capability.Speech }),
+                                     Decoders.NoModel);
+        Indexer.DrainOnce(db, _ => { }, d);
+
+        ContentDb.ItemRow row = db.ItemByPath(video)!.Value;
+        var kinds = db.SegmentsOf(row.Id).Select(s => (s.SegKind, s.Vec)).ToList();
+        Assert.Contains((ContentDb.SegFrame, 7L), kinds);      // still there, and still findable
+        Assert.Contains((ContentDb.SegSpeech, 9L), kinds);
+        Assert.Equal(0, db.PendingCount());
     }
 }

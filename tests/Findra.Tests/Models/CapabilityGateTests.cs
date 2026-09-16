@@ -472,6 +472,23 @@ public class CapabilityGateTests : IDisposable
     }
 
     [Fact]
+    public void ALongVideoBlockedOnItsCodecIsStillReachedWhenTheLimitRises()
+    {
+        // A file carries ONE recorded reason, and Decoders.Video gives the codec one precedence
+        // over the length one - so an HEVC film longer than the limit says it needs a codec, and an
+        // exact match on TooLong reaches nothing. What Windows cannot read there is its PICTURES:
+        // the sound track is ordinary, and raising the limit is exactly the lever that should go
+        // back for it. Without this the file is unreachable by every lever the product has, and the
+        // symptom is "I raised the limit and this video still has no transcript".
+        using ContentDb db = Open();
+        Item(db, 1, ResultKind.Video, ContentDb.StateSkipped, Decoders.NoVideoCodec + " (HEVC)", File_("film.mkv"));
+        Item(db, 2, ResultKind.Video, ContentDb.StateSkipped, Decoders.NoContainerReader, File_("odd.bin"));
+
+        Assert.Equal(2, CapabilityGate.ApplyLimit(db, TranscribeLimit.NoLimit));
+        Assert.All(db.PendingRows(), r => Assert.Equal(Indexer.Recheck, r.Reason));
+    }
+
+    [Fact]
     public void LoweringTheLimitQueuesNothing()
     {
         // Deleting transcripts somebody already paid for, because they moved a slider down, is
