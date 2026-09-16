@@ -50,6 +50,8 @@ and Findra follows [Semantic Versioning](https://semver.org/spec/v2.0.0/).
 
 ### Changed
 
+- Documentation: how video frames are read, and what is checked end to end.
+
 - **The indexer says it is working while it reads one file.** A long recording or a large document
   used to leave every surface saying nothing was happening until the file was finished.
 

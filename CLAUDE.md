@@ -381,6 +381,91 @@ reading it.
   can be asked a question about, and "I cannot see the progress pill" had no answer that did not
   involve reading source and guessing.
 
+## Video frames
+
+`VideoFrames` is the one place a video is opened for pictures, by the indexer and by the card's
+preview alike, and it goes through the source reader - never through `Windows.Media.Editing`,
+which is the pipeline Windows ships for video editing and looks like the obvious tool for pulling
+a frame out of a file. It took about 33 seconds a frame for MPEG-4 Part 2 video and handed back a
+black picture, measured on this machine at the size the indexer asks for. The decoders underneath
+are the same ones the source reader uses, which reads the same films at 17 to 24 ms a frame with
+real pictures in them. The failure reported success at every step - a black frame is a valid
+image, it embeds, it stores, and nothing re-reads a file that worked - which is why the pipeline
+is named here rather than left as a thing somebody tries again.
+
+- **Four corrections, three of them from a file that got them wrong.** A decoder pads its output to
+  a multiple of 16 rows, and the padding is not black - it is a green strip along the bottom of
+  every H.264 frame, so `VideoGeometry` crops to the visible area the container states rather than
+  the buffer's own size. A phone writes its video sideways and a flag saying so, and on the library
+  measured 2,361 of 4,712 videos were `.mov` H.264 files, every one sampled a phone recording
+  carrying that flag - so a frame is rotated by what the file says rather than shown as decoded.
+  And the MPEG-1 decoder returns one all-zero buffer after every seek and the real picture straight
+  after it - 70 of 90 frames from one file came back pure black with real pictures in between -
+  so `VideoFrames.Frame` reads past an empty sample rather than returning it. The fourth, squaring
+  a picture whose pixels are not square, is the one correction this machine's library never
+  exercised: no file in it is anamorphic, so it is reasoned from the pixel-aspect-ratio field
+  rather than proven by a measurement, and a 720x576 4:3 frame is what the tests use to check it
+  rather than a real one.
+- **Empty means every pixel zero, and nothing looser.** A dark frame is a real frame: most films
+  open with a fade from black, and a threshold on how dark a picture may be is a rule about what
+  somebody is allowed to find. `IsEmpty` checks every pixel is exactly zero and nothing else.
+- **Every file has a limit, and the two kinds of limit catch different failures.**
+  `VideoRead.GiveUpAfter` ends a file after three empty frames in a row with nothing decoded yet -
+  a real film can open on frames the decoder will not produce, which is why it is three and not
+  one. `VideoRead.Budget` caps any one video at five minutes of frame-taking, because a queue that
+  hands out one file at a time lets the slowest file set the pace for everything behind it, and
+  "slow" can mean forever. Neither of those catches a `ReadSample` call that never returns at all:
+  the attempts counter is spent before a file is opened, so a decoder that takes the process down
+  is written off, but a hang is not a crash - the attempt never ends, the child never exits, and
+  the queue stops at that file for as long as the machine is on. `IndexerWatch.ShouldRestart`
+  is the one thing that catches that: a live, reading child with work to do that has gone
+  `IndexerWatch.StallSeconds` (three minutes) since its last beat is killed and restarted. Attempts
+  catch crashes; only the watchdog catches hangs.
+- **A codec Windows has not got is a skip naming the codec, and there are two container-level
+  reasons besides it.** `Decoders.NoVideoCodec` names the codec Windows cannot decode, in
+  brackets, so a person can search for it; `Decoders.NoVideoStream` is an audio-only container,
+  which is ordinary and still gets its sound track transcribed. `Decoders.NoContainerReader` is
+  the fourth reason, and it is deliberately not folded into the codec one: it fires when Windows
+  does not recognise the file's bytes as a container at all, which happens *before* any codec is
+  known, so calling it a codec gap would name a reason that is not the reason. Both
+  `NoVideoCodec` and `NoContainerReader` rows are re-queued together when `VideoDecoders.Fingerprint`
+  changes, because either is fixed the same way - something arriving that lets Windows open the
+  file at all. **The Store listing is paid; nothing may call it free.** The HEVC extension is
+  published for device manufacturers to pre-install, and only installs on machines that shipped
+  with it - `VideoCodecStore` sends a person to buy it, never to a promise that it is free.
+- **The migration that re-reads a video's pictures records what it failed to bring back, the same
+  way the ordinary path does.** A `reframe` row's frames are written through `ReplaceSegments`,
+  which touches only the frame segments and leaves a transcript in place; when the frames reader
+  reports a skip, `RecordFrameOutcome` applies `Decoders.Video`'s own rule rather than a rule of
+  its own - a transcript still on the row means the video stays `StateIndexed` with the reason as
+  a note about what was not seen, and nothing left at all drops it to `StateSkipped` carrying the
+  reason as why. Without this, a codec-blocked reframe looked like a successfully indexed video
+  with no pictures: quietly wrong rather than visibly waiting.
+- **A failed re-read keeps the transcript.** If the frames reader throws partway through a
+  reframe, the catch around it writes the failure through `RecordFrameOutcome` rather than through
+  the ordinary failure path, because the ordinary path's catch writes an empty segment set for a
+  file being read from scratch - right there, and wrong here, where it would take the speech rows
+  a real transcript had already earned and leave the item `StateFailed`, which nothing re-queues.
+- **`ContentDb.BlockedVideoCodecs` counts `StateIndexed` and `StateSkipped` together**, matching
+  the set `RequeueKinds` selects for its own re-queue, so the number Settings shows and the set the
+  re-queue can actually reach are the same set. Counting `StateSkipped` alone would drop every
+  video whose sound track still answers - the one case this whole section exists to keep counted
+  and keep re-queueable rather than losing it between two different ideas of "blocked".
+- **Document extraction beats as it reads, not just once per file.** `DocText.Extract` calls its
+  `beat` once per page in a PDF, once per paragraph inside a docx or pptx part, and once per
+  worksheet row and once per shared-string entry in an xlsx - because the watchdog above kills a
+  child that reports no progress for three minutes, and a large spreadsheet's shared-strings table
+  or a long document's single substantial part genuinely takes minutes inside one call with
+  nothing else in `Extract` to beat from.
+- **Measured on one machine only: x64, AMD processor, NVIDIA card, software decoding, with the
+  codec extensions installed.** No arm64 machine has run any of it, and Microsoft has an
+  acknowledged, unfixed bug where `IMFSourceReader::ReadSample` hangs at random on arm64, which
+  Findra ships for. That is an argument for the watchdog above rather than against reading video
+  this way at all: a hang there is bounded at three minutes for the file rather than unbounded for
+  the queue. The same caveat the hardware portability section states for every other measurement
+  in this file applies here: no Source Reader call hung during the measurements that produced the
+  numbers above, and that is not evidence that none will.
+
 ## The capsule's progress pill
 
 Under the bar, in a pill of its own: what is being read on the left, a track across the middle,

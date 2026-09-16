@@ -490,7 +490,7 @@ stamped on every reply exists to prevent. Name search is a pipe round trip, not 
 
 # Phase 4 - Content
 
-Twelve items. This phase is where the largest amount of never-executed code runs for the first
+Sixteen items. This phase is where the largest amount of never-executed code runs for the first
 time: everything below the gate in `Decoders` - photo, audio, video, transcription and the Meaning
 branch of a document - is unexercised at runtime until it does.
 
@@ -663,6 +663,69 @@ nothing.
 not read again. `CapabilityGate.ApplyLimit` writes `index:transcribeminutes` into the index, before
 its re-queue, and the child reads that row before each recording it opens - which is the same
 delegate-not-snapshot shape as step 4.7.
+
+### 4.13 (catalogue 63) A video library through a first pass - eye
+
+With photos installed, point Findra at a real folder of films and watch the progress pill from the
+start of the first pass.
+
+**Pass:** the pill moves past the first film within seconds rather than sitting on it.
+
+**No automated run has ever opened a real video for its pictures** - `VideoFramesTests` injects a
+fake `IVideoSource` and `--searchshot` composes the card with no image at all, so this is the
+first time the source reader's own speed is seen rather than measured in isolation. The pipeline
+it replaced, `Windows.Media.Editing`, took about 33 seconds a frame and returned black; the source
+reader reads a frame in 17 to 24 ms. A stall here at any one file is what `IndexerWatch` exists to
+catch: a live child gone three minutes with no beat is killed and restarted.
+
+### 4.14 (catalogue 64) A phone video's picture is upright - eye
+
+Index a video recorded on a phone held in portrait, then open it on the card.
+
+**Pass:** the picture on the stage is the right way up, not lying on its side.
+
+**A failure means** `VideoGeometry` is not reading the rotation flag the file carries, or is
+reading it backwards. This is a silent failure by nature: a sideways frame is still a valid
+picture, it embeds and stores exactly like an upright one, and nothing re-reads a file that
+"worked". The rotation flag itself was confirmed on 2,361 `.mov` H.264 phone recordings out of a
+library of 4,712 videos, every one sampled carrying it - but nobody has opened the card and looked
+at one since, which is what this step is for.
+
+### 4.15 (catalogue 65) The HEVC codec is offered, and installing it queues exactly those videos
+
+On a machine, or a Windows install, that has never had the HEVC Store extension, index a folder
+holding an HEVC phone video.
+
+**Pass:**
+- Settings shows the row offering to open the Store listing for HEVC, by name, and says plainly
+  that it is **not free** - `VideoCodecStore` sends a person to buy it, never to a promise it costs
+  nothing;
+- install the extension from the Store and wait for the five-minute check (`App.axaml.cs`). The log
+  must say how many videos were queued, and that count must be **exactly the videos blocked on that
+  codec**, not the whole library.
+
+**A failure where nothing is queued means** `VideoDecoders.Fingerprint` did not notice the machine's
+decoders changed. **A failure where the whole library is queued means** the re-queue is not
+filtered to `Decoders.NoVideoCodec` and `Decoders.NoContainerReader` rows, and every video in the
+index - including ones that were never blocked on anything - is being read again.
+
+### 4.16 (catalogue 66) An index from before this release re-reads frames and does not re-transcribe
+
+This needs an index built by a Findra from before the video-frame decoder shipped (schema below 6),
+with videos already indexed and at least one recording already transcribed. Point this build at it
+and let the first pass run.
+
+**Pass:**
+- every video in the old index is re-queued with the `reframe` reason and its pictures are read
+  again;
+- a transcript that was already held for a video **is not re-read** - the phrase that was findable
+  in it before this start is still findable, and the time this step takes is minutes, not the hours
+  a full re-transcription of the library would cost.
+
+**A failure where a transcript goes missing means** `ReplaceSegments` is touching the whole row
+instead of the frame segments alone, which is exactly the mistake `RecordFrameOutcome` exists to
+avoid at the other end of the same path: a video whose frames could not be read again must keep
+its transcript too, never lose it to a decoder failure it had nothing to do with.
 
 ---
 
@@ -1195,9 +1258,14 @@ halves stable.
   Neither exists yet.
 - **Step 9.6 (catalogue 37)** is an application to a third party and its outcome is not on any
   schedule this repository controls.
-- Nothing else in the catalogue is unplaceable. Every numbered item from 1 to 54, including 23a,
-  23b and 27a, appears above exactly once, except catalogue 33, 42 and 50, which are each split
-  across the phases where their halves become reachable.
+- **Step 4.16 (catalogue 66)** needs an index written by a Findra build from before schema 6, with
+  at least one video indexed and one recording already transcribed in it. If no such index has been
+  kept, the step cannot be run until one exists - a schema stamp cannot honestly be rolled back by
+  hand, because that would test the migration against a database this build wrote, not one an older
+  build did.
+- Nothing else in the catalogue is unplaceable. Every numbered item from 1 to 66, including 23a,
+  23b, 27a and 63 to 66, appears above exactly once, except catalogue 33, 42 and 50, which are each
+  split across the phases where their halves become reachable.
 - **Step 6.9 is not a catalogue item.** The two dim behaviours are a rule in the specification and
   in `CLAUDE.md` that the catalogue never turned into a step, and they need two monitors to tell
   apart at all, so they are written down here rather than left to be noticed.
