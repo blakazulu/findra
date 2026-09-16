@@ -329,6 +329,11 @@ public static class SearchIndex
 {
     public static int Run(string[] args)
     {
+        // Draining below opens whisper on whichever files were handed in. Without the card made
+        // visible first, this measures speech on whatever the runtime lists first rather than the
+        // chip the indexer actually uses.
+        if (VulkanAdapter.ReExecWithDiscrete(args) is { } code) return code;
+
         var files = new List<string>();
         var queries = new List<string>();
         var explain = new List<string>();

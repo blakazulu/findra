@@ -75,4 +75,38 @@ public class VulkanAdapterTests
     [Fact]
     public void DescribeAlwaysSaysSomething()
         => Assert.False(string.IsNullOrWhiteSpace(VulkanAdapter.Describe()));
+
+    [Fact]
+    public void AProcessThatAlreadyHasTheVariableIsNotRestarted()
+    {
+        bool ran = false;
+        int? code = VulkanAdapter.ReExecWithDiscrete(
+            ["--searchmodels"], _ => "0", () => "1", (_, _) => { ran = true; return 0; });
+        Assert.Null(code);
+        Assert.False(ran);
+    }
+
+    [Fact]
+    public void AMachineWithNothingDiscreteIsLeftExactlyAsItWas()
+    {
+        bool ran = false;
+        int? code = VulkanAdapter.ReExecWithDiscrete(
+            ["--searchmodels"], _ => null, () => null, (_, _) => { ran = true; return 0; });
+        Assert.Null(code);
+        Assert.False(ran);
+    }
+
+    [Fact]
+    public void OtherwiseTheProcessIsRestartedOnceWithTheCardMadeVisibleAndItsExitCodeCarried()
+    {
+        var seen = new List<(IReadOnlyList<string> Args, string Visible)>();
+        int? code = VulkanAdapter.ReExecWithDiscrete(
+            ["--searchindex", @"D:\clip.mp4"], _ => null, () => "1",
+            (args, visible) => { seen.Add((args, visible)); return 3; });
+
+        Assert.Equal(3, code);
+        (IReadOnlyList<string> args, string visible) = Assert.Single(seen);
+        Assert.Equal("1", visible);
+        Assert.Equal(["--searchindex", @"D:\clip.mp4"], args);
+    }
 }

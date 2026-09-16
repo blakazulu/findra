@@ -180,6 +180,12 @@ public static class SearchModels
 
     public static int Run(string[] args)
     {
+        // Whatever chip the indexer transcribes on, this has to agree with it - not whichever
+        // Vulkan device the runtime lists first. Media.ProveItTranscribes below runs a real
+        // transcription, and on the wrong chip that probe can produce exactly the garbled output
+        // it exists to detect, rejecting the accelerated rung this machine actually uses.
+        if (VulkanAdapter.ReExecWithDiscrete(args) is { } code) return code;
+
         string dir = ModelStore.Dir;
 
         var modelRows = new List<ModelRow>();

@@ -346,6 +346,11 @@ public static class SearchBench
     public static async Task<int> RunAsync(string[] args)
     {
         ArgumentNullException.ThrowIfNull(args);
+        // Machine.Read() below opens whisper to name the speech provider, even though this mode's
+        // own decoders take no capabilities. Without the card made visible first, that reads the
+        // wrong chip's name and speed on a machine with integrated graphics beside a card.
+        if (VulkanAdapter.ReExecWithDiscrete(args) is { } code) return code;
+
         string? outPath = args.Length > 1 && args[1].Length > 0 ? args[1] : null;
         int corpus = DefaultCorpus;
         if (args.Length > 2 && int.TryParse(args[2], NumberStyles.Integer, CultureInfo.InvariantCulture, out int n))
