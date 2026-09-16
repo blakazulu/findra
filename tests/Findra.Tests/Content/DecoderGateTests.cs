@@ -494,6 +494,70 @@ public class DecoderGateTests : IDisposable
         Assert.Equal(5, TranscribeLimit.Default);
     }
 
+    // ---- the video composition, with an injected source ----
+
+    /// <summary>A source with no real decoder behind it - the seam <see cref="Decoders"/> takes
+    /// so these arms can be driven without a model, a codec or a real file.</summary>
+    private sealed class FakeSource(double seconds) : IVideoSource
+    {
+        public double Seconds { get; } = seconds;
+        public string Codec => "TEST";
+        public VideoFrames.FrameResult Frame(double seconds, int maxDim)
+            => new(null, 0, true, false);
+        public void Dispose() { }
+    }
+
+    /// <summary>The real <see cref="Decoders"/>, with a throwaway vector store and the video open
+    /// itself replaced - so these tests drive <c>Video(path)</c>'s own composition rather than a
+    /// fake that would have to reimplement it.</summary>
+    private Decoders VideoDecoders(CapabilitySet installed, Func<string, (IVideoSource? Source, string? Skip)> videos)
+    {
+        var vectors = new VectorStore(Path.Combine(_dir, "video-vectors.bin"), writer: true);
+        return new Decoders(() => installed, vectors, modelDir: _dir, ownsVectors: true, videos: videos);
+    }
+
+    [Fact]
+    public void AnOpenFailureCarriesItsReasonIntoTheResult()
+    {
+        // The one that matters most: this is how a codec-blocked video gets a reason a later
+        // re-queue matches on, without a real codec or a real file ever being touched.
+        string reason = Decoders.NoVideoCodec + " (XVID)";
+        using Decoders d = VideoDecoders(CapabilitySet.None, _ => (null, reason));
+
+        KindResult r = d.Decode(ResultKind.Video, File_("film.avi"), 1_000);
+
+        Assert.Equal(reason, r.Skip);
+        Assert.Empty(r.Segments);
+    }
+
+    [Fact]
+    public void AMachineWithNoCapabilitiesRecordsNoFramesRatherThanAnEmptySuccess()
+    {
+        // The source opened fine - the file itself is readable - but nothing installed wants
+        // either half of it, so the result has to say so rather than reading as a video with
+        // nothing wrong that simply carries no segments.
+        using Decoders d = VideoDecoders(CapabilitySet.None, _ => (new FakeSource(10), null));
+
+        KindResult r = d.Decode(ResultKind.Video, File_("clip.mp4"), 1_000);
+
+        Assert.Equal(Decoders.NoFrames, r.Skip);
+        Assert.Empty(r.Segments);
+    }
+
+    [Fact]
+    public void ARecordingOverTheTranscriptionLimitIsPassedOverForLength()
+    {
+        // Speech only, no Photos, and a source whose own duration - read off the container, not
+        // decoded - is well past the default five-minute limit. TranscribeLimit.Covers is asked
+        // before a single sample is pulled into memory.
+        using Decoders d = VideoDecoders(Set(Capability.Speech), _ => (new FakeSource(1_000), null));
+
+        KindResult r = d.Decode(ResultKind.Video, File_("lecture.mp4"), 1_000);
+
+        Assert.Equal(Decoders.TooLong, r.Skip);
+        Assert.Empty(r.Segments);
+    }
+
     // ---- the size gates, applied ----
 
     [Theory]

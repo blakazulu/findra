@@ -39,6 +39,10 @@ public static class VideoRead
     /// <summary>The most any one video may spend on frames.</summary>
     public static readonly TimeSpan Budget = TimeSpan.FromMinutes(5);
 
+    /// <summary>Open one video for its frames, or say why not. The caller owns the returned
+    /// source and must dispose it - this is a thin seam over <see cref="VideoFrames.Open"/>, kept
+    /// separate so <see cref="Decoders"/> can inject a fake one here without a real file or a real
+    /// codec.</summary>
     public static (IVideoSource? Source, string? Skip) Open(string path)
     {
         VideoFrames.VideoOpen opened = VideoFrames.Open(path);
@@ -49,6 +53,8 @@ public static class VideoRead
         return (new SourceReaderVideo(opened), null);
     }
 
+    /// <summary>Where to sample this video - the same spacing the index has always used, so
+    /// changing how frames are taken never changes which moments are asked for.</summary>
     public static IReadOnlyList<double> Plan(double duration) => Media.SampleTimes(duration);
 
     /// <summary>Take the frames, stopping when the file is not worth more time.
