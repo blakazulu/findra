@@ -194,7 +194,8 @@ and Findra follows [Semantic Versioning](https://semver.org/spec/v2.0.0/).
   crashed was never noticed: the indexer stayed alive, the file was never given up on, and nothing
   else in the queue was read until Findra was restarted. A file that stops making progress for
   three minutes now ends that attempt, and after three attempts the file is set aside with a reason
-  and the queue moves on.
+  and the queue moves on. The reader that takes over is given the same three minutes before it is
+  judged in its turn, so ending one attempt cannot turn into Findra ending every attempt it starts.
 
 - **A large spreadsheet no longer looks stopped to the three-minute watchdog above.** Its worksheet
   loop only reported progress once the whole sheet had been read, so one large sheet with few
