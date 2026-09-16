@@ -68,6 +68,30 @@ public sealed class DocTextTests : IDisposable
     }
 
     [Fact]
+    public void TheBeatFiresMoreThanOnceOverManyRowsInOneWorksheetWithNoSharedStrings()
+    {
+        // The shared-strings table and the paragraph loop both beat inside themselves already; the
+        // worksheet's own row loop did not, so one huge sheet with nothing shared beat only once -
+        // after the whole sheet had been read rather than while it was being read.
+        string xlsx = Under("many-rows.xlsx");
+        using (FileStream fs = File.Create(xlsx))
+        using (var zip = new ZipArchive(fs, ZipArchiveMode.Create))
+        using (var w = new StreamWriter(zip.CreateEntry("xl/worksheets/sheet1.xml").Open()))
+        {
+            w.Write("<sheetData>");
+            for (int i = 0; i < 5000; i++) w.Write($"<row><c><t>row {i} has its own words</t></c></row>");
+            w.Write("</sheetData>");
+        }
+
+        int beats = 0;
+        string text = DocText.Extract(xlsx, () => beats++);
+
+        Assert.True(beats > 1, $"expected more than one beat over many rows in one worksheet, got {beats}");
+        Assert.Contains("row 0", text);
+        Assert.Contains("row 4999", text);
+    }
+
+    [Fact]
     public void TheBeatFiresMoreThanOnceAcrossManyParagraphsInOneOoxmlPart()
     {
         // docx beats once per PART, and there are only three - in practice nearly everything sits

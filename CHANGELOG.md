@@ -168,6 +168,12 @@ and Findra follows [Semantic Versioning](https://semver.org/spec/v2.0.0/).
   three minutes now ends that attempt, and after three attempts the file is set aside with a reason
   and the queue moves on.
 
+- **A large spreadsheet no longer looks stopped to the three-minute watchdog above.** Its worksheet
+  loop only reported progress once the whole sheet had been read, so one large sheet with few
+  shared strings could run for minutes writing nothing - the exact shape that watchdog ends an
+  attempt over, spending one of the three tries a file gets before it is set aside for good. It now
+  reports progress once per row, the same as every other format already does.
+
 - **The picture on the card for a video result is the moment that matched.** It came from the same
   slow path as indexing, so for many films it was a black rectangle after a long wait.
 
