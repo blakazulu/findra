@@ -536,4 +536,81 @@ public sealed class IndexerTests : IDisposable
         Assert.Equal(Decoders.NoFrames, row.Error);
         Assert.Empty(db.SegmentsOf(row.Id));
     }
+
+    /// <summary>A fake whose <c>DecodeFrames</c> throws rather than returning a reason - a
+    /// malformed file, or an error the reader does not map to a skip. Its other members behave
+    /// as <see cref="TrackingDecoders"/>'s do, standing in for a machine with Photos installed.</summary>
+    private sealed class ThrowingFrames : IDecoders
+    {
+        public CapabilitySet Installed { get; } = new CapabilitySet(new HashSet<Capability> { Capability.Photos });
+        public bool CanRead(ResultKind kind) => Decoders.Covers(kind, Installed);
+        public KindResult Decode(ResultKind kind, string path, long bytes) =>
+            new([new ContentDb.Segment(ContentDb.SegFrame, 0, 0, 900, "")], null);
+        public KindResult DecodeFrames(string path) => throw new InvalidOperationException("torn frame table");
+        public void Flush() { }
+        public void Release(IReadOnlyList<long> rows) { }
+        public void Dispose() { }
+    }
+
+    [Fact]
+    public void AReframeThatThrowsKeepsTheTranscriptItWasProtecting()
+    {
+        // A path Handle can find on disk: the fi.Exists check ahead of the reframe branch would
+        // otherwise dequeue this as "gone" and never reach DecodeFrames at all.
+        string video = Under("film.mkv");
+        File.WriteAllBytes(video, new byte[64]);
+
+        using ContentDb db = Open();
+        var frame = new ContentDb.Segment(ContentDb.SegFrame, 10, 10, 7, "");
+        var speech = new ContentDb.Segment(ContentDb.SegSpeech, 0, 5, 9, "hello there");
+        using (var tx = db.Begin())
+        {
+            db.Upsert("C", 42, video, ResultKind.Video, 1, 100, ContentDb.StateIndexed, null,
+                      [frame, speech], tx);
+            tx.Commit();
+        }
+        db.Enqueue("C", 42, video, ResultKind.Video, Indexer.Reframe);
+
+        // A decoder that throws rather than returning a reason: a malformed file, or an error the
+        // reader does not map to a skip.
+        Indexer.DrainOnce(db, _ => { }, new ThrowingFrames());
+
+        ContentDb.ItemRow row = db.ItemByPath(video)!.Value;
+        Assert.NotEqual(ContentDb.StateFailed, row.State);
+        Assert.Contains(db.SegmentsOf(row.Id), s => s.SegKind == ContentDb.SegSpeech && s.Vec == 9);
+        Assert.Contains(db.Fts("hello", 10), h => h.Path == video);
+        Assert.NotEqual("", row.Error);            // it says what happened
+        Assert.Equal(0, db.PendingCount());        // and the queue moved on
+    }
+
+    [Fact]
+    public void AMissingPhotosCapabilityWritesNoNoteOverAVideoATranscriptStillAnswersFor()
+    {
+        // Decoders.Video never stamps a note for a missing capability when another kind still
+        // searches for the file - a capability being absent is not a fact about the file. A
+        // machine with Speech installed and Photos absent has CanRead(Video) true and
+        // DecodeFrames answering NoModel, and this branch has to agree with the ordinary path
+        // rather than stamping "no decoder for this kind yet" onto every indexed video it touches.
+        string video = Under("nophotos.mkv");
+        File.WriteAllBytes(video, new byte[64]);
+
+        using ContentDb db = Open();
+        var frame = new ContentDb.Segment(ContentDb.SegFrame, 0, 0, 7, "");
+        var speech = new ContentDb.Segment(ContentDb.SegSpeech, 0, 5, 9, "hello there");
+        using (var tx = db.Begin())
+        {
+            db.Upsert("C", 1, video, ResultKind.Video, 1, 64, ContentDb.StateIndexed, null,
+                      [frame, speech], tx);
+            tx.Commit();
+        }
+        db.Enqueue("C", 1, video, ResultKind.Video, Indexer.Reframe);
+
+        var d = new TrackingDecoders(new CapabilitySet(new HashSet<Capability> { Capability.Speech }),
+                                     Decoders.NoModel);
+        Indexer.DrainOnce(db, _ => { }, d);
+
+        ContentDb.ItemRow row = db.ItemByPath(video)!.Value;
+        Assert.Equal(ContentDb.StateIndexed, row.State);
+        Assert.Equal("", row.Error);
+    }
 }

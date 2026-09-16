@@ -1257,6 +1257,13 @@ CREATE TABLE IF NOT EXISTS opened(path TEXT PRIMARY KEY, count INTEGER NOT NULL,
     /// <see cref="StateIndexed"/>; nothing left at all means the item drops to
     /// <see cref="StateSkipped"/> carrying the reason as why. Never <see cref="Upsert"/> here - it
     /// deletes every segment, including the transcript this whole path exists to protect.</para>
+    ///
+    /// <para><see cref="Decoders.NoModel"/> is the one reason that writes nothing when something
+    /// still answers for the file: a capability being absent is not a fact about the file, and
+    /// <see cref="Decoders.Video"/> never stamps that note on an item its other kind still
+    /// searches. Without this, a machine with Speech installed and Photos absent would carry "no
+    /// decoder for this kind yet" on every indexed video the frames step touched, which the
+    /// ordinary path deliberately never writes.</para>
     /// </summary>
     public void RecordFrameOutcome(string vol, ulong frn, string reason, SqliteTransaction tx)
     {
@@ -1282,13 +1289,16 @@ CREATE TABLE IF NOT EXISTS opened(path TEXT PRIMARY KEY, count INTEGER NOT NULL,
             anySegments = cmd.ExecuteScalar() is not null;
         }
 
+        if (reason == Decoders.NoModel && anySegments) return;
+
         using (var cmd = _c.CreateCommand())
         {
             cmd.Transaction = tx;
-            cmd.CommandText = "UPDATE items SET state=$st, error=$e WHERE id=$i";
+            cmd.CommandText = "UPDATE items SET state=$st, error=$e, indexed_at=$t WHERE id=$i";
             cmd.Parameters.AddWithValue("$st", anySegments ? StateIndexed : StateSkipped);
             cmd.Parameters.AddWithValue("$e", reason);
             cmd.Parameters.AddWithValue("$i", itemId.Value);
+            cmd.Parameters.AddWithValue("$t", DateTimeOffset.UtcNow.ToUnixTimeSeconds());
             cmd.ExecuteNonQuery();
         }
     }

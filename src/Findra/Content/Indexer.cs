@@ -443,26 +443,48 @@ public sealed class Indexer
             if (item.Reason == Reframe && item.Kind == ResultKind.Video
                 && _db.StateOf(item.Vol, item.Frn) == ContentDb.StateIndexed)
             {
-                KindResult frames = _decoders.DecodeFrames(item.Path);
-                _decoders.Flush();
-                List<long> old;
-                using (var tx = _db.Begin())
+                try
                 {
-                    old = _db.ReplaceSegments(item.Vol, item.Frn, ContentDb.SegFrame, frames.Segments, tx);
-                    // A reason the new reader gives must not vanish into a quietly successful,
-                    // pictureless video - an HEVC file the old decoder filled with black frames is
-                    // exactly that case. Decoders.Video's own rule applies here too: if a
-                    // transcript still answers for the file the reason is a NOTE and the row stays
-                    // indexed; if nothing does, it drops to skipped carrying the reason as why.
-                    // Success touches nothing, so an unrelated note already on the row - about its
-                    // sound track, say - survives untouched.
-                    if (frames.Skip is not null) _db.RecordFrameOutcome(item.Vol, item.Frn, frames.Skip, tx);
-                    _db.Dequeue(item.Id, tx);
-                    tx.Commit();
+                    KindResult frames = _decoders.DecodeFrames(item.Path);
+                    _decoders.Flush();
+                    List<long> old;
+                    using (var tx = _db.Begin())
+                    {
+                        old = _db.ReplaceSegments(item.Vol, item.Frn, ContentDb.SegFrame, frames.Segments, tx);
+                        // A reason the new reader gives must not vanish into a quietly successful,
+                        // pictureless video - an HEVC file the old decoder filled with black frames is
+                        // exactly that case. Decoders.Video's own rule applies here too: if a
+                        // transcript still answers for the file the reason is a NOTE and the row stays
+                        // indexed; if nothing does, it drops to skipped carrying the reason as why.
+                        // Success touches nothing, so an unrelated note already on the row - about its
+                        // sound track, say - survives untouched.
+                        if (frames.Skip is not null) _db.RecordFrameOutcome(item.Vol, item.Frn, frames.Skip, tx);
+                        _db.Dequeue(item.Id, tx);
+                        tx.Commit();
+                    }
+                    _decoders.Release(old);
+                    _done++;
+                    return "reframed";
                 }
-                _decoders.Release(old);
-                _done++;
-                return "reframed";
+                catch (Exception ex)
+                {
+                    // The transcript is not this failure's to destroy. Handle's own catch writes an
+                    // empty segment set, which is right for a file being read from scratch and
+                    // wrong here: it would take the speech rows with it and leave the item Failed,
+                    // where nothing re-queues it.
+                    Log.Once($"index|reframe|{ex.GetType().Name}", "WARN", "index",
+                        $"the pictures of {Path.GetFileName(item.Path)} could not be read again :: " +
+                        $"{ex.GetType().Name}: {ex.Message}");
+                    using (var tx = _db.Begin())
+                    {
+                        _db.RecordFrameOutcome(item.Vol, item.Frn,
+                            $"the pictures could not be read again :: {ex.GetType().Name}", tx);
+                        _db.Dequeue(item.Id, tx);
+                        tx.Commit();
+                    }
+                    _failed++;
+                    return "FAILED";
+                }
             }
 
             KindResult decoded = _decoders.Decode(item.Kind, item.Path, fi.Length);

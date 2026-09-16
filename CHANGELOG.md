@@ -170,6 +170,11 @@ and Findra follows [Semantic Versioning](https://semver.org/spec/v2.0.0/).
 
 ### Fixed
 
+- **Re-reading a video's pictures can no longer cost it its transcript.** If reading the pictures
+  of an already-indexed video failed outright, everything stored for that file was discarded -
+  including what was heard in it, which had not changed and was not being re-read. What was heard
+  now survives, and the file says why its pictures are missing.
+
 - **One file can no longer hold up everything waiting behind it.** A decoder that hung rather than
   crashed was never noticed: the indexer stayed alive, the file was never given up on, and nothing
   else in the queue was read until Findra was restarted. A file that stops making progress for
