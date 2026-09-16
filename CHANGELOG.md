@@ -193,7 +193,20 @@ and Findra follows [Semantic Versioning](https://semver.org/spec/v2.0.0/).
 - **Re-reading a video's pictures can no longer cost it its transcript.** If reading the pictures
   of an already-indexed video failed outright, everything stored for that file was discarded -
   including what was heard in it, which had not changed and was not being re-read. What was heard
-  now survives, and the file says why its pictures are missing.
+  now survives, and the file says why its pictures are missing. The pictures that could not be read
+  again are dropped rather than kept, because those are the ones this pass exists to replace.
+
+- **A machine that no longer has the picture model keeps the pictures it already found.** Taking a
+  video's pictures again on a machine where that capability has since been removed threw away every
+  picture it had no way to replace, and said nothing about it: the video went on being listed as
+  read while quietly losing what it could be found by. Nothing is thrown away now unless something
+  can be put in its place.
+
+- **Raising the transcription limit reaches a long video Windows cannot decode.** A file records one
+  reason, and needing a codec comes ahead of being too long - so a film over the limit in a format
+  Windows has no decoder for recorded the codec, and raising the limit went back for every other
+  recording but not that one. What Windows cannot read there is its pictures; its sound track is
+  ordinary. Those films are now heard when the limit rises, whether or not the codec ever arrives.
 
 - **One file can no longer hold up everything waiting behind it.** A decoder that hung rather than
   crashed was never noticed: the indexer stayed alive, the file was never given up on, and nothing

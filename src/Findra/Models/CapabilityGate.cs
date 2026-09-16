@@ -208,11 +208,24 @@ public static class CapabilityGate
         db.Set(LimitKey, minutes);
         if (owed is null) return 0;
 
-        // onlyBecause, not notBecause: EXACTLY the recordings that were passed over for being
+        // The narrow direction, never the wide one: EXACTLY the recordings passed over for being
         // longer than the old limit, and nothing else. It reads the recorded reason rather than
         // the state, so it also reaches a long video that was indexed for its frames alone and
         // carries TooLong as a note about the sound track nobody heard.
-        int n = db.RequeueKinds(owed.Value.Kinds, Indexer.Recheck, onlyBecause: [Decoders.TooLong]);
+        //
+        // The codec reasons are on the list because a file carries ONE recorded reason and
+        // Decoders.Video gives the codec one precedence over the length one: an HEVC film longer
+        // than the limit says it needs a codec, so an exact match on TooLong cannot reach it, and
+        // raising the limit - the one lever that person just pulled - would do nothing for the very
+        // file they pulled it for. What Windows cannot read there is its PICTURES. Its sound track
+        // is ordinary, and it is worth hearing whether or not the codec ever arrives.
+        //
+        // By prefix, because the codec is named in brackets after the reason naming it, and a list
+        // of every codec somebody might be missing is a list that will be wrong on somebody's
+        // machine. TooLong goes through the same door: its prefix is the whole of its text.
+        int n = db.RequeueKinds(owed.Value.Kinds, Indexer.Recheck,
+                                onlyBecauseStartingWith:
+                                [Decoders.TooLong, Decoders.NoVideoCodec, Decoders.NoContainerReader]);
         Log.Info("models", $"{owed.Value.Why}: {n.ToString("N0", CultureInfo.InvariantCulture)} recording(s) queued to be heard");
         return n;
     }

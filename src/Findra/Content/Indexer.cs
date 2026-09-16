@@ -447,10 +447,20 @@ public sealed class Indexer
                 {
                     KindResult frames = _decoders.DecodeFrames(item.Path);
                     _decoders.Flush();
-                    List<long> old;
+                    List<long> old = [];
                     using (var tx = _db.Begin())
                     {
-                        old = _db.ReplaceSegments(item.Vol, item.Frn, ContentDb.SegFrame, frames.Segments, tx);
+                        // NOT when the answer was "no model for this kind". ReplaceSegments with an
+                        // empty set deletes every frame this file has and hands back their vectors
+                        // to be tombstoned, and NoModel is the one reason that says nothing was
+                        // read because nothing on this machine COULD read it. On a machine that had
+                        // Photos when those frames were written and has not got it now, this step
+                        // would strip the pictures out of every video it touched with nothing to
+                        // put back - and the note is then correctly withheld, so the row would read
+                        // as a perfectly good indexed video that had quietly lost them. A migration
+                        // must not delete what it knows it cannot replace.
+                        if (frames.Skip != Decoders.NoModel)
+                            old = _db.ReplaceSegments(item.Vol, item.Frn, ContentDb.SegFrame, frames.Segments, tx);
                         // A reason the new reader gives must not vanish into a quietly successful,
                         // pictureless video - an HEVC file the old decoder filled with black frames is
                         // exactly that case. Decoders.Video's own rule applies here too: if a
@@ -475,13 +485,23 @@ public sealed class Indexer
                     Log.Once($"index|reframe|{ex.GetType().Name}", "WARN", "index",
                         $"the pictures of {Path.GetFileName(item.Path)} could not be read again :: " +
                         $"{ex.GetType().Name}: {ex.Message}");
+                    List<long> stale;
                     using (var tx = _db.Begin())
                     {
+                        // The frames go, even though nothing replaced them. They were written by
+                        // the decoder this step exists to replace, and the reason recorded here is
+                        // not one of the codec prefixes any re-queue watches for - so nothing will
+                        // ever offer this row again, and keeping them means keeping pictures known
+                        // to be suspect for the life of the index. The transcript is not this
+                        // failure's to destroy and stays where it is: the file goes on being found
+                        // by what was said in it and by its name.
+                        stale = _db.ReplaceSegments(item.Vol, item.Frn, ContentDb.SegFrame, [], tx);
                         _db.RecordFrameOutcome(item.Vol, item.Frn,
                             $"the pictures could not be read again :: {ex.GetType().Name}", tx);
                         _db.Dequeue(item.Id, tx);
                         tx.Commit();
                     }
+                    _decoders.Release(stale);
                     _failed++;
                     return "FAILED";
                 }
