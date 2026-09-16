@@ -133,6 +133,30 @@ public class MediaTests
         Assert.Empty(Speech.Merge([], _ => 0, 20, 600));
     }
 
+    [Fact]
+    public void CuttingTheWindowsAndEmbeddingThemAreSeparateSteps()
+    {
+        List<Media.Line> lines =
+        [
+            new(0, 3, "the first thing said", "en"),
+            new(3, 7, "and the second", "en"),
+            new(30, 34, "much later", "en"),
+        ];
+
+        // The windows a caller can embed in batches, and the segments the old path produced, have
+        // to agree: same texts, same times, same order.
+        List<Speech.Window> windows = Speech.Windows(lines);
+        List<ContentDb.Segment> merged = Speech.Merge(lines, _ => -1);
+
+        Assert.Equal(merged.Count, windows.Count);
+        for (int i = 0; i < windows.Count; i++)
+        {
+            Assert.Equal(merged[i].Text, windows[i].Text);
+            Assert.Equal(merged[i].T0, windows[i].T0);
+            Assert.Equal(merged[i].T1, windows[i].T1);
+        }
+    }
+
     // ---- words inside pictures ----
 
     [Theory]
