@@ -52,6 +52,9 @@ and Findra follows [Semantic Versioning](https://semver.org/spec/v2.0.0/).
 
 - Documentation: how video frames are read, and what is checked end to end.
 
+- Documentation: named the two limits the give-up rule means, rather than leaving "these" to
+  reach for the attempts-versus-watchdog sentence beside it.
+
 - **The indexer says it is working while it reads one file.** A long recording or a large document
   used to leave every surface saying nothing was happening until the file was finished.
 
