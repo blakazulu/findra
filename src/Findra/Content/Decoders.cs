@@ -352,6 +352,7 @@ public sealed class Decoders : IDecoders
     {
         if (!DocText.CanExtract(path)) return new KindResult([], NoFormatReader);
         string text = DocText.Extract(path);
+        Beat();
         if (text.Length < 40) return new KindResult([], NoText);
 
         List<string> chunks = DocText.Chunk(text);
@@ -379,6 +380,7 @@ public sealed class Decoders : IDecoders
             var batch = new List<string>(n);
             for (int k = 0; k < n; k++) batch.Add(E5Encoder.Passage(path, chunks[worth[i + k]]));
             float[][] vs = e5.EncodePassages(batch);
+            Beat();
             for (int k = 0; k < n; k++) rows[worth[i + k]] = Append(vs[k], ContentDb.SegText);
         }
 
@@ -391,6 +393,7 @@ public sealed class Decoders : IDecoders
     private KindResult Photo(string path)
     {
         using SKBitmap? bmp = LoadBitmap(path, 384);
+        Beat();
         if (bmp is null) return new KindResult([], "undecodable");
 
         long row = Append(Vision().Encode([ClipImageEncoder.Preprocess(bmp)])[0], ContentDb.SegImage);
@@ -412,6 +415,7 @@ public sealed class Decoders : IDecoders
         // "the screenshot with the invoice number in it" is a real thing to want, and it is a
         // question about WORDS. A vector answer to it was never asked for.
         string ocr = ImageText.Read(path);
+        Beat();
         if (ocr.Length >= 12)
             foreach (string chunk in DocText.Chunk(ocr, max: 8))
                 segs.Add(new ContentDb.Segment(ContentDb.SegText, -1, -1, -1, chunk));
@@ -428,6 +432,7 @@ public sealed class Decoders : IDecoders
         if (!TranscribeLimit.Covers(_transcribeMinutes(), duration)) return new KindResult([], TooLong);
 
         (float[] samples, double actual) = Media.Decode(path, MaxDecodeSeconds);
+        Beat();
         if (samples.Length < Media.SampleRate) return new KindResult([], "no audio");
         string? note = actual > MaxDecodeSeconds
             ? $"first {(MaxDecodeSeconds / 60).ToString("0", System.Globalization.CultureInfo.InvariantCulture)} min of {(actual / 60).ToString("0", System.Globalization.CultureInfo.InvariantCulture)}"
@@ -467,6 +472,7 @@ public sealed class Decoders : IDecoders
                     try
                     {
                         (float[] samples, _) = Media.Decode(path, MaxDecodeSeconds);
+                        Beat();
                         if (samples.Length >= Media.SampleRate) segs.AddRange(Transcribe(path, samples, null));
                     }
                     catch (Exception ex)
@@ -521,7 +527,12 @@ public sealed class Decoders : IDecoders
     private List<ContentDb.Segment> Transcribe(string path, float[] samples, string? note)
     {
         (Model general, Model? hebrew) = SpeechModels(Installed);
-        _whisper ??= Media.OpenWhisper(ModelStore.PathOf(general, _dir)).Value;
+        if (_whisper is null)
+        {
+            Beat();
+            _whisper = Media.OpenWhisper(ModelStore.PathOf(general, _dir)).Value;
+            Beat();
+        }
 
         // The FINE-TUNE is allowed to fail on its own, and this is the whole reason it has a try
         // of its own. It is a second pass over what the general model called Hebrew, so a machine
@@ -537,7 +548,12 @@ public sealed class Decoders : IDecoders
         // than one line in the log.
         if (_whisperHe is null && !_heIsBroken && hebrew is not null && ModelStore.Present(hebrew, _dir))
         {
-            try { _whisperHe = Media.OpenWhisper(ModelStore.PathOf(hebrew, _dir)).Value; }
+            try
+            {
+                Beat();
+                _whisperHe = Media.OpenWhisper(ModelStore.PathOf(hebrew, _dir)).Value;
+                Beat();
+            }
             catch (Exception ex)
             {
                 _heIsBroken = true;
@@ -547,12 +563,18 @@ public sealed class Decoders : IDecoders
         }
 
         (List<Media.Line> lines, string lang) = Media.Transcribe(samples, _whisper, _whisperHe).GetAwaiter().GetResult();
+        Beat();
         Log.Once($"index|speech|{lang}", "INFO", "index",
                  $"speech: first '{lang}' transcript, {lines.Count.ToString(System.Globalization.CultureInfo.InvariantCulture)} line(s)"
                  + (note is null ? "" : $" ({note})"));
 
         E5Encoder e5 = E5();
-        return Speech.Merge(lines, text => Append(e5.EncodePassage(E5Encoder.Passage(path, text)), ContentDb.SegSpeech));
+        return Speech.Merge(lines, text =>
+        {
+            long row = Append(e5.EncodePassage(E5Encoder.Passage(path, text)), ContentDb.SegSpeech);
+            Beat();
+            return row;
+        });
     }
 
     // ---- the pieces the arms share ----
@@ -564,7 +586,14 @@ public sealed class Decoders : IDecoders
         return row;
     }
 
-    private ClipImageEncoder Vision() => _vision ??= new ClipImageEncoder(wantAccelerator: true, _dir);
+    private ClipImageEncoder Vision()
+    {
+        if (_vision is not null) return _vision;
+        Beat();
+        _vision = new ClipImageEncoder(wantAccelerator: true, _dir);
+        Beat();
+        return _vision;
+    }
 
     /// <summary>
     /// On the accelerator, which is the largest single lever on how long a first pass takes.
@@ -580,7 +609,14 @@ public sealed class Decoders : IDecoders
     /// quantised file it did not agree, and <c>ProviderAgreementTests</c> is what keeps that
     /// true.</para>
     /// </summary>
-    private E5Encoder E5() => _e5 ??= new E5Encoder(wantAccelerator: true, _dir);
+    private E5Encoder E5()
+    {
+        if (_e5 is not null) return _e5;
+        Beat();
+        _e5 = new E5Encoder(wantAccelerator: true, _dir);
+        Beat();
+        return _e5;
+    }
 
     private static SKBitmap? LoadBitmap(string path, int maxDim)
     {
