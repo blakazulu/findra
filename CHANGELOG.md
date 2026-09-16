@@ -10,8 +10,10 @@ and Findra follows [Semantic Versioning](https://semver.org/spec/v2.0.0/).
 ### Added
 
 - **Settings says when videos need a codec.** Under Content, the Photos and video row reports how
-  many videos Windows has no decoder for, and where the codec can be had when there is one to get.
-  Findra installs nothing itself. Those videos are read as soon as the codec is there.
+  many videos need the codec it names, and where that codec can be had when there is one to get.
+  Findra installs nothing itself. Those videos are read as soon as the codec is there. When there
+  is no codec worth naming, the row reports every video Findra cannot read instead, which is a
+  different number on a library blocked on more than one format.
 
 - **Findra can say which video codec a file needs.** A video Windows has no decoder for is now
   recognised by the format the file itself states, so the reason recorded names the codec rather

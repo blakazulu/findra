@@ -178,7 +178,10 @@ public static class SearchShot
             // unscrolled list never shows what a partial page looks like.
             ExclusionScroll = section == Section.Searches ? 6 : 0,
             Installed = new CapabilitySet(new HashSet<Capability> { Capability.Meaning, Capability.Photos }),
-            BlockedVideos = 212, BlockedCodec = "HEVC",
+            // One codec on this machine, so the row's number and the total are the same 212. The
+            // button reports the codec's own count, and a shot that set only the total would draw
+            // "0 need HEVC".
+            BlockedVideos = 212, BlockedCodec = "HEVC", BlockedForCodec = 212,
             Version = BuildInfo.Version, Update = UpdateState.Available, Latest = "1.4.0",
             HoverTarget = PanelTarget.Section, HoverRow = 1,
             Prompt = prompt,

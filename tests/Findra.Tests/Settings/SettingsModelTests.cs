@@ -669,13 +669,16 @@ public class SettingsModelTests
             c => c.Id == ControlId.Capability && c.Tag == (int)Capability.Hebrew);
     }
 
-    private static SettingsState Content(long blocked, string? codec, bool photos = true) =>
+    private static SettingsState Content(long blocked, string? codec, bool photos = true, long? forCodec = null) =>
         new(Config.Default with { IndexContent = true })
         {
             Section = Section.Content,
             Installed = photos ? new CapabilitySet(new HashSet<Capability> { Capability.Photos }) : CapabilitySet.None,
             BlockedVideos = blocked,
             BlockedCodec = codec,
+            // One codec on the machine unless a case says otherwise, which is every case here but
+            // the mixed library below.
+            BlockedForCodec = forCodec ?? blocked,
         };
 
     [Fact]
@@ -705,6 +708,36 @@ public class SettingsModelTests
         Control row = SettingsModel.Controls(Content(6, "cvid")).Single(c => c.Id == ControlId.VideoCodec);
         Assert.Equal(ControlKind.Text, row.Kind);
         Assert.Contains("6", row.Value, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void TheCodecRowCountsTheVideosThatCodecWouldClearRatherThanEveryBlockedVideo()
+    {
+        // 24 HEVC files and 6 in a format nobody sells a decoder for. "30 need HEVC" is false in
+        // the one way that matters: installing HEVC clears 24 of them, and the row has promised
+        // all 30. The number and the codec beside it have to come from the same group.
+        // --searchindex has grouped by codec since it learned to report this at all, so the two
+        // surfaces were saying different things about the same index.
+        Control row = SettingsModel.Controls(Content(30, "HEVC", forCodec: 24))
+            .Single(c => c.Id == ControlId.VideoCodec);
+
+        Assert.Equal(ControlKind.Button, row.Kind);
+        Assert.Contains("24", row.Value, StringComparison.Ordinal);
+        Assert.DoesNotContain("30", row.Value, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void WithNoCodecWorthNamingTheRowReportsEveryVideoItCannotRead()
+    {
+        // The other branch, and why the total is still carried: nothing is named in "installed, 30
+        // unreadable", so that sentence is about every video Findra cannot read rather than about
+        // one codec's worth of them. Replacing the total with the chosen group's count here would
+        // under-report a mixed library instead of over-reporting it.
+        Control row = SettingsModel.Controls(Content(30, "cvid", forCodec: 24))
+            .Single(c => c.Id == ControlId.VideoCodec);
+
+        Assert.Equal(ControlKind.Text, row.Kind);
+        Assert.Contains("30", row.Value, StringComparison.Ordinal);
     }
 
     [Fact]
