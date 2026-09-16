@@ -40,6 +40,59 @@ public sealed class DocTextTests : IDisposable
     }
 
     [Fact]
+    public void TheBeatFiresMoreThanOnceOverALargeSharedStringsTable()
+    {
+        // Every repeated string in a real workbook lives in xl/sharedStrings.xml, parsed before
+        // any worksheet - a realistic place to spend a long, genuinely-progressing stretch with
+        // nothing else in Extract to beat from. One worksheet on its own would beat only once, so
+        // this table is what has to carry the count past one.
+        string xlsx = Under("shared.xlsx");
+        using (FileStream fs = File.Create(xlsx))
+        using (var zip = new ZipArchive(fs, ZipArchiveMode.Create))
+        {
+            using (var w = new StreamWriter(zip.CreateEntry("xl/sharedStrings.xml").Open()))
+            {
+                w.Write("<sst>");
+                for (int i = 0; i < 20; i++) w.Write($"<si><t>shared string number {i}</t></si>");
+                w.Write("</sst>");
+            }
+            using (var w = new StreamWriter(zip.CreateEntry("xl/worksheets/sheet1.xml").Open()))
+                w.Write("<sheetData><row><c t=\"s\"><v>0</v></c></row></sheetData>");
+        }
+
+        int beats = 0;
+        string text = DocText.Extract(xlsx, () => beats++);
+
+        Assert.True(beats > 1, $"expected more than one beat while reading a large shared-strings table, got {beats}");
+        Assert.Contains("shared string number 0", text);
+    }
+
+    [Fact]
+    public void TheBeatFiresMoreThanOnceAcrossManyParagraphsInOneOoxmlPart()
+    {
+        // docx beats once per PART, and there are only three - in practice nearly everything sits
+        // in the one substantial part, word/document.xml, so a beat only between parts is barely
+        // better than one beat before the file and one after. The real progress unit inside a huge
+        // single part is the paragraph.
+        string docx = Under("many-paragraphs.docx");
+        using (FileStream fs = File.Create(docx))
+        using (var zip = new ZipArchive(fs, ZipArchiveMode.Create))
+        using (var w = new StreamWriter(zip.CreateEntry("word/document.xml").Open()))
+        {
+            w.Write("<w:document xmlns:w=\"http://schemas.openxmlformats.org/wordprocessingml/2006/main\"><w:body>");
+            for (int i = 0; i < 50; i++) w.Write($"<w:p><w:r><w:t>paragraph {i}</w:t></w:r></w:p>");
+            w.Write("</w:body></w:document>");
+        }
+
+        int beats = 0;
+        string text = DocText.Extract(docx, () => beats++);
+
+        Assert.True(beats > 1, $"expected more than one beat across many paragraphs in one part, got {beats}");
+        Assert.Contains("paragraph 0", text);
+        Assert.Contains("paragraph 49", text);
+    }
+
+    [Fact]
     public void NoBeatIsRequired()
     {
         // The default stays usable for every caller that does not care about progress - the

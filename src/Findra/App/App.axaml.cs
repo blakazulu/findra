@@ -1206,15 +1206,17 @@ internal sealed class Shell : ISettingsHost
             // the next recording instead of waiting for a restart.
             if (minutes != _indexerMinutes) { db.Set(Indexer.TranscribeMinutesKey, minutes); _indexerMinutes = minutes; }
 
+            long pending = db.PendingCount();
+
             // The child is started, never stopped, by this: it watches this process's id and dies
             // with it. That is the whole of the "indexing stops when the app quits" rule, and
             // there is no other lifetime code anywhere.
-            if (reading && db.PendingCount() > 0) host.EnsureRunning();
+            if (reading && pending > 0) host.EnsureRunning();
 
             // A child that is alive and has stopped reporting progress is a hung decoder. The
             // attempt was counted before the file was opened, so killing it now is what lets that
             // file be written off after three tries instead of holding the queue for ever.
-            if (IndexerWatch.ShouldRestart(host.Running, reading, db.PendingCount(),
+            if (IndexerWatch.ShouldRestart(host.Running, reading, pending,
                                            db.Get("indexer:beat"), DateTimeOffset.UtcNow.ToUnixTimeSeconds()))
             {
                 string current = db.Get("indexer:current") ?? "";

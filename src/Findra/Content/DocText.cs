@@ -131,7 +131,7 @@ public static class DocText
             var e = zip.GetEntry(part);
             if (e is null) continue;
             using var s = e.Open();
-            XmlText(s, sb);
+            XmlText(s, sb, beat);
             beat?.Invoke();
         }
         return sb.ToString();
@@ -151,7 +151,7 @@ public static class DocText
         foreach (var e in entries)
         {
             using var s = e.Open();
-            XmlText(s, sb);
+            XmlText(s, sb, beat);
             beat?.Invoke();
             if (sb.Length > MaxChars) break;
         }
@@ -175,7 +175,16 @@ public static class DocText
             {
                 if (r.NodeType == XmlNodeType.Element && r.Name == "si") cur.Clear();
                 else if (r.NodeType == XmlNodeType.Text) cur.Append(r.Value);
-                else if (r.NodeType == XmlNodeType.EndElement && r.Name == "si") shared.Add(cur.ToString());
+                else if (r.NodeType == XmlNodeType.EndElement && r.Name == "si")
+                {
+                    shared.Add(cur.ToString());
+                    // Every repeated string in the workbook lives here, parsed before any
+                    // worksheet - a real workbook can spend a long, genuinely-progressing stretch
+                    // in this loop alone with nothing else in Extract to beat from. Beat.Throttled
+                    // upstream already rate-limits the write this drives, so beating per entry
+                    // costs nothing extra.
+                    beat?.Invoke();
+                }
             }
         }
         foreach (var e in zip.Entries)
@@ -224,7 +233,11 @@ public static class DocText
         return sb.ToString();
     }
 
-    private static void XmlText(Stream s, StringBuilder sb)
+    // A part is not the finest unit worth beating on: docx has only three, and in practice nearly
+    // everything sits in the one substantial part, word/document.xml, so a beat only at Ooxml's own
+    // loop is barely better than one beat before the part and one after. A paragraph end is the
+    // natural progress unit inside the part itself, so THIS is where a huge single part beats.
+    private static void XmlText(Stream s, StringBuilder sb, Action? beat)
     {
         using var r = XmlReader.Create(s, new XmlReaderSettings { DtdProcessing = DtdProcessing.Ignore });
         while (r.Read())
@@ -232,7 +245,10 @@ public static class DocText
             if (r.NodeType == XmlNodeType.Text || r.NodeType == XmlNodeType.CDATA) { sb.Append(r.Value); sb.Append(' '); }
             // a paragraph or a table cell ends a run of words; without this "Total" glues to "12"
             else if (r.NodeType == XmlNodeType.EndElement && r.Name is "w:p" or "a:p" or "w:tc" or "w:tab" or "w:br")
+            {
                 sb.Append(r.Name == "w:tab" ? ' ' : '\n');
+                if (r.Name is "w:p" or "a:p") beat?.Invoke();
+            }
             if (sb.Length > MaxChars) return;
         }
     }
