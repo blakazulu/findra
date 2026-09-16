@@ -345,4 +345,48 @@ public sealed class SchemaTests : IDisposable
         using (var db = new ContentDb(path, migrations: step))
             Assert.Equal((0xABCDEFUL, 90210L), db.UsnPosition('C'));
     }
+
+    [Fact]
+    public void AStepCanNameItsOwnReasonForgiveAttemptsAndPickUpItsOwnFailures()
+    {
+        // Schema 6's own three fields, exercised together: a queue reason other than Recheck for
+        // the rows RequeueKinds finds, attempts forgiven for a video already waiting under the
+        // old decoder, and the FAILED row RequeueKinds deliberately excludes picked up instead by
+        // IncludeFailed - with Recheck rather than the step's own reason, because a failed row has
+        // no transcript worth protecting and belongs on the ordinary full-decode path, not the
+        // frames-only one.
+        string path = Db();
+        var step = new[]
+        {
+            new ContentDb.Migration(2, [(int)ResultKind.Video], "frames retaken",
+                QueueReason: "reframe", ResetAttempts: true, IncludeFailed: true),
+        };
+
+        using (var db = new ContentDb(path))
+        {
+            using (var tx = db.Begin())
+            {
+                db.Upsert("C", 1, @"C:\indexed.mkv", ResultKind.Video, 7, 10, ContentDb.StateIndexed, null, [], tx);
+                db.Upsert("C", 2, @"C:\dead.avi", ResultKind.Video, 7, 10, ContentDb.StateFailed,
+                          "this file stopped or ended every attempt to read it", [], tx);
+                tx.Commit();
+            }
+            db.Enqueue("C", 3, @"C:\waiting.avi", ResultKind.Video, "probe");
+            ContentDb.Pending waiting = db.TakeNext()!.Value;
+            db.CountAttempt(waiting.Id);
+            db.CountAttempt(waiting.Id);
+            db.Set("schema", "1");
+        }
+
+        using (var db = new ContentDb(path, migrations: step))
+        {
+            Assert.Equal(3, db.PendingCount());
+            Assert.Equal("reframe", db.QueuedAs(@"C:\indexed.mkv")!.Value.Reason);
+            Assert.Equal(Indexer.Recheck, db.QueuedAs(@"C:\dead.avi")!.Value.Reason);
+
+            (string Reason, int Attempts) resumed = db.QueuedAs(@"C:\waiting.avi")!.Value;
+            Assert.Equal("probe", resumed.Reason);      // untouched - only its attempts are forgiven
+            Assert.Equal(0, resumed.Attempts);
+        }
+    }
 }

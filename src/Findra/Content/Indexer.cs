@@ -449,6 +449,14 @@ public sealed class Indexer
                 using (var tx = _db.Begin())
                 {
                     old = _db.ReplaceSegments(item.Vol, item.Frn, ContentDb.SegFrame, frames.Segments, tx);
+                    // A reason the new reader gives must not vanish into a quietly successful,
+                    // pictureless video - an HEVC file the old decoder filled with black frames is
+                    // exactly that case. Decoders.Video's own rule applies here too: if a
+                    // transcript still answers for the file the reason is a NOTE and the row stays
+                    // indexed; if nothing does, it drops to skipped carrying the reason as why.
+                    // Success touches nothing, so an unrelated note already on the row - about its
+                    // sound track, say - survives untouched.
+                    if (frames.Skip is not null) _db.RecordFrameOutcome(item.Vol, item.Frn, frames.Skip, tx);
                     _db.Dequeue(item.Id, tx);
                     tx.Commit();
                 }

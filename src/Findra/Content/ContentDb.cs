@@ -317,7 +317,7 @@ CREATE TABLE IF NOT EXISTS opened(path TEXT PRIMARY KEY, count INTEGER NOT NULL,
             if (m.To <= from || m.To > SchemaVersion) continue;
             _migrationsRun.Add(m.Reason);
             if (m.ReWalk) ClearAllUsnPositions();
-            if (m.ResetAttempts) ResetAttempts(m.InvalidatedKinds);
+            int forgiven = m.ResetAttempts ? ResetAttempts(m.InvalidatedKinds) : 0;
             // Indexer.Recheck, NOT the migration's prose, unless the step names its own reason.
             // RequeueKinds says it in its own note: the indexer dequeues a row untouched unless
             // the reason is Recheck (or the step's own reason), the row is Skipped, or the file's
@@ -328,7 +328,13 @@ CREATE TABLE IF NOT EXISTS opened(path TEXT PRIMARY KEY, count INTEGER NOT NULL,
             // the index was exactly as it had been.
             int n = RequeueKinds(m.InvalidatedKinds, m.QueueReason ?? Indexer.Recheck);
             if (m.IncludeFailed) n += RequeueFailed(m.InvalidatedKinds, Indexer.Recheck);
-            Log.Info("index", $"schema {from} -> {m.To}: {m.Reason}, {n.ToString("N0", CultureInfo.InvariantCulture)} file(s) re-queued");
+            // The forgiven count is its own clause, not folded into "re-queued": it is the
+            // difference between a file the new decoder gets its own three tries at and one
+            // written off before it is ever seen, and that fact has nowhere else to be read.
+            string forgivenNote = m.ResetAttempts
+                ? $", {forgiven.ToString("N0", CultureInfo.InvariantCulture)} file(s) had spent attempts forgiven"
+                : "";
+            Log.Info("index", $"schema {from} -> {m.To}: {m.Reason}, {n.ToString("N0", CultureInfo.InvariantCulture)} file(s) re-queued{forgivenNote}");
         }
         Set("schema", Stamp(SchemaVersion));
     }
@@ -964,14 +970,23 @@ CREATE TABLE IF NOT EXISTS opened(path TEXT PRIMARY KEY, count INTEGER NOT NULL,
     ///
     /// <para>The CODEC reason only - a file Windows did not even recognise as a container has no
     /// codec to name, and folding it into this count would render as a codec nobody can
-    /// install.</para></summary>
+    /// install.</para>
+    ///
+    /// <para><c>state IN (1, 3)</c> - indexed and skipped - matching what <see cref="RequeueKinds"/>
+    /// already selects, and for the same reason: a video whose sound track was read but whose
+    /// pictures are blocked on a codec is genuinely INDEXED with the codec reason as a note, not
+    /// skipped, and it has to be both counted here and reachable by the re-queue that watches for
+    /// the codec's arrival. Counting only Skipped would let such a file disappear from the number
+    /// Settings prints while it went on waiting in the set the re-queue actually reaches.</para>
+    /// </summary>
     public IReadOnlyList<(string Codec, long Count)> BlockedVideoCodecs()
     {
         var list = new List<(string, long)>();
         using var cmd = _c.CreateCommand();
-        cmd.CommandText = "SELECT error, COUNT(*) FROM items WHERE kind=$k AND state=$s AND error LIKE $p || '%' GROUP BY error";
+        cmd.CommandText = $"SELECT error, COUNT(*) FROM items WHERE kind=$k " +
+                          $"AND state IN ({StateIndexed.ToString(CultureInfo.InvariantCulture)}, {StateSkipped.ToString(CultureInfo.InvariantCulture)}) " +
+                          "AND error LIKE $p || '%' GROUP BY error";
         cmd.Parameters.AddWithValue("$k", (int)ResultKind.Video);
-        cmd.Parameters.AddWithValue("$s", StateSkipped);
         cmd.Parameters.AddWithValue("$p", Decoders.NoVideoCodec);
         using var r = cmd.ExecuteReader();
         while (r.Read())
@@ -1225,41 +1240,57 @@ CREATE TABLE IF NOT EXISTS opened(path TEXT PRIMARY KEY, count INTEGER NOT NULL,
         }
         if (itemId is null) return [];
 
-        var dead = new List<long>();
-        using (var cmd = _c.CreateCommand())
-        {
-            cmd.Transaction = tx;
-            cmd.CommandText = "SELECT id, vec, text FROM segments WHERE item=$i AND kind=$k";
-            cmd.Parameters.AddWithValue("$i", itemId.Value);
-            cmd.Parameters.AddWithValue("$k", segKind);
-            using var r = cmd.ExecuteReader();
-            var rows = new List<(long Id, long Vec, string Text)>();
-            while (r.Read()) rows.Add((r.GetInt64(0), r.GetInt64(1), r.GetString(2)));
-            r.Close();
-            foreach (var (id, vec, text) in rows)
-            {
-                if (vec >= 0) dead.Add(vec);
-                if (text.Length > 0)
-                {
-                    using var f = _c.CreateCommand();
-                    f.Transaction = tx;
-                    f.CommandText = "INSERT INTO fts(fts, rowid, text) VALUES('delete', $r, $x)";
-                    f.Parameters.AddWithValue("$r", id);
-                    f.Parameters.AddWithValue("$x", text);
-                    f.ExecuteNonQuery();
-                }
-            }
-        }
-        using (var cmd = _c.CreateCommand())
-        {
-            cmd.Transaction = tx;
-            cmd.CommandText = "DELETE FROM segments WHERE item=$i AND kind=$k";
-            cmd.Parameters.AddWithValue("$i", itemId.Value);
-            cmd.Parameters.AddWithValue("$k", segKind);
-            cmd.ExecuteNonQuery();
-        }
+        List<long> dead = DeleteSegments(itemId.Value, tx, segKind);
         InsertSegments(itemId.Value, segments, tx);
         return dead;
+    }
+
+    /// <summary>
+    /// Record what a frames-only reread left behind, following the rule <see cref="Video"/> in
+    /// <see cref="Decoders"/> already uses for the ordinary path.
+    ///
+    /// <para>Called only when the frames reader reported a reason - success touches nothing, and
+    /// the item's existing state and note (about its sound track, say) stay exactly as they were.
+    /// A reason means the segments <see cref="ReplaceSegments"/> just wrote for the frame kind are
+    /// empty, so this asks what is LEFT: another kind still there - a transcript - means the file
+    /// is genuinely still searchable and the reason is a NOTE on an item that stays
+    /// <see cref="StateIndexed"/>; nothing left at all means the item drops to
+    /// <see cref="StateSkipped"/> carrying the reason as why. Never <see cref="Upsert"/> here - it
+    /// deletes every segment, including the transcript this whole path exists to protect.</para>
+    /// </summary>
+    public void RecordFrameOutcome(string vol, ulong frn, string reason, SqliteTransaction tx)
+    {
+        ArgumentNullException.ThrowIfNull(reason);
+        using var claim = Enter();
+        long? itemId;
+        using (var cmd = _c.CreateCommand())
+        {
+            cmd.Transaction = tx;
+            cmd.CommandText = "SELECT id FROM items WHERE vol=$v AND frn=$f";
+            cmd.Parameters.AddWithValue("$v", vol);
+            cmd.Parameters.AddWithValue("$f", unchecked((long)frn));
+            itemId = cmd.ExecuteScalar() as long?;
+        }
+        if (itemId is null) return;
+
+        bool anySegments;
+        using (var cmd = _c.CreateCommand())
+        {
+            cmd.Transaction = tx;
+            cmd.CommandText = "SELECT 1 FROM segments WHERE item=$i LIMIT 1";
+            cmd.Parameters.AddWithValue("$i", itemId.Value);
+            anySegments = cmd.ExecuteScalar() is not null;
+        }
+
+        using (var cmd = _c.CreateCommand())
+        {
+            cmd.Transaction = tx;
+            cmd.CommandText = "UPDATE items SET state=$st, error=$e WHERE id=$i";
+            cmd.Parameters.AddWithValue("$st", anySegments ? StateIndexed : StateSkipped);
+            cmd.Parameters.AddWithValue("$e", reason);
+            cmd.Parameters.AddWithValue("$i", itemId.Value);
+            cmd.ExecuteNonQuery();
+        }
     }
 
     /// <summary>Drop an item and every segment under it, and take its text back out of the
@@ -1289,14 +1320,22 @@ CREATE TABLE IF NOT EXISTS opened(path TEXT PRIMARY KEY, count INTEGER NOT NULL,
         return dead;
     }
 
-    private List<long> DeleteSegments(long itemId, SqliteTransaction tx)
+    /// <summary>Read, tombstone-list and full-text-delete every segment under an item - every one,
+    /// or only those of ONE kind when <paramref name="kind"/> is given. One shape for both a full
+    /// delete and a kind-scoped replace, so the two can never come to remove a full-text row
+    /// differently: an orphaned FTS row is invisible until a query returns a segment that no
+    /// longer exists.</summary>
+    private List<long> DeleteSegments(long itemId, SqliteTransaction tx, int? kind = null)
     {
         var dead = new List<long>();
         using (var cmd = _c.CreateCommand())
         {
             cmd.Transaction = tx;
-            cmd.CommandText = "SELECT id, vec, text FROM segments WHERE item=$i";
+            cmd.CommandText = kind is null
+                ? "SELECT id, vec, text FROM segments WHERE item=$i"
+                : "SELECT id, vec, text FROM segments WHERE item=$i AND kind=$k";
             cmd.Parameters.AddWithValue("$i", itemId);
+            if (kind is not null) cmd.Parameters.AddWithValue("$k", kind.Value);
             using var r = cmd.ExecuteReader();
             var rows = new List<(long Id, long Vec, string Text)>();
             while (r.Read()) rows.Add((r.GetInt64(0), r.GetInt64(1), r.GetString(2)));
@@ -1319,8 +1358,11 @@ CREATE TABLE IF NOT EXISTS opened(path TEXT PRIMARY KEY, count INTEGER NOT NULL,
         using (var cmd = _c.CreateCommand())
         {
             cmd.Transaction = tx;
-            cmd.CommandText = "DELETE FROM segments WHERE item=$i";
+            cmd.CommandText = kind is null
+                ? "DELETE FROM segments WHERE item=$i"
+                : "DELETE FROM segments WHERE item=$i AND kind=$k";
             cmd.Parameters.AddWithValue("$i", itemId);
+            if (kind is not null) cmd.Parameters.AddWithValue("$k", kind.Value);
             cmd.ExecuteNonQuery();
         }
         return dead;

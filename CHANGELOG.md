@@ -322,7 +322,10 @@ and Findra follows [Semantic Versioning](https://semver.org/spec/v2.0.0/).
   release may hold black frames, so Findra re-reads the pictures of every video it has - and only
   the pictures: what was heard in them is kept, so nothing is transcribed twice. Videos that were
   set aside as unreadable are tried again, and videos waiting in the queue no longer carry the
-  attempts they spent on the old decoder.
+  attempts they spent on the old decoder. A video whose codec is still unsupported keeps the
+  reason recorded rather than coming back as a quietly finished video with no pictures, so it goes
+  on being counted under Settings' "videos need a codec" row and is still picked up the moment the
+  codec arrives - and its transcript, if it has one, is untouched either way.
 
 ## [0.1.0] - 2026-09-04
 
