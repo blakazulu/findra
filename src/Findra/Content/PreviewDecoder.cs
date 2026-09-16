@@ -29,7 +29,7 @@ public static class PreviewDecoder
         {
             try
             {
-                (IVideoSource? source, string? skip) = VideoRead.Open(path);
+                (IVideoSource? source, _) = VideoRead.Open(path);
                 using (source)
                     if (source is not null)
                     {
