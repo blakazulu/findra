@@ -16,6 +16,10 @@ namespace Findra;
 /// <para><paramref name="embed"/> hands back the vector row the window's text was appended at.
 /// Passing it in rather than holding an encoder is what lets the windowing rule - the part with
 /// an off-by-one in it - be tested without a model on disk.</para>
+///
+/// <para><see cref="Windows"/> is the better answer to that same problem, and is the one production
+/// takes: it cuts the windows and embeds nothing at all, so the rule needs no delegate to be
+/// testable and the caller embeds a batch at a time rather than paying a round trip per window.</para>
 /// </summary>
 public static class Speech
 {

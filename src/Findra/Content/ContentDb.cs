@@ -118,7 +118,8 @@ public sealed class ContentDb : IDisposable
         // a query from the new one is a number with nothing behind it.
         //
         // Documents, recordings and video, because those are the kinds that carry an e5 vector -
-        // Decoders.Document embeds chunks and Speech.Merge embeds transcript lines. Photos do not:
+        // Decoders.Document embeds a document's chunks, and a transcript's windows are cut by
+        // Speech.Windows and embedded beside them, a batch at a time. Photos do not:
         // their vectors come from SigLIP-2's vision tower, which has not changed, and re-reading
         // every picture on a disk for a change that cannot touch them is the expensive mistake
         // spec 2a names.
