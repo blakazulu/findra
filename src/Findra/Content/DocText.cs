@@ -204,9 +204,15 @@ public static class DocText
                     sb.Append(' ');
                 }
                 else if (r.NodeType == XmlNodeType.Element && r.Name == "t") { sb.Append(r.ReadElementContentAsString()).Append(' '); }
-                else if (r.NodeType == XmlNodeType.EndElement && r.Name == "row") sb.Append('\n');
+                else if (r.NodeType == XmlNodeType.EndElement && r.Name == "row")
+                {
+                    sb.Append('\n');
+                    // A row is this format's own progress unit, the same as a paragraph in a docx
+                    // part: one huge sheet with nothing in the shared-strings table used to beat
+                    // only once, after the whole sheet had already been read.
+                    beat?.Invoke();
+                }
             }
-            beat?.Invoke();
             if (sb.Length > MaxChars) break;
         }
         return sb.ToString();
