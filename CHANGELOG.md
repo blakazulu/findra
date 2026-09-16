@@ -56,6 +56,9 @@ and Findra follows [Semantic Versioning](https://semver.org/spec/v2.0.0/).
 
 - Documentation: how video frames are read, and what is checked end to end.
 
+- Documentation: the design note and the step plan behind the video frame work are in the
+  repository, beside the code they describe.
+
 - Documentation: named the two limits the give-up rule means, rather than leaving "these" to
   reach for the attempts-versus-watchdog sentence beside it.
 
