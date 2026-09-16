@@ -8,14 +8,15 @@ namespace Findra;
 
 /// <summary>
 /// The picture the card's stage shows for the selected row: a photo decoded at preview size by
-/// Skia with its EXIF orientation honoured, and - for everything Skia cannot read, which is HEIC,
-/// RAW, video, PDF and Office files - the shell's own thumbnail through WinRT, the same one
-/// Explorer draws, from its cache when it has one.
+/// Skia with its EXIF orientation honoured; a video frame at the matched moment through
+/// <see cref="VideoFrames"/>, the same reader the indexer uses; and - for everything else, which is
+/// HEIC, RAW, a video with no matched moment, PDF and Office files - the shell's own thumbnail
+/// through WinRT, the same one Explorer draws, from its cache when it has one.
 ///
-/// <para>Neither path decodes a whole image into memory: a 48-megapixel photo is sampled down by
-/// the codec, and a video is never opened here at all. And neither path throws for a file that
-/// turns out not to be a picture, because the caller runs this over whatever row somebody has
-/// arrowed onto.</para>
+/// <para>Neither the Skia path nor the shell path decodes a whole image into memory: a
+/// 48-megapixel photo is sampled down by the codec. And nothing here throws for a file that turns
+/// out not to be a picture, because the caller runs this over whatever row somebody has arrowed
+/// onto.</para>
 /// </summary>
 [SupportedOSPlatform("windows10.0.19041.0")]
 public static class PreviewDecoder
@@ -28,8 +29,13 @@ public static class PreviewDecoder
         {
             try
             {
-                var frames = Media.Frames(path, new[] { moment }, maxDim).GetAwaiter().GetResult();
-                if (frames.Count > 0 && frames[0] is { } f) { using (f) return SKImage.FromBitmap(f); }
+                (IVideoSource? source, string? skip) = VideoRead.Open(path);
+                using (source)
+                    if (source is not null)
+                    {
+                        VideoFrames.FrameResult f = source.Frame(moment, maxDim);
+                        if (f.Picture is { } picture) { using (picture) return SKImage.FromBitmap(picture); }
+                    }
             }
             catch (Exception ex) { Log.Once("card|frame|" + ex.GetType().Name, "WARN", "card", $"frame at {moment:0}s failed :: {ex.Message}"); }
         }

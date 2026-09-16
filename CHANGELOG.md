@@ -159,6 +159,14 @@ and Findra follows [Semantic Versioning](https://semver.org/spec/v2.0.0/).
 
 ### Fixed
 
+- **Videos are read in seconds rather than hours, and the frames are real.** Findra read video
+  frames through a path that took about 33 seconds per frame for DivX and XviD films and returned
+  a black picture every time, so one film could hold up the whole queue for a day and then store
+  90 black frames. Frames now come from Windows' own decoders directly: the same films read in
+  under three seconds with real pictures in them. No video can spend more than five minutes on
+  frames, and one that produces nothing is recorded as such instead of filling the index with
+  black.
+
 - **The log is readable again.** The part of Findra that watches for file changes was writing
   a line every second for as long as the machine was on - 50,248 lines in 14 hours on a real
   install, 99.5% of everything in the log, about 9 MB a day, and 83% of them reporting that
