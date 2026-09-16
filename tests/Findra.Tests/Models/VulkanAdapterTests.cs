@@ -109,4 +109,18 @@ public class VulkanAdapterTests
         Assert.Equal("1", visible);
         Assert.Equal(["--searchindex", @"D:\clip.mp4"], args);
     }
+
+    [Fact]
+    public void AnEmptyVariableCountsAsUnsetAndStillRestarts()
+    {
+        // Read back as "" rather than null - set by something outside Findra, or left over from a
+        // shell that exported it empty - hides every device from the runtime rather than choosing
+        // none of them. Treating that as "already chosen" would skip the restart and leave the
+        // runtime on its default device, which is the exact failure this method exists to prevent.
+        bool ran = false;
+        int? code = VulkanAdapter.ReExecWithDiscrete(
+            ["--searchmodels"], _ => "", () => "1", (_, _) => { ran = true; return 0; });
+        Assert.Equal(0, code);
+        Assert.True(ran);
+    }
 }

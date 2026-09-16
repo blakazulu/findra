@@ -490,7 +490,7 @@ stamped on every reply exists to prevent. Name search is a pipe round trip, not 
 
 # Phase 4 - Content
 
-Sixteen items. This phase is where the largest amount of never-executed code runs for the first
+Seventeen items. This phase is where the largest amount of never-executed code runs for the first
 time: everything below the gate in `Decoders` - photo, audio, video, transcription and the Meaning
 branch of a document - is unexercised at runtime until it does.
 
@@ -726,6 +726,33 @@ and let the first pass run.
 instead of the frame segments alone, which is exactly the mistake `RecordFrameOutcome` exists to
 avoid at the other end of the same path: a video whose frames could not be read again must keep
 its transcript too, never lose it to a decoder failure it had nothing to do with.
+
+### 4.17 (catalogue 67) The diagnostics restart themselves to reach the card
+
+This one needs a machine with integrated graphics beside a discrete card - the shape of machine
+`ReExecWithDiscrete` exists for, and the one shape nothing in this project has ever run it on. Copy
+a short audio or video file to a path holding a space and a Hebrew word, then run each of these in
+turn: `findra --searchmodels`, `findra --searchindex "<that path>"`, `findra --searchtest`,
+`findra --searchbench`.
+
+**Pass:**
+- each command's output appears exactly once - the restarted process's, never the original's
+  printed twice and never neither;
+- each exits with the code a script would check (`echo $LASTEXITCODE` after each, in PowerShell);
+- `--searchmodels`'s speech device line names the **discrete card** as chosen, not the integrated
+  device;
+- the path with the space and the Hebrew word round-trips whole into `--searchindex`'s own report -
+  it queued and read that exact file, not a truncated or mis-split one.
+
+**A failure where nothing prints means** the restarted process did not inherit the console handles -
+`ProcessStartInfo.UseShellExecute` came back on, or something else changed how the child's standard
+streams are wired. **A failure where output prints twice means** the parent kept running after
+starting the child instead of returning its exit code straight back. **A failure where
+`--searchmodels` still chooses the integrated device means** the restart never happened at all, or
+happened after speech was already opened - the guard has to run before `Media.OpenWhisper`, not
+after. **This machine has only ever proven the other path**: one discrete card and nothing
+integrated beside it means `VulkanAdapter.Visible()` always had nothing to choose, so every run
+here so far took the "leave it exactly as it was" branch, never this one.
 
 ---
 

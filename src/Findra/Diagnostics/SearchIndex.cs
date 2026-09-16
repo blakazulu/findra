@@ -329,10 +329,11 @@ public static class SearchIndex
 {
     public static int Run(string[] args)
     {
-        // Draining below opens whisper on whichever files were handed in. Without the card made
-        // visible first, this measures speech on whatever the runtime lists first rather than the
-        // chip the indexer actually uses.
-        if (VulkanAdapter.ReExecWithDiscrete(args) is { } code) return code;
+        // Scoped to invocations that will actually drain a file: a bare `--searchindex` is a
+        // read-only report and `q:`/`why:` alone is a query, neither opens a model, and a machine
+        // with a second Vulkan device should not pay a process restart for either. Draining below
+        // is what opens whisper, on whichever files were handed in.
+        if (HasPathsToDrain(args) && VulkanAdapter.ReExecWithDiscrete(args) is { } code) return code;
 
         var files = new List<string>();
         var queries = new List<string>();
@@ -442,6 +443,17 @@ public static class SearchIndex
 
         return 0;
     }
+
+    /// <summary>
+    /// Whether this invocation names at least one real file or folder to queue and drain, as
+    /// opposed to a bare report or a <c>q:</c>/<c>why:</c> query. Mirrors the classification the
+    /// main loop above does anyway, read-only and side-effect free - it exists only to decide
+    /// whether re-pointing the speech runtime at the card is worth a process restart at all.
+    /// </summary>
+    private static bool HasPathsToDrain(string[] args) => args.Skip(1).Any(a =>
+        !a.StartsWith("q:", StringComparison.OrdinalIgnoreCase) &&
+        !a.StartsWith("why:", StringComparison.OrdinalIgnoreCase) &&
+        (Directory.Exists(a) || File.Exists(a)));
 
     /// <summary>
     /// Read everything <see cref="SearchIndexReport"/> needs off a live database. Two decisions
