@@ -610,6 +610,32 @@ Written down so they are known gaps rather than assumed passes. Every one of the
   exit code back" path, which only a machine with integrated graphics beside a card can exercise
   (step 67).
 
+## Small things noticed and left
+
+These are not steps and none needs a machine. They are findings from the reviews of the video-frame
+work that were judged real, weighed, and deliberately not fixed, written down here so that nobody
+has to rediscover them and so that leaving them stays a decision rather than an oversight.
+
+- **`AllowUnsafeBlocks` is on for the whole of `src/Findra`**, not for the one method that needs
+  it. `VideoFrames.Copy` walks a decoded buffer with a pointer because `SKBitmap` exposes only a
+  read-only span, and the safe alternative is two managed copies per row. The setting is broader
+  than the need, which is the cost of not paying that.
+- **The negative-stride branch of that copy is exercised only incidentally.** A bottom-up buffer
+  has its first row in memory at the bottom of the picture, and whether a decoder reports one is
+  the machine's choice, so the one real-file test covers whichever sign this machine's H.264
+  decoder happens to use. The geometry tests pin crop, rotation and pixel aspect in isolation;
+  nothing pins stride sign that way.
+- **Four lazy model opens repeat the same shape** - `if (field is null) { Beat(); field = ...;
+  Beat(); }` - in `Decoders`. A helper taking a ref field and a factory would halve them and stop
+  the four copies drifting apart.
+- **A dead `= null` initialiser** on the blocked-codec local in the interface's settings plumbing,
+  immediately overwritten.
+- **`SearchIndexReportTests` asserts `Contains("3")`** where `"3 video(s)"` would be tighter; any
+  incidental 3 elsewhere in the rendered report satisfies it.
+- **The culture sweep never sets a blocked-video count**, so the invariant formatting of that one
+  number is correct by construction rather than by the test that exists to catch a German machine
+  rendering it differently.
+
 ## Notes
 
 Steps 1 to 4, 9 to 13 and 29 to 59 are the ones that have never executed in any form, except 32,

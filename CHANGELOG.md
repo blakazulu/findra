@@ -58,6 +58,10 @@ and Findra follows [Semantic Versioning](https://semver.org/spec/v2.0.0/).
 
 - Documentation: how video frames are read, and what is checked end to end.
 
+- Documentation: the small findings the video frame reviews raised and chose not to act on are
+  written down beside the end-to-end steps, so that leaving them stays a decision somebody made
+  rather than something nobody noticed.
+
 - Documentation: the design note and the step plan behind the video frame work are in the
   repository, beside the code they describe.
 
