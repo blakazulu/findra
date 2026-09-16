@@ -13,6 +13,10 @@ and Findra follows [Semantic Versioning](https://semver.org/spec/v2.0.0/).
   recognised by the format the file itself states, so the reason recorded names the codec rather
   than saying the file could not be read.
 
+- **Videos Windows cannot decode say so, by name.** A video whose codec Windows has no decoder for
+  is recorded as needing that codec rather than as unreadable, `findra --searchindex` groups them,
+  and installing the codec queues exactly those files to be read. Nothing else is re-read.
+
 - **Settings can open the log folder.** Under About, beside the version and how Findra was
   installed, there is now an Open folder button. The logs were only reachable by knowing that
   `findra --version` prints their location, which is not something anybody knows at the moment

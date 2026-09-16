@@ -930,6 +930,30 @@ CREATE TABLE IF NOT EXISTS opened(path TEXT PRIMARY KEY, count INTEGER NOT NULL,
         return (long)(cmd.ExecuteScalar() ?? 0L);
     }
 
+    /// <summary>Videos passed over because Windows has no decoder for them, by codec. What
+    /// Settings reports and what <c>--searchindex</c> groups: "212 videos need HEVC" is something
+    /// a person can act on, where "212 videos were skipped" is not.
+    ///
+    /// <para>The CODEC reason only - a file Windows did not even recognise as a container has no
+    /// codec to name, and folding it into this count would render as a codec nobody can
+    /// install.</para></summary>
+    public IReadOnlyList<(string Codec, long Count)> BlockedVideoCodecs()
+    {
+        var list = new List<(string, long)>();
+        using var cmd = _c.CreateCommand();
+        cmd.CommandText = "SELECT error, COUNT(*) FROM items WHERE kind=$k AND state=$s AND error LIKE $p || '%' GROUP BY error";
+        cmd.Parameters.AddWithValue("$k", (int)ResultKind.Video);
+        cmd.Parameters.AddWithValue("$s", StateSkipped);
+        cmd.Parameters.AddWithValue("$p", Decoders.NoVideoCodec);
+        using var r = cmd.ExecuteReader();
+        while (r.Read())
+        {
+            string codec = VideoDecoders.CodecFromReason(r.GetString(0)) ?? "unknown";
+            list.Add((codec, r.GetInt64(1)));
+        }
+        return list;
+    }
+
     /// <summary>
     /// How many SKIPPED items of these kinds carry this reason and are NOT waiting in the queue -
     /// files nothing has read, and nothing is going to.
@@ -1359,6 +1383,13 @@ CREATE TABLE IF NOT EXISTS opened(path TEXT PRIMARY KEY, count INTEGER NOT NULL,
     /// <para>The two filters are mutually exclusive and <paramref name="onlyBecause"/> wins,
     /// because a caller that passes both has not decided which set it means.</para>
     ///
+    /// <para><paramref name="onlyBecauseStartingWith"/> is the same narrow direction, matched by
+    /// PREFIX rather than the whole sentence - a codec is named in brackets after the reason
+    /// that names it, "no decoder for this video format yet (HEVC)", so the machine's decoders
+    /// changing has to re-queue whichever codecs anybody on this install happens to be missing,
+    /// and a list of every codec that might appear in those brackets is a list that will be
+    /// wrong on somebody's machine. It wins over both of the others for the same reason.</para>
+    ///
     /// <para>An empty <paramref name="kinds"/> queues nothing and DOES NOT TOUCH THE DATABASE,
     /// which is the part that matters. The clause below is built by concatenation, so an empty
     /// array emits <c>IN ()</c> - and the bundled SQLite accepts that as an empty list rather
@@ -1368,7 +1399,8 @@ CREATE TABLE IF NOT EXISTS opened(path TEXT PRIMARY KEY, count INTEGER NOT NULL,
     /// </summary>
     public int RequeueKinds(int[] kinds, string reason,
                             IReadOnlyList<string>? notBecause = null,
-                            IReadOnlyList<string>? onlyBecause = null)
+                            IReadOnlyList<string>? onlyBecause = null,
+                            IReadOnlyList<string>? onlyBecauseStartingWith = null)
     {
         ArgumentNullException.ThrowIfNull(kinds);
         if (kinds.Length == 0) return 0;
@@ -1384,7 +1416,17 @@ CREATE TABLE IF NOT EXISTS opened(path TEXT PRIMARY KEY, count INTEGER NOT NULL,
             // - but every reason string is a parameter, because a skip reason is free text that
             // has come from an exception message.
             string filter = "";
-            if (onlyBecause is { Count: > 0 })
+            if (onlyBecauseStartingWith is { Count: > 0 })
+            {
+                // A prefix rather than the whole sentence: the recorded reason names the codec in
+                // brackets after it, and a list of every codec anybody might have is a list that
+                // will be wrong on somebody's machine.
+                var named = onlyBecauseStartingWith.Select((_, i) => $"error LIKE $s{i.ToString(CultureInfo.InvariantCulture)} || '%'");
+                filter = " AND (" + string.Join(" OR ", named) + ")";
+                for (int i = 0; i < onlyBecauseStartingWith.Count; i++)
+                    cmd.Parameters.AddWithValue($"$s{i.ToString(CultureInfo.InvariantCulture)}", onlyBecauseStartingWith[i]);
+            }
+            else if (onlyBecause is { Count: > 0 })
             {
                 // The narrow direction: exactly the rows carrying one of these reasons. Raising
                 // the transcription limit uses it, because re-queueing everything Speech covers

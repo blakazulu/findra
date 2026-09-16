@@ -194,4 +194,28 @@ public sealed class ContentDbTests : IDisposable
         // capability - nothing about it changed, and retrying it every install is a loop.
         Assert.DoesNotContain(@"C:\a\broken.jpg", queued);
     }
+
+    [Fact]
+    public void VideosBlockedOnACodecAreRequeuedTogetherWhateverCodecTheyName()
+    {
+        using ContentDb db = Open();
+        using (var tx = db.Begin())
+        {
+            db.Upsert("C", 1, @"C:\a.mp4", ResultKind.Video, 1, 10, ContentDb.StateSkipped,
+                      Decoders.NoVideoCodec + " (HEVC)", [], tx);
+            db.Upsert("C", 2, @"C:\b.mov", ResultKind.Video, 1, 10, ContentDb.StateSkipped,
+                      Decoders.NoVideoCodec + " (cvid)", [], tx);
+            db.Upsert("C", 3, @"C:\c.mp4", ResultKind.Video, 1, 10, ContentDb.StateSkipped,
+                      Decoders.NoFrames, [], tx);
+            tx.Commit();
+        }
+
+        int n = db.RequeueKinds([(int)ResultKind.Video], Indexer.Recheck,
+                                onlyBecauseStartingWith: [Decoders.NoVideoCodec]);
+        Assert.Equal(2, n);
+
+        var counts = db.BlockedVideoCodecs();
+        Assert.Equal(2, counts.Count);
+        Assert.Contains(counts, c => c.Codec == "HEVC" && c.Count == 1);
+    }
 }

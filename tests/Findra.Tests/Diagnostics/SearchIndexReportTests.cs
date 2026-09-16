@@ -45,7 +45,7 @@ public sealed class SearchIndexReportTests : IDisposable
             (Capability.Speech, false, 0),
             (Capability.Hebrew, false, 0),
         ],
-        TranscribeMinutes: TranscribeLimit.Default, TooLongRecordings: 0);
+        TranscribeMinutes: TranscribeLimit.Default, TooLongRecordings: 0, BlockedVideos: []);
 
     [Fact]
     public void ItReportsTheSchemaVersionAndWhereTheIndexLives()
@@ -341,6 +341,20 @@ public sealed class SearchIndexReportTests : IDisposable
 
         Assert.Contains("231", text, StringComparison.Ordinal);
         Assert.Contains("limit", text, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void VideosBlockedOnACodecAreGroupedByName()
+    {
+        // "212 videos were skipped" tells nobody what to do; naming the codec does.
+        IndexSnapshot s = Sample() with { BlockedVideos = [("HEVC", 212), ("cvid", 3)] };
+
+        string text = SearchIndexReport.Render(s);
+
+        Assert.Contains("212", text, StringComparison.Ordinal);
+        Assert.Contains("HEVC", text, StringComparison.Ordinal);
+        Assert.Contains("3", text, StringComparison.Ordinal);
+        Assert.Contains("cvid", text, StringComparison.Ordinal);
     }
 
     [Fact]
