@@ -103,4 +103,21 @@ public class VideoFramesTests
         }
         finally { File.Delete(path); }
     }
+
+    [Fact]
+    public void TheCardsPreviewOfAMatchedMomentIsTheFrameFromThatMoment()
+    {
+        string path = Path.Combine(Path.GetTempPath(), "findra-preview-" + Guid.NewGuid().ToString("N") + ".mp4");
+        TestClip.Write(path, (40, 40, 220), (40, 200, 40), (220, 60, 40));
+        try
+        {
+            using SKImage? img = PreviewDecoder.Decode(path, ResultKind.Video, 200, moment: 1.5);
+            Assert.NotNull(img);
+            using SKBitmap bmp = SKBitmap.FromImage(img!);
+            SKColor c = bmp.GetPixel(bmp.Width / 2, bmp.Height / 2);
+            Assert.InRange(c.Green, 170, 230);
+            Assert.InRange(c.Red, 10, 70);
+        }
+        finally { File.Delete(path); }
+    }
 }

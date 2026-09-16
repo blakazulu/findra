@@ -159,6 +159,9 @@ and Findra follows [Semantic Versioning](https://semver.org/spec/v2.0.0/).
 
 ### Fixed
 
+- **The picture on the card for a video result is the moment that matched.** It came from the same
+  slow path as indexing, so for many films it was a black rectangle after a long wait.
+
 - **Videos are read in seconds rather than hours, and the frames are real.** Findra read video
   frames through a path that took about 33 seconds per frame for DivX and XviD films and returned
   a black picture every time, so one film could hold up the whole queue for a day and then store
