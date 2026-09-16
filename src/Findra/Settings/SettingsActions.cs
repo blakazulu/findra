@@ -25,6 +25,11 @@ public interface ISettingsHost
     /// somebody reporting "it stopped working last night" actually needs, and a folder reaches
     /// both.</summary>
     void OpenLogs();
+
+    /// <summary>Open the Store page for a codec Windows has not got. Findra installs nothing
+    /// itself - the same rule updates follow - so this opens a page and gets out of the way.
+    /// </summary>
+    void OpenCodecStore(string productId);
 }
 
 public static class SettingsActions
@@ -52,6 +57,7 @@ public static class SettingsActions
             case SettingsAction.RecentreCapsule: host.RecentreCapsule(); return;
             case SettingsAction.StartIndexing: host.StartIndexing(); return;
             case SettingsAction.OpenLogs: host.OpenLogs(); return;
+            case SettingsAction.OpenCodecStore: host.OpenCodecStore(argument); return;
 
             case SettingsAction.InstallCapability:
                 // The argument crossed a string boundary. A parse that falls back to the first

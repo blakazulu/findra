@@ -25,6 +25,7 @@ public class SettingsActionTests
         public void RecentreCapsule() => Calls.Add("recentre");
         public void StartIndexing() => Calls.Add("start");
         public void OpenLogs() => Calls.Add("logs");
+        public void OpenCodecStore(string productId) => Calls.Add("codec:" + productId);
     }
 
     [Fact]
@@ -51,6 +52,7 @@ public class SettingsActionTests
             [SettingsAction.RecentreCapsule] = "recentre",
             [SettingsAction.StartIndexing] = "start",
             [SettingsAction.OpenLogs] = "logs",
+            [SettingsAction.OpenCodecStore] = "codec:9NMZLZ57R3T7",
         };
 
         foreach (SettingsAction action in Enum.GetValues<SettingsAction>())
@@ -60,6 +62,7 @@ public class SettingsActionTests
             var host = new Recorder();
             string argument = action == SettingsAction.InstallCapability ? nameof(Capability.Photos)
                             : action == SettingsAction.OpenPalettesFile ? @"C:\x\palettes.json"
+                            : action == SettingsAction.OpenCodecStore ? "9NMZLZ57R3T7"
                             : "";
 
             SettingsActions.Dispatch(action, argument, host);

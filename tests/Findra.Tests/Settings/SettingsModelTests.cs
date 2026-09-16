@@ -669,6 +669,54 @@ public class SettingsModelTests
             c => c.Id == ControlId.Capability && c.Tag == (int)Capability.Hebrew);
     }
 
+    private static SettingsState Content(long blocked, string? codec, bool photos = true) =>
+        new(Config.Default with { IndexContent = true })
+        {
+            Section = Section.Content,
+            Installed = photos ? new CapabilitySet(new HashSet<Capability> { Capability.Photos }) : CapabilitySet.None,
+            BlockedVideos = blocked,
+            BlockedCodec = codec,
+        };
+
+    [Fact]
+    public void WithNothingBlockedThePhotoRowSaysOnlyThatItIsInstalled()
+    {
+        // Tag alone is not enough to find this row: IndexContent, IndexPower and Transcribe are
+        // non-capability rows that default to the same Tag as Capability.Photos (both are 0), so
+        // the id is what tells this row apart, exactly as the older capability tests already do.
+        Control row = SettingsModel.Controls(Content(0, null))
+            .Single(c => c.Id == ControlId.Capability && c.Tag == (int)Capability.Photos);
+        Assert.Equal(ControlKind.Text, row.Kind);
+        Assert.Equal("installed", row.Value);
+    }
+
+    [Fact]
+    public void VideosNeedingACodecYouCanGetAreOfferedAsAButton()
+    {
+        Control row = SettingsModel.Controls(Content(212, "HEVC")).Single(c => c.Id == ControlId.VideoCodec);
+        Assert.Equal(ControlKind.Button, row.Kind);
+        Assert.Contains("212", row.Value, StringComparison.Ordinal);
+        Assert.Contains("HEVC", row.Value, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void VideosNeedingACodecNobodySellsAreReportedAndNotOffered()
+    {
+        Control row = SettingsModel.Controls(Content(6, "cvid")).Single(c => c.Id == ControlId.VideoCodec);
+        Assert.Equal(ControlKind.Text, row.Kind);
+        Assert.Contains("6", row.Value, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void PressingTheCodecRowOpensThatCodecsPage()
+    {
+        SettingsState s = Content(212, "HEVC");
+        int row = SettingsModel.Controls(s).ToList().FindIndex(c => c.Id == ControlId.VideoCodec);
+        SettingsOutcome o = SettingsModel.Apply(s, new PanelHit(PanelTarget.Control, row, -1));
+        Assert.Equal(SettingsAction.OpenCodecStore, o.Action);
+        Assert.Equal(VideoCodecStore.ProductFor("HEVC"), o.Argument);
+    }
+
     // ---- About ------------------------------------------------------------------------------
 
     [Theory]
