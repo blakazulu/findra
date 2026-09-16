@@ -22,14 +22,28 @@ public static class IndexerWatch
     /// missed stall costs the whole queue.</summary>
     public const int StallSeconds = 180;
 
-    /// <summary>Is a live, reading child with work to do overdue enough that it should be killed
-    /// and restarted? A paused reader, an idle queue, or no child at all are none of this rule's
+    /// <summary>
+    /// Is a live, reading child with work to do overdue enough that it should be killed and
+    /// restarted? A paused reader, an idle queue, or no child at all are none of this rule's
     /// business - each already writes its status every couple of seconds, so none of them can trip
     /// it - and a beat from the future is a clock that resynced rather than evidence of a stall.
+    ///
+    /// <para><b>A child younger than <see cref="StallSeconds"/> is never judged</b>, and
+    /// <paramref name="sinceStart"/> is how that is known. The beat row is written by the CHILD and
+    /// outlives the child that wrote it, so the row a replacement would be read against belongs to
+    /// the one just killed - and a watchdog kill restarts immediately, on purpose. Without this,
+    /// one turn of the pump kills a stalled child and every turn after it kills the replacement
+    /// microseconds after starting it: a process storm every 400 ms in place of the stall, and the
+    /// file is never written off, because an attempt is only committed once a child has taken a row
+    /// off the queue and this one never gets that far. A child with no age at all is refused for the
+    /// same reason - not knowing how long it has been there is not evidence that it has stalled.
+    /// </para>
     /// </summary>
-    public static bool ShouldRestart(bool hostRunning, bool reading, long pending, string? beat, long nowUnix)
+    public static bool ShouldRestart(bool hostRunning, bool reading, long pending, string? beat, long nowUnix,
+                                     TimeSpan? sinceStart)
     {
         if (!hostRunning || !reading || pending <= 0) return false;
+        if (sinceStart is not { } age || age.TotalSeconds < StallSeconds) return false;
         if (!long.TryParse(beat, NumberStyles.Integer, CultureInfo.InvariantCulture, out long at)) return false;
         return nowUnix - at > StallSeconds;
     }

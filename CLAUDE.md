@@ -419,7 +419,16 @@ is named here rather than left as a thing somebody tries again.
   is written off, but a hang is not a crash - the attempt never ends, the child never exits, and
   the queue stops at that file for as long as the machine is on. `IndexerWatch.ShouldRestart`
   is the one thing that catches that: a live, reading child with work to do that has gone
-  `IndexerWatch.StallSeconds` (three minutes) since its last beat is killed and restarted. Attempts
+  `IndexerWatch.StallSeconds` (three minutes) since its last beat is killed, and the next turn of
+  the pump starts another one **immediately** - a watchdog kill resets the crash backoff rather
+  than escalating it, so a file that hangs every time reaches its third attempt in minutes rather
+  than over an afternoon. **A child younger than that window is never judged**, and that half is
+  what keeps the immediate restart from being a storm of its own: `indexer:beat` is written by the
+  CHILD and outlives the child that wrote it, so a replacement read against the row its predecessor
+  left behind is killed on the turn it is started, and so is the next, every 400 ms - with the file
+  never written off, because an attempt is committed only once a child has taken a row off the
+  queue. `IndexerHost.SinceStart` is the age the rule reads, and `IndexerHostTests` drives the whole
+  sequence rather than the predicate, which was correct throughout that defect's life. Attempts
   catch crashes; only the watchdog catches hangs. Whichever of the two limits ends the file, if
   nothing was decoded before it did `VideoRead.Take` records `Decoders.NoFrames`: a skip, not a
   failure, the same shape as the codec reasons below rather than a fault in reading the file.

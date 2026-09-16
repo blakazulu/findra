@@ -1228,8 +1228,15 @@ internal sealed class Shell : ISettingsHost
             // A child that is alive and has stopped reporting progress is a hung decoder. The
             // attempt was counted before the file was opened, so killing it now is what lets that
             // file be written off after three tries instead of holding the queue for ever.
+            //
+            // The child's own age goes in beside the beat, and it is load-bearing: the beat row is
+            // written by the CHILD, a killed one leaves its last beat behind, and the restart above
+            // is immediate. Judged on the row alone, the replacement started on the next turn is
+            // killed microseconds later against its predecessor's beat, and so is the one after
+            // that - every 400 ms, for ever, with the file never written off.
             if (IndexerWatch.ShouldRestart(host.Running, reading, pending,
-                                           db.Get("indexer:beat"), DateTimeOffset.UtcNow.ToUnixTimeSeconds()))
+                                           db.Get("indexer:beat"), DateTimeOffset.UtcNow.ToUnixTimeSeconds(),
+                                           host.SinceStart))
             {
                 string current = db.Get("indexer:current") ?? "";
                 host.Kill($"the indexer made no progress on {(current.Length > 0 ? current : "the file it was reading")} " +
