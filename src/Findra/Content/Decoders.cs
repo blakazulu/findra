@@ -589,13 +589,27 @@ public sealed class Decoders : IDecoders
                  $"speech: first '{lang}' transcript, {lines.Count.ToString(System.Globalization.CultureInfo.InvariantCulture)} line(s)"
                  + (note is null ? "" : $" ({note})"));
 
+        // Embedded a batch at a time, the way Document embeds chunks: the cost that matters is on
+        // the accelerator, and one window at a time paid a fresh round trip for every twenty
+        // seconds of speech.
         E5Encoder e5 = E5();
-        return Speech.Merge(lines, text =>
+        List<Speech.Window> windows = Speech.Windows(lines);
+        var segs = new List<ContentDb.Segment>(windows.Count);
+        for (int i = 0; i < windows.Count; i += E5Encoder.Batch)
         {
-            long row = Append(e5.EncodePassage(E5Encoder.Passage(path, text)), ContentDb.SegSpeech);
+            int n = Math.Min(E5Encoder.Batch, windows.Count - i);
+            var batch = new List<string>(n);
+            for (int k = 0; k < n; k++) batch.Add(E5Encoder.Passage(path, windows[i + k].Text));
+            float[][] vs = e5.EncodePassages(batch);
+            for (int k = 0; k < n; k++)
+            {
+                Speech.Window w = windows[i + k];
+                segs.Add(new ContentDb.Segment(ContentDb.SegSpeech, w.T0, w.T1,
+                                               Append(vs[k], ContentDb.SegSpeech), w.Text));
+            }
             Beat();
-            return row;
-        });
+        }
+        return segs;
     }
 
     // ---- the pieces the arms share ----

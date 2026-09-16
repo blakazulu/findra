@@ -50,6 +50,10 @@ and Findra follows [Semantic Versioning](https://semver.org/spec/v2.0.0/).
 
 ### Changed
 
+- **Transcripts are embedded a batch at a time.** Each window of speech was embedded on its own,
+  which on the accelerator is several times slower than embedding them together - the way words in
+  documents have always been done.
+
 - Documentation: how video frames are read, and what is checked end to end.
 
 - Documentation: named the two limits the give-up rule means, rather than leaving "these" to
