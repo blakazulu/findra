@@ -42,6 +42,9 @@ and Findra follows [Semantic Versioning](https://semver.org/spec/v2.0.0/).
 
 ### Changed
 
+- **The indexer says it is working while it reads one file.** A long recording or a large document
+  used to leave every surface saying nothing was happening until the file was finished.
+
 - **Pictures no longer out-rank the documents that answer the question.** The two kinds of match
   were scored on scales that did not mean the same thing, so a picture matching about as well as
   a picture can scored far higher than a document matching about as well as a document can - and

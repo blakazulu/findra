@@ -85,12 +85,24 @@ public sealed class Indexer
         try
         {
             using ContentDb db = ContentDb.OpenOrRebuild(dbPath);
+            // A decoder now reports as it works rather than only between files, which is what
+            // tells a long file apart from a dead child. Throttled so the write stays cheap: the
+            // beat is evidence a watchdog can trust, not a rate limit on how often work happens.
+            Action beat = Beat.Throttled(
+                () => DateTimeOffset.UtcNow.ToUnixTimeSeconds(),
+                seconds =>
+                {
+                    // Only the beat row. Everything else in Status describes a file that has been
+                    // finished, and this is written in the middle of one.
+                    try { db.Set("indexer:beat", seconds.ToString(CultureInfo.InvariantCulture)); }
+                    catch (Exception ex) { Log.Once("index|beat", "WARN", "index", "a progress beat could not be written :: " + ex.Message); }
+                });
             // The only place in the product that opens a writer on the real vector store. It is
             // held for the life of the process and disposed last, and BOTH of the things that can
             // move while this process runs - the transcription limit, and which models are on
             // disk - are read through delegates rather than captured, so each of them reaches the
             // next file rather than the next launch.
-            using IDecoders decoders = Decoders.ForThisMachine(() => TranscribeMinutes(db));
+            using IDecoders decoders = Decoders.ForThisMachine(() => TranscribeMinutes(db), beat: beat);
             Loop(db, parent, () => true, decoders);
             Log.Info("index", "indexer down (clean)");
             Log.Flush();
