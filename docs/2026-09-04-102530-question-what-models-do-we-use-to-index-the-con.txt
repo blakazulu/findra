@@ -1,0 +1,321 @@
+ ▐▛███▛█   Claude Code v2.1.260
+▝▜██████▀  Opus 5 · Claude Max
+  ▝▝ ▝▝    C:\Code\Personal\findra
+
+
+❯ question - what models do we use to index the content?                        
+
+  Listed 1 directory, ran 1 shell command (ctrl+o to expand)
+
+● Seven files, in src/Findra/Models/ModelStore.cs:37-65. Four capabilities, none
+  of them required:
+
+  Capability: words in documents
+  Model files: none - FTS5 only
+  Source: -
+  Size on disk: 0
+  ────────────────────────────────────────
+  Capability: photos & video
+  Model files: siglip2-vision.onnx, siglip2-text-q.onnx (quantized), siglip2.spm
+  Source: onnx-community/siglip2-base-patch16-256-ONNX
+  Size on disk: 354.8 + 270.3 + 4.0 MB
+  ────────────────────────────────────────
+  Capability: meaning in docs
+  Model files: e5-base-q.onnx (quantized), e5-small.spm
+  Source: Xenova/multilingual-e5-base, tokenizer from multilingual-e5-small
+  Size on disk: 265.7 + 4.8 MB
+  ────────────────────────────────────────
+  Capability: speech
+  Model files: whisper-turbo-q5.bin (+ the e5 pair)
+  Source: ggerganov/whisper.cpp ggml-large-v3-turbo-q5_0
+  Size on disk: 547.4 MB
+  ────────────────────────────────────────
+  Capability: hebrew
+  Model files: whisper-ivrit.bin (requires speech)
+  Source: ivrit-ai/whisper-large-v3-turbo-ggml
+  Size on disk: 1549.3 MB
+
+  Everything together is 2.93 GB.
+
+  How they divide the work:
+
+  - SigLIP-2 is a two-tower pair: the vision tower embeds a photo or a decoded
+    video frame at index time, the text tower embeds what you type at query
+    time, into the same space. The .spm is the text tower's vocabulary.
+  - multilingual-e5-base embeds document text - and transcripts, which is why
+    Speech depends on it: a transcript is searched exactly like a document. Its
+    tokenizer comes from the small repo, which is the same sentencepiece
+    vocabulary in a smaller download.
+  - Whisper transcribes. Turbo always runs first, including for language
+    detection; whisper-ivrit is a second pass over only what turbo called
+    Hebrew, never an alternative to it (Decoders.cs:270, :466-491).
+
+  Runtime side: the ONNX models go DirectML → CPU, Whisper goes Vulkan → CPU, so
+  no vendor lock. findra.exe --searchmodels prints what is present, what
+  loaded, and which provider answered for each.
+
+✻ Worked for 19s · done 9:58 AM
+
+❯ search online - are these truley the best models for us considering our       
+  requirements (amd/intel cpus, amd/intel/nvidia grpahics, no graphics, only    
+  internal graphics)?                                                           
+
+● I'll research each of the four choices against the portability constraint.
+  Running the searches in parallel.
+
+● Web Search("ONNX Runtime DirectML dynamic quantized uint8 model falls back to
+            CPU MatMulInteger DynamicQuantizeLinear not supported")
+  ⎿  Did 1 search in 10s
+
+● Web Search("DirectML execution provider deprecated Windows ML 2026 ONNX
+            Runtime replacement")
+  ⎿  Did 1 search in 7s
+
+● Web Search("best small multilingual text embedding model on-device 2026
+            EmbeddingGemma vs multilingual-e5-base vs gte-multilingual-base")
+  ⎿  Did 1 search in 8s
+
+● Web Search("SigLIP 2 vs MobileCLIP2 vs jina-clip-v2 multilingual image text
+            retrieval CPU inference speed 2026")
+  ⎿  Did 1 search in 8s
+
+● Web Search("whisper.cpp Vulkan backend integrated GPU Intel Iris AMD Radeon
+            performance vs CPU large-v3-turbo 2026")
+  ⎿  Did 1 search in 7s
+
+● Web Search("Xenova transformers.js model_quantized.onnx dynamic quantization
+            uint8 QOperator MatMulInteger CPU only webgpu unsupported")
+  ⎿  Did 1 search in 8s
+
+● Fetch(https://onnxruntime.ai/docs/execution-providers/DirectML-ExecutionProvid
+       er.html)
+  ⎿  Received 52.8KB (200 OK)
+
+● Web Search("whisper large-v3-turbo alternatives 2026 parakeet moonshine
+            distil-whisper multilingual on-device transcription quality
+            comparison")
+  ⎿  Did 1 search in 8s
+
+  Listed 1 directory (ctrl+o to expand)
+
+● Fetch(https://raw.githubusercontent.com/microsoft/onnxruntime/main/docs/Operat
+       orKernels.md)
+  ⎿  Received 332.1KB (200 OK)
+
+● The models are on disk. Let me inspect the actual ONNX graphs rather than
+  guess at what "quantized" means here.
+
+  Ran 1 shell command (ctrl+o to expand)
+
+● Web Search("DirectML execution provider MatMulInteger DynamicQuantizeLinear
+            supported operator DML_OPERATOR_MATRIX_MULTIPLY_INTEGER onnxruntime
+            registration")
+  ⎿  Did 1 search in 8s
+
+● Fetch(https://learn.microsoft.com/en-us/windows/win32/direct3d12/dml-feature-l
+       evel-history)
+  ⎿  Received 23.5KB (200 OK)
+
+● DirectML does register those ops. The sharper question is whether an
+  int8-dynamic build is the right artifact for a GPU at all, and what variants
+  those repos actually ship. Let me check.
+
+● Fetch(https://huggingface.co/api/models/onnx-community/siglip2-base-patch16-25
+       6-ONNX)
+  ⎿  Received 2.8KB (200 OK)
+
+● Fetch(https://huggingface.co/api/models/Xenova/multilingual-e5-base)
+  ⎿  Received 1.8KB (200 OK)
+
+● Web Search("int8 dynamic quantization embedding model retrieval quality
+            degradation MTEB e5 bge accuracy loss percent")  ⎿  Did 1 search in 7s
+
+● Web Search("gte-multilingual-base Alibaba-NLP license Apache 2.0 ONNX 305M
+            MTEB multilingual retrieval vs multilingual-e5-base")
+  ⎿  Did 2 searches in 12s
+
+● Web Search("EmbeddingGemma license Gemma Terms of Use commercial
+            redistribution restrictions embedding 308M")
+  ⎿  Did 1 search in 9s
+
+● Web Search("MobileCLIP2 English only multilingual support languages Apple
+            license")
+  ⎿  Did 1 search in 5s
+
+● Web Search("whisper.cpp Vulkan slower than CPU integrated graphics iGPU shared
+            memory bandwidth issue crash driver")
+  ⎿  Did 1 search in 8s
+
+  Ran 2 shell commands (ctrl+o to expand)
+
+● Fetch(https://github.com/ggml-org/whisper.cpp/issues/2596)
+  ⎿  Received 311.7KB (200 OK)
+
+  Searched for 1 pattern (ctrl+o to expand)
+
+● Fetch(https://huggingface.co/api/models/jinaai/jina-clip-v2)
+  ⎿  Received 4.1KB (200 OK)
+
+● Fetch(https://huggingface.co/api/models/intfloat/multilingual-e5-base)
+  ⎿  Received 360.3KB (200 OK)
+
+● Verified against the actual files on your disk (I scanned the ONNX graphs),
+  not just the docs. Short answer: the four model choices are right; the way two
+  of them are packaged and one of them is proven is not.
+
+  The model choices hold up
+
+  Choice: SigLIP-2 base
+  Verdict: Keep
+  Why the alternatives lose: MobileCLIP2 is 5x faster but its text encoder is
+  English-only, which kills it the moment Hebrew is a shipped capability.
+  jina-clip-v2 is cc-by-nc-4.0, non-commercial, so it is not shippable at all.
+  SigLIP-2 SO400M is stronger but ~4x the vision tower.
+  ────────────────────────────────────────
+  Choice: multilingual-e5-base
+  Verdict: Keep, but see below
+  Why the alternatives lose: Only real rival is
+  Alibaba-NLP/gte-multilingual-base: Apache-2.0, 305M, same 768-d output, 8192
+  context vs e5's 512, and it edges e5 on TR-MTEB (64.49 vs 64.26 task mean).
+  EmbeddingGemma-300M scores higher but ships under Gemma Terms of Use, which
+  drags a pass-through licence obligation into an Apache-2.0 product. e5 is
+  MIT.
+  ────────────────────────────────────────
+  Choice: whisper large-v3-turbo
+  Verdict: Keep
+  Why the alternatives lose: Every faster option is English-only: Parakeet-TDT,
+  Moonshine, distil-whisper. Turbo is still the only ~800M multilingual model
+  covering 99 languages.
+  ────────────────────────────────────────
+  Choice: whisper-ivrit
+  Verdict: Keep
+  Why the alternatives lose: Nothing better exists for Hebrew.
+
+  So no model swap is urgent. The problems are elsewhere.
+
+  Three real problems, ranked
+
+  1. The Vulkan rung proves the wrong thing, and its failure mode is silent 
+  garbage.
+
+  Providers.WhisperOrder accepts Vulkan the moment WhisperFactory.FromPath
+  returns (Media.cs:171-178). But the known iGPU failures happen at
+  transcription time, after a clean init. whisper.cpp issue #2596 is exactly
+  your target hardware: AMD Radeon 780M (the iGPU in every Ryzen 7040/8040
+  laptop), Windows 11, Vulkan initialises fine, shaders compile, device
+  registers, and then transcription emits garbled text with exclamation marks in
+  the timestamps. In a Debug build it asserts; in Release it just returns
+  rubbish.
+
+  Findra would take that rubbish, embed it through e5, and write it into the
+  index as a finished transcript. Nothing re-checks it. This is the same shape
+  as the whisper-ivrit bug you already fixed, one level up: you proved the model
+  opens, not that it works. The fix is the same shape too - transcribe a short
+  known sample on the Vulkan rung and reject it if the output is not what it
+  should be, before accepting the provider.
+
+  2. One artifact per model, chosen without reference to the provider - and the 
+  split is backwards.
+
+  I scanned the three ONNX files in %LOCALAPPDATA%\Findra\models:
+
+  e5-base-q.onnx       72 MatMulInteger, 48 DynamicQuantizeLinear   -> int8
+  dynamic (QOperator)
+  siglip2-text-q.onnx  73 MatMulInteger, 49 DynamicQuantizeLinear   -> int8
+  dynamic (QOperator)
+  siglip2-vision.onnx   0 quantized ops, 372MB / 93M params         -> fp32
+
+  The two towers that run once per query, on one short string, are quantized.
+  The tower that runs on every photo and every video frame during the first pass
+  is full fp32. That is inverted relative to where the time actually goes.
+
+  It gets worse per provider:
+
+  - On DirectML, int8-dynamic is the wrong format for a GPU. DirectML does
+    register the ops (DML_OPERATOR_MATRIX_MULTIPLY_INTEGER at FL 2.1,
+    DML_OPERATOR_DYNAMIC_QUANTIZE_LINEAR at FL 4.0), so it will run, but you
+    give up fp16 throughput and pay per-node quantize/dequantize. GPUs want
+    fp16.
+  - On CPU-only, the fp32 vision tower is the slowest possible choice on exactly
+    the machines with the least headroom.
+
+  Both HF repos already ship what you'd want: vision_model_fp16.onnx,
+  vision_model_uint8.onnx, text_model_fp16.onnx, and the same set for e5.
+  Picking _fp16 on the DirectML rung and _uint8/_quantized on the CPU rung would
+  roughly halve the vision download (372MB -> ~186MB) and speed up the first
+  pass on both paths.
+
+  The honest cost: this makes the download provider-dependent, which collides
+  with Model.Bytes being a fixed table and with CapabilitySet pricing everything
+  off filenames. That is real design work, not a URL change.
+
+  3. e5 is specifically quantization-sensitive.
+
+  General int8 dynamic quantization costs 1.5-3.5% retrieval quality and keeps
+  94-98% of accuracy. But BGE models hold up notably better than E5, and there
+  is published work showing dimension collapse on e5-base under quantization
+  specifically. You are paying that on both the index side and the query side.
+  If you ever revisit the text model, gte-multilingual-base is the swap that
+  fixes three things at once: Apache-2.0, better quantization behaviour, and
+  8192 context instead of 512, which matters for documents. Same 768-d, so the
+  vector store schema does not move - but every embedding on every installed
+  machine would need regenerating, which is a ReWalk migration.
+
+  One thing to write down but not act on
+
+  Microsoft.ML.OnnxRuntime.DirectML 1.24.4 is fine, but DirectML is officially 
+  "in sustained engineering" - new work has moved to Windows ML, which keeps the
+  same ONNX Runtime API and picks the provider itself (OpenVINO on Intel,
+  MIGraphX/VitisAI on AMD, NvTensorRtRtx on NVIDIA). That is a strictly better
+  fit for your "no vendor lock, lands on machines nobody chose" thesis than a
+  single DirectML rung, and it is where the hardware-portability story goes
+  next. Not urgent, but the DirectML rung is now the legacy path rather than the
+  modern one.
+
+  What I would do, in order
+
+  1. Make the Vulkan rung prove itself with a real transcription, not a
+     successful load. This one is shipping a correctness bug on common AMD
+     hardware today.
+  2. Switch the vision tower off fp32. Even keeping one artifact for everyone,
+     vision_model_fp16.onnx is the better single choice on DirectML and _uint8
+     is the better one on CPU; picking per provider is better still.
+  3. Leave e5 and whisper-turbo alone for now. Note gte-multilingual-base as the
+     swap to make if you ever pay a re-embed migration for another reason.
+
+  Want me to take any of these further? Item 1 is a contained change and I can
+  verify it against your 5070 Ti before you ship it to a 780M.
+
+  Sources:
+  - whisper.cpp #2596 - Invalid probability vector, AMD iGPU Vulkan
+    (https://github.com/ggml-org/whisper.cpp/issues/2596)
+  - ONNX Runtime DirectML execution provider (https://onnxruntime.ai/docs/execut
+    ion-providers/DirectML-ExecutionProvider.html)
+  - DirectML feature level history (https://learn.microsoft.com/en-us/windows/wi
+    n32/direct3d12/dml-feature-level-history)
+  - Windows ML execution providers (https://learn.microsoft.com/en-us/windows/ai
+    /new-windows-ml/supported-execution-providers)
+  - onnx-community/siglip2-base-patch16-256-ONNX
+    (https://huggingface.co/onnx-community/siglip2-base-patch16-256-ONNX)
+  - Xenova/multilingual-e5-base
+    (https://huggingface.co/Xenova/multilingual-e5-base)
+  - intfloat/multilingual-e5-base (MIT)
+    (https://huggingface.co/intfloat/multilingual-e5-base)
+  - jinaai/jina-clip-v2 (cc-by-nc-4.0)
+    (https://huggingface.co/jinaai/jina-clip-v2)
+  - Alibaba-NLP/gte-multilingual-base
+    (https://huggingface.co/Alibaba-NLP/gte-multilingual-base)
+  - MobileCLIP2: Improving Multi-Modal Reinforced Training
+    (https://arxiv.org/html/2508.20691v1)
+  - Gemma Terms of Use (https://ai.google.dev/gemma/terms)
+  - Optimization of embeddings storage for RAG systems using quantization
+    (https://arxiv.org/html/2505.00105v1)
+  - How to compute LLM embeddings 3X faster with model quantization
+    (https://medium.com/nixiesearch/how-to-compute-llm-embeddings-3x-faster-with
+    -model-quantization-25523d9b4ce5)
+  - Best open-source speech-to-text models in 2026
+    (https://www.gladia.io/blog/best-open-source-speech-to-text-models)
+  - ONNX Runtime quantization docs (https://onnxruntime.ai/docs/performance/mode
+    l-optimizations/quantization.html)
+
+✻ Brewed for 4m 20s · done 10:04 AM
