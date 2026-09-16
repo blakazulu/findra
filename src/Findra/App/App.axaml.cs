@@ -1178,6 +1178,10 @@ internal sealed class Shell : ISettingsHost
     private string _indexerPower = "";
     private string _indexerMinutes = "";
 
+    // Every five minutes rather than every pass: the pump comes round every 400 ms and enumerating
+    // the platform's transforms is not free.
+    private readonly Stopwatch _decoderCheck = Stopwatch.StartNew();
+
     /// <summary>Keep the indexer child running while there is work and nobody has paused it, and
     /// keep its two control rows matching the settings.</summary>
     private void PumpIndexer(ContentDb db)
@@ -1222,6 +1226,27 @@ internal sealed class Shell : ISettingsHost
                 string current = db.Get("indexer:current") ?? "";
                 host.Kill($"the indexer made no progress on {(current.Length > 0 ? current : "the file it was reading")} " +
                           $"for {IndexerWatch.StallSeconds.ToString(CultureInfo.InvariantCulture)} s - restarting it");
+            }
+
+            // Installing a codec is the one thing that makes a blocked video readable, and nothing
+            // else would ever queue it again: the journal reports files that change, and these do
+            // not. Asked here rather than at startup because the Store installs it while Findra is
+            // running. The version test is what VideoDecoders' own platform annotation asks for:
+            // this window is declared for Windows generally, and the transform enumeration starts
+            // at 19041.
+            if (OperatingSystem.IsWindowsVersionAtLeast(10, 0, 19041) && _decoderCheck.ElapsedMilliseconds > 5 * 60 * 1000)
+            {
+                _decoderCheck.Restart();
+                string now = VideoDecoders.Fingerprint();
+                string was = db.Get(VideoDecoders.Key) ?? "";
+                if (now.Length > 0 && was.Length > 0 && now != was)
+                {
+                    int n = db.RequeueKinds([(int)ResultKind.Video], Indexer.Recheck,
+                                            onlyBecauseStartingWith: [Decoders.NoVideoCodec, Decoders.NoContainerReader]);
+                    Log.Info("index", $"the video decoders on this machine changed: {n.ToString("N0", CultureInfo.InvariantCulture)} " +
+                                      "video(s) that needed a codec are queued to be read");
+                }
+                if (now.Length > 0 && now != was) db.Set(VideoDecoders.Key, now);
             }
 
             ShowOnCapsule(db);

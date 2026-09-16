@@ -37,7 +37,11 @@ public sealed record IndexSnapshot(
     int TranscribeMinutes,
     // Recordings passed over for their length rather than for want of a model. A different lever
     // clears these - a setting, not a download - so a single "skipped" total hides which one.
-    long TooLongRecordings);
+    long TooLongRecordings,
+    // Videos Windows has no decoder for, by codec. Grouped rather than totalled for the same
+    // reason the capability counts are: "212 videos were skipped" tells nobody what to do, and
+    // "212 videos need HEVC" does.
+    IReadOnlyList<(string Codec, long Count)> BlockedVideos);
 
 /// <summary>
 /// `--searchindex`'s formatter: what is in the content index, and what is still queued (spec §9).
@@ -134,6 +138,13 @@ public static class SearchIndexReport
         // somebody can raise, and one merged "skipped" total says nothing about which to pull.
         if (s.TooLongRecordings > 0)
             Line($"              {N(s.TooLongRecordings)} recording(s) passed over for being longer than the limit");
+        if (s.BlockedVideos.Count > 0)
+        {
+            Line();
+            foreach ((string codec, long count) in s.BlockedVideos.OrderByDescending(b => b.Count))
+                Line($"              {N(count)} video(s) need a codec Windows has not got: {codec}");
+            Line("              Installing it makes exactly those files readable; nothing else is re-read.");
+        }
         Line();
 
         // A heartbeat this report was told is stale must not be read back as live work - the
@@ -497,7 +508,8 @@ public static class SearchIndex
             ContentEnabled: db.Get("index:paused") == "0",
             Capabilities: caps,
             TranscribeMinutes: Indexer.TranscribeMinutes(db),
-            TooLongRecordings: db.CountRecorded(Decoders.TooLong));
+            TooLongRecordings: db.CountRecorded(Decoders.TooLong),
+            BlockedVideos: db.BlockedVideoCodecs());
     }
 
     /// <summary>Every file the index is made of that exists right now - the database and its
