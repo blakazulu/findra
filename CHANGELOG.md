@@ -162,6 +162,12 @@ and Findra follows [Semantic Versioning](https://semver.org/spec/v2.0.0/).
 
 ### Fixed
 
+- **One file can no longer hold up everything waiting behind it.** A decoder that hung rather than
+  crashed was never noticed: the indexer stayed alive, the file was never given up on, and nothing
+  else in the queue was read until Findra was restarted. A file that stops making progress for
+  three minutes now ends that attempt, and after three attempts the file is set aside with a reason
+  and the queue moves on.
+
 - **The picture on the card for a video result is the moment that matched.** It came from the same
   slow path as indexing, so for many films it was a black rectangle after a long wait.
 

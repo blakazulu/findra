@@ -351,7 +351,7 @@ public sealed class Decoders : IDecoders
     private KindResult Document(string path)
     {
         if (!DocText.CanExtract(path)) return new KindResult([], NoFormatReader);
-        string text = DocText.Extract(path);
+        string text = DocText.Extract(path, Beat);
         Beat();
         if (text.Length < 40) return new KindResult([], NoText);
 

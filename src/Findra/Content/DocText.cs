@@ -39,23 +39,29 @@ public static class DocText
     /// honest gap, and stripping RTF control words is writing a reader.</summary>
     public static bool CanExtract(string path) => !NoReader.Contains(Path.GetExtension(path).TrimStart('.'));
 
-    public static string Extract(string path)
+    /// <summary><paramref name="beat"/> is called once per page, sheet, slide or chapter - the
+    /// unit of progress each format already iterates over - so a watchdog can tell a large
+    /// document still being read apart from a decoder that has stopped moving (see
+    /// <see cref="IndexerWatch"/>). HTML and plain text have no such loop: <c>Extract</c> reads the
+    /// whole file in one call for either, and there is nowhere inside that call to beat from.
+    /// </summary>
+    public static string Extract(string path, Action? beat = null)
     {
         string ext = Path.GetExtension(path).TrimStart('.').ToLowerInvariant();
         string text = ext switch
         {
-            "pdf" => Pdf(path),
-            "docx" => Ooxml(path, "word/document.xml", "word/footnotes.xml", "word/endnotes.xml"),
-            "pptx" => OoxmlAll(path, "ppt/slides/slide", "ppt/notesSlides/notesSlide"),
-            "xlsx" => Xlsx(path),
-            "epub" => Epub(path),
+            "pdf" => Pdf(path, beat),
+            "docx" => Ooxml(path, beat, "word/document.xml", "word/footnotes.xml", "word/endnotes.xml"),
+            "pptx" => OoxmlAll(path, beat, "ppt/slides/slide", "ppt/notesSlides/notesSlide"),
+            "xlsx" => Xlsx(path, beat),
+            "epub" => Epub(path, beat),
             "html" or "htm" => StripTags(File.ReadAllText(path)),
             _ => File.ReadAllText(path),
         };
         return Clean(text);
     }
 
-    private static string Pdf(string path)
+    private static string Pdf(string path, Action? beat)
     {
         var sb = new StringBuilder();
         using var doc = UglyToad.PdfPig.PdfDocument.Open(path);
@@ -80,6 +86,7 @@ public static class DocText
             }
             if (line.Count > 0) sb.Append(LineText(line)).Append('\n');
             sb.Append('\n');
+            beat?.Invoke();
             if (sb.Length > MaxChars) break;
         }
         return sb.ToString();
@@ -112,7 +119,10 @@ public static class DocText
 
     private static bool IsLtr(char c) => char.IsAsciiLetterOrDigit(c);
 
-    private static string Ooxml(string path, params string[] parts)
+    // word/document.xml, footnotes.xml and endnotes.xml: a fixed three parts, not one per page -
+    // Word does not record page boundaries in the XML at all, so a part is the finest unit this
+    // format has to beat on.
+    private static string Ooxml(string path, Action? beat, params string[] parts)
     {
         var sb = new StringBuilder();
         using var zip = ZipFile.OpenRead(path);
@@ -122,12 +132,13 @@ public static class DocText
             if (e is null) continue;
             using var s = e.Open();
             XmlText(s, sb);
+            beat?.Invoke();
         }
         return sb.ToString();
     }
 
     // slides and notes are numbered parts; take them in order
-    private static string OoxmlAll(string path, params string[] prefixes)
+    private static string OoxmlAll(string path, Action? beat, params string[] prefixes)
     {
         var sb = new StringBuilder();
         using var zip = ZipFile.OpenRead(path);
@@ -141,6 +152,7 @@ public static class DocText
         {
             using var s = e.Open();
             XmlText(s, sb);
+            beat?.Invoke();
             if (sb.Length > MaxChars) break;
         }
         return sb.ToString();
@@ -149,7 +161,7 @@ public static class DocText
     private static string Pad(string name) => Regex.Replace(name, @"\d+", m => m.Value.PadLeft(6, '0'));
 
     // cells reference a shared-strings table; inline strings and numbers sit in the sheet
-    private static string Xlsx(string path)
+    private static string Xlsx(string path, Action? beat)
     {
         var sb = new StringBuilder();
         using var zip = ZipFile.OpenRead(path);
@@ -185,12 +197,13 @@ public static class DocText
                 else if (r.NodeType == XmlNodeType.Element && r.Name == "t") { sb.Append(r.ReadElementContentAsString()).Append(' '); }
                 else if (r.NodeType == XmlNodeType.EndElement && r.Name == "row") sb.Append('\n');
             }
+            beat?.Invoke();
             if (sb.Length > MaxChars) break;
         }
         return sb.ToString();
     }
 
-    private static string Epub(string path)
+    private static string Epub(string path, Action? beat)
     {
         var sb = new StringBuilder();
         using var zip = ZipFile.OpenRead(path);
@@ -205,6 +218,7 @@ public static class DocText
             using var s = e.Open();
             using var rd = new StreamReader(s);
             sb.Append(StripTags(rd.ReadToEnd())).Append('\n');
+            beat?.Invoke();
             if (sb.Length > MaxChars) break;
         }
         return sb.ToString();
