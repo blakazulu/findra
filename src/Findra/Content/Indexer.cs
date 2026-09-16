@@ -46,6 +46,10 @@ public sealed class Indexer
     /// whatever the reason says, because it was never opened in the first place.</summary>
     public const string Recheck = "recheck";
 
+    /// <summary>The queue reason that means "take this video's pictures again, and leave what was
+    /// heard in it alone".</summary>
+    public const string Reframe = "reframe";
+
     /// <summary>The meta row the interface writes the transcription limit to. The child reads it
     /// per file, the same way it reads <c>index:power</c>, so raising the limit takes effect on
     /// the next recording rather than on the next restart.</summary>
@@ -397,7 +401,7 @@ public sealed class Indexer
             // up, and it arrives carrying whatever reason the caller wrote; deciding from that
             // string alone would dequeue every one of them untouched, move no counter and log
             // nothing. Recheck stays for reopening a file that genuinely was indexed.
-            if (item.Reason != Recheck
+            if (item.Reason != Recheck && item.Reason != Reframe
                 && _db.StateOf(item.Vol, item.Frn) != ContentDb.StateSkipped
                 && _db.IsCurrent(item.Vol, item.Frn, mtime))
             {
@@ -429,6 +433,28 @@ public sealed class Indexer
                 _decoders.Release(stale);
                 _done++;
                 return "skipped";
+            }
+
+            // The frames-only path. A row queued to re-take a video's pictures must not go through
+            // the full Decode below: that reads the sound track too, and every recording under the
+            // transcription limit would be transcribed a second time for a transcript already held.
+            // Guarded on StateIndexed as well as the reason, because a video the old decoder never
+            // finished has no transcript to protect and belongs on the ordinary path instead.
+            if (item.Reason == Reframe && item.Kind == ResultKind.Video
+                && _db.StateOf(item.Vol, item.Frn) == ContentDb.StateIndexed)
+            {
+                KindResult frames = _decoders.DecodeFrames(item.Path);
+                _decoders.Flush();
+                List<long> old;
+                using (var tx = _db.Begin())
+                {
+                    old = _db.ReplaceSegments(item.Vol, item.Frn, ContentDb.SegFrame, frames.Segments, tx);
+                    _db.Dequeue(item.Id, tx);
+                    tx.Commit();
+                }
+                _decoders.Release(old);
+                _done++;
+                return "reframed";
             }
 
             KindResult decoded = _decoders.Decode(item.Kind, item.Path, fi.Length);

@@ -353,4 +353,60 @@ public sealed class IndexerTests : IDisposable
         Indexer.DrainOnce(db, lines.Add, Dec());
         Assert.Contains(lines, l => l.StartsWith("removed", StringComparison.Ordinal));
     }
+
+    [Fact]
+    public void ReReadingAVideosFramesKeepsWhatWasHeardInIt()
+    {
+        using ContentDb db = Open();
+        var frame = new ContentDb.Segment(ContentDb.SegFrame, 10, 10, 7, "");
+        var speech = new ContentDb.Segment(ContentDb.SegSpeech, 0, 5, 9, "hello there");
+        using (var tx = db.Begin())
+        {
+            db.Upsert("C", 42, @"C:\film.mkv", ResultKind.Video, 1, 100, ContentDb.StateIndexed, null,
+                      [frame, speech], tx);
+            tx.Commit();
+        }
+
+        var fresh = new ContentDb.Segment(ContentDb.SegFrame, 20, 20, 11, "");
+        List<long> dead;
+        using (var tx = db.Begin())
+        {
+            dead = db.ReplaceSegments("C", 42, ContentDb.SegFrame, [fresh], tx);
+            tx.Commit();
+        }
+
+        Assert.Equal([7L], dead);                              // the old frame's vector, to be tombstoned
+        ContentDb.ItemRow row = db.ItemByPath(@"C:\film.mkv")!.Value;
+        var kinds = db.SegmentsOf(row.Id).Select(s => (s.SegKind, s.Vec)).ToList();
+        Assert.Contains((ContentDb.SegSpeech, 9L), kinds);     // the transcript is untouched
+        Assert.Contains((ContentDb.SegFrame, 11L), kinds);     // the frame is the new one
+        Assert.DoesNotContain((ContentDb.SegFrame, 7L), kinds);
+        Assert.Contains(db.Fts("hello", 10), h => h.Path == @"C:\film.mkv");   // and still findable
+    }
+
+    [Fact]
+    public void AVideoWrittenOffByTheOldDecoderIsOfferedAgain()
+    {
+        using ContentDb db = Open();
+        using (var tx = db.Begin())
+        {
+            db.Upsert("C", 1, @"C:\dead.avi", ResultKind.Video, 1, 10, ContentDb.StateFailed,
+                      "this file stopped or ended every attempt to read it", [], tx);
+            tx.Commit();
+        }
+        Assert.Equal(1, db.RequeueFailed([(int)ResultKind.Video], Indexer.Recheck));
+        Assert.Equal(1, db.PendingCount());
+    }
+
+    [Fact]
+    public void AQueuedVideosSpentAttemptsAreForgotten()
+    {
+        using ContentDb db = Open();
+        db.Enqueue("C", 5, @"C:\slow.avi", ResultKind.Video, Indexer.Recheck);
+        ContentDb.Pending item = db.TakeNext()!.Value;
+        db.CountAttempt(item.Id);
+        db.CountAttempt(item.Id);
+        Assert.Equal(1, db.ResetAttempts([(int)ResultKind.Video]));
+        Assert.Equal(0, db.TakeNext()!.Value.Attempts);
+    }
 }

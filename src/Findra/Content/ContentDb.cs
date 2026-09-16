@@ -53,7 +53,7 @@ public sealed class ContentDb : IDisposable
 
     /// <summary>The relational shape of this database. Bumped only when a change makes rows
     /// already on disk mean something different.</summary>
-    public const int SchemaVersion = 5;
+    public const int SchemaVersion = 6;
 
     /// <summary>One schema step. <c>InvalidatedKinds</c> is what that step made stale - and
     /// nothing else is re-queued. Re-indexing a finished disk because an upgrade did not look
@@ -63,7 +63,17 @@ public sealed class ContentDb : IDisposable
     /// ones already known: a re-queue moves rows that exist, and a file that was never queued at
     /// all has no row to move. Nothing else can reach it - the journal only reports what changes,
     /// and a folder of finished work never changes again.</param>
-    public readonly record struct Migration(int To, int[] InvalidatedKinds, string Reason, bool ReWalk = false);
+    /// <param name="QueueReason">The reason handed to <see cref="RequeueKinds"/>, when a step needs
+    /// something other than <see cref="Indexer.Recheck"/> - a re-queue that leaves only some of an
+    /// item's segments alone, the way a video's frames are retaken without its transcript.</param>
+    /// <param name="ResetAttempts">Forget attempts spent under the decoder this step replaces, so a
+    /// file that hung the old one is not written off before the new one has seen it.</param>
+    /// <param name="IncludeFailed">Also queue the FAILED rows of these kinds. A file the old
+    /// decoder could not read at all has not changed because a schema step ran, but a new decoder
+    /// is exactly what such a file is waiting for.</param>
+    public readonly record struct Migration(int To, int[] InvalidatedKinds, string Reason, bool ReWalk = false,
+                                            string? QueueReason = null, bool ResetAttempts = false,
+                                            bool IncludeFailed = false);
 
     /// <summary>
     /// A schema change appends the step that invalidates whatever it invalidated, and NOTHING
@@ -134,6 +144,21 @@ public sealed class ContentDb : IDisposable
         // already known.
         new(To: 5, InvalidatedKinds: [(int)ResultKind.Document],
             Reason: "chunks too short to mean one thing no longer carry a vector"),
+
+        // Every video frame in an index older than this was taken by a decoder that returned a
+        // black picture for a whole family of codecs, in about 33 seconds each. The frames have to
+        // be taken again - and ONLY the frames: what was heard in a video has not changed, and
+        // re-transcribing every recording under the limit would be hours of work for a transcript
+        // already held. Reframe is what says so.
+        //
+        // Attempts are reset because a video that hung the old decoder has spent attempts it did
+        // not deserve, and the failed rows are queued because "could not be read" was the old
+        // decoder's verdict rather than the file's.
+        //
+        // No ReWalk: which files are eligible has not changed, only what is stored about them.
+        new(To: 6, InvalidatedKinds: [(int)ResultKind.Video],
+            Reason: "video frames were read by a decoder that stored black pictures",
+            QueueReason: Indexer.Reframe, ResetAttempts: true, IncludeFailed: true),
     ];
 
     private readonly SqliteConnection _c;
@@ -292,14 +317,17 @@ CREATE TABLE IF NOT EXISTS opened(path TEXT PRIMARY KEY, count INTEGER NOT NULL,
             if (m.To <= from || m.To > SchemaVersion) continue;
             _migrationsRun.Add(m.Reason);
             if (m.ReWalk) ClearAllUsnPositions();
-            // Indexer.Recheck, NOT the migration's prose. RequeueKinds says it in its own note:
-            // the indexer dequeues a row untouched unless the reason is Recheck, the row is
-            // Skipped, or the file's bytes have moved. Passing the sentence meant for the log
-            // queued every photo on the machine and re-read none of them - the already-indexed
-            // ones, which are the whole point of a migration that changes how a kind is read,
-            // each came back "current" the moment they were taken. The pill counted them down,
-            // the log said "re-queued", and the index was exactly as it had been.
-            int n = RequeueKinds(m.InvalidatedKinds, Indexer.Recheck);
+            if (m.ResetAttempts) ResetAttempts(m.InvalidatedKinds);
+            // Indexer.Recheck, NOT the migration's prose, unless the step names its own reason.
+            // RequeueKinds says it in its own note: the indexer dequeues a row untouched unless
+            // the reason is Recheck (or the step's own reason), the row is Skipped, or the file's
+            // bytes have moved. Passing the sentence meant for the log queued every photo on the
+            // machine and re-read none of them - the already-indexed ones, which are the whole
+            // point of a migration that changes how a kind is read, each came back "current" the
+            // moment they were taken. The pill counted them down, the log said "re-queued", and
+            // the index was exactly as it had been.
+            int n = RequeueKinds(m.InvalidatedKinds, m.QueueReason ?? Indexer.Recheck);
+            if (m.IncludeFailed) n += RequeueFailed(m.InvalidatedKinds, Indexer.Recheck);
             Log.Info("index", $"schema {from} -> {m.To}: {m.Reason}, {n.ToString("N0", CultureInfo.InvariantCulture)} file(s) re-queued");
         }
         Set("schema", Stamp(SchemaVersion));
@@ -1051,6 +1079,45 @@ CREATE TABLE IF NOT EXISTS opened(path TEXT PRIMARY KEY, count INTEGER NOT NULL,
         return v is long n && n > MaxAttempts;
     }
 
+    /// <summary>Forget attempts spent on queued files of these kinds. A file that spent attempts
+    /// under a decoder that has been replaced must not be written off before the new one has seen
+    /// it - which would make the files that motivated the change the ones it never reads.</summary>
+    public int ResetAttempts(int[] kinds)
+    {
+        ArgumentNullException.ThrowIfNull(kinds);
+        if (kinds.Length == 0) return 0;
+        using var claim = Enter();
+        using var cmd = _c.CreateCommand();
+        cmd.CommandText = $"UPDATE pending SET attempts = 0 WHERE attempts > 0 AND kind IN ({string.Join(",", kinds)})";
+        return cmd.ExecuteNonQuery();
+    }
+
+    /// <summary>Queue the FAILED rows of these kinds. <see cref="RequeueKinds"/> deliberately
+    /// leaves them out - a file the decoder could not read has not changed because a capability
+    /// arrived - but a file the decoder could not read is exactly what a NEW decoder is for.
+    /// </summary>
+    public int RequeueFailed(int[] kinds, string reason)
+    {
+        ArgumentNullException.ThrowIfNull(kinds);
+        if (kinds.Length == 0) return 0;
+        using var claim = Enter();
+        int n = 0;
+        using var tx = Begin();
+        using (var cmd = _c.CreateCommand())
+        {
+            cmd.Transaction = tx;
+            cmd.CommandText = $"SELECT vol, frn, path, kind FROM items WHERE state={StateFailed.ToString(CultureInfo.InvariantCulture)} " +
+                              $"AND kind IN ({string.Join(",", kinds)})";
+            using var r = cmd.ExecuteReader();
+            var rows = new List<(string, ulong, string, int)>();
+            while (r.Read()) rows.Add((r.GetString(0), unchecked((ulong)r.GetInt64(1)), r.GetString(2), r.GetInt32(3)));
+            r.Close();
+            foreach (var (vol, frn, path, kind) in rows) { Enqueue(vol, frn, path, (ResultKind)kind, reason, tx); n++; }
+        }
+        tx.Commit();
+        return n;
+    }
+
     public void Dequeue(long id, SqliteTransaction? tx = null)
     {
         using var claim = Enter();
@@ -1103,6 +1170,14 @@ CREATE TABLE IF NOT EXISTS opened(path TEXT PRIMARY KEY, count INTEGER NOT NULL,
             itemId = (long)cmd.ExecuteScalar()!;
         }
         dead.AddRange(DeleteSegments(itemId, tx));
+        InsertSegments(itemId, segments, tx);
+        return dead;
+    }
+
+    // The write half of Upsert, and now of ReplaceSegments too: one insert loop rather than two
+    // copies that could come to write the full-text row differently.
+    private void InsertSegments(long itemId, IReadOnlyList<Segment> segments, SqliteTransaction tx)
+    {
         foreach (var s in segments)
         {
             using var cmd = _c.CreateCommand();
@@ -1125,6 +1200,65 @@ CREATE TABLE IF NOT EXISTS opened(path TEXT PRIMARY KEY, count INTEGER NOT NULL,
                 f.ExecuteNonQuery();
             }
         }
+    }
+
+    /// <summary>Replace only the segments of ONE kind, leaving the rest of the item alone.
+    ///
+    /// <para>A video's frames were read by a decoder that has changed; what was HEARD in it has
+    /// not. Re-reading the whole file would re-transcribe every video under the transcription
+    /// limit - hours of work to arrive at the transcript already held. Returns the vector rows the
+    /// replaced segments carried, to be tombstoned after the commit, for the reason
+    /// <see cref="Upsert"/> gives.</para></summary>
+    public List<long> ReplaceSegments(string vol, ulong frn, int segKind,
+                                      IReadOnlyList<Segment> segments, SqliteTransaction tx)
+    {
+        ArgumentNullException.ThrowIfNull(segments);
+        using var claim = Enter();
+        long? itemId;
+        using (var cmd = _c.CreateCommand())
+        {
+            cmd.Transaction = tx;
+            cmd.CommandText = "SELECT id FROM items WHERE vol=$v AND frn=$f";
+            cmd.Parameters.AddWithValue("$v", vol);
+            cmd.Parameters.AddWithValue("$f", unchecked((long)frn));
+            itemId = cmd.ExecuteScalar() as long?;
+        }
+        if (itemId is null) return [];
+
+        var dead = new List<long>();
+        using (var cmd = _c.CreateCommand())
+        {
+            cmd.Transaction = tx;
+            cmd.CommandText = "SELECT id, vec, text FROM segments WHERE item=$i AND kind=$k";
+            cmd.Parameters.AddWithValue("$i", itemId.Value);
+            cmd.Parameters.AddWithValue("$k", segKind);
+            using var r = cmd.ExecuteReader();
+            var rows = new List<(long Id, long Vec, string Text)>();
+            while (r.Read()) rows.Add((r.GetInt64(0), r.GetInt64(1), r.GetString(2)));
+            r.Close();
+            foreach (var (id, vec, text) in rows)
+            {
+                if (vec >= 0) dead.Add(vec);
+                if (text.Length > 0)
+                {
+                    using var f = _c.CreateCommand();
+                    f.Transaction = tx;
+                    f.CommandText = "INSERT INTO fts(fts, rowid, text) VALUES('delete', $r, $x)";
+                    f.Parameters.AddWithValue("$r", id);
+                    f.Parameters.AddWithValue("$x", text);
+                    f.ExecuteNonQuery();
+                }
+            }
+        }
+        using (var cmd = _c.CreateCommand())
+        {
+            cmd.Transaction = tx;
+            cmd.CommandText = "DELETE FROM segments WHERE item=$i AND kind=$k";
+            cmd.Parameters.AddWithValue("$i", itemId.Value);
+            cmd.Parameters.AddWithValue("$k", segKind);
+            cmd.ExecuteNonQuery();
+        }
+        InsertSegments(itemId.Value, segments, tx);
         return dead;
     }
 

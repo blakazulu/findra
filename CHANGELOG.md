@@ -318,6 +318,12 @@ and Findra follows [Semantic Versioning](https://semver.org/spec/v2.0.0/).
   being true the moment 0.1.0 shipped. It still says plainly that nothing is signed yet, because
   nothing is.
 
+- **Videos already in the index have their pictures taken again.** Anything indexed before this
+  release may hold black frames, so Findra re-reads the pictures of every video it has - and only
+  the pictures: what was heard in them is kept, so nothing is transcribed twice. Videos that were
+  set aside as unreadable are tried again, and videos waiting in the queue no longer carry the
+  attempts they spent on the old decoder.
+
 ## [0.1.0] - 2026-09-04
 
 The first release. Everything below is the whole of Findra as it stands: the three
