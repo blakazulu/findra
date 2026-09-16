@@ -100,6 +100,9 @@ public static class MediaFoundation
         return Marshal.GetDelegateForFunctionPointer<T>(Marshal.ReadIntPtr(vtable, slot * IntPtr.Size));
     }
 
+    /// <summary>Drop one COM reference. Every caller in this file takes exactly one, so this is
+    /// the one place that reference is given back - a leak or a double-release is a search
+    /// somebody would have to do file by file otherwise.</summary>
     public static void Release(IntPtr obj)
     {
         if (obj != IntPtr.Zero) Call<ReleaseFn>(obj, ReleaseSlot)(obj);
