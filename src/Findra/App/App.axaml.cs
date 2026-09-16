@@ -198,6 +198,11 @@ internal sealed class Shell : ISettingsHost
     /// way <see cref="_indexLine"/> starts from "" for the tray.</summary>
     private long _blockedVideos;
     private string? _blockedCodec;
+
+    /// <summary>How many of <see cref="_blockedVideos"/> need <see cref="_blockedCodec"/> itself.
+    /// The row reports this one and not the total, because installing that codec clears exactly
+    /// these.</summary>
+    private long _blockedForCodec;
     private IReadOnlyList<string> _drives = [];
 
     // ---- the content index ----
@@ -1328,20 +1333,26 @@ internal sealed class Shell : ISettingsHost
         {
             // Only while the window is open - the query is a grouped scan and nothing else needs
             // it, so it never runs on every heartbeat for a window nobody has open.
-            long blocked = 0; string? blockedCodec = null;
+            long blocked = 0;
             IReadOnlyList<(string Codec, long Count)> byCodec = db.BlockedVideoCodecs();
             foreach ((string codec, long count) in byCodec) blocked += count;
             // The codec with a decoder somebody can install decides the row; otherwise the
-            // commonest one, so the row can still report the number.
-            blockedCodec = byCodec.OrderByDescending(b => VideoCodecStore.ProductFor(b.Codec) is not null)
-                                  .ThenByDescending(b => b.Count)
-                                  .Select(b => b.Codec)
-                                  .FirstOrDefault();
+            // commonest one, so the row can still report the number. Its OWN count travels beside
+            // it, because that is what the row promises: "24 need HEVC" means installing HEVC
+            // clears 24. Handing the sum across every codec on the machine to a row that names one
+            // of them overstates what that codec can do, and --searchindex - which has always
+            // grouped by codec - would then disagree with this surface about the same index.
+            (string Codec, long Count) worst = byCodec
+                .OrderByDescending(b => VideoCodecStore.ProductFor(b.Codec) is not null)
+                .ThenByDescending(b => b.Count)
+                .FirstOrDefault();
             // Cached for the next window that opens, on the same terms as _indexPending and
             // _indexIndexed just above.
             Interlocked.Exchange(ref _blockedVideos, blocked);
-            Interlocked.Exchange(ref _blockedCodec, blockedCodec);
-            Dispatcher.UIThread.Post(() => panel.UseIndexState(indexed > 0, alive, pending, indexed, blocked, blockedCodec));
+            Interlocked.Exchange(ref _blockedForCodec, worst.Count);
+            Interlocked.Exchange(ref _blockedCodec, worst.Codec);
+            Dispatcher.UIThread.Post(() => panel.UseIndexState(indexed > 0, alive, pending, indexed,
+                                                              blocked, worst.Codec, worst.Count));
         }
         // The capsule's pill: the same facts as the line, laid out for a label / track / count
         // rather than a sentence. Nothing to show is `default`, which draws no pill at all - not a
@@ -1693,6 +1704,7 @@ internal sealed class Shell : ISettingsHost
                 Indexed = _indexIndexed,
                 BlockedVideos = _blockedVideos,
                 BlockedCodec = _blockedCodec,
+                BlockedForCodec = _blockedForCodec,
                 Drives = _drives,
                 WindowsIsLight = Theme.WindowsIsLight(),
                 Version = BuildInfo.Version,

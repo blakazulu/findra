@@ -146,13 +146,15 @@ public sealed class SettingsWindow : Window
     /// about this same moment, not one fetched separately.</para>
     /// </summary>
     public void UseIndexState(bool everIndexed, bool indexerAlive, long pending, long indexed,
-                              long blockedVideos, string? blockedCodec) =>
+                              long blockedVideos, string? blockedCodec, long blockedForCodec) =>
         _canvas.Refresh(s => s.EverIndexed == everIndexed && s.IndexerAlive == indexerAlive
                              && s.Pending == pending && s.Indexed == indexed
                              && s.BlockedVideos == blockedVideos && s.BlockedCodec == blockedCodec
+                             && s.BlockedForCodec == blockedForCodec
             ? s
             : s with { EverIndexed = everIndexed, IndexerAlive = indexerAlive, Pending = pending, Indexed = indexed,
-                       BlockedVideos = blockedVideos, BlockedCodec = blockedCodec });
+                       BlockedVideos = blockedVideos, BlockedCodec = blockedCodec,
+                       BlockedForCodec = blockedForCodec });
 
     /// <summary>
     /// Mark a row as waiting on its own work, or as finished with it.

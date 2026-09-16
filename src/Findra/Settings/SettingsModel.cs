@@ -136,6 +136,13 @@ public sealed record SettingsState(Config Config)
     public long BlockedVideos { get; init; }
     public string? BlockedCodec { get; init; }
 
+    /// <summary>How many of <see cref="BlockedVideos"/> need the codec <see cref="BlockedCodec"/>
+    /// names, which is what the button reports and is not the same number. A library with 24 HEVC
+    /// files and 6 in a format nobody sells a decoder for is "24 need HEVC", because installing
+    /// HEVC clears 24 of them: the total belongs to the row with no codec to name, where the
+    /// sentence is about every video Findra cannot read rather than about one of them.</summary>
+    public long BlockedForCodec { get; init; }
+
     /// <summary>What Windows' own light/dark setting says right now. Only used to work out which
     /// of the two palette rows is the one actually on screen, so that picking from the other one
     /// can be made to show. Not a setting and never written.</summary>
@@ -503,13 +510,18 @@ public static class SettingsModel
             // what this capability can do here.
             if (c == Capability.Photos && s.BlockedVideos > 0)
             {
-                string n = s.BlockedVideos.ToString("N0", Fixed);
                 string? product = s.BlockedCodec is { } codec ? VideoCodecStore.ProductFor(codec) : null;
+                // The NAMED codec's own count on the button, and the total on the row that names
+                // nothing. They are different numbers whenever a library is blocked on more than
+                // one codec: "30 need HEVC" over 24 HEVC files and 6 in some other format promises
+                // that installing HEVC clears all 30, and it clears 24. The row with no codec in
+                // it is a sentence about every video Findra cannot read, so there the total is the
+                // true number.
                 rows.Add(product is not null
                     ? Control.Plain(ControlId.VideoCodec, ControlKind.Button, Capabilities.Title(c),
-                                    $"{n} need {s.BlockedCodec}", tag: (int)c)
+                                    $"{s.BlockedForCodec.ToString("N0", Fixed)} need {s.BlockedCodec}", tag: (int)c)
                     : Control.Plain(ControlId.VideoCodec, ControlKind.Text, Capabilities.Title(c),
-                                    $"installed, {n} unreadable", tag: (int)c));
+                                    $"installed, {s.BlockedVideos.ToString("N0", Fixed)} unreadable", tag: (int)c));
                 continue;
             }
 
