@@ -1211,6 +1211,17 @@ internal sealed class Shell : ISettingsHost
             // there is no other lifetime code anywhere.
             if (reading && db.PendingCount() > 0) host.EnsureRunning();
 
+            // A child that is alive and has stopped reporting progress is a hung decoder. The
+            // attempt was counted before the file was opened, so killing it now is what lets that
+            // file be written off after three tries instead of holding the queue for ever.
+            if (IndexerWatch.ShouldRestart(host.Running, reading, db.PendingCount(),
+                                           db.Get("indexer:beat"), DateTimeOffset.UtcNow.ToUnixTimeSeconds()))
+            {
+                string current = db.Get("indexer:current") ?? "";
+                host.Kill($"the indexer made no progress on {(current.Length > 0 ? current : "the file it was reading")} " +
+                          $"for {IndexerWatch.StallSeconds.ToString(CultureInfo.InvariantCulture)} s - restarting it");
+            }
+
             ShowOnCapsule(db);
         }
         catch (Exception ex)

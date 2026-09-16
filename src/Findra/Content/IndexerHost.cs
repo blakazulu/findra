@@ -101,6 +101,33 @@ public sealed class IndexerHost : IDisposable
         }
     }
 
+    /// <summary>Stop a child that has stopped making progress, so that its attempt is spent and
+    /// the next one starts. The restart is the ordinary one: a stalled file is not a process storm,
+    /// and escalating the crash backoff to five minutes would make a file that hangs every time
+    /// take the rest of the afternoon to be written off.</summary>
+    public void Kill(string reason) => Kill(reason, m => Log.Warn("index", m), () =>
+    {
+        lock (_gate)
+        {
+            if (_proc is not { HasExited: false }) return false;
+            _proc.Kill();
+            _proc.Dispose();
+            _proc = null;
+            _restarts = 0;
+            _lastStart = DateTime.MinValue;
+            return true;
+        }
+    });
+
+    /// <summary>The effects as delegates, so a test can assert what was killed and what was said
+    /// without a process.</summary>
+    public static void Kill(string reason, Action<string> log, Func<bool> kill)
+    {
+        ArgumentNullException.ThrowIfNull(log);
+        ArgumentNullException.ThrowIfNull(kill);
+        if (kill()) log(reason);
+    }
+
     public void Dispose()
     {
         lock (_gate)

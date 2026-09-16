@@ -319,8 +319,8 @@ public sealed class Indexer
         if (!spent) return false;
 
         Log.Warn("index", $"{Path.GetFileName(item.Path)} has been given " +
-                          $"{ContentDb.MaxAttempts.ToString(CultureInfo.InvariantCulture)} attempts and has ended " +
-                          "each of them; it is written off so the rest of the queue can move");
+                          $"{ContentDb.MaxAttempts.ToString(CultureInfo.InvariantCulture)} attempts and ended or " +
+                          "stalled in each of them; it is written off so the rest of the queue can move");
         try
         {
             long mtime = File.Exists(item.Path) ? new FileInfo(item.Path).LastWriteTimeUtc.Ticks : 0;
@@ -328,7 +328,7 @@ public sealed class Indexer
             using (var tx = _db.Begin())
             {
                 dead = _db.Upsert(item.Vol, item.Frn, item.Path, item.Kind, mtime, 0, ContentDb.StateFailed,
-                                  "this file ended every attempt to read it", Array.Empty<ContentDb.Segment>(), tx);
+                                  "this file stopped or ended every attempt to read it", Array.Empty<ContentDb.Segment>(), tx);
                 _db.Dequeue(item.Id, tx);
                 tx.Commit();
             }

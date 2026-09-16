@@ -174,8 +174,16 @@ public static class SearchProbe
             if (!IndexStatus.Alive(db.Get("indexer:beat"), pid))
                 return Label + $"not running - {N(db.PendingCount())} file(s) waiting";
 
-            return Label + IndexStatus.Running(pid, db.Get("indexer:state"),
-                                               db.Get("indexer:current"), db.Get("indexer:rate"));
+            string running = Label + IndexStatus.Running(pid, db.Get("indexer:state"),
+                                                         db.Get("indexer:current"), db.Get("indexer:rate"));
+            if (long.TryParse(db.Get("indexer:beat"), NumberStyles.Integer, CultureInfo.InvariantCulture, out long beat))
+            {
+                long ago = DateTimeOffset.UtcNow.ToUnixTimeSeconds() - beat;
+                running += Environment.NewLine +
+                           $"                           last progress {ago.ToString("N0", CultureInfo.InvariantCulture)} s ago" +
+                           (ago > IndexerWatch.StallSeconds ? "  (STALLED - the interface restarts it)" : "");
+            }
+            return running;
         }
         catch (Exception ex)
         {
