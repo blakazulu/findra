@@ -12,6 +12,9 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <LangVersion>latest</LangVersion>
+    <!-- VideoFrames.Copy reads a decoded frame straight out of the buffer Media Foundation
+         locked, row by row, honouring a negative stride - there is no managed API for that. -->
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <InvariantGlobalization>false</InvariantGlobalization>
     <!-- System.IO.Pipes.AccessControl (below) carries the PipeSecurity the helper puts on
          its listener, and 5.0.0 is the only stable release NuGet has ever published
