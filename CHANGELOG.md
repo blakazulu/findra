@@ -9,6 +9,10 @@ and Findra follows [Semantic Versioning](https://semver.org/spec/v2.0.0/).
 
 ### Added
 
+- **Findra can say which video codec a file needs.** A video Windows has no decoder for is now
+  recognised by the format the file itself states, so the reason recorded names the codec rather
+  than saying the file could not be read.
+
 - **Settings can open the log folder.** Under About, beside the version and how Findra was
   installed, there is now an Open folder button. The logs were only reachable by knowing that
   `findra --version` prints their location, which is not something anybody knows at the moment
