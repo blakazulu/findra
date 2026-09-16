@@ -175,6 +175,12 @@ and Findra follows [Semantic Versioning](https://semver.org/spec/v2.0.0/).
 
 ### Fixed
 
+- **The diagnostics measured speech on the wrong chip.** `--searchmodels`, `--searchindex`,
+  `--searchtest` and `--searchbench` transcribed on whichever graphics device Windows listed first,
+  which on a machine with integrated graphics beside a card is the integrated one - so they were far
+  slower than the indexer they exist to explain, and `--searchmodels` could report that accelerated
+  speech does not work on a machine where it does.
+
 - **Re-reading a video's pictures can no longer cost it its transcript.** If reading the pictures
   of an already-indexed video failed outright, everything stored for that file was discarded -
   including what was heard in it, which had not changed and was not being re-read. What was heard

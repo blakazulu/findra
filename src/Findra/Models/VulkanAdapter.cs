@@ -141,4 +141,58 @@ public static class VulkanAdapter
                       + (best is not null && best.Index == d.Index ? " <- chosen" : ""));
         return string.Join(", ", parts);
     }
+
+    /// <summary>
+    /// Start this process again with the speech runtime pointed at the card, and hand back the exit
+    /// code it finished with. Null means nothing was done and the caller carries on.
+    ///
+    /// <para><b>It has to be a new process.</b> The runtime reads
+    /// <see cref="VisibleDevices"/> through the C runtime's copy of the environment, which
+    /// <c>Environment.SetEnvironmentVariable</c> does not reach - so a version of this that set the
+    /// variable in place would read its own value back, log success, and change nothing. The
+    /// indexer child gets the variable because its parent sets it before the child exists; a
+    /// diagnostic somebody typed has no such parent, and this is how it gets one.</para>
+    ///
+    /// <para>Nothing happens when the variable is already set - which is what stops this restarting
+    /// itself for ever - or when there is no card to choose, which is an ordinary machine rather
+    /// than a fault.</para>
+    /// </summary>
+    public static int? ReExecWithDiscrete(IReadOnlyList<string> args)
+        => ReExecWithDiscrete(args, Environment.GetEnvironmentVariable, Visible, Run);
+
+    /// <summary>The effects as delegates, so the decision is testable without starting a process.
+    /// </summary>
+    public static int? ReExecWithDiscrete(IReadOnlyList<string> args, Func<string, string?> readEnv,
+                                          Func<string?> visible, Func<IReadOnlyList<string>, string, int> run)
+    {
+        ArgumentNullException.ThrowIfNull(args);
+        ArgumentNullException.ThrowIfNull(readEnv);
+        ArgumentNullException.ThrowIfNull(visible);
+        ArgumentNullException.ThrowIfNull(run);
+
+        if (!string.IsNullOrEmpty(readEnv(VisibleDevices))) return null;
+        if (visible() is not { } device) return null;
+        return run(args, device);
+    }
+
+    private static int Run(IReadOnlyList<string> args, string device)
+    {
+        string exe = Environment.ProcessPath ?? "";
+        if (exe.Length == 0) return 0;          // nothing to restart; the caller carries on
+
+        var start = new System.Diagnostics.ProcessStartInfo(exe)
+        {
+            // Inherited handles, so the restarted process writes to the console the caller is
+            // already attached to. A diagnostic whose output went nowhere would be worse than a
+            // slow one.
+            UseShellExecute = false,
+        };
+        foreach (string a in args) start.ArgumentList.Add(a);
+        start.Environment[VisibleDevices] = device;
+
+        using var proc = System.Diagnostics.Process.Start(start);
+        if (proc is null) return 0;
+        proc.WaitForExit();
+        return proc.ExitCode;
+    }
 }

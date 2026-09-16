@@ -11,6 +11,11 @@ public static class SelfTest
 {
     public static int Run()
     {
+        // This runs the indexer's own decoders over a real file, which is how speech ends up
+        // opened here too. Without the card made visible first, that would run on whichever
+        // Vulkan device the runtime lists first rather than the chip the indexer actually uses.
+        if (VulkanAdapter.ReExecWithDiscrete(["--searchtest"]) is { } code) return code;
+
         int failed = 0;
         Console.WriteLine("findra --searchtest");
         Console.WriteLine();
