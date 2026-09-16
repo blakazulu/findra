@@ -61,6 +61,11 @@ and Findra follows [Semantic Versioning](https://semver.org/spec/v2.0.0/).
 - Documentation: the design note and the step plan behind the video frame work are in the
   repository, beside the code they describe.
 
+- Documentation: two comments named a transcript helper that production no longer calls, and the
+  video decoder fingerprint is no longer checked in a way that asserts the machine running the
+  check rather than the code - an install without the Media Feature Pack has no decoders to list,
+  and that is a supported machine rather than a failure.
+
 - Documentation: named the two limits the give-up rule means, rather than leaving "these" to
   reach for the attempts-versus-watchdog sentence beside it.
 
@@ -207,6 +212,10 @@ and Findra follows [Semantic Versioning](https://semver.org/spec/v2.0.0/).
   Windows has no decoder for recorded the codec, and raising the limit went back for every other
   recording but not that one. What Windows cannot read there is its pictures; its sound track is
   ordinary. Those films are now heard when the limit rises, whether or not the codec ever arrives.
+
+- **`findra --searchindex` no longer says "Installing it" under a list of several codecs.** The
+  sentence had nothing to point at as soon as more than one codec was named. It now says that
+  installing one of them makes exactly the files listed against that one readable.
 
 - **One file can no longer hold up everything waiting behind it.** A decoder that hung rather than
   crashed was never noticed: the indexer stayed alive, the file was never given up on, and nothing

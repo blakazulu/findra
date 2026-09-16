@@ -143,7 +143,8 @@ public static class SearchIndexReport
             Line();
             foreach ((string codec, long count) in s.BlockedVideos.OrderByDescending(b => b.Count))
                 Line($"              {N(count)} video(s) need a codec Windows has not got: {codec}");
-            Line("              Installing it makes exactly those files readable; nothing else is re-read.");
+            Line("              Installing one of these codecs makes exactly the files listed against it");
+            Line("              readable; nothing else is re-read.");
         }
         Line();
 
