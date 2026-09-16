@@ -36,9 +36,9 @@ public static class VideoFrames
     /// </summary>
     public static string? SkipFor(int hresult) => hresult switch
     {
-        TopoCodecNotFound => "no decoder for this video format yet",
-        InvalidStreamNumber => "no video stream",
-        UnsupportedByteStream => "no reader for this container yet",
+        TopoCodecNotFound => Decoders.NoVideoCodec,
+        InvalidStreamNumber => Decoders.NoVideoStream,
+        UnsupportedByteStream => Decoders.NoContainerReader,
         _ => null,
     };
 
@@ -90,7 +90,7 @@ public static class VideoFrames
                 Close(reader);
                 reader = IntPtr.Zero;
                 return new VideoOpen(IntPtr.Zero, 0, codec,
-                                     SkipFor(hr) ?? "no decoder for this video format yet");
+                                     SkipFor(hr) ?? Decoders.NoVideoCodec);
             }
 
             VideoOpen opened = new(reader, Seconds(reader), codec, null);

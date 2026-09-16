@@ -129,6 +129,25 @@ public sealed class Decoders : IDecoders
     /// re-queues exactly these rows.</summary>
     public const string NoFormatReader = "no decoder for this format yet";
 
+    /// <summary>Windows has no decoder for this video's codec. The codec is named in brackets
+    /// after it, so a re-queue matches on the sentence and a person reads which one. It is a skip
+    /// and never a failure: installing the codec makes exactly these files readable.</summary>
+    public const string NoVideoCodec = "no decoder for this video format yet";
+
+    /// <summary>A container with no video stream in it - an audio-only MP4, which is ordinary.
+    /// The sound track is still transcribed.</summary>
+    public const string NoVideoStream = "no video stream";
+
+    /// <summary>Opened, and no picture came out of it. Recorded rather than stored: a video whose
+    /// frames are all empty must not leave black frames in the index answering queries.</summary>
+    public const string NoFrames = "no frames";
+
+    /// <summary>Windows did not recognise the file as a container at all, which happens before any
+    /// codec is known - so it is not the codec reason, which names one. A skip rather than a
+    /// failure: an extension that brings a container source with it makes these readable, and the
+    /// re-queue that watches the machine's decoders picks exactly these rows up.</summary>
+    public const string NoContainerReader = "no reader for this container yet";
+
     /// <summary>Too small to be a picture of anything. Deliberately not "an icon, not a picture",
     /// which was the old wording and the old rule: an icon IS an image, and this reason now means
     /// only what it says.</summary>
@@ -146,6 +165,8 @@ public sealed class Decoders : IDecoders
     private readonly bool _ownsVectors;
     private readonly Func<int> _transcribeMinutes;
     private readonly Func<CapabilitySet> _installed;
+    private readonly Func<string, (IVideoSource? Source, string? Skip)> _videos;
+    private readonly Action _beat;
     private ClipImageEncoder? _vision;
     private E5Encoder? _e5;
     private WhisperFactory? _whisper, _whisperHe;
@@ -171,7 +192,9 @@ public sealed class Decoders : IDecoders
     /// is worse than a delay, because the interface queues the files the moment they land and the
     /// child records every one of them unreadable.</para></summary>
     public Decoders(Func<CapabilitySet> installed, VectorStore vectors, Func<int>? transcribeMinutes = null,
-                    string? modelDir = null, bool ownsVectors = false)
+                    string? modelDir = null, bool ownsVectors = false,
+                    Func<string, (IVideoSource? Source, string? Skip)>? videos = null,
+                    Action? beat = null)
     {
         ArgumentNullException.ThrowIfNull(installed);
         _installed = installed;
@@ -180,15 +203,19 @@ public sealed class Decoders : IDecoders
         _transcribeMinutes = transcribeMinutes ?? (() => TranscribeLimit.Default);
         _dir = modelDir;
         _ownsVectors = ownsVectors;
+        _videos = videos ?? VideoRead.Open;
+        _beat = beat ?? (() => { });
     }
 
     /// <summary>The set this machine actually has, with a writer on the real vector store. Only
     /// the <c>--index</c> child calls this. A diagnostic that calls it takes a writer on a file
     /// the running child already holds, and appends rows to a store its throwaway database will
     /// never reference.</summary>
-    public static Decoders ForThisMachine(Func<int> transcribeMinutes, string? modelDir = null)
+    public static Decoders ForThisMachine(Func<int> transcribeMinutes, string? modelDir = null, Action? beat = null)
         => new(() => CapabilitySet.Installed(modelDir), new VectorStore(writer: true), transcribeMinutes,
-               modelDir, ownsVectors: true);
+               modelDir, ownsVectors: true, beat: beat);
+
+    private void Beat() => _beat();
 
     /// <summary>
     /// Look at the disk again, and take the new set if it has moved.
@@ -414,42 +441,58 @@ public sealed class Decoders : IDecoders
     /// was passed over for length is INDEXED with a note rather than skipped.</summary>
     private KindResult Video(string path)
     {
-        double duration = Media.VideoDuration(path).GetAwaiter().GetResult();
-        var segs = new List<ContentDb.Segment>();
-        if (Installed.Has(Capability.Photos)) segs.AddRange(Frames(path, duration));
-
-        string? tooLong = null;
-        if (Installed.Has(Capability.Speech))
+        (IVideoSource? source, string? openSkip) = _videos(path);
+        using (source)
         {
-            if (!TranscribeLimit.Covers(_transcribeMinutes(), duration)) tooLong = TooLong;
-            else
-                try
-                {
-                    (float[] samples, _) = Media.Decode(path, MaxDecodeSeconds);
-                    if (samples.Length >= Media.SampleRate) segs.AddRange(Transcribe(path, samples, null));
-                }
-                catch (Exception ex)
-                {
-                    Log.Once($"index|videoaudio|{ex.GetType().Name}", "WARN", "index",
-                             $"a video sound track could not be read :: {ex.GetType().Name}: {ex.Message}");
-                }
-        }
+            double duration = source?.Seconds ?? 0;
+            var segs = new List<ContentDb.Segment>();
+            string? frameSkip = openSkip;
 
-        // Something was read: the file really is searchable, and the note records only what was
-        // left undone. Nothing was read: the length is the skip reason if it was the cause.
-        return segs.Count > 0 ? new KindResult(segs, null, tooLong) : new KindResult(segs, tooLong ?? "no frames");
+            if (source is not null && Installed.Has(Capability.Photos))
+            {
+                var clock = System.Diagnostics.Stopwatch.StartNew();
+                VideoTake take = VideoRead.Take(source, VideoRead.Plan(duration), Beat, () => clock.Elapsed);
+                frameSkip = take.Skip;
+                segs.AddRange(Embed(take));
+            }
+
+            // The sound track is a separate capability and a separate question: a video whose
+            // pictures cannot be read may still be worth hearing, and the file opens either way.
+            string? tooLong = null;
+            if (Installed.Has(Capability.Speech))
+            {
+                double heard = duration > 0 ? duration : Media.Duration(path);
+                if (!TranscribeLimit.Covers(_transcribeMinutes(), heard)) tooLong = TooLong;
+                else
+                    try
+                    {
+                        (float[] samples, _) = Media.Decode(path, MaxDecodeSeconds);
+                        if (samples.Length >= Media.SampleRate) segs.AddRange(Transcribe(path, samples, null));
+                    }
+                    catch (Exception ex)
+                    {
+                        Log.Once($"index|videoaudio|{ex.GetType().Name}", "WARN", "index",
+                                 $"a video sound track could not be read :: {ex.GetType().Name}: {ex.Message}");
+                    }
+            }
+
+            return segs.Count > 0
+                ? new KindResult(segs, null, tooLong ?? frameSkip)
+                : new KindResult(segs, frameSkip ?? tooLong ?? NoFrames);
+        }
     }
 
-    private List<ContentDb.Segment> Frames(string path, double duration)
+    /// <summary>The frames, through the vision tower, in batches. Every picture handed in is one
+    /// the decoder produced: an empty frame never reaches here, so nothing embeds black.</summary>
+    private List<ContentDb.Segment> Embed(VideoTake take)
     {
         var segs = new List<ContentDb.Segment>();
-        List<double> times = Media.SampleTimes(duration);
-        List<SKBitmap?> frames = Media.Frames(path, times).GetAwaiter().GetResult();
+        if (take.Frames.Count == 0) return segs;
         ClipImageEncoder vision = Vision();
         var batch = new List<float[]>();
         var batchTimes = new List<double>();
 
-        void FlushBatch()
+        void Flush()
         {
             if (batch.Count == 0) return;
             float[][] vs = vision.Encode(batch);
@@ -458,17 +501,17 @@ public sealed class Decoders : IDecoders
                                                Append(vs[i], ContentDb.SegFrame), ""));
             batch.Clear();
             batchTimes.Clear();
+            Beat();
         }
 
-        for (int i = 0; i < frames.Count; i++)
-        {
-            using SKBitmap? f = frames[i];
-            if (f is null) continue;
-            batch.Add(ClipImageEncoder.Preprocess(f));
-            batchTimes.Add(times[i]);
-            if (batch.Count == 8) FlushBatch();
-        }
-        FlushBatch();
+        foreach ((double at, SKBitmap picture) in take.Frames)
+            using (picture)
+            {
+                batch.Add(ClipImageEncoder.Preprocess(picture));
+                batchTimes.Add(at);
+                if (batch.Count == 8) Flush();
+            }
+        Flush();
         return segs;
     }
 

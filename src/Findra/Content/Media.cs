@@ -1,13 +1,10 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.IO;
 using System.Runtime.Versioning;
 using System.Threading.Tasks;
 
 using NAudio.Wave;
 using NAudio.Wave.SampleProviders;
-
-using SkiaSharp;
 
 using Whisper.net;
 using Whisper.net.LibraryLoader;
@@ -25,10 +22,8 @@ namespace Findra;
 /// Hebrew is a second pass and never an alternative, which is why the general model is required
 /// for it and why the extra cost is paid only on Hebrew files.</para>
 ///
-/// <para><b>Video frames</b> come from the media pipeline Windows ships
-/// (<c>Windows.Media.Editing</c>): a frame at each sample time, snapped to the nearest key frame
-/// and decoded by whatever codec plays the file. Nothing here links a media framework of its own.
-/// </para>
+/// <para><b>Video frames are not here.</b> They come from <see cref="VideoFrames"/>, which reads
+/// them through the source reader; this file is sound alone.</para>
 ///
 /// <para>Everything in this file reads a file somebody else wrote, which is why it lives in the
 /// indexer child at normal integrity and is never reachable from the elevated helper.</para>
@@ -202,43 +197,6 @@ public static class Media
     {
         ArgumentNullException.ThrowIfNull(t);
         return (t.StartsWith('[') && t.EndsWith(']')) || (t.StartsWith('(') && t.EndsWith(')')) || t.StartsWith('♪');
-    }
-
-    /// <summary>Video length, via the media pipeline the frames come from.</summary>
-    public static async Task<double> VideoDuration(string path)
-    {
-        var file = await Windows.Storage.StorageFile.GetFileFromPathAsync(path);
-        var clip = await Windows.Media.Editing.MediaClip.CreateFromFileAsync(file);
-        return clip.OriginalDuration.TotalSeconds;
-    }
-
-    /// <summary>One frame at each of <paramref name="times"/> (seconds), decoded to a bitmap sized
-    /// for the vision encoder. A time the pipeline cannot render yields null in its slot.</summary>
-    public static async Task<List<SKBitmap?>> Frames(string path, IReadOnlyList<double> times, int maxDim = 320)
-    {
-        ArgumentNullException.ThrowIfNull(times);
-        var frames = new List<SKBitmap?>(times.Count);
-        var file = await Windows.Storage.StorageFile.GetFileFromPathAsync(path);
-        var clip = await Windows.Media.Editing.MediaClip.CreateFromFileAsync(file);
-        var comp = new Windows.Media.Editing.MediaComposition();
-        comp.Clips.Add(clip);
-        foreach (double t in times)
-        {
-            try
-            {
-                using var stream = await comp.GetThumbnailAsync(TimeSpan.FromSeconds(t), maxDim, 0,
-                    Windows.Media.Editing.VideoFramePrecision.NearestKeyFrame);
-                using var s = System.IO.WindowsRuntimeStreamExtensions.AsStreamForRead(stream);
-                frames.Add(SKBitmap.Decode(s));
-            }
-            catch (Exception ex)
-            {
-                Log.Once("index|frame|" + ex.GetType().Name, "WARN", "index",
-                         $"a frame could not be rendered :: {ex.GetType().Name}: {ex.Message}");
-                frames.Add(null);
-            }
-        }
-        return frames;
     }
 
     /// <summary>Where to sample a video: every <paramref name="every"/> seconds from a beat in, at
