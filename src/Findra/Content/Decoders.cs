@@ -55,6 +55,10 @@ public interface IDecoders : IDisposable
 
     KindResult Decode(ResultKind kind, string path, long bytes);
 
+    /// <summary>The pictures alone, for a video already in the index whose transcript is still
+    /// good. Never a whole re-read: that would transcribe every recording again.</summary>
+    KindResult DecodeFrames(string path);
+
     /// <summary>Make every vector written so far durable. Called BEFORE the transaction that
     /// references those rows commits, because a database row pointing past the vector header's
     /// count is a segment that silently never matches again.</summary>
@@ -438,6 +442,23 @@ public sealed class Decoders : IDecoders
             ? $"first {(MaxDecodeSeconds / 60).ToString("0", System.Globalization.CultureInfo.InvariantCulture)} min of {(actual / 60).ToString("0", System.Globalization.CultureInfo.InvariantCulture)}"
             : null;
         return new KindResult(Transcribe(path, samples, note), null);
+    }
+
+    /// <summary>The pictures alone, for a video whose transcript is already held and must not be
+    /// read again. <see cref="Video"/> below is the two-capability arm this replaces for a
+    /// <c>reframe</c> row; this one asks only the vision tower and never opens the sound track.
+    /// </summary>
+    public KindResult DecodeFrames(string path)
+    {
+        if (!Installed.Has(Capability.Photos)) return new KindResult([], NoModel);
+        (IVideoSource? source, string? skip) = _videos(path);
+        using (source)
+        {
+            if (source is null) return new KindResult([], skip ?? NoFrames);
+            var clock = System.Diagnostics.Stopwatch.StartNew();
+            VideoTake take = VideoRead.Take(source, VideoRead.Plan(source.Seconds), Beat, () => clock.Elapsed);
+            return new KindResult(Embed(take), take.Skip);
+        }
     }
 
     /// <summary>A video is two things at once, gated separately: its frames want the vision tower

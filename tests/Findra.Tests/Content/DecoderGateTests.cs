@@ -47,6 +47,9 @@ public class DecoderGateTests : IDisposable
             return new KindResult([new ContentDb.Segment(ContentDb.SegImage, -1, -1, NextRow++, "")], null);
         }
 
+        public KindResult DecodeFrames(string path)
+            => new([new ContentDb.Segment(ContentDb.SegFrame, -1, -1, NextRow++, "")], null);
+
         public void Flush() => Flushes++;
         public void Release(IReadOnlyList<long> vectorRows) => Released.AddRange(vectorRows);
         public void Dispose() { }
@@ -288,6 +291,8 @@ public class DecoderGateTests : IDisposable
         public bool CanRead(ResultKind kind) => Decoders.Covers(kind, Installed);
         public KindResult Decode(ResultKind kind, string path, long bytes)
             => throw new InvalidDataException("the file is malformed");
+        public KindResult DecodeFrames(string path)
+            => throw new InvalidDataException("the file is malformed");
         public void Flush() { }
         public void Release(IReadOnlyList<long> rows) => released.AddRange(rows);
         public void Dispose() { }
@@ -357,6 +362,9 @@ public class DecoderGateTests : IDisposable
 
         public KindResult Decode(ResultKind kind, string path, long bytes)
             => new([new ContentDb.Segment(ContentDb.SegImage, -1, -1, _next++, "")], null);
+
+        public KindResult DecodeFrames(string path)
+            => new([new ContentDb.Segment(ContentDb.SegFrame, -1, -1, _next++, "")], null);
 
         public void Flush()
         {
@@ -443,6 +451,8 @@ public class DecoderGateTests : IDisposable
         public KindResult Decode(ResultKind kind, string path, long bytes)
             => new([new ContentDb.Segment(ContentDb.SegFrame, 0, 0, 100, "")],
                    Skip: null, Note: Decoders.TooLong);
+        public KindResult DecodeFrames(string path)
+            => new([new ContentDb.Segment(ContentDb.SegFrame, 0, 0, 100, "")], null);
         public void Flush() { }
         public void Release(IReadOnlyList<long> rows) { }
         public void Dispose() { }
@@ -455,6 +465,8 @@ public class DecoderGateTests : IDisposable
         public bool CanRead(ResultKind kind) => Decoders.Covers(kind, Installed);
         public KindResult Decode(ResultKind kind, string path, long bytes)
             => new([], Decoders.TooLong);
+        public KindResult DecodeFrames(string path)
+            => new([], Decoders.NoFrames);
         public void Flush() { }
         public void Release(IReadOnlyList<long> rows) { }
         public void Dispose() { }

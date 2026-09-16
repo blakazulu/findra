@@ -124,6 +124,11 @@ public class CapabilityGateTests : IDisposable
             Asked.Add(path);
             return new KindResult([new ContentDb.Segment(ContentDb.SegText, -1, -1, -1, "words")], null);
         }
+        public KindResult DecodeFrames(string path)
+        {
+            Asked.Add(path);
+            return new KindResult([new ContentDb.Segment(ContentDb.SegFrame, -1, -1, -1, "")], null);
+        }
         public void Flush() { }
         public void Release(IReadOnlyList<long> rows) { }
         public void Dispose() { }
@@ -551,6 +556,8 @@ public class CapabilityGateTests : IDisposable
             => TranscribeLimit.Covers(minutes(), 90 * 60)
                ? new KindResult([new ContentDb.Segment(ContentDb.SegSpeech, 0, 5, -1, "what was said")], null)
                : new KindResult([], Decoders.TooLong);
+        public KindResult DecodeFrames(string path)
+            => new([], Decoders.NoFrames);
         public void Flush() { }
         public void Release(IReadOnlyList<long> rows) { }
         public void Dispose() { }
