@@ -526,6 +526,36 @@ person makes by looking; two are destructive and belong last.
     it on a **light** taskbar in particular, which is where a filled slot would have looked like a
     smudge and where the hole has to read as one.
 
+## From the video frames work
+
+63. **A video library through a first pass.** Index a real folder of films and watch the progress
+    pill. It must move past the first one within seconds rather than sitting on it: the source
+    reader this decoder goes through reads a frame in 17 to 24 ms, where the media pipeline it
+    replaced took about 33 seconds a frame and handed back black pictures the whole time it did it.
+    No automated run has ever opened a real video for its pictures - `--searchshot` composes the
+    card with no image, and every test here injects a fake `IVideoSource`.
+64. **A phone video's picture on the card is upright.** Index a video recorded on a phone held in
+    portrait and open it on the card. The picture on the stage must be the right way up, not lying
+    on its side. The file carries a flag saying which way it was recorded, `VideoGeometry` is what
+    turns it back, and the film library this decoder was measured against was checked by eye for
+    exactly this - a rotated preview is a silent failure, because a sideways frame is still a valid
+    image that embeds and stores like any other.
+65. **On a machine without the HEVC extension, Settings offers the codec, and installing it queues
+    exactly those videos.** Index a folder holding an HEVC phone video on a machine (or a copy of
+    Windows) that has never had the Store extension. Settings must offer to open the Store listing
+    for it by name, and it must say plainly that the listing is not free. Install the extension and
+    wait for the five-minute check: the log must say how many videos were queued, and it must be
+    the count that needed that codec and nothing else in the library - `VideoDecoders.Fingerprint`
+    changing is what triggers the re-queue, and it reaches only rows recorded against
+    `Decoders.NoVideoCodec` or `Decoders.NoContainerReader`.
+66. **An index from before this release re-reads video frames and does not re-transcribe.** Take an
+    index built by a version before schema 6 - a real one, with videos already indexed and speech
+    already transcribed in some of them - and start this build on it. Every video in it is
+    re-queued with the `reframe` reason, its pictures are read again, and any transcript already
+    held must survive untouched rather than being read a second time: `ReplaceSegments` touches
+    only the frame segments it is asked for, never the whole row, which is the difference between
+    minutes of frame-reading and hours of re-transcribing a library that was already heard once.
+
 ## What could not be verified in this project at all
 
 Written down so they are known gaps rather than assumed passes. Every one of them is a step above.
@@ -553,11 +583,20 @@ Written down so they are known gaps rather than assumed passes. Every one of the
   asserted and the diagnostics are proven to reach a terminal, but nothing reads the subsystem out
   of the built PE header, and the absence of the window on a double-click, a sign-in and an
   elevated logon task is not something this machine can show.
+- **No real video has ever been opened for its pictures.** `VideoFramesTests` and `VideoRead`'s
+  own tests inject a fake `IVideoSource`, and `--searchshot` composes the card with no image, so
+  every measurement behind `## Video frames` in `CLAUDE.md` - the 17 to 24 ms a frame, the four
+  geometry corrections, the codec skips - was taken on this one machine's own library and has
+  never been checked against a stranger's. And **no arm64 machine has run any of it**: Microsoft's
+  own acknowledged bug in `IMFSourceReader::ReadSample` hanging at random on arm64 is the reason
+  the three-minute watchdog exists, and nothing here has ever seen that hang happen (steps 63 to
+  66).
 
 ## Notes
 
 Steps 1 to 4, 9 to 13 and 29 to 59 are the ones that have never executed in any form, except 32,
 which is done, and 35, which has run and needs reading. Steps 5 to 8 have been verified by log
-line and by inspection, but not by eye.
+line and by inspection, but not by eye. Steps 63 to 66 are new with the video-frame decoder and
+have never executed either.
 
 `docs/e2e-run-sheet.md` is the order to work through them in.
