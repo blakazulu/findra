@@ -1,5 +1,4 @@
 using System;
-using System.Globalization;
 using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
 
@@ -104,6 +103,8 @@ public static class VideoFrames
         }
     }
 
+    /// <summary>Release a reader <see cref="Open"/> handed back. Nothing else in this file may
+    /// hold one past this call - the caller owns it from the moment <c>Open</c> returns.</summary>
     public static void Close(IntPtr reader) => MediaFoundation.Release(reader);
 
     /// <summary>The codec as the FILE states it, read before any decoder is asked for - which is

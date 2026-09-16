@@ -23,7 +23,7 @@ public class VideoFramesTests
     [InlineData(unchecked((int)0xC00D5212), "no decoder")]      // MF_E_TOPO_CODEC_NOT_FOUND
     [InlineData(unchecked((int)0xC00D36B3), "no video stream")] // MF_E_INVALIDSTREAMNUMBER
     [InlineData(unchecked((int)0xC00D36C4), "container")]       // MF_E_UNSUPPORTED_BYTESTREAM_TYPE
-    public void TheTwoOrdinaryOpenFailuresBecomeReasonsRatherThanErrors(int hresult, string fragment)
+    public void TheOrdinaryOpenFailuresBecomeReasonsRatherThanErrors(int hresult, string fragment)
         => Assert.Contains(fragment, VideoFrames.SkipFor(hresult), StringComparison.Ordinal);
 
     [Fact]
@@ -40,6 +40,26 @@ public class VideoFramesTests
             VideoFrames.VideoOpen opened = VideoFrames.Open(path);
             Assert.False(string.IsNullOrEmpty(opened.Skip));
             Assert.Equal(IntPtr.Zero, opened.Reader);
+        }
+        finally { File.Delete(path); }
+    }
+
+    [Fact]
+    public void OpeningARealVideoReadsItsLengthAndTheCodecItStates()
+    {
+        string path = Path.Combine(Path.GetTempPath(), "findra-open-" + Guid.NewGuid().ToString("N") + ".mp4");
+        TestClip.Write(path, (40, 40, 220), (40, 200, 40), (220, 60, 40));
+        try
+        {
+            VideoFrames.VideoOpen opened = VideoFrames.Open(path);
+            Assert.Null(opened.Skip);
+            Assert.NotEqual(IntPtr.Zero, opened.Reader);
+            try
+            {
+                Assert.Equal("H264", opened.Codec);
+                Assert.InRange(opened.Seconds, 2.5, 3.5);
+            }
+            finally { VideoFrames.Close(opened.Reader); }
         }
         finally { File.Delete(path); }
     }
