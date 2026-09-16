@@ -190,6 +190,14 @@ internal sealed class Shell : ISettingsHost
     private volatile string _indexLine = "";
     private long _indexPending;
     private long _indexIndexed;
+
+    /// <summary>How many videos Windows cannot decode, and the codec the row would name, last
+    /// computed while a settings window was open. The grouped scan behind them runs only then
+    /// (see <see cref="ShowOnCapsule"/>), so a settings window opened before the first pump since
+    /// launch starts from zero and picks up the real count within the next heartbeat - the same
+    /// way <see cref="_indexLine"/> starts from "" for the tray.</summary>
+    private long _blockedVideos;
+    private string? _blockedCodec;
     private IReadOnlyList<string> _drives = [];
 
     // ---- the content index ----
@@ -1310,7 +1318,24 @@ internal sealed class Shell : ISettingsHost
         // arrived rather than the one they are looking at - which is why "Start now" appeared to
         // do nothing. Refresh compares before it repaints, so an unchanged answer costs nothing.
         if (SettingsWindow.Open is { } panel)
-            Dispatcher.UIThread.Post(() => panel.UseIndexState(indexed > 0, alive, pending, indexed));
+        {
+            // Only while the window is open - the query is a grouped scan and nothing else needs
+            // it, so it never runs on every heartbeat for a window nobody has open.
+            long blocked = 0; string? blockedCodec = null;
+            IReadOnlyList<(string Codec, long Count)> byCodec = db.BlockedVideoCodecs();
+            foreach ((string codec, long count) in byCodec) blocked += count;
+            // The codec with a decoder somebody can install decides the row; otherwise the
+            // commonest one, so the row can still report the number.
+            blockedCodec = byCodec.OrderByDescending(b => VideoCodecStore.ProductFor(b.Codec) is not null)
+                                  .ThenByDescending(b => b.Count)
+                                  .Select(b => b.Codec)
+                                  .FirstOrDefault();
+            // Cached for the next window that opens, on the same terms as _indexPending and
+            // _indexIndexed just above.
+            Interlocked.Exchange(ref _blockedVideos, blocked);
+            Interlocked.Exchange(ref _blockedCodec, blockedCodec);
+            Dispatcher.UIThread.Post(() => panel.UseIndexState(indexed > 0, alive, pending, indexed, blocked, blockedCodec));
+        }
         // The capsule's pill: the same facts as the line, laid out for a label / track / count
         // rather than a sentence. Nothing to show is `default`, which draws no pill at all - not a
         // bar at zero, which is what makes an idle widget feel busy.
@@ -1659,6 +1684,8 @@ internal sealed class Shell : ISettingsHost
                 IndexerAlive = _indexerAlive,
                 Pending = _indexPending,
                 Indexed = _indexIndexed,
+                BlockedVideos = _blockedVideos,
+                BlockedCodec = _blockedCodec,
                 Drives = _drives,
                 WindowsIsLight = Theme.WindowsIsLight(),
                 Version = BuildInfo.Version,
@@ -1916,6 +1943,19 @@ internal sealed class Shell : ISettingsHost
         // answered by yesterday's.
         try { Process.Start(new ProcessStartInfo(Log.Dir) { UseShellExecute = true }); }
         catch (Exception ex) { Log.Warn("settings", "could not open the log folder: " + ex.Message); }
+    }
+
+    void ISettingsHost.OpenCodecStore(string productId)
+    {
+        // The Store app first, because that is where the install happens; the web listing when it
+        // will not open, which is the machine where the Store has been removed.
+        try { Process.Start(new ProcessStartInfo(VideoCodecStore.LinkFor(productId)) { UseShellExecute = true }); }
+        catch (Exception first)
+        {
+            Log.Warn("settings", "the Store would not open for a codec: " + first.Message);
+            try { Process.Start(new ProcessStartInfo(VideoCodecStore.PageFor(productId)) { UseShellExecute = true }); }
+            catch (Exception second) { Log.Warn("settings", "nor would the page: " + second.Message); }
+        }
     }
 
     void ISettingsHost.StartIndexing()

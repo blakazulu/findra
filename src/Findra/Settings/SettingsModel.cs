@@ -20,7 +20,7 @@ public enum ControlId
     Mode, DarkPalette, LightPalette, PalettesFile,
     Hotkey, ShowCapsule, ResetCapsule, Autostart, Helper,
     Drives, AddFolder,
-    IndexContent, StartIndexing, IndexPower, Transcribe, Capability,
+    IndexContent, StartIndexing, IndexPower, Transcribe, Capability, VideoCodec,
     Version, Updates, CheckUpdates, CheckNow, InstalledVia, Logs, Removing,
 }
 
@@ -53,6 +53,11 @@ public enum SettingsAction
     /// rule is about who does the replacing, and the answer stays winget or the installer.
     /// </summary>
     UpdateNow,
+
+    /// <summary>Open the Store page for a codec Windows has not got. Findra installs nothing
+    /// itself - the same rule updates follow - so this opens a page and gets out of the way.
+    /// </summary>
+    OpenCodecStore,
 
     /// <summary>Put the capsule back where it can be seen, NOW, not at the next launch.
     ///
@@ -122,6 +127,14 @@ public sealed record SettingsState(Config Config)
     public long Pending { get; init; }
     public long Indexed { get; init; }
     public IReadOnlyList<string> Drives { get; init; } = [];
+
+    /// <summary>How many videos Windows has no decoder for, and the codec the row names for it -
+    /// the one with a Store listing when there is one, otherwise the commonest, so the row can
+    /// still report the number. Pushed while the window is open, on the same terms as
+    /// <see cref="Pending"/> and <see cref="Indexed"/>: it belongs to the Photos and video row
+    /// rather than a section of its own, because the pane is fixed and already full.</summary>
+    public long BlockedVideos { get; init; }
+    public string? BlockedCodec { get; init; }
 
     /// <summary>What Windows' own light/dark setting says right now. Only used to work out which
     /// of the two palette rows is the one actually on screen, so that picking from the other one
@@ -475,13 +488,32 @@ public static class SettingsModel
         foreach (Capability c in Capabilities.All)
         {
             if (c == Capability.Hebrew && !s.HebrewOffered) continue;
-            rows.Add(s.Installed.Has(c)
-                ? Control.Plain(ControlId.Capability, ControlKind.Text, Capabilities.Title(c), "installed", tag: (int)c)
+            if (!s.Installed.Has(c))
+            {
                 // MARGINAL, given what is already there (spec §6). Meaning and Speech share the
                 // e5 pair, so a fixed per-row number makes the total fail to add up in public.
-                : Control.Plain(ControlId.Capability, ControlKind.Button, Capabilities.Title(c),
-                                s.Waiting(ControlId.Capability) ? "Downloading..." :
-                                Sizes.Human(Capabilities.MarginalBytes(c, s.Installed)), tag: (int)c));
+                rows.Add(Control.Plain(ControlId.Capability, ControlKind.Button, Capabilities.Title(c),
+                                       s.Waiting(ControlId.Capability) ? "Downloading..." :
+                                       Sizes.Human(Capabilities.MarginalBytes(c, s.Installed)), tag: (int)c));
+                continue;
+            }
+
+            // The blocked count belongs on THIS row rather than one of its own: the pane is a
+            // fixed rectangle and is already full, and a video Findra cannot read is a fact about
+            // what this capability can do here.
+            if (c == Capability.Photos && s.BlockedVideos > 0)
+            {
+                string n = s.BlockedVideos.ToString("N0", Fixed);
+                string? product = s.BlockedCodec is { } codec ? VideoCodecStore.ProductFor(codec) : null;
+                rows.Add(product is not null
+                    ? Control.Plain(ControlId.VideoCodec, ControlKind.Button, Capabilities.Title(c),
+                                    $"{n} need {s.BlockedCodec}", tag: (int)c)
+                    : Control.Plain(ControlId.VideoCodec, ControlKind.Text, Capabilities.Title(c),
+                                    $"installed, {n} unreadable", tag: (int)c));
+                continue;
+            }
+
+            rows.Add(Control.Plain(ControlId.Capability, ControlKind.Text, Capabilities.Title(c), "installed", tag: (int)c));
         }
 
         return rows;
@@ -636,6 +668,8 @@ public static class SettingsModel
                 SettingsOutcome.Changed(s with { Config = c with { TranscribeMinutes = TranscribeLimit.Presets[hit.Option] } }),
             ControlId.Capability when row.Kind == ControlKind.Button =>
                 SettingsOutcome.Ask(s, SettingsAction.InstallCapability, ((Capability)row.Tag).ToString()),
+            ControlId.VideoCodec when s.BlockedCodec is { } codec && VideoCodecStore.ProductFor(codec) is { } product =>
+                SettingsOutcome.Ask(s, SettingsAction.OpenCodecStore, product),
 
             ControlId.CheckUpdates =>
                 SettingsOutcome.Changed(s with { Config = c with { CheckForUpdates = !c.CheckForUpdates } }),

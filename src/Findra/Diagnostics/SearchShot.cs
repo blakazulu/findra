@@ -177,7 +177,8 @@ public static class SearchShot
             // Scrolled, because the exclusions list is the only scroller in the product and an
             // unscrolled list never shows what a partial page looks like.
             ExclusionScroll = section == Section.Searches ? 6 : 0,
-            Installed = new CapabilitySet(new HashSet<Capability> { Capability.Meaning }),
+            Installed = new CapabilitySet(new HashSet<Capability> { Capability.Meaning, Capability.Photos }),
+            BlockedVideos = 212, BlockedCodec = "HEVC",
             Version = BuildInfo.Version, Update = UpdateState.Available, Latest = "1.4.0",
             HoverTarget = PanelTarget.Section, HoverRow = 1,
             Prompt = prompt,

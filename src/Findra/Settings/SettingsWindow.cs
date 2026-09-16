@@ -140,12 +140,19 @@ public sealed class SettingsWindow : Window
     /// happened" looked like - the indexer had started and this surface had no way to hear about
     /// it. The shell already reads both once a second for the capsule; this is the same answer
     /// arriving here too.</para>
+    ///
+    /// <para><paramref name="blockedVideos"/> and <paramref name="blockedCodec"/> ride along for
+    /// the same reason: the Photos and video row's count of what Windows cannot decode is a fact
+    /// about this same moment, not one fetched separately.</para>
     /// </summary>
-    public void UseIndexState(bool everIndexed, bool indexerAlive, long pending, long indexed) =>
+    public void UseIndexState(bool everIndexed, bool indexerAlive, long pending, long indexed,
+                              long blockedVideos, string? blockedCodec) =>
         _canvas.Refresh(s => s.EverIndexed == everIndexed && s.IndexerAlive == indexerAlive
                              && s.Pending == pending && s.Indexed == indexed
+                             && s.BlockedVideos == blockedVideos && s.BlockedCodec == blockedCodec
             ? s
-            : s with { EverIndexed = everIndexed, IndexerAlive = indexerAlive, Pending = pending, Indexed = indexed });
+            : s with { EverIndexed = everIndexed, IndexerAlive = indexerAlive, Pending = pending, Indexed = indexed,
+                       BlockedVideos = blockedVideos, BlockedCodec = blockedCodec });
 
     /// <summary>
     /// Mark a row as waiting on its own work, or as finished with it.
