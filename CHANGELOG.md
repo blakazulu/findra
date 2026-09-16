@@ -187,6 +187,10 @@ and Findra follows [Semantic Versioning](https://semver.org/spec/v2.0.0/).
 - **The headline figure was still the old one in six places**, including the description every
   shared link shows, the ticker, and two lines of prose that called it measured.
 
+- **Video frames are read the right way up, without a green strip along the bottom.** Frames from
+  phone videos were stored on their side, and frames from most H.264 films carried a strip of
+  decoder padding. Both are corrected from what the file itself says.
+
 - **The headline speed is a range now, not the best case.** "0.33 ms median" replaced "under a
   millisecond" and was worse: 0.33 ms is the fastest of five measured queries, where the sentence
   it replaced was at least true of three. Every surface that prints it without naming the query
