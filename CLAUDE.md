@@ -420,7 +420,9 @@ is named here rather than left as a thing somebody tries again.
   the queue stops at that file for as long as the machine is on. `IndexerWatch.ShouldRestart`
   is the one thing that catches that: a live, reading child with work to do that has gone
   `IndexerWatch.StallSeconds` (three minutes) since its last beat is killed and restarted. Attempts
-  catch crashes; only the watchdog catches hangs.
+  catch crashes; only the watchdog catches hangs. Whichever of these ends the file, if nothing was
+  decoded before it did `VideoRead.Take` records `Decoders.NoFrames`: a skip, not a failure, the
+  same shape as the codec reasons below rather than a fault in reading the file.
 - **A codec Windows has not got is a skip naming the codec, and there are two container-level
   reasons besides it.** `Decoders.NoVideoCodec` names the codec Windows cannot decode, in
   brackets, so a person can search for it; `Decoders.NoVideoStream` is an audio-only container,

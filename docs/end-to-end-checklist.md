@@ -536,10 +536,12 @@ person makes by looking; two are destructive and belong last.
     card with no image, and every test here injects a fake `IVideoSource`.
 64. **A phone video's picture on the card is upright.** Index a video recorded on a phone held in
     portrait and open it on the card. The picture on the stage must be the right way up, not lying
-    on its side. The file carries a flag saying which way it was recorded, `VideoGeometry` is what
-    turns it back, and the film library this decoder was measured against was checked by eye for
-    exactly this - a rotated preview is a silent failure, because a sideways frame is still a valid
-    image that embeds and stores like any other.
+    on its side. The file carries a flag saying which way it was recorded, and `VideoGeometry` is
+    what turns it back - but that is as far as the record goes. The flag itself was confirmed on
+    2,361 of 4,712 files in the library measured, every one sampled carrying it, which is why they
+    are all indexed on their side today; nobody has opened the card and looked at the corrected
+    output since, and that is what this step is for. A rotated preview is a silent failure either
+    way: a sideways frame is still a valid image that embeds and stores like any other.
 65. **On a machine without the HEVC extension, Settings offers the codec, and installing it queues
     exactly those videos.** Index a folder holding an HEVC phone video on a machine (or a copy of
     Windows) that has never had the Store extension. Settings must offer to open the Store listing
