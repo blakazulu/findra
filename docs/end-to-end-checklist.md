@@ -557,6 +557,16 @@ person makes by looking; two are destructive and belong last.
     held must survive untouched rather than being read a second time: `ReplaceSegments` touches
     only the frame segments it is asked for, never the whole row, which is the difference between
     minutes of frame-reading and hours of re-transcribing a library that was already heard once.
+67. **On a machine with integrated graphics beside a discrete card, the diagnostics restart
+    themselves to reach it.** Run `findra --searchmodels`, `findra --searchindex` against a real
+    audio or video file (a path holding a space and Hebrew characters, to prove the arguments
+    round-trip), `findra --searchtest` and `findra --searchbench` on such a machine. Each must
+    print exactly once - the restarted process's output, never the original's, and never both -
+    end with the exit code a script would check, and `--searchmodels`'s speech device line must
+    name the discrete card as chosen. `VulkanAdapter.ReExecWithDiscrete` has run only against
+    machines with one device or none; the restart itself, console inheritance across it, and a
+    path with unusual characters surviving the hand-off have never been exercised on a machine
+    where the restart actually fires.
 
 ## What could not be verified in this project at all
 
@@ -593,6 +603,12 @@ Written down so they are known gaps rather than assumed passes. Every one of the
   own acknowledged bug in `IMFSourceReader::ReadSample` hanging at random on arm64 is the reason
   the three-minute watchdog exists, and nothing here has ever seen that hang happen (steps 63 to
   66).
+- **The diagnostics' own restart has never actually restarted anything.** This machine has one
+  discrete card and no integrated GPU beside it, so `VulkanAdapter.Visible()` always had nothing to
+  choose and `ReExecWithDiscrete` returned null on every run here - the "leave an ordinary machine
+  alone" path, proven for real, but not the "start the process again, hand it the card, and get its
+  exit code back" path, which only a machine with integrated graphics beside a card can exercise
+  (step 67).
 
 ## Notes
 

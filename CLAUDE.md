@@ -1014,6 +1014,17 @@ wins the race by being tried first and then loses the work.
   code reads - so an in-process version of this sets the value, reads it back correctly, logs
   success and changes nothing. The environment a process reads is fixed before it starts, which is
   why the choice is made in `IndexerHost` and nowhere later.
+- **A diagnostic that opens whisper in its own process has no parent to set the variable for it,
+  so it re-execs itself.** `--searchmodels`, `--searchindex` when given paths to drain,
+  `--searchtest` and `--searchbench`'s machine report all open speech outside the indexer, on
+  whatever device the runtime lists first unless something intervenes - and the same
+  in-process trap applies: `VulkanAdapter.ReExecWithDiscrete` starts the process again with the
+  variable on the **child's** environment, exactly as `IndexerHost` does for the indexer, rather
+  than setting it and reading it back correctly having changed nothing. It restarts once - the
+  guard is that the variable is already set on the way back in - and only when there is a card to
+  choose; either an ordinary machine or the restarted child leaves it alone. A mode that opens a
+  speech model and skips this call is the same bug back again, on a machine with integrated
+  graphics beside a card, which is the one shape of machine this whole section is about.
 - **Both fail soft, and that is deliberate.** No DXGI, no Vulkan loader, one adapter, or an
   enumeration that throws returns null and leaves the decision exactly where it was. Nothing may
   fail to start because a chip could not be named, and restricting the speech runtime to a device

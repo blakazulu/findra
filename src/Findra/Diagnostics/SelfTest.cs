@@ -11,9 +11,10 @@ public static class SelfTest
 {
     public static int Run()
     {
-        // This runs the indexer's own decoders over a real file, which is how speech ends up
-        // opened here too. Without the card made visible first, that would run on whichever
-        // Vulkan device the runtime lists first rather than the chip the indexer actually uses.
+        // Nothing queued below is an audio or video file, so today's checks never actually open
+        // whisper - but this runs the indexer's own decoders over a real file, and a check added
+        // here later easily could. Made visible first, so that day does not reintroduce the bug
+        // this method exists to fix.
         if (VulkanAdapter.ReExecWithDiscrete(["--searchtest"]) is { } code) return code;
 
         int failed = 0;

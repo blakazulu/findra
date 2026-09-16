@@ -158,7 +158,21 @@ public static class VulkanAdapter
     /// than a fault.</para>
     /// </summary>
     public static int? ReExecWithDiscrete(IReadOnlyList<string> args)
-        => ReExecWithDiscrete(args, Environment.GetEnvironmentVariable, Visible, Run);
+    {
+        // Checked here rather than inside Run: Run's return type is int, with no way to say "I
+        // could not restart", so folding this into it would hand the caller a real exit code for
+        // a diagnostic that never ran - reporting success for nothing done. An absent process path
+        // is not itself a fault - a host that did not launch this as its own executable - so the
+        // diagnostic proceeds on whatever device the runtime picks by default, same as a machine
+        // with nothing discrete to choose.
+        if (string.IsNullOrEmpty(Environment.ProcessPath))
+        {
+            Log.Once("models|no-process-path", "WARN", "models",
+                     "cannot restart to choose a Vulkan device: no process path");
+            return null;
+        }
+        return ReExecWithDiscrete(args, Environment.GetEnvironmentVariable, Visible, Run);
+    }
 
     /// <summary>The effects as delegates, so the decision is testable without starting a process.
     /// </summary>
@@ -170,6 +184,10 @@ public static class VulkanAdapter
         ArgumentNullException.ThrowIfNull(visible);
         ArgumentNullException.ThrowIfNull(run);
 
+        // An empty value counts as unset, the same as a null one: GGML_VK_VISIBLE_DEVICES set to
+        // "" by something outside Findra hides every device from the runtime rather than choosing
+        // none of them, and treating that as "already chosen" would skip the restart and leave the
+        // runtime on its default device - the exact failure this method exists to prevent.
         if (!string.IsNullOrEmpty(readEnv(VisibleDevices))) return null;
         if (visible() is not { } device) return null;
         return run(args, device);
@@ -177,10 +195,7 @@ public static class VulkanAdapter
 
     private static int Run(IReadOnlyList<string> args, string device)
     {
-        string exe = Environment.ProcessPath ?? "";
-        if (exe.Length == 0) return 0;          // nothing to restart; the caller carries on
-
-        var start = new System.Diagnostics.ProcessStartInfo(exe)
+        var start = new System.Diagnostics.ProcessStartInfo(Environment.ProcessPath!)
         {
             // Inherited handles, so the restarted process writes to the console the caller is
             // already attached to. A diagnostic whose output went nowhere would be worse than a
