@@ -66,7 +66,7 @@ public static class Pointers
         FirstRunTarget.None => PointerShape.Arrow,
         FirstRunTarget.Preset or FirstRunTarget.Row or FirstRunTarget.Limit or FirstRunTarget.Content
             or FirstRunTarget.Updates or FirstRunTarget.Autostart or FirstRunTarget.NotNow
-            or FirstRunTarget.Go => PointerShape.Hand,
+            or FirstRunTarget.Go or FirstRunTarget.Settings or FirstRunTarget.Link => PointerShape.Hand,
         _ => throw new ArgumentOutOfRangeException(nameof(target), target, "no pointer shape for this first-run target"),
     };
 }

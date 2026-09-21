@@ -238,27 +238,13 @@ public static class FirstRunLayout
         return new SKRect(x, height - ButtonH - 20, x + ButtonW, height - 20);
     }
 
-    /// <summary>
-    /// How tall the window is once the question has been answered.
-    ///
-    /// <para>The choosing height is sized for the tallest configuration on purpose, so that
-    /// ticking Speech cannot resize the window under the pointer that ticked it. Once the answer
-    /// is given none of that applies: the tiles, the switches, the limit row and the notes all
-    /// stop being drawn, and the fixed height left roughly 350 pixels of nothing between the
-    /// summary and the bottom - which reads as a hole rather than as room.
-    ///
-    /// <para>Measured from what the second act actually draws: the last row, the gap, the summary
-    /// band and the button. The one resize happens on a deliberate click on a button that then
-    /// stops existing, which is the moment nothing is under the pointer waiting to be hit.</para>
-    /// </summary>
-    /// <summary>How tall this screen is RIGHT NOW: the choosing act's constant, or the settled
-    /// act's measured height. One expression, because the window resizes to it and the painter
-    /// draws the card's shape to it, and those two disagreeing is a card with no bottom.</summary>
+    /// <summary>How tall this screen is RIGHT NOW: the choosing act's constant, or the answered
+    /// page's own height. One expression, because the window resizes to it and the painter draws
+    /// the card's shape to it, and those two disagreeing is a card with no bottom.</summary>
     public static float SurfaceHeight(FirstRunState s)
     {
         ArgumentNullException.ThrowIfNull(s);
-        if (s.Stage == FirstRunStage.Choosing) return Height;
-        return SettledHeight(FirstRun.Rows(s).Count, BandRow(s), FirstRun.Asks(s));
+        return s.Stage == FirstRunStage.Choosing ? Height : WelcomeLayout.Height(s);
     }
 
     /// <summary>
@@ -277,32 +263,6 @@ public static class FirstRunLayout
         return s.Stage == FirstRunStage.Choosing ? FirstRun.LimitRow(s) : -1;
     }
 
-    public static float SettledHeight(int rows, int limitRow = -1, bool asking = false) =>
-        RowRect(rows - 1, limitRow).Bottom + RowsToSwitchesGap + SettledSummaryH
-        + (asking ? AskH : 0f) + ButtonH + 40f;
-
-    /// <summary>
-    /// Room for the last question: a rule, the question, and the paragraph that is the reason for
-    /// asking it. <c>TheLastQuestionFitsTheRoomTheWindowMakesForIt</c> measures both strings in the
-    /// shipped face rather than trusting this number, on the terms every other band on this screen
-    /// is held to.
-    /// </summary>
-    public const float AskH = 122f;
-
-    /// <summary>Where that block sits: under the summary it follows, above the two buttons it is
-    /// asking through.</summary>
-    public static SKRect AskRect(int rows, int limitRow = -1)
-    {
-        float top = SettledSummaryRect(rows, limitRow).Bottom;
-        return new SKRect(Inset, top, Width - Inset, top + AskH);
-    }
-
-    /// <summary>Room for the second act's sentence. Two lines at the summary's own leading, which
-    /// is what the longest of them needs - a dropped connection names the host, and 44 was two
-    /// pixels short of it. TheSecondActsSummaryFollowsItsListAndClearsTheWayOut measures the
-    /// longest reachable sentence in the shipped face rather than trusting this number.</summary>
-    public const float SettledSummaryH = 48f;
-
     /// <summary>Between the last switch and the buttons: at least two lines of room, because
     /// <see cref="FirstRun.Summary"/> is a sentence rather than a number and its longest form
     /// carries a failure message as well.</summary>
@@ -311,87 +271,34 @@ public static class FirstRunLayout
             Width - Inset - ButtonW * 2 - TileGap, ButtonRect(0).Top - 6);
 
     /// <summary>
-    /// The summary's band once the screen has been answered, which is a different band and not a
-    /// different anchor inside the same one.
-    ///
-    /// <para>The second act draws no switches, so the room they took is empty and the sentence
-    /// that carries the screen would otherwise sit alone against the bottom with three hundred
-    /// pixels of nothing above it. Here it follows the list it is about, under the rule, and the
-    /// slack falls between it and the button - which is the shape of every progress dialog and
-    /// not a hole in the middle of one. Wider than the choosing band too: "Not now" is not drawn
-    /// in the second act, so the sentence has the whole card rather than the card less two
-    /// buttons.</para>
-    /// </summary>
-    public static SKRect SettledSummaryRect(int rows, int limitRow = -1)
-    {
-        float top = RowRect(rows - 1, limitRow).Bottom + RowsToSwitchesGap;
-        return new SKRect(Inset, top, Width - Inset - ButtonW - TileGap, top + SettledSummaryH);
-    }
-
-    /// <summary>
-    /// The same hit test, with every one of its bounds derived from the state rather than handed
-    /// in - which is what the surfaces call, because the five arguments below are five chances to
-    /// aim at a screen that is not the one on the display.
+    /// The hit test, with every one of its bounds derived from the state rather than handed in -
+    /// which is what the surfaces call, because hand-made arguments are chances to aim at a screen
+    /// that is not the one on the display.
     ///
     /// <para>One of them had already gone wrong. The band the transcription limit sits in is
-    /// RESERVED and DRAWN from <see cref="BandRow"/>, which is -1 once the screen has been
-    /// answered; the window's height comes from <see cref="SurfaceHeight"/>, which reads the same
-    /// answer. The hit test was given <c>FirstRun.LimitRow</c> instead, which names Speech's row
-    /// in every act - so on a machine offered Hebrew, anybody who took Speech got a last question
-    /// whose two buttons were hit-tested 64 px below the bottom edge of the window they were
-    /// painted in. Nothing on that screen hovered, nothing changed the cursor and nothing could be
-    /// pressed.</para>
+    /// RESERVED and DRAWN from <see cref="BandRow"/>; the hit test was once given
+    /// <c>FirstRun.LimitRow</c> instead, which names Speech's row in every act, and a whole screen
+    /// of buttons was hit-tested 64 px below where it was painted.</para>
+    ///
+    /// <para>Once answered, the screen is <see cref="WelcomeLayout"/>'s page and answers with its
+    /// controls and nothing of the chooser's: the selection belongs to the shell by then.</para>
     /// </summary>
     public static FirstRunHit HitTest(float x, float y, FirstRunState s)
     {
         ArgumentNullException.ThrowIfNull(s);
-        return HitTest(x, y, FirstRun.Rows(s).Count, BandRow(s),
-                       settled: s.Stage != FirstRunStage.Choosing,
-                       finished: s.Stage == FirstRunStage.Finished,
-                       asking: FirstRun.Asks(s));
+        return s.Stage == FirstRunStage.Choosing
+            ? HitTest(x, y, FirstRun.Rows(s).Count, BandRow(s))
+            : WelcomeLayout.HitTest(x, y, s);
     }
 
-    /// <summary>Tiles, rows, the transcription limit, switches, buttons, in that order, each
-    /// bounded by what is actually drawn. <paramref name="rows"/> is
+    /// <summary>The choosing act's hit test: tiles, rows, the transcription limit, switches,
+    /// buttons, in that order, each bounded by what is actually drawn. <paramref name="rows"/> is
     /// <c>FirstRun.Rows(state).Count</c>, which is one shorter where Hebrew is not offered;
-    /// <paramref name="limitRow"/> is <see cref="BandRow"/>, which is the row the band is actually
-    /// drawn under and NOT <c>FirstRun.LimitRow</c> - the two part company the moment the screen is
-    /// answered. Prefer the overload above, which reads both from the state.
-    ///
-    /// <para><paramref name="settled"/> is the second act, and it answers with the way out and
-    /// nothing else. Once the screen has been answered the selection belongs to the shell: a
-    /// tile, a row, a switch or a limit pill that still took a click would be acting on a
-    /// decision that has already been handed over, and a download that had begun would not
-    /// change with it. The painter draws the same distinction rather than leaving controls
-    /// looking live.</para></summary>
-    public static FirstRunHit HitTest(
-        float x, float y, int rows, int limitRow = -1, bool settled = false, bool finished = false,
-        bool asking = false)
+    /// <paramref name="limitRow"/> is <see cref="BandRow"/>. Prefer the overload above, which
+    /// reads both from the state.</summary>
+    public static FirstRunHit HitTest(float x, float y, int rows, int limitRow = -1)
     {
-        // Against the height THIS act has. The settled window is shorter than the choosing one,
-        // and a bound taken from the choosing constant would accept a click below its own bottom
-        // edge - which is off the window entirely.
-        float bottom = settled ? SettledHeight(rows, limitRow, asking) : Height;
-        if (x < 0 || x > Width || y < 0 || y > bottom) return new FirstRunHit(FirstRunTarget.None, -1);
-
-        // While the download runs this screen answers NOTHING. It is a status screen and the
-        // chooser behind it is settled, so a control that still took a click would be answering a
-        // question that has already been given. The way out during a download is the window's own
-        // close, which stays live and is what the summary points at - a 3.7 GB fetch on a slow
-        // line is long enough that a screen with no exit at all would be a trap rather than a
-        // safeguard. Only when it has finished does a button appear, because only then is there
-        // something for it to mean.
-        if (settled)
-        {
-            if (!finished) return new FirstRunHit(FirstRunTarget.None, -1);
-            float h = SettledHeight(rows, limitRow, asking);
-            // Two buttons only while the last question is on the screen. Without it there is one
-            // way out and a second pill beside it would be a choice with no difference in it.
-            if (asking && ButtonRect(0, h).Contains(x, y)) return new FirstRunHit(FirstRunTarget.NotNow, -1);
-            return ButtonRect(1, h).Contains(x, y)
-                ? new FirstRunHit(FirstRunTarget.Go, -1)
-                : new FirstRunHit(FirstRunTarget.None, -1);
-        }
+        if (x < 0 || x > Width || y < 0 || y > Height) return new FirstRunHit(FirstRunTarget.None, -1);
 
         for (int i = 0; i < 3; i++)
             if (TileRect(i).Contains(x, y)) return new FirstRunHit(FirstRunTarget.Preset, i);
@@ -427,8 +334,7 @@ public static class FirstRunLayout
 public static class FirstRunPainter
 {
     private const float TitleSize = 20f;
-    private const float BarW = 132f;
-    private const float BarH = 7f;
+    private const float SizeW = 132f;
 
     // ---- the three colour decisions this painter makes, and why they are functions --------------
     //
@@ -505,58 +411,35 @@ public static class FirstRunPainter
         { Color = d.Accent.WithAlpha(52), IsAntialias = true, Style = SKPaintStyle.Stroke, StrokeWidth = 1.4f })
             canvas.DrawRoundRect(new SKRoundRect(card, FirstRunLayout.Radius), edge);
 
+        // Once answered, the screen is a different page: where Findra lives, what happens now,
+        // who made it. The chooser is a record of a decision already handed to the shell, and
+        // the answered page is what somebody looking for the window they just pressed a button
+        // in needs to read instead.
+        if (s.Stage != FirstRunStage.Choosing)
+        {
+            WelcomePainter.Paint(canvas, s, d, face);
+            return;
+        }
+
         IReadOnlyList<FirstRunRow> rows = FirstRun.Rows(s);
         float left = FirstRunLayout.RowRect(0).Left;
-        float right = FirstRunLayout.RowRect(0).Right;
-        // The list is settled once the screen has been answered, whether the download is still
-        // running or over. The three stages say three different things, because "it carries on in
-        // the tray" is a promise about work that has already stopped.
-        bool busy = s.Stage != FirstRunStage.Choosing;
 
-        CardText.Draw(canvas, s.Stage switch
-        {
-            FirstRunStage.Downloading => "Getting things ready",
-            FirstRunStage.Finished => "Findra is ready",
-            _ => "Welcome to Findra",
-        }, left, 44, TitleSize, face, d.Ink);
-
-        CardText.Draw(canvas,
-            // The finished screen has two of these, because it has two shapes. With the last
-            // question on it, "Settings can add any of the rest later" points somebody away from
-            // the one thing still worth answering, six lines above it.
-            FirstRun.Asks(s) ? "Everything you asked for is on the disk. One thing left to decide."
-            : s.Stage switch
-            {
-                FirstRunStage.Downloading => "You can close this window. The downloads carry on, and Findra is in the tray.",
-                FirstRunStage.Finished => "Findra is in the tray. Settings can add any of the rest later.",
-                _ => "Names are searchable the moment Findra starts. Everything below is optional.",
-            }, left, 70, Parts.LabelSize, face, d.Fade(170));
+        CardText.Draw(canvas, "Welcome to Findra", left, 44, TitleSize, face, d.Ink);
+        CardText.Draw(canvas, "Names are searchable the moment Findra starts. Everything below is optional.",
+                      left, 70, Parts.LabelSize, face, d.Fade(170));
 
         // Reserved and drawn are one answer, read from one place. See FirstRunLayout.BandRow.
         int limitRow = FirstRunLayout.BandRow(s);
 
-        // The tiles and the rows are drawn in both acts: in the first they are the question, in
-        // the second they are the record of what was asked for and how far each part of it has
-        // got. Everything else on the screen is a SETTING, and a setting whose value has already
-        // been written and handed to the shell is not a control any more.
         Tiles(canvas, s, d, face);
-        for (int i = 0; i < rows.Count; i++) Row(canvas, rows[i], i, s, d, face, busy, limitRow);
+        for (int i = 0; i < rows.Count; i++) Row(canvas, rows[i], i, s, d, face, limitRow);
 
-        // So the second act stops drawing them. Not dimmed and not greyed: a toggle drawn faintly
-        // is still a toggle, and text faded far enough to read as disabled is text that fails the
-        // reading this screen holds every other mark to. The switches, their notes and the
-        // transcription limit go, and the rule goes with them because a parting between a list
-        // and nothing is not a parting. What is left is the download and the way out of it.
-        if (!busy)
-        {
-            if (limitRow >= 0) Limit(canvas, s, limitRow, d, face);
-            Rule(canvas, FirstRunLayout.RuleRect(rows.Count, limitRow), d);
-            Switches(canvas, s, rows.Count, limitRow, d, face);
-        }
+        if (limitRow >= 0) Limit(canvas, s, limitRow, d, face);
+        Rule(canvas, FirstRunLayout.RuleRect(rows.Count, limitRow), d);
+        Switches(canvas, s, rows.Count, limitRow, d, face);
 
-        // A lead, not a note. Every row states its own download and none of them moves any more,
-        // so this is the only line that says what the whole selection costs - and what is still
-        // owed, once the second act starts.
+        // A lead, not a note. Every row states its own download and none of them moves, so this
+        // is the only line that says what the whole selection costs.
         //
         // Sat on the BOTTOM of its band rather than the top. The band is what is left between the
         // last switch and the buttons, and it is a whole limit row taller when Speech is not
@@ -565,56 +448,14 @@ public static class FirstRunPainter
         // time. Against the buttons it stays where it is and the slack falls into the air above
         // it, which is the one part of the screen with nothing in it.
         string summary = FirstRun.Summary(s);
-        SKRect band = busy
-            ? FirstRunLayout.SettledSummaryRect(rows.Count, limitRow)
-            : FirstRunLayout.SummaryRect(rows.Count, limitRow);
+        SKRect band = FirstRunLayout.SummaryRect(rows.Count, limitRow);
         float need = Parts.LeadHeight(Parts.Wrap(summary, face, Parts.LeadSize, band.Width).Count);
-        // Against the TOP of the second act's band and the BOTTOM of the first's, because the two
-        // bands are the wrong way round from each other: in the first act the slack is above the
-        // sentence, in the second it is below it, and in both the sentence stays put.
-        Parts.Lead(canvas, summary,
-                   busy
-                       ? new SKRect(band.Left, band.Top, band.Right, band.Top + need)
-                       : new SKRect(band.Left, band.Bottom - need, band.Right, band.Bottom),
-                   d, face);
+        Parts.Lead(canvas, summary, new SKRect(band.Left, band.Bottom - need, band.Right, band.Bottom), d, face);
 
-        // The last question, and the only thing on this screen that is still a question once the
-        // first act has been answered. Nothing reads until it is: a first pass walks every drive
-        // and there is no room on the first act to say so, which is the whole reason it is asked
-        // here rather than folded into the switch above.
-        bool asking = FirstRun.Asks(s);
-        if (asking)
-        {
-            SKRect ask = FirstRunLayout.AskRect(rows.Count, limitRow);
-            Rule(canvas, new SKRect(ask.Left, ask.Top, ask.Right, ask.Top + 1), d);
-            CardText.Draw(canvas, FirstRun.AskTitle, ask.Left, ask.Top + 30, Parts.LeadSize, face, d.Ink);
-            Parts.Note(canvas, FirstRun.AskNote,
-                       new SKRect(ask.Left, ask.Top + 40, ask.Right, ask.Bottom), d, face);
-        }
-
-        // One button in the second act, not two - unless the last question is on the screen, which
-        // is the one place a second answer means something different from the first. Otherwise the
-        // answer has already been given, so "Not now" has nothing left to decline and a second pill
-        // that does exactly what the first one does is a choice with no difference in it.
-        if (!busy)
-            Parts.Pill(canvas, FirstRunLayout.ButtonRect(0), FirstRun.NotNowLabel,
-                       chosen: false, hovered: s.HoverTarget == FirstRunTarget.NotNow, d, face);
-        else if (asking)
-            Parts.Pill(canvas,
-                       FirstRunLayout.ButtonRect(0, FirstRunLayout.SettledHeight(rows.Count, limitRow, asking: true)),
-                       FirstRun.LaterLabel,
-                       chosen: false, hovered: s.HoverTarget == FirstRunTarget.NotNow, d, face);
-
-        // Not drawn at all while the files are still coming. The second act is a status screen,
-        // and a pill is a promise that a click does something - drawn and inert is worse than
-        // absent, because absent is honest. It arrives with the last byte, which is also the
-        // moment its label stops being a guess about what the person wants to do next.
-        if (s.Stage != FirstRunStage.Downloading)
-            Parts.Pill(canvas,
-                       busy ? FirstRunLayout.ButtonRect(1, FirstRunLayout.SettledHeight(rows.Count, limitRow, asking))
-                            : FirstRunLayout.ButtonRect(1),
-                       FirstRun.GoLabel(s),
-                       chosen: true, hovered: s.HoverTarget == FirstRunTarget.Go, d, face);
+        Parts.Pill(canvas, FirstRunLayout.ButtonRect(0), FirstRun.NotNowLabel,
+                   chosen: false, hovered: s.HoverTarget == FirstRunTarget.NotNow, d, face);
+        Parts.Pill(canvas, FirstRunLayout.ButtonRect(1), FirstRun.GoLabel(s),
+                   chosen: true, hovered: s.HoverTarget == FirstRunTarget.Go, d, face);
     }
 
     /// <summary>The parting between what gets downloaded and how Findra behaves, drawn in the
@@ -654,7 +495,7 @@ public static class FirstRunPainter
     }
 
     private static void Row(SKCanvas canvas, FirstRunRow row, int i, FirstRunState s,
-                            Derived d, SKTypeface face, bool busy, int limitRow)
+                            Derived d, SKTypeface face, int limitRow)
     {
         SKRect r = FirstRunLayout.RowRect(i, limitRow);
         bool hovered = s.HoverTarget == FirstRunTarget.Row && s.HoverIndex == i;
@@ -667,20 +508,13 @@ public static class FirstRunPainter
              row.Ticked, row.Free, d);
 
         float textLeft = x + FirstRunLayout.TickBox + 12f;
-        // The size column is reserved whatever is drawn in it, so a bar and a size never move the
-        // title, and a row mid-download does not jump when it finishes.
-        float textRight = r.Right - BarW - 16f;
+        // The size column is reserved whatever is drawn in it, so a long size never moves the
+        // title.
+        float textRight = r.Right - SizeW - 16f;
         CardText.Draw(canvas, CardText.Ellipsize(row.Title, face, Parts.LabelSize, textRight - textLeft),
                       textLeft, r.Top + 17, Parts.LabelSize, face, d.Ink);
         CardText.Draw(canvas, CardText.Ellipsize(row.Note, face, Parts.NoteSize, textRight - textLeft),
                       textLeft, r.Top + 34, Parts.NoteSize, face, d.Fade(150));
-
-        if (busy && row.Capability is { } c && Progress(s, c) is { } p)
-        {
-            var bar = new SKRect(r.Right - BarW, r.MidY - BarH / 2f, r.Right, r.MidY + BarH / 2f);
-            Parts.Bar(canvas, bar, p.Total > 0 ? (float)((double)p.Got / p.Total) : 0f, d);
-            return;
-        }
 
         CardText.DrawRight(canvas, row.Size, r.Right, r.Top + 17, Parts.LabelSize, face, PriceInk(row, d));
     }
@@ -708,16 +542,6 @@ public static class FirstRunPainter
         // it, "Transcribe up to" under a row called Speech says nothing about the videos it also
         // governs - which is the question somebody asked of the shipped screen.
         Parts.Note(canvas, FirstRun.LimitNote, FirstRunLayout.LimitNoteRect(limitRow), d, face);
-    }
-
-    private static CapabilityProgress? Progress(FirstRunState s, Capability c)
-    {
-        // A loop rather than FirstOrDefault, for the reason FirstRun.Summary spells out: over a
-        // sequence of structs the default is a real CapabilityProgress, so a nullable assigned
-        // from it is never null - and every row not being fetched would draw an empty bar where
-        // its size belongs.
-        foreach (CapabilityProgress p in s.Downloads) if (p.Capability == c) return p;
-        return null;
     }
 
     private static void Tick(SKCanvas canvas, SKRect box, bool on, bool free, Derived d)

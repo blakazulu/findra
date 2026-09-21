@@ -9,7 +9,7 @@ using Findra.Startup;   // HelperTaskState
 
 namespace Findra;
 
-public enum FirstRunTarget { None, Preset, Row, Limit, Content, Updates, Autostart, NotNow, Go }
+public enum FirstRunTarget { None, Preset, Row, Limit, Content, Updates, Autostart, NotNow, Go, Settings, Link }
 public enum FirstRunStage { Choosing, Downloading, Finished }
 
 public readonly record struct FirstRunHit(FirstRunTarget Target, int Index);
@@ -46,6 +46,11 @@ public sealed record FirstRunState
     /// e5 pair. Priced per capability it would say 547 MB where 270 MB of it is already here.</para>
     /// </summary>
     public IReadOnlySet<string> OnDisk { get; init; } = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>The chord the hotkey actually landed on, for the answered page: the configured one
+    /// until the answer builds the hotkey, then whatever registered - or null where nothing
+    /// would.</summary>
+    public string? Hotkey { get; init; }
 
     public bool CheckUpdates { get; init; } = true;
     public bool StartAtLogon { get; init; } = true;
@@ -196,10 +201,10 @@ public static class FirstRun
         "Findra is open. The text it reads is kept in an index in your user profile, which is " +
         "not encrypted.";
 
-    /// <summary>The label on the button that closes this window, in both halves of the second
-    /// act. It says what it does: the answer has already been given and the download belongs to
-    /// the shell, so there is nothing left to confirm.</summary>
-    public const string CloseLabel = "Close";
+    /// <summary>The label on the button that closes this window once it has been answered. The
+    /// answer has already been given and the download belongs to the shell, so there is nothing
+    /// left to confirm - only somebody finishing with the page.</summary>
+    public const string DoneLabel = "Done";
 
     /// <summary>The label on the left-hand button, which exists only while the screen is still a
     /// question.</summary>
@@ -209,7 +214,7 @@ public static class FirstRun
     /// painter, so the test that measures every label into its pill measures what is drawn.
     /// </summary>
     public static string GoLabel(FirstRunStage stage) =>
-        stage == FirstRunStage.Choosing ? "Get these" : CloseLabel;
+        stage == FirstRunStage.Choosing ? "Get these" : DoneLabel;
 
     /// <summary>
     /// The same, for a screen that knows what it is actually going to do.
@@ -222,7 +227,7 @@ public static class FirstRun
     {
         ArgumentNullException.ThrowIfNull(s);
         if (Asks(s)) return StartReadingLabel;
-        if (s.Stage != FirstRunStage.Choosing) return CloseLabel;
+        if (s.Stage != FirstRunStage.Choosing) return DoneLabel;
         return TotalBytes(s) == 0 ? ContinueLabel : GoLabel(s.Stage);
     }
 
@@ -452,7 +457,7 @@ public static class FirstRun
             // Only while it is still running. "It carries on in the tray" is a promise about work
             // that has already stopped once the run is over.
             string tail = s.Stage == FirstRunStage.Downloading
-                ? " You can close this; it carries on in the tray."
+                ? " Closing this page does not stop it; it carries on in the tray."
                 : "";
 
             // "2 of 4 done" could be anything, and content indexing - a different, later and far
@@ -460,17 +465,12 @@ public static class FirstRun
             // them goes in front of the count while the count is still moving.
             string doing = s.Stage == FirstRunStage.Downloading ? "Downloading model files. " : "";
 
-            // And the end of the run says it has ended, and where the way out is. A finished run
-            // that reported only its count left somebody looking at "1 of 1 done" with no reason
-            // to believe anything more was going to happen.
-            // "you can close this window" is right when closing is the only thing left, and wrong
-            // when there is a question underneath it - a sentence telling somebody to leave, six
-            // lines above the one thing on the screen still worth answering.
+            // And the end of the run says it has ended. A finished run that reported only its
+            // count left somebody looking at "1 of 1 done" with no reason to believe anything more
+            // was going to happen. The way out is the page's own "Done", so the sentence no longer
+            // points at it.
             string over = s.Stage == FirstRunStage.Finished && s.Problem.Length == 0 && current is null
-                // Not "Findra is ready" - the title says that, two inches above, and a screen
-                // that says the same thing twice in two registers reads as one thing said badly.
-                ? Asks(s) ? " Everything you chose has arrived."
-                          : " Everything you chose has arrived, and you can close this window."
+                ? " Everything you chose has arrived."
                 : "";
 
             return $"{doing}{done.ToString(Fixed)} of {s.Downloads.Count.ToString(Fixed)} " +

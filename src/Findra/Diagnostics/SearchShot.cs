@@ -26,7 +26,7 @@ public static class SearchShot
         "settings", "settingsopening", "settingssearches", "settingscontent", "settingsabout",
         "settingsuptodate", "settingsupdate", "settingsasking",
         "firstrun", "firstruninstalled", "firstrunspeech", "firstrundownloading", "firstrunfinished",
-        "firstrunready",
+        "firstrunready", "firstrunnames",
     ];
 
     public static int Render(string outPath, string state, string? paletteName = null)
@@ -222,6 +222,12 @@ public static class SearchShot
     /// its own title, its own sentence, no problem to report, and both bars full - which is
     /// exactly the arm a defect hid in, because a download that could never finish was reported
     /// by nothing anybody looked at.</para>
+    ///
+    /// <para>Once answered, the screen is the welcome page, and <c>firstrunnames</c> is its other
+    /// half: "Just names", so no bars and no status line; no shortcut registered, so the hotkey
+    /// row says so instead of naming a chord; and the update check off, so the About paragraph
+    /// makes its second promise. Every branch the page takes on data is supplied by one of the
+    /// four answered states.</para>
     /// </summary>
     private static SKBitmap RenderFirstRun(string state, Derived d, SKTypeface face)
     {
@@ -231,7 +237,8 @@ public static class SearchShot
         // out. A finished shot that only ever had reading on would ship the other half of the
         // painter unlooked at, which is the rule the card's picture branch is written under.
         bool ready = state == "firstrunready";
-        bool done = state == "firstrunfinished" || ready;
+        bool names = state == "firstrunnames";
+        bool done = state == "firstrunfinished" || ready || names;
         bool busy = state == "firstrundownloading" || done;
         bool speech = state == "firstrunspeech";
         // A reinstall over kept models, which is what an uninstall leaves behind unless the purge
@@ -248,15 +255,18 @@ public static class SearchShot
                 ? FirstRun.AlreadyChosen(
                     new HashSet<string>(ModelStore.All.Select(m => m.File), StringComparer.OrdinalIgnoreCase),
                     hebrewOffered: true)
+                : names
+                ? new HashSet<Capability>()
                 : speech
                 ? Capabilities.Close([Capability.Photos, Capability.Speech])
                 : Capabilities.Close([Capability.Photos, Capability.Meaning]),
             HebrewOffered = true,
-            ContentOn = !ready,
+            ContentOn = !ready && !names,
+            Hotkey = names ? null : "Alt+Space",
             OnDisk = installed
                 ? new HashSet<string>(ModelStore.All.Select(m => m.File), StringComparer.OrdinalIgnoreCase)
                 : new HashSet<string>(StringComparer.OrdinalIgnoreCase),
-            CheckUpdates = true,
+            CheckUpdates = !names,
             StartAtLogon = true,
             // Not the default, so the shot shows a chosen pill somewhere other than where an
             // untouched screen would put it - and shows that the control is answered rather than
@@ -265,7 +275,9 @@ public static class SearchShot
             Stage = done ? FirstRunStage.Finished
                   : busy ? FirstRunStage.Downloading
                   : FirstRunStage.Choosing,
-            Downloads = done
+            Downloads = names
+                ? []
+                : done
                 ?
                 [
                     new CapabilityProgress(Capability.Photos, 659_000_000, 659_000_000),
@@ -285,21 +297,19 @@ public static class SearchShot
             // the defect that let hover sit within 1.4 L* of a resting row on two palettes. The
             // speech state hovers a limit pill that is not the chosen one, which is the only place
             // a pill's hover fill is painted on this screen at all.
-            // In the second act the way out is the only thing that answers a pointer at all, so
-            // it is the only thing a hover can be on. "Not now" is not drawn there.
-            HoverTarget = busy ? FirstRunTarget.Go : speech ? FirstRunTarget.Limit : FirstRunTarget.Row,
+            // The answered page hovers a link on the ready shot, the only place a link's hover
+            // fill is painted, and its way out everywhere else.
+            HoverTarget = ready ? FirstRunTarget.Link
+                        : busy ? FirstRunTarget.Go
+                        : speech ? FirstRunTarget.Limit : FirstRunTarget.Row,
             // 3 is the Hebrew row on the choosing screen and the "2 hr" pill on the speech one -
             // in both cases something other than what is already chosen.
-            HoverIndex = busy ? -1 : 3,
+            HoverIndex = ready ? 1 : busy ? -1 : 3,
         };
 
-        // The second act is a shorter window than the first, and the shot has to be the size the
-        // window really is or the review render carries an empty band the product does not have.
-        int rows = FirstRun.Rows(s).Count;
-        int limitRow = FirstRun.LimitRow(s);
-        float tall = busy
-            ? FirstRunLayout.SettledHeight(rows, limitRow, FirstRun.Asks(s))
-            : FirstRunLayout.Height;
+        // The answered page has its own height, and the shot has to be the size the window really
+        // is or the review render carries an empty band the product does not have.
+        float tall = FirstRunLayout.SurfaceHeight(s);
 
         int w = (int)Math.Ceiling(FirstRunLayout.Width), h = (int)Math.Ceiling(tall);
         var info = new SKImageInfo(w, h, SKColorType.Bgra8888, SKAlphaType.Premul);

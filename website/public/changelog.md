@@ -5,6 +5,23 @@ All notable changes to Findra are documented here.
 The format follows [Keep a Changelog 1.1.0](https://keepachangelog.com/en/1.1.0/),
 and Findra follows [Semantic Versioning](https://semver.org/spec/v2.0.0/).
 
+## [0.3.0 - 22 September 2026](https://github.com/blakazulu/findra/releases/tag/v0.3.0)
+
+### Added
+
+- **A welcome page after the first screen.** Once you choose what to download, the window shows
+  where Findra lives - the capsule on your desktop, the shortcut that opens search (the one that
+  actually registered on your machine), and the tray icon, including that Windows may tuck it under
+  the ^ arrow - then what happens now, with the downloads as they arrive, and a few words about who
+  makes Findra with links to the website and the source. "Open settings" takes you straight to
+  Settings. It appears for "Just names" too, which used to close the window without saying where
+  Findra had gone.
+
+### Changed
+
+- **The first screen's download progress can be closed from a button.** "Done" closes the page and
+  the downloads carry on in the tray, as they always did when the window was closed.
+
 ## [0.2.1 - 21 September 2026](https://github.com/blakazulu/findra/releases/tag/v0.2.1)
 
 ### Added

@@ -511,6 +511,9 @@ internal sealed class Shell : ISettingsHost
             // not show five minutes to somebody who chose two hours the last time.
             TranscribeMinutes = _config.TranscribeMinutes,
             CheckUpdates = _config.CheckForUpdates,
+            // The chord asked for, until the answer builds the hotkey and NoteHotkey replaces it
+            // with the one that actually registered.
+            Hotkey = _config.Hotkey,
             // What is actually in the Run key, not a default: a reinstall over an existing entry
             // must not show the switch off while the entry is there.
             StartAtLogon = Autostart.IsSet(),
@@ -539,11 +542,16 @@ internal sealed class Shell : ISettingsHost
         // The rest of the product IS built from the answer - names are searchable seconds later
         // and nobody should wait on 2.9 GB for their filenames - but a card opened over a running
         // download is a second Findra in front of the one that is still setting itself up.
+        // "Open settings" on the answered page. Opened once the screen has gone, because until
+        // then it is the only door in and OpenSettings would only bring it forward again.
+        bool settingsAfter = false;
+        window.SettingsRequested += () => settingsAfter = true;
         window.Closed += (_, _) =>
         {
             _firstRun = null;
             _firstRunIsUp = false;
             WhenTheWelcomeScreenIsGone(window);
+            if (settingsAfter) Dispatcher.UIThread.Post(() => OpenSettings());
         };
         window.Show();
         // The gate is taken AFTER Show, and this is the same rule _firstRunIsUp is written under.
@@ -638,6 +646,9 @@ internal sealed class Shell : ISettingsHost
         // the update check - which have been waiting for this answer rather than appearing behind
         // the screen while it was being read.
         StartTheRest();
+        // The page that follows the answer names the hotkey, and the chord that registered is not
+        // always the one configured: the chain takes the first Windows gives it.
+        window.NoteHotkey(_hotkey?.Landed);
 
         IReadOnlyList<Model> wanted = FirstRun.Wanted(answer);
         // Always, even when it is empty: the bars are drawn from what is NOT being fetched as

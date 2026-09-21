@@ -1039,51 +1039,16 @@ public class FirstRunTests
             Downloads = [new CapabilityProgress(Capability.Photos, 660_000_000, 660_000_000)],
         };
 
-        Assert.Contains("close", FirstRun.Summary(done), StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("arrived", FirstRun.Summary(done), StringComparison.OrdinalIgnoreCase);
 
-        // The button under it says the same thing, in both halves of the second act.
-        Assert.Equal(FirstRun.CloseLabel, FirstRun.GoLabel(FirstRunStage.Finished));
-        Assert.Equal(FirstRun.CloseLabel, FirstRun.GoLabel(FirstRunStage.Downloading));
-        Assert.NotEqual(FirstRun.CloseLabel, FirstRun.GoLabel(FirstRunStage.Choosing));
+        // The way out is the page's own button, in both halves of the answered page.
+        Assert.Equal(FirstRun.DoneLabel, FirstRun.GoLabel(FirstRunStage.Finished));
+        Assert.Equal(FirstRun.DoneLabel, FirstRun.GoLabel(FirstRunStage.Downloading));
+        Assert.NotEqual(FirstRun.DoneLabel, FirstRun.GoLabel(FirstRunStage.Choosing));
 
         // A run that ended badly keeps its report rather than being told it is ready.
         string bad = FirstRun.Summary(done with { Problem = "the network went away" });
         Assert.Contains("network went away", bad, StringComparison.Ordinal);
-    }
-
-    [Theory]
-    [InlineData(-1)]
-    [InlineData(3)]
-    public void TheSecondActsSummaryFollowsItsListAndClearsTheWayOut(int limit)
-    {
-        // The second act draws no switches, so the sentence moves out of the band they were in
-        // and follows the list it is about. Both ends have to hold: it may not run into the last
-        // row above it, and it may not run into the button below it.
-        int rows = FirstRun.Rows(State()).Count;
-        SKRect band = FirstRunLayout.SettledSummaryRect(rows, limit);
-
-        Assert.True(band.Top > FirstRunLayout.RowRect(rows - 1, limit).Bottom, "the summary overlaps the last row");
-        Assert.True(band.Bottom <= FirstRunLayout.ButtonRect(1).Top, "the summary overlaps the way out");
-        Assert.True(band.Right <= FirstRunLayout.ButtonRect(1).Left, "the summary runs under the button");
-
-        // And the longest thing it can say still fits. The worst case is a run that ended badly:
-        // the longest capability title, a real network message, and the promise about the tray.
-        FirstRunState worst = State(Capability.Hebrew) with
-        {
-            Stage = FirstRunStage.Downloading,
-            Downloads =
-            [
-                new CapabilityProgress(Capability.Meaning, 283_000_000, 283_000_000),
-                new CapabilityProgress(Capability.Speech, 12_000, 574_000_000),
-                new CapabilityProgress(Capability.Hebrew, 0, 1_549_000_000),
-            ],
-            Problem = "No such host is known. (huggingface.co:443)",
-        };
-
-        SKRect w = FirstRunLayout.SettledSummaryRect(FirstRun.Rows(worst).Count, FirstRun.LimitRow(worst));
-        int lines = Parts.Wrap(FirstRun.Summary(worst), Parts.Face, Parts.LeadSize, w.Width).Count;
-        Assert.True(Parts.LeadHeight(lines) <= w.Height,
-            $"the summary wraps to {lines} lines, needing {Parts.LeadHeight(lines)}px of the {w.Height}px it has");
     }
 
     [Fact]
@@ -1102,6 +1067,8 @@ public class FirstRunTests
             FirstRun.LaterLabel,
             FirstRun.StartReadingLabel,
             FirstRun.ContinueLabel,
+            // And the answered page's left-hand button, which is the same pill.
+            Welcome.SettingsLabel,
         ];
 
         foreach (string label in labels)
@@ -1112,61 +1079,48 @@ public class FirstRunTests
     }
 
     [Fact]
-    public void NothingButTheWayOutAnswersAClickOnceTheDownloadHasStarted()
+    public void NothingOfTheChooserAnswersAClickOnceTheScreenIsAnswered()
     {
-        // "In that phase nothing should be clickable." A tile, a row, a switch or a limit pill
-        // that still answers is a control acting on a selection already handed to the shell, and
-        // a screen that looks live while it is not is worse than one that is plainly settled.
-        int rows = FirstRun.Rows(State()).Count;
+        // A tile, a row, a switch or a limit pill that still answers is a control acting on a
+        // selection already handed to the shell. The answered page has controls of its own -
+        // "Open settings", two links and the way out - and some of them may sit where a chooser
+        // control used to, so the sweep asserts that no CHOOSER target answers rather than that
+        // nothing does.
+        FirstRunState choosing = State(Capability.Speech) with { HebrewOffered = true };
+        int rows = FirstRun.Rows(choosing).Count;
+        int band = FirstRun.LimitRow(choosing);
 
         var points = new List<(string What, float X, float Y)>();
         for (int i = 0; i < 3; i++)
             points.Add(($"tile {i}", FirstRunLayout.TileRect(i).MidX, FirstRunLayout.TileRect(i).MidY));
         for (int i = 0; i < rows; i++)
-            points.Add(($"row {i}", FirstRunLayout.RowRect(i, 3).MidX, FirstRunLayout.RowRect(i, 3).MidY));
+            points.Add(($"row {i}", FirstRunLayout.RowRect(i, band).MidX, FirstRunLayout.RowRect(i, band).MidY));
         for (int o = 0; o < FirstRun.LimitOptions.Count; o++)
             points.Add(($"limit {o}",
-                        FirstRunLayout.LimitOptionRect(o, 3).MidX, FirstRunLayout.LimitOptionRect(o, 3).MidY));
+                        FirstRunLayout.LimitOptionRect(o, band).MidX, FirstRunLayout.LimitOptionRect(o, band).MidY));
         for (int i = 0; i < 3; i++)
             points.Add(($"switch {i}",
-                        FirstRunLayout.SwitchRect(i, rows, 3).MidX, FirstRunLayout.SwitchRect(i, rows, 3).MidY));
-        points.Add(("not now", FirstRunLayout.ButtonRect(0).MidX, FirstRunLayout.ButtonRect(0).MidY));
-
-        foreach ((string what, float x, float y) in points)
-            Assert.True(FirstRunLayout.HitTest(x, y, rows, 3, settled: true).Target == FirstRunTarget.None,
-                        $"{what} still answers a click while the download runs");
+                        FirstRunLayout.SwitchRect(i, rows, band).MidX, FirstRunLayout.SwitchRect(i, rows, band).MidY));
 
         // Every one of them answers while the screen is still a question, so the sweep is a
         // statement about the stage rather than about a layout with nothing in it.
         foreach ((string what, float x, float y) in points)
-            Assert.True(FirstRunLayout.HitTest(x, y, rows, 3).Target != FirstRunTarget.None,
+            Assert.True(FirstRunLayout.HitTest(x, y, choosing).Target != FirstRunTarget.None,
                         $"{what} answers nothing even while the screen is a question");
 
-        // The button included, WHILE THE FILES ARE STILL COMING. "It should be just a download
-        // status screen at that point": a pill that answers is a pill that has to mean something,
-        // and the only thing it could mean during a download is a choice nobody was offered. The
-        // way out here is the window's own close, which is never disabled - a 2.93 GB fetch is
-        // long enough that a screen answering nothing at all AND refusing to close would be a
-        // trap rather than a settled question.
-        // The settled window is SHORTER than the choosing one, so the button is not where it was
-        // - taking its rect from the choosing height would test a point off the bottom of the
-        // window and pass for the wrong reason.
-        SKRect wayOut = FirstRunLayout.ButtonRect(1, FirstRunLayout.SettledHeight(rows, 3));
-
-        Assert.Equal(FirstRunTarget.None,
-            FirstRunLayout.HitTest(wayOut.MidX, wayOut.MidY, rows, 3, settled: true, finished: false).Target);
-
-        // And once the last byte has landed it answers, because now there is something for it to
-        // say. Both halves are asserted at the same point on the screen, so this is a statement
-        // about the stage and not about where the button happens to sit.
-        Assert.Equal(FirstRunTarget.Go,
-            FirstRunLayout.HitTest(wayOut.MidX, wayOut.MidY, rows, 3, settled: true, finished: true).Target);
-
-        // Nothing ELSE answers when it is finished either - the chooser stays settled.
-        foreach ((string what, float x, float y) in points)
-            Assert.True(FirstRunLayout.HitTest(x, y, rows, 3, settled: true, finished: true).Target
-                            == FirstRunTarget.None,
-                        $"{what} answers a click after the download finished");
+        FirstRunTarget[] chooser =
+            [FirstRunTarget.Preset, FirstRunTarget.Row, FirstRunTarget.Limit,
+             FirstRunTarget.Content, FirstRunTarget.Updates, FirstRunTarget.Autostart];
+        foreach (FirstRunStage stage in new[] { FirstRunStage.Downloading, FirstRunStage.Finished })
+        {
+            FirstRunState answered = choosing with
+            {
+                Stage = stage,
+                Downloads = [new CapabilityProgress(Capability.Speech, 1, 2)],
+            };
+            foreach ((string what, float x, float y) in points)
+                Assert.DoesNotContain(FirstRunLayout.HitTest(x, y, answered).Target, chooser);
+        }
     }
 }
 
@@ -1283,8 +1237,8 @@ public class FirstRunDownloadTests : IDisposable
         // Reading was declined on the first act, so there is nothing to ask and nothing to start.
         Assert.False(FirstRun.Asks(Finished(contentOn: false)));
 
-        // And never before the end. While files are still arriving the screen answers nothing at
-        // all, and the question would be about work that would compete with the download.
+        // And never before the end. While files are still arriving the question would be about
+        // work that would compete with the download.
         Assert.False(FirstRun.Asks(Finished(contentOn: true) with { Stage = FirstRunStage.Downloading }));
         Assert.False(FirstRun.Asks(Finished(contentOn: true) with { Stage = FirstRunStage.Choosing }));
     }
@@ -1292,28 +1246,22 @@ public class FirstRunDownloadTests : IDisposable
     [Fact]
     public void TheQuestionBringsBackTheSecondButtonAndBothOfThemAnswerIt()
     {
-        // Two buttons, and they mean different things - which is the whole reason the second one
-        // comes back. Everywhere else in the second act there is one way out, because a second
-        // pill doing exactly what the first does is a choice with no difference in it.
+        // Two answer buttons, and they mean different things - which is the whole reason the
+        // second one comes back. Everywhere else the answered page has one way out, because a
+        // second pill doing exactly what the first does is a choice with no difference in it.
         FirstRunState asking = Finished(contentOn: true);
-        int rows = FirstRun.Rows(asking).Count;
-        int limitRow = FirstRun.LimitRow(asking);
-        float h = FirstRunLayout.SettledHeight(rows, limitRow, asking: true);
+        float h = FirstRunLayout.SurfaceHeight(asking);
 
         SKRect later = FirstRunLayout.ButtonRect(0, h);
         SKRect start = FirstRunLayout.ButtonRect(1, h);
+        Assert.Equal(FirstRunTarget.NotNow, FirstRunLayout.HitTest(later.MidX, later.MidY, asking).Target);
+        Assert.Equal(FirstRunTarget.Go, FirstRunLayout.HitTest(start.MidX, start.MidY, asking).Target);
 
-        Assert.Equal(FirstRunTarget.NotNow,
-            FirstRunLayout.HitTest(later.MidX, later.MidY, rows, limitRow, settled: true, finished: true, asking: true).Target);
-        Assert.Equal(FirstRunTarget.Go,
-            FirstRunLayout.HitTest(start.MidX, start.MidY, rows, limitRow, settled: true, finished: true, asking: true).Target);
-
-        // Without the question that left-hand pill is not drawn, so nothing may answer a click
-        // there - a hit test that still reported NotNow would be a control nobody can see.
-        float plain = FirstRunLayout.SettledHeight(rows, limitRow, asking: false);
-        Assert.Equal(FirstRunTarget.None,
-            FirstRunLayout.HitTest(FirstRunLayout.ButtonRect(0, plain).MidX, FirstRunLayout.ButtonRect(0, plain).MidY,
-                                   rows, limitRow, settled: true, finished: true, asking: false).Target);
+        // Without the question that pill is not drawn, so nothing may answer a click there - a hit
+        // test that still reported NotNow would be a control nobody can see.
+        FirstRunState plain = Finished(contentOn: false);
+        SKRect gone = FirstRunLayout.ButtonRect(0, FirstRunLayout.SurfaceHeight(plain));
+        Assert.Equal(FirstRunTarget.None, FirstRunLayout.HitTest(gone.MidX, gone.MidY, plain).Target);
     }
 
     [Fact]
@@ -1353,15 +1301,12 @@ public class FirstRunDownloadTests : IDisposable
     [Fact]
     public void TheWindowMakesRoomForTheQuestionAndGivesItBackWhenThereIsNone()
     {
-        FirstRunState asking = Finished(contentOn: true);
-        int rows = FirstRun.Rows(asking).Count;
-        int limitRow = FirstRun.LimitRow(asking);
+        // The question takes the reading sentence's place, and needs more room than it did.
+        float withQuestion = FirstRunLayout.SurfaceHeight(Finished(contentOn: true));
+        float without = FirstRunLayout.SurfaceHeight(Finished(contentOn: false));
 
-        float withQuestion = FirstRunLayout.SettledHeight(rows, limitRow, asking: true);
-        float without = FirstRunLayout.SettledHeight(rows, limitRow, asking: false);
-
-        Assert.True(withQuestion > without, "the question needs room the plain finished screen does not");
-        Assert.Equal(FirstRunLayout.AskH, withQuestion - without);
+        Assert.True(withQuestion > without, "the question needs room the plain finished page does not");
+        Assert.Equal(WelcomeLayout.AskH - WelcomeLayout.ReadingH, withQuestion - without, 3);
     }
 
     [Fact]
@@ -1371,13 +1316,12 @@ public class FirstRunDownloadTests : IDisposable
         // AskH is a constant and the two strings are prose; a copy-edit that adds a line is what
         // this catches, and the fix is to shorten the sentence or raise the constant deliberately.
         SKTypeface face = Parts.Face;
-        FirstRunState asking = Finished(contentOn: true);
-        SKRect ask = FirstRunLayout.AskRect(FirstRun.Rows(asking).Count, FirstRun.LimitRow(asking));
+        SKRect ask = WelcomeLayout.NextRect(Finished(contentOn: true));
 
-        // The rule and the title sit in the first 40px; the note has the rest.
-        float need = 40f + Parts.NoteHeight(Parts.Wrap(FirstRun.AskNote, face, Parts.NoteSize, ask.Width).Count);
-        Assert.True(need <= FirstRunLayout.AskH,
-            $"the question needs {need:0.0}px and AskH is {FirstRunLayout.AskH:0.0}px");
+        // The rule and the title sit in the first 42px; the note has the rest.
+        float need = 42f + Parts.NoteHeight(Parts.Wrap(FirstRun.AskNote, face, Parts.NoteSize, ask.Width).Count);
+        Assert.True(need <= WelcomeLayout.AskH,
+            $"the question needs {need:0.0}px and AskH is {WelcomeLayout.AskH:0.0}px");
 
         // And the title fits on one line, because a wrapped question reads as two questions.
         Assert.True(CardText.Measure(FirstRun.AskTitle, face, Parts.LeadSize) <= ask.Width,
@@ -1395,21 +1339,15 @@ public class FirstRunDownloadTests : IDisposable
             Downloads = [new CapabilityProgress(Capability.Photos, 659_000_000, 659_000_000)],
         });
 
-        Assert.DoesNotContain("close this window", summary, StringComparison.OrdinalIgnoreCase);
-
-        // The screen that is NOT asking still says it, because there it is the whole truth.
-        string done = FirstRun.Summary(Finished(contentOn: false) with
-        {
-            Downloads = [new CapabilityProgress(Capability.Photos, 659_000_000, 659_000_000)],
-        });
-        Assert.Contains("close this window", done, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("close", summary, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("close", Welcome.Subtitle(Finished(contentOn: true)), StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
     public void TheRightHandButtonSaysWhatItStartsRatherThanClose()
     {
         Assert.Equal(FirstRun.StartReadingLabel, FirstRun.GoLabel(Finished(contentOn: true)));
-        Assert.Equal(FirstRun.CloseLabel, FirstRun.GoLabel(Finished(contentOn: false)));
+        Assert.Equal(FirstRun.DoneLabel, FirstRun.GoLabel(Finished(contentOn: false)));
     }
 
     // ---- what is already on the disk ---------------------------------------------------------

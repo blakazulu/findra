@@ -41,6 +41,11 @@ public sealed class FirstRunWindow : Window
     /// arrives or the window closes without it.</summary>
     public event Action? StartReadingRequested;
 
+    /// <summary>Raised when "Open settings" is pressed on the answered page, just before the
+    /// window closes. The shell opens Settings once the screen is gone: while it is up, it is the
+    /// only door into Findra and Settings would only bring it forward again.</summary>
+    public event Action? SettingsRequested;
+
     /// <summary>Whether the last question ever reached the screen. Read by the shell when the
     /// window closes, because the hold on reading has three endings and only two of them raise an
     /// event: "Start reading" clears it, "Later" deliberately keeps it for the session, and a
@@ -91,7 +96,12 @@ public sealed class FirstRunWindow : Window
         };
         _canvas.Answered += s => Answered?.Invoke(s);
         _canvas.StartReadingRequested += () => StartReadingRequested?.Invoke();
+        _canvas.SettingsRequested += () => SettingsRequested?.Invoke();
     }
+
+    /// <summary>The chord the hotkey actually registered, once the answer has built it - or null
+    /// where nothing would register. The answered page names it.</summary>
+    public void NoteHotkey(string? chord) => _canvas.NoteHotkey(chord);
 
     /// <summary>What the shell is actually fetching. Everything a chosen capability needs that is
     /// NOT in this list was already on disk, so its bar starts full rather than empty.</summary>
@@ -125,6 +135,7 @@ public sealed class FirstRunWindow : Window
 
         public event Action<FirstRunState>? Answered;
         public event Action? StartReadingRequested;
+        public event Action? SettingsRequested;
 
         public FirstRunCanvas(FirstRunState state, Palette palette, Window owner)
         {
@@ -161,10 +172,20 @@ public sealed class FirstRunWindow : Window
         /// of the final state, so it needs no flag of its own.</summary>
         public bool AskedAboutReading => Asking;
 
+        public void NoteHotkey(string? chord)
+        {
+            _state = _state with { Hotkey = chord };
+            InvalidateVisual();
+        }
+
         public void NoteFetching(IReadOnlyList<Model> models)
         {
             _fetching = models;
             _state = _state with { Downloads = FirstRun.Progress(_state, _fetching, _moved) };
+            // The bars are rows on the answered page, so knowing how many there are is knowing
+            // how tall it is. This arrives straight after the answer, while the pointer is still
+            // on the button that has just stopped existing.
+            _owner.Height = FirstRunLayout.SurfaceHeight(_state);
             InvalidateVisual();
         }
 
@@ -182,8 +203,7 @@ public sealed class FirstRunWindow : Window
         {
             _state = _state with { Problem = problem, Stage = FirstRunStage.Finished };
             // The last question needs room that the download screen did not, so the window grows
-            // here. Safe for the same reason the shrink was: no button is drawn while a download
-            // runs, so there is nothing under the pointer for a resize to move out from under.
+            // here - downwards, so everything above the question stays where it was.
             _owner.Height = FirstRunLayout.SurfaceHeight(_state);
             InvalidateVisual();
         }
@@ -224,10 +244,27 @@ public sealed class FirstRunWindow : Window
                 return;
             }
 
+            // The answered page's own controls. "Open settings" closes the page first, because
+            // while it is up it is the only door into Findra; the shell opens Settings behind it.
+            // Pressed over the last question it is "Later" with somewhere to go: nothing starts
+            // reading, and Settings' own "Start now" is right there.
+            if (hit.Target == FirstRunTarget.Settings)
+            {
+                SettingsRequested?.Invoke();
+                _owner.Close();
+                return;
+            }
+            if (hit.Target == FirstRunTarget.Link)
+            {
+                if (hit.Index >= 0 && hit.Index < Welcome.Links.Count) OpenLink(Welcome.Links[hit.Index].Url);
+                return;
+            }
+
             if (hit.Target is FirstRunTarget.NotNow or FirstRunTarget.Go)
             {
-                // The second act keeps the same window: "Close" and "Done" both just close it,
-                // because the answer has already been given and the download is the shell's.
+                // The answered page keeps the same window: "Done" closes it, because the answer
+                // has already been given and the download is the shell's, which carries on in the
+                // tray without it.
                 //
                 // Unless the last question is still on it, in which case the right-hand button is
                 // the answer to that question and the left one declines it. Both close - the
@@ -266,13 +303,9 @@ public sealed class FirstRunWindow : Window
                 _owner.Height = FirstRunLayout.SurfaceHeight(_state);
                 InvalidateVisual();
 
+                // No early close when nothing was chosen: the answered page is where somebody who
+                // took "Just names" learns where Findra went, which they need as much as anyone.
                 Answered?.Invoke(answer);
-                // Nothing to wait for when nothing was chosen, so the screen goes rather than
-                // sitting there saying "0 of 0 done" - unless it has a question left to ask, which
-                // is the case for anybody who took no models and still turned reading on. Closing
-                // there would ask nothing and start nothing, which is the one outcome that loses
-                // the answer.
-                if (answer.Chosen.Count == 0 && !FirstRun.Asks(_state)) _owner.Close();
                 return;
             }
 
@@ -282,6 +315,14 @@ public sealed class FirstRunWindow : Window
             _state = FirstRun.Apply(_state, hit);
             if (ReferenceEquals(before, _state)) return;
             InvalidateVisual();
+        }
+
+        /// <summary>In the browser, which is the only thing that fetches it. A browser that will
+        /// not start is a log line: the page has nothing else to offer for it.</summary>
+        private static void OpenLink(string url)
+        {
+            try { System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(url) { UseShellExecute = true }); }
+            catch (Exception ex) { Log.Warn("firstrun", $"could not open {url}: {ex.Message}"); }
         }
 
         public override void Render(DrawingContext context)

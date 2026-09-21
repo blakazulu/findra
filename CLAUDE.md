@@ -54,7 +54,7 @@ findra.exe --searchprobe [query]      # end to end: which process answered, the 
 findra.exe --searchmodels             # models present, loading, agreeing; provider per runtime
 findra.exe --searchindex [file|folder|q:query|why:path]...   # indexed/queued; paths queue and
                                       # drain, q: queries, why:<path> explains ONE file, read-only
-findra.exe --searchshot out.png <state> [palette]   # twenty-six states, listed below
+findra.exe --searchshot out.png <state> [palette]   # twenty-seven states, listed below
 findra.exe --searchtest               # engine self-check
 findra.exe --searchbench [out.md] [corpus]   # measured numbers, pasteable Markdown; `corpus` is
                                       # how many files it generates
@@ -62,7 +62,7 @@ findra.exe --version                  # print the version and log location, then
 ```
 
 The `--searchshot` states are `SearchShot.States`, and that list is the only definition of them.
-Twelve draw the card, eight the settings window and six the first-run screen:
+Twelve draw the card, eight the settings window and seven the first-run screen:
 
 ```
 capsule  empty  indexing  contentmode  contentwaiting  typing  results  noresults  many  adv
@@ -70,13 +70,18 @@ opening  openingempty
 settings  settingsopening  settingssearches  settingscontent  settingsabout
 settingsuptodate  settingsupdate  settingsasking
 firstrun  firstruninstalled  firstrunspeech  firstrundownloading
-firstrunfinished  firstrunready
+firstrunfinished  firstrunready  firstrunnames
 ```
 
 - `contentwaiting` is the Content pill NOT offering (reading on, nothing read yet), hovered on
   purpose: suppressing the hover fill is half of what makes a dead control read dead.
-- `firstrunfinished` (took reading: last question, two buttons) and `firstrunready` (plain "Findra
-  is ready") are the last act's two shapes. `firstrunspeech` shows the transcription-limit row that
+- Once answered, the first-run screen is the **welcome page** (`src/Findra/First/Welcome.cs`):
+  where Findra lives (capsule, the hotkey that actually LANDED via `FirstRunWindow.NoteHotkey`, the
+  tray), what happens now (bars, status, reading), About with two links, and "Open settings" (the
+  shell opens Settings after the page closes, since the page is the only door in while up).
+  `firstrunfinished` (took reading: last question, Later / Start reading) and `firstrunready`
+  (plain, Done) are its two finished shapes; `firstrunnames` is "Just names" with no bars, no
+  shortcut registered and update checks off. `firstrunspeech` shows the transcription-limit row that
   appears only when Speech is ticked. Each exists so both halves of a painter get reviewed.
 - **Where a painter branches on data a state supplies, some state has to supply it**, or the branch
   ships unlooked at. The card's stage: `results` and `opening` carry a picture, `many` keeps the

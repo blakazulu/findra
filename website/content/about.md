@@ -42,7 +42,7 @@ takes it apart and never speaks to me again.
 
 ## Where it is
 
-Version 0.2.1, released on 21 September 2026. `winget install blakazulu.Findra` installs it from the
+Version 0.3.0, released on 22 September 2026. `winget install blakazulu.Findra` installs it from the
 Windows Package Manager catalogue, and the installer on the
 [releases page](https://github.com/blakazulu/findra/releases/latest), which carries one for x64 and one
 for arm64, is the same program as a download. The releases page has each new release first; the
