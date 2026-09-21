@@ -7,6 +7,8 @@ and Findra follows [Semantic Versioning](https://semver.org/spec/v2.0.0/).
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-09-21
+
 ### Added
 
 - **Settings says when videos need a codec.** Under Content, the Photos and video row reports how
@@ -1535,5 +1537,6 @@ all of it gets verified without a screen.
 - The named pipe is restricted to the current user, and the interface verifies the
   owner before trusting a connection.
 
-[Unreleased]: https://github.com/blakazulu/findra/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/blakazulu/findra/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/blakazulu/findra/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/blakazulu/findra/releases/tag/v0.1.0

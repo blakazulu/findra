@@ -41,7 +41,7 @@ takes it apart and never speaks to me again.
 
 ## Where it is
 
-Version 0.1.0, released on 4 September 2026. The install that works today is the installer on the
+Version 0.2.0, released on 21 September 2026. The install that works today is the installer on the
 [releases page](https://github.com/blakazulu/findra/releases/latest), which carries one for x64 and one
 for arm64. `winget install blakazulu.Findra` becomes the whole install once the submitted manifest
 clears moderation in the Microsoft catalogue; it is awaiting a moderator and does not resolve yet.

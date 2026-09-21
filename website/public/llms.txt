@@ -102,7 +102,7 @@ phone number and no postal address, deliberately - the contact page says why.
 - **First released**: 4 September 2026.
 - **Platform**: Windows 10 and 11 only, x64 and arm64. Not cross-platform.
 - **Price**: free. There is no paid tier, no trial, no licence key and nothing to buy.
-- **Version**: 0.1.0, released 4 September 2026. Installers for x64 and arm64 are on the releases
+- **Version**: 0.2.0, released 21 September 2026. Installers for x64 and arm64 are on the releases
   page. The winget manifest is submitted and awaiting moderation, so `winget install
   blakazulu.Findra` does not resolve yet.
 - **Signing**: neither the installer nor the executables are signed. Windows warns about an
@@ -178,4 +178,4 @@ Microsoft catalogue; it does not resolve yet. Building from source needs the .NE
 and nothing else. Neither the installer nor the executables are signed, so Windows warns about an
 unknown publisher.
 
-Last updated: 5 September 2026, for Findra 0.1.0.
+Last updated: 21 September 2026, for Findra 0.2.0.

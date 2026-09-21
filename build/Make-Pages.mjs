@@ -59,7 +59,7 @@ const PAGES = [
     description:
       'Findra is a desktop search widget for Windows built on .NET 10, Avalonia, SkiaSharp and ' +
       'SQLite, by one person, under Apache-2.0.',
-    reviewed: '2026-09-05',
+    reviewed: '2026-09-21',
     ogType: 'website',
     markdown: 'about.md',
   },
