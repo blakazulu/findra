@@ -44,7 +44,7 @@ jobs:
           $r = Invoke-RestMethod -Uri $url -Headers @{ 'User-Agent' = 'findra-release' }
           $names = @($r.assets.name)
           foreach ($arch in 'x64', 'arm64') {
-            if ($names -notcontains "findra-$v-$arch.exe") { throw "the release has no findra-$v-$arch.exe" }
+            if ($names -notcontains "findra-setup-$arch.exe") { throw "the release has no findra-setup-$arch.exe" }
           }
 
       - name: fetch wingetcreate
@@ -72,7 +72,7 @@ jobs:
 
           $hashes = @{}
           foreach ($arch in 'x64', 'arm64') {
-            $file = "findra-$v-$arch.exe"
+            $file = "findra-setup-$arch.exe"
             Invoke-WebRequest -Uri "$base/$file" -OutFile $file
             $hashes[$arch] = (Get-FileHash -Algorithm SHA256 -LiteralPath $file).Hash
           }

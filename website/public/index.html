@@ -3,16 +3,18 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Findra - Windows Search. But it works.</title>
-<meta name="description" content="Desktop search for Windows. Filenames from an in-RAM index in 0.33 to 2.05 ms median, measured on one named desktop. Free, open source, nothing leaves your machine.">
+<title>Findra - Fast, private desktop search for Windows</title>
+<meta name="description" content="Private desktop search for Windows. Filenames from RAM in 0.33 to 2.05 ms median; documents, photos and speech when you ask. Free and open source.">
 <link rel="canonical" href="https://findra-search.netlify.app/">
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="Findra">
 <meta property="og:locale" content="en_US">
 <meta property="og:url" content="https://findra-search.netlify.app/">
-<!-- The page's own first section, so a shared link says what the page opens on. There is no
+<!-- What Findra IS, in the words people search with. The first section's headline is a joke
+     about Windows Search and stays one on the page; a title is the one line a search result or a
+     shared link gets, and "Windows Search" there names somebody else's product. There is no
      twitter:title: the Twitter card falls back to og:title, so it follows this one. -->
-<meta property="og:title" content="Findra - Windows Search. But it works.">
+<meta property="og:title" content="Findra - Fast, private desktop search for Windows">
 <meta property="og:description" content="Names from RAM in 0.33 to 2.05 ms median across five measured queries. Documents, photos and speech when you ask for them. No account, no cloud, no telemetry.">
 <!-- share/card.png is drawn by build/Make-Icon.mjs from the same geometry as the application
      icon, at the 1.91:1 that X and Facebook crop to. It replaced a product screenshot at
@@ -31,12 +33,10 @@
 <link rel="apple-touch-icon" href="/apple-touch-icon.png">
 <link rel="alternate" type="text/markdown" href="/index.md" title="Findra as Markdown">
 <link rel="alternate" type="text/markdown" href="/llms.txt" title="Findra for language models">
-<!-- Preconnected and linked rather than @import-ed from inside styles.css: an @import cannot
-     begin until the whole stylesheet has arrived, which put four serial round trips in front of
-     the first painted glyph. Both origins are already the only two the CSP permits. -->
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Quicksand:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap">
+<!-- The two faces are served from this site, so the page makes no request to anybody else - which
+     is the promise it exists to make. Quicksand is preloaded because it sets the headline, and a
+     font the browser only discovers inside styles.css is a font it starts fetching late. -->
+<link rel="preload" href="/fonts/Quicksand-wght.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="styles.css">
 <noscript><style>.reveal{opacity:1;transform:none}</style></noscript>
 
@@ -61,7 +61,7 @@
       "description": "Desktop search for Windows. Filenames come back from an index held in RAM in 0.33 to 2.05 ms median across five measured queries, measured on one named desktop. It also finds files by what is written inside them, by what a photo shows and by what was said out loud, each an optional download. Free, open source, and nothing leaves your machine.",
       "applicationCategory": "UtilitiesApplication",
       "applicationSubCategory": "Desktop search",
-      "disambiguatingDescription": "Findra is an independent third-party application by blakazulu. It is not made by, affiliated with or endorsed by Microsoft, and it is not a version, component, fork or replacement of the Windows Search service built into Windows.",
+      "disambiguatingDescription": "Findra is an independent third-party application by blakazulu. It is not made by, affiliated with or endorsed by Microsoft, and it is not a version, component, fork or replacement of the Windows Search service built into Windows. It runs on Windows only and is not related to any other application that shares its name.",
       "inLanguage": "en",
       "keywords": "desktop search, file search, Windows, NTFS, USN journal, local search, offline search, semantic search, photo search by description, speech search, transcript search, open source",
       "operatingSystem": "Windows 10, Windows 11",
@@ -87,7 +87,7 @@
         {
           "@type": "ImageObject",
           "url": "https://findra-search.netlify.app/shots/results.png",
-          "caption": "The Findra results card showing nine results for the query sunset, with a photo previewed beside them"
+          "caption": "The Findra results card with nine results for the query sunset: a photo matched on what it shows and previewed beside the list, documents matched on their text, and a recording matched on what was said"
         },
         {
           "@type": "ImageObject",
@@ -112,18 +112,28 @@
       },
       "sameAs": [
         "https://github.com/blakazulu/findra",
-        "https://github.com/blakazulu/findra/releases"
+        "https://github.com/blakazulu/findra/releases",
+        "https://github.com/microsoft/winget-pkgs/tree/master/manifests/b/blakazulu/Findra"
       ],
       "installUrl": "https://github.com/blakazulu/findra/releases/latest",
-      "codeRepository": "https://github.com/blakazulu/findra",
       "downloadUrl": "https://github.com/blakazulu/findra/releases/latest",
       "datePublished": "2026-09-04",
       "dateModified": "2026-09-21",
       "releaseNotes": "https://github.com/blakazulu/findra/releases/tag/v0.2.0",
-      "privacyPolicy": "https://findra-search.netlify.app/privacy/",
       "author": { "@id": "https://findra-search.netlify.app/#blakazulu" },
       "publisher": { "@id": "https://findra-search.netlify.app/#blakazulu" },
       "maintainer": { "@id": "https://findra-search.netlify.app/#blakazulu" }
+    },
+    {
+      "@type": "SoftwareSourceCode",
+      "@id": "https://findra-search.netlify.app/#source",
+      "name": "Findra source code",
+      "codeRepository": "https://github.com/blakazulu/findra",
+      "programmingLanguage": "C#",
+      "runtimePlatform": ".NET 10",
+      "license": "https://www.apache.org/licenses/LICENSE-2.0",
+      "targetProduct": { "@id": "https://findra-search.netlify.app/#findra" },
+      "author": { "@id": "https://findra-search.netlify.app/#blakazulu" }
     },
     {
       "@type": "Person",
@@ -188,7 +198,7 @@
           "name": "How do I install Findra?",
           "acceptedAnswer": {
             "@type": "Answer",
-            "text": "Today, the installer on the GitHub releases page, https://github.com/blakazulu/findra/releases/latest, which carries one for x64 and one for arm64. winget install blakazulu.Findra becomes the whole install once the submitted manifest clears moderation in the Microsoft catalogue; it does not resolve yet. Building from source needs the .NET 10 SDK and nothing else. Neither the installer nor the executables are signed yet, so Windows warns about an unknown publisher until that changes."
+            "text": "winget install blakazulu.Findra, which picks the x64 or arm64 build for your machine. The same installer is on the GitHub releases page, https://github.com/blakazulu/findra/releases/latest, and that page carries each new release first: the Windows Package Manager catalogue can take a few days to pick one up. Building from source needs the .NET 10 SDK and nothing else. Neither the installer nor the executables are signed yet, so Windows warns about an unknown publisher until that changes."
           }
         },
         {
@@ -292,7 +302,7 @@
 <header class="nav">
   <a class="brand" href="#top">
     <span class="brand-mark" aria-hidden="true"></span>
-    <span class="brand-name">FINDRA</span>
+    <span class="brand-name">Findra</span>
   </a>
   <nav class="nav-links">
     <a href="#finds">What it finds</a>
@@ -317,12 +327,12 @@
   <!-- The card runs off the right of the screen on purpose; see .lede in styles.css. -->
   <section class="lede">
     <div class="lede-copy">
-      <span class="lede-lockup">
+      <span class="lede-lockup" aria-hidden="true">
         <span class="brand-mark" aria-hidden="true"></span>
-        <span class="brand-name">FINDRA</span>
+        <span class="brand-name">Findra</span>
       </span>
 
-      <h1>WINDOWS SEARCH.<br><span class="accent">BUT IT WORKS.</span></h1>
+      <h1><span class="sr-only">Findra: </span>Windows Search.<br><span class="accent">But it works.</span></h1>
 
       <p class="hero-sub">
         Type one word. Findra gives you the photo that looks like it, the document that says it
@@ -361,7 +371,7 @@
         <source type="image/avif" srcset="/.netlify/images?url=/shots/results.png&amp;w=410&amp;fm=avif 410w, /.netlify/images?url=/shots/results.png&amp;w=820&amp;fm=avif 820w" sizes="(max-width: 860px) 100vw, 820px">
         <source type="image/webp" srcset="/.netlify/images?url=/shots/results.png&amp;w=410&amp;fm=webp 410w, /.netlify/images?url=/shots/results.png&amp;w=820&amp;fm=webp 820w" sizes="(max-width: 860px) 100vw, 820px">
         <img src="shots/results.png" width="820" height="626" fetchpriority="high" decoding="async"
-             alt="Findra's results card answering a search for sunset: a photograph matched on what it shows, documents matched on their text, and a recording matched on what was said">
+             alt="The Findra results card with nine results for the query sunset: a photo matched on what it shows and previewed beside the list, documents matched on their text, and a recording matched on what was said">
       </picture>
     </figure>
   </section>
@@ -372,7 +382,7 @@
       <div class="hero-copy">
         <span class="eyebrow"><span class="dot"></span>TICKET #3036 &middot; OPEN SINCE 1996 &middot; NOW CLOSED</span>
 
-        <h2>WE FIXED WINDOWS SEARCH.<br><span class="accent">YOU'RE WELCOME.</span></h2>
+        <h2>We fixed Windows Search.<br><span class="accent">You're welcome.</span></h2>
 
         <p class="hero-sub">
           You bought a drive that reads seven thousand megabytes a second. Windows uses it to
@@ -676,7 +686,7 @@
             <picture>
               <source type="image/avif" srcset="/.netlify/images?url=/shots/results.png&amp;w=410&amp;fm=avif 410w, /.netlify/images?url=/shots/results.png&amp;w=820&amp;fm=avif 820w" sizes="(max-width: 860px) 100vw, 820px">
               <source type="image/webp" srcset="/.netlify/images?url=/shots/results.png&amp;w=410&amp;fm=webp 410w, /.netlify/images?url=/shots/results.png&amp;w=820&amp;fm=webp 820w" sizes="(max-width: 860px) 100vw, 820px">
-              <img src="shots/results.png" loading="lazy" decoding="async" alt="The Findra results card showing nine results for the query sunset, with a photo previewed beside them" width="820" height="626">
+              <img src="shots/results.png" loading="lazy" decoding="async" alt="The Findra results card with nine results for the query sunset: a photo matched on what it shows and previewed beside the list, documents matched on their text, and a recording matched on what was said" width="820" height="626">
             </picture>
           </div>
           <figcaption class="shot-cap">
@@ -940,7 +950,7 @@
 
         <article class="excuse reveal">
           <h3>How do I install Findra?</h3>
-          <p>Today, the installer on the GitHub releases page, <a href="https://github.com/blakazulu/findra/releases/latest" rel="noopener">https://github.com/blakazulu/findra/releases/latest</a>, which carries one for x64 and one for arm64. <code>winget install blakazulu.Findra</code> becomes the whole install once the submitted manifest clears moderation in the Microsoft catalogue; it does not resolve yet. Building from source needs the .NET 10 SDK and nothing else. Neither the installer nor the executables are signed yet, so Windows warns about an unknown publisher until that changes.</p>
+          <p><code>winget install blakazulu.Findra</code>, which picks the x64 or arm64 build for your machine. The same installer is on the GitHub releases page, <a href="https://github.com/blakazulu/findra/releases/latest" rel="noopener">https://github.com/blakazulu/findra/releases/latest</a>, and that page carries each new release first: the Windows Package Manager catalogue can take a few days to pick one up. Building from source needs the .NET 10 SDK and nothing else. Neither the installer nor the executables are signed yet, so Windows warns about an unknown publisher until that changes.</p>
         </article>
 
         <article class="excuse reveal">
@@ -982,9 +992,10 @@
           <a href="https://github.com/blakazulu/findra/releases/latest" rel="noopener">releases page</a></b>, which
           carries one for x64 and one for arm64. That is the whole install of
           <span data-stamp="release">Findra 0.2.0, released on 21 September 2026</span>.
-          <code style="font-family:var(--mono);font-size:15px;color:var(--ink-dim)">winget install blakazulu.Findra</code>
-          becomes the whole install once the submitted manifest clears moderation in the Microsoft
-          catalogue; it is awaiting a moderator and does not resolve yet. Building from source
+          Or run
+          <code style="font-family:var(--mono);font-size:15px;color:var(--ink-dim)">winget install blakazulu.Findra</code>,
+          which installs the same program from the Windows Package Manager catalogue; the catalogue
+          can take a few days to pick up a new release. Building from source
           still works and needs the .NET 10 SDK and nothing else. Every release note is that
           version's section of the
           <a href="/changelog/">changelog</a>.
@@ -992,22 +1003,29 @@
       </div>
 
       <div class="install">
-        <div class="panel reveal">
-          <span class="badge now">INSTALLER WORKS TODAY</span>
+        <div class="panel accent lead reveal">
+          <span class="badge now">INSTALLER OR WINGET</span>
           <h3>Installer and winget</h3>
           <p>
-            The installer is the route that works today, on x64 and arm64 alike. Every
-            release carries one for each architecture on its
+            The installer and winget install the same program, on x64 and arm64 alike. Every
+            release carries an installer for each architecture on its
             <a href="https://github.com/blakazulu/findra/releases/latest" rel="noopener">releases
-            page</a>.
+            page</a>, and winget picks it up from there.
           </p>
+          <div class="get">
+            <a class="btn btn-primary" href="https://github.com/blakazulu/findra/releases/latest/download/findra-setup-x64.exe">
+              <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v11"/><polyline points="7 9.5 12 14.5 17 9.5"/><path d="M4 20h16"/></svg>
+              Download for Windows x64
+            </a>
+            <a class="alt" href="https://github.com/blakazulu/findra/releases/latest/download/findra-setup-arm64.exe">Arm64</a>
+          </div>
           <button type="button" class="cmd" aria-label="Copy the command: winget install blakazulu.Findra" data-copy="winget install blakazulu.Findra">
             <span class="p">&gt;</span><span class="t">winget install blakazulu.Findra</span><span class="c" aria-hidden="true">COPY</span>
           </button>
           <span class="said" role="status"></span>
           <p style="font-size:14px">
-            The winget manifest is submitted and awaiting a moderator in the Microsoft catalogue,
-            so the command does not resolve yet; the installer above is the route that works today.
+            winget installs from the Windows Package Manager catalogue, which can take a few days
+            to pick up a new release; the releases page always has the newest.
             Neither the installer nor the executables are signed yet, so Windows will warn about an
             unknown publisher until that changes. The
             <a href="/code-signing/">Code signing policy</a> says who writes Findra, who approves a
@@ -1080,7 +1098,7 @@
     <div class="col">
       <span class="brand" style="margin-bottom:6px">
         <span class="brand-mark" aria-hidden="true"></span>
-        <span class="brand-name">FINDRA</span>
+        <span class="brand-name">Findra</span>
       </span>
       <span>Desktop search for Windows.</span>
       <span>Built with .NET 10, Avalonia, SkiaSharp and SQLite.</span>
@@ -1090,6 +1108,13 @@
       <a href="https://github.com/blakazulu/findra" rel="noopener">Source</a>
       <a href="/changelog/">Changelog</a>
       <a href="https://github.com/blakazulu/findra/issues" rel="noopener">Issues</a>
+    </div>
+    <div class="col">
+      <strong>GUIDES</strong>
+      <a href="/windows-search-not-finding-files/">Windows Search not finding files</a>
+      <a href="/search-inside-pdfs/">Search inside PDFs</a>
+      <a href="/find-photos-by-description/">Find photos by description</a>
+      <a href="/search-recordings-by-speech/">Search recordings by speech</a>
     </div>
     <div class="col">
       <strong>THE SMALL PRINT</strong>
@@ -1105,7 +1130,7 @@
     <div class="col">
       <strong>ATTRIBUTION</strong>
       <span>Findra by blakazulu.</span>
-      <span>Quicksand under the SIL Open Font License 1.1.</span>
+      <span><a href="/fonts/Quicksand-OFL.txt">Quicksand</a> and <a href="/fonts/JetBrainsMono-OFL.txt">JetBrains Mono</a> under the SIL Open Font License 1.1.</span>
       <span>&copy; <span id="year">2026</span></span>
     </div>
   </div>

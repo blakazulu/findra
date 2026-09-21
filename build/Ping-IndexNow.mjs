@@ -1,6 +1,7 @@
 // Tell the search engines that read IndexNow that this site changed, instead of waiting to be
-// discovered. Run by hand after a deploy, the way Make-Pages.mjs and Make-Icon.mjs are run by
-// hand: nothing in CI runs this, and nothing needs it to build.
+// discovered. .github/workflows/site.yml runs it after every successful release, once the live
+// site names the new version; between releases it is run by hand after a deploy worth announcing.
+// Nothing needs it to build.
 //
 // Why it exists. Findra is days old, on a subdomain, with no inbound links, so the ordinary route
 // to being crawled is somebody else linking to it - which has not happened and will not happen
@@ -8,9 +9,9 @@
 // that changed, honoured by Bing and Yandex. Bing is the one that matters here, because Copilot
 // answers out of Bing's index, so this is the shortest path from "pushed" to "quotable".
 //
-// It is deliberately not automated on deploy. A submission is a claim that these pages really
+// It is deliberately not run on every deploy. A submission is a claim that these pages really
 // changed, and firing it on every push - including the ones that change a test - is how a site
-// teaches an engine to stop believing its own signal.
+// teaches an engine to stop believing its own signal. A release is the push that certainly did.
 //
 //   node build/Ping-IndexNow.mjs            what it would send, and nothing else
 //   node build/Ping-IndexNow.mjs --send     actually send it

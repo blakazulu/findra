@@ -42,7 +42,17 @@ public class WebsiteTests
         // from the twin. So the page is compared with the twin here, and the twin with
         // CHANGELOG.md by TheChangelogPageIsTheChangelogWithoutItsDocumentationEntries.
         { "changelog", "website/public/changelog.md" },
+        // The guides, which answer the questions people type rather than questions about Findra.
+        { "windows-search-not-finding-files", "website/content/guides/windows-search-not-finding-files.md" },
+        { "search-inside-pdfs", "website/content/guides/search-inside-pdfs.md" },
+        { "find-photos-by-description", "website/content/guides/find-photos-by-description.md" },
+        { "search-recordings-by-speech", "website/content/guides/search-recordings-by-speech.md" },
     };
+
+    /// <summary>The guide slugs, which every list below that names the site's pages has to carry.
+    /// </summary>
+    private static readonly string[] Guides =
+        { "windows-search-not-finding-files", "search-inside-pdfs", "find-photos-by-description", "search-recordings-by-speech" };
 
     // ------------------------------------------------------------------ the pages say their source
 
@@ -235,6 +245,11 @@ public class WebsiteTests
     [InlineData("website/public/about/index.html")]
     [InlineData("website/public/contact/index.html")]
     [InlineData("website/public/code-signing/index.html")]
+    [InlineData("website/public/changelog/index.html")]
+    [InlineData("website/public/windows-search-not-finding-files/index.html")]
+    [InlineData("website/public/search-inside-pdfs/index.html")]
+    [InlineData("website/public/find-photos-by-description/index.html")]
+    [InlineData("website/public/search-recordings-by-speech/index.html")]
     public void EveryPageCarriesTheWholeOpenGraphSet(string path)
     {
         string html = Repo.Read(path);
@@ -331,7 +346,8 @@ public class WebsiteTests
                    "website/public/404.html", "website/public/index.md", "website/public/about.md",
                    "website/public/contact.md", "website/public/privacy.md",
                    "website/public/code-signing.md", "website/content/home.md",
-                   "website/content/about.md", "website/content/contact.md" })
+                   "website/content/about.md", "website/content/contact.md" }
+                 .Concat(Guides.SelectMany(g => new[] { $"website/public/{g}.md", $"website/public/{g}/index.html" })))
         {
             // Comments only. The structured data is deliberately NOT stripped: an address added
             // to the JSON-LD is exactly the thing this test exists to catch, and a check that read
@@ -365,7 +381,7 @@ public class WebsiteTests
             .ToHashSet(StringComparer.Ordinal);
 
         HashSet<string> onDisk = new(StringComparer.Ordinal) { $"{Site}/" };
-        foreach (string slug in new[] { "privacy", "about", "contact", "code-signing", "changelog" })
+        foreach (string slug in new[] { "privacy", "about", "contact", "code-signing", "changelog" }.Concat(Guides))
         {
             Assert.True(Repo.Exists($"website/public/{slug}/index.html"), $"/{slug}/ is missing");
             onDisk.Add($"{Site}/{slug}/");
@@ -393,7 +409,8 @@ public class WebsiteTests
         foreach (string href in new[]
                  { "\"/\"", "\"/about/\"", "\"/contact/\"", "\"/privacy/\"",
                    "\"/code-signing/\"", "\"/changelog/\"",
-                   "\"/llms.txt\"", "\"/sitemap.xml\"", "\"/robots.txt\"" })
+                   "\"/llms.txt\"", "\"/sitemap.xml\"", "\"/robots.txt\"" }
+                 .Concat(Guides.Select(g => $"\"/{g}/\"")))
         {
             Assert.Contains($"href={href}", NotFound, StringComparison.Ordinal);
         }
@@ -465,7 +482,8 @@ public class WebsiteTests
                  { $"{Site}/", $"{Site}/about/", $"{Site}/contact/", $"{Site}/privacy/",
                    $"{Site}/changelog/",
                    $"{Site}/index.md", $"{Site}/about.md", $"{Site}/contact.md", $"{Site}/privacy.md",
-                   $"{Site}/changelog.md" })
+                   $"{Site}/changelog.md" }
+                 .Concat(Guides.SelectMany(g => new[] { $"{Site}/{g}/", $"{Site}/{g}.md" })))
         {
             Assert.Contains(url, Llms, StringComparison.Ordinal);
         }
@@ -487,7 +505,8 @@ public class WebsiteTests
         foreach ((string path, string twin) in new[]
                  { ("/", "/index.md"), ("/about/", "/about.md"),
                    ("/contact/", "/contact.md"), ("/privacy/", "/privacy.md"),
-                   ("/code-signing/", "/code-signing.md"), ("/changelog/", "/changelog.md") })
+                   ("/code-signing/", "/code-signing.md"), ("/changelog/", "/changelog.md") }
+                 .Concat(Guides.Select(g => ($"/{g}/", $"/{g}.md"))))
         {
             Assert.Contains($"'{path}': '{twin}'", edge, StringComparison.Ordinal);
             Assert.True(Repo.Exists($"website/public{twin}"), $"{twin} is declared but not published");
@@ -557,7 +576,9 @@ public class WebsiteTests
                    "website/public/privacy/index.html", "website/public/code-signing/index.html",
                    "website/public/index.md", "website/public/about.md", "website/public/contact.md",
                    "website/public/privacy.md", "website/public/code-signing.md",
-                   "CHANGELOG.md", "website/public/changelog/index.html", "website/public/changelog.md" })
+                   "CHANGELOG.md", "website/public/changelog/index.html", "website/public/changelog.md" }
+                 .Concat(Guides.SelectMany(g => new[]
+                     { $"website/content/guides/{g}.md", $"website/public/{g}.md", $"website/public/{g}/index.html" })))
         {
             string text = Repo.Read(path);
             foreach (string name in Repo.Competitors)
@@ -1153,13 +1174,13 @@ public class WebsiteTests
     [Fact]
     public void EveryFooterListsTheSameLinksInTheSameOrder()
     {
-        string[] pages =
+        string[] pages = new[]
         {
             "website/public/index.html", "website/public/404.html",
             "website/public/about/index.html", "website/public/contact/index.html",
             "website/public/privacy/index.html", "website/public/code-signing/index.html",
             "website/public/changelog/index.html",
-        };
+        }.Concat(Guides.Select(g => $"website/public/{g}/index.html")).ToArray();
 
         List<(string Text, string Href)>? expected = null;
         string? from = null;
@@ -1295,6 +1316,120 @@ public class WebsiteTests
 
         // Named for its own contents, which is the whole of Google's format.
         Assert.Equal($"google-site-verification: {found[0]}", Repo.Read($"website/public/{found[0]}").Trim());
+    }
+
+    /// <summary>
+    /// The site fetches nothing from anybody else, fonts included.
+    ///
+    /// <para>The page's whole argument is that nothing leaves your machine, and it used to load its
+    /// two typefaces from Google Fonts - a request to a third party on every first visit, made by the
+    /// page that says there are none. Both faces are now served from <c>/fonts/</c>, and the content
+    /// security policy names no origin but this one. Anything that brings a third-party origin back
+    /// is a decision to put to somebody, and this is where it fails first.</para>
+    /// </summary>
+    [Fact]
+    public void TheSiteFetchesNothingFromAnotherOrigin()
+    {
+        string csp = Regex.Match(Netlify, @"Content-Security-Policy = ""([^""]+)""").Groups[1].Value;
+        Assert.False(string.IsNullOrEmpty(csp), "netlify.toml sets no content security policy");
+        Assert.DoesNotContain("https://", csp, StringComparison.Ordinal);
+        Assert.Contains("font-src 'self'", csp, StringComparison.Ordinal);
+
+        string[] pages = Directory.GetFiles(Repo.Path_("website/public"), "*.html", SearchOption.AllDirectories);
+        Assert.True(pages.Length >= 11, $"expected every page, found {pages.Length}");
+        foreach (string page in pages)
+        {
+            string html = WithoutComments(File.ReadAllText(page));
+            // Absolute links to this site - the canonical, mostly - are not a request to anybody else.
+            Assert.DoesNotMatch(@"<link[^>]+href=""https?://(?!findra-search\.netlify\.app/)", html);
+            Assert.DoesNotMatch(@"<script[^>]+src=""https?://", html);
+        }
+
+        // Each face is on the disk, and its licence travels beside it: OFL condition 2.
+        string css = Repo.Read("website/public/styles.css");
+        foreach (string face in new[] { "Quicksand", "JetBrainsMono" })
+        {
+            Assert.True(Repo.Exists($"website/public/fonts/{face}-wght.woff2"), $"{face} is not served");
+            Assert.Contains($"url('/fonts/{face}-wght.woff2')", css, StringComparison.Ordinal);
+            Assert.Contains("SIL OPEN FONT LICENSE", Repo.Read($"website/public/fonts/{face}-OFL.txt"), StringComparison.Ordinal);
+        }
+    }
+
+    /// <summary>
+    /// Every footer links every guide.
+    ///
+    /// <para>The guides are the pages that answer what people search for, and a page nothing links
+    /// to is a page a crawler finds late or never. The footer is on every page, so it is the link
+    /// that reaches them from everywhere - and there are three copies of it, two of them by hand.</para>
+    /// </summary>
+    [Fact]
+    public void EveryFooterLinksEveryGuide()
+    {
+        foreach (string path in new[] { "website/public/index.html", "website/public/404.html",
+                                        "website/public/about/index.html", "website/public/changelog/index.html" }
+                 .Concat(Guides.Select(g => $"website/public/{g}/index.html")))
+        {
+            string column = Between(Repo.Read(path), "<strong>GUIDES</strong>", "</div>");
+            foreach (string guide in Guides)
+            {
+                Assert.Contains($@"<a href=""/{guide}/"">", column, StringComparison.Ordinal);
+            }
+        }
+    }
+
+    /// <summary>
+    /// The front page's title says what Findra is, its h1 names Findra, and no heading is typed in
+    /// capitals.
+    ///
+    /// <para>The headline is a joke about Windows Search and stays one on the page. The title is the
+    /// one line a search result and a shared link get, and "Windows Search" there is a query for
+    /// somebody else's product that Findra cannot win. And capitals are a look: typed into the markup
+    /// they are what a snippet, a screen reader and every model quoting the page carry too, so the
+    /// stylesheet sets them.</para>
+    /// </summary>
+    [Fact]
+    public void TheFrontPageTitleAndHeadingsSayWhatFindraIs()
+    {
+        string title = Regex.Match(Index, "<title>([^<]+)</title>").Groups[1].Value;
+        Assert.StartsWith("Findra", title, StringComparison.Ordinal);
+        Assert.Contains("desktop search", title, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains($@"<meta property=""og:title"" content=""{title}"">", Index, StringComparison.Ordinal);
+
+        string h1 = Regex.Match(Index, "<h1>(.*?)</h1>", RegexOptions.Singleline).Groups[1].Value;
+        Assert.Contains("Findra", h1, StringComparison.Ordinal);
+
+        foreach (Match heading in Regex.Matches(Index, "<h[1-3][^>]*>(.*?)</h[1-3]>", RegexOptions.Singleline))
+        {
+            string text = WebUtility.HtmlDecode(Regex.Replace(heading.Groups[1].Value, "<[^>]+>", " "));
+            Assert.True(!Regex.IsMatch(text, "[A-Z]{2,}") || Regex.IsMatch(text, "[a-z]"),
+                        $"this heading is typed in capitals; set text-transform in styles.css instead: {text.Trim()}");
+        }
+    }
+
+    /// <summary>
+    /// The structured data uses schema.org's properties on the types that have them.
+    ///
+    /// <para><c>privacyPolicy</c> is not a schema.org property at all, and <c>codeRepository</c>
+    /// belongs to SoftwareSourceCode rather than to SoftwareApplication. Validators flag both, and a
+    /// graph a consumer has to forgive is a graph it may read less of. The repository is a node of
+    /// its own, pointing at the application it builds.</para>
+    /// </summary>
+    [Fact]
+    public void TheStructuredDataUsesOnlyRealProperties()
+    {
+        Match block = Regex.Match(
+            Index, @"<script type=""application/ld\+json"">(?<json>.*?)</script>", RegexOptions.Singleline);
+        using JsonDocument document = JsonDocument.Parse(block.Groups["json"].Value);
+        JsonElement graph = document.RootElement.GetProperty("@graph");
+
+        Assert.DoesNotContain("privacyPolicy", block.Groups["json"].Value, StringComparison.Ordinal);
+
+        JsonElement app = graph.EnumerateArray().Single(n => n.GetProperty("@type").GetString() == "SoftwareApplication");
+        Assert.False(app.TryGetProperty("codeRepository", out _), "codeRepository is not a SoftwareApplication property");
+
+        JsonElement source = graph.EnumerateArray().Single(n => n.GetProperty("@type").GetString() == "SoftwareSourceCode");
+        Assert.Equal("https://github.com/blakazulu/findra", source.GetProperty("codeRepository").GetString());
+        Assert.Equal(app.GetProperty("@id").GetString(), source.GetProperty("targetProduct").GetProperty("@id").GetString());
     }
 
     private static string WithoutComments(string html) =>

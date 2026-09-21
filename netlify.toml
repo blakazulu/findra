@@ -12,12 +12,13 @@
   command = ""
 
 # A page that sells "nothing leaves your machine" should not itself be reaching out.
-# The policy below permits the two Google Fonts hosts and nothing else - no analytics,
-# no beacons, no third-party scripts, and no way for one to be added by accident.
+# The policy below permits this origin and nothing else - the fonts are served from /fonts/,
+# so there is no analytics, no beacon, no third-party script or stylesheet, and no way for one
+# to be added by accident.
 [[headers]]
   for = "/*"
   [headers.values]
-    Content-Security-Policy = "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data:; connect-src 'none'; frame-ancestors 'none'; base-uri 'self'; form-action 'none'"
+    Content-Security-Policy = "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'none'; frame-ancestors 'none'; base-uri 'self'; form-action 'none'"
     Referrer-Policy = "strict-origin-when-cross-origin"
     X-Content-Type-Options = "nosniff"
     X-Frame-Options = "DENY"
@@ -36,6 +37,11 @@
   for = "/app.js"
   [headers.values]
     Cache-Control = "public, max-age=3600"
+
+[[headers]]
+  for = "/fonts/*"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000"
 
 [[headers]]
   for = "/shots/*"
@@ -90,6 +96,26 @@
   for = "/changelog.md"
   [headers.values]
     Link = "<https://findra-search.netlify.app/changelog/>; rel=\"canonical\""
+
+[[headers]]
+  for = "/windows-search-not-finding-files.md"
+  [headers.values]
+    Link = "<https://findra-search.netlify.app/windows-search-not-finding-files/>; rel=\"canonical\""
+
+[[headers]]
+  for = "/search-inside-pdfs.md"
+  [headers.values]
+    Link = "<https://findra-search.netlify.app/search-inside-pdfs/>; rel=\"canonical\""
+
+[[headers]]
+  for = "/find-photos-by-description.md"
+  [headers.values]
+    Link = "<https://findra-search.netlify.app/find-photos-by-description/>; rel=\"canonical\""
+
+[[headers]]
+  for = "/search-recordings-by-speech.md"
+  [headers.values]
+    Link = "<https://findra-search.netlify.app/search-recordings-by-speech/>; rel=\"canonical\""
 
 [[headers]]
   for = "/llms.txt"

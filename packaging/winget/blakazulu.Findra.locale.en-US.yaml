@@ -10,7 +10,7 @@ PackageUrl: https://github.com/blakazulu/findra
 License: Apache-2.0
 LicenseUrl: https://github.com/blakazulu/findra/blob/main/LICENSE
 Copyright: Copyright (c) 2026 blakazulu
-ShortDescription: Desktop search for Windows. A capsule on your desktop unfolds into a results card.
+ShortDescription: Fast, private desktop search for Windows. A capsule on your desktop unfolds into a results card.
 Description: |-
   Findra searches your files by name in milliseconds, reading the NTFS master file table
   directly and keeping it live from the change journal.
@@ -29,5 +29,9 @@ Tags:
   - desktop
   - ntfs
   - local
+  - offline
+  - privacy
+  - file-search
+  - desktop-search
 ManifestType: defaultLocale
 ManifestVersion: 1.6.0

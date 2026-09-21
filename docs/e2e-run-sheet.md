@@ -1193,7 +1193,7 @@ Then push the tag and watch for:
 - `softprops/action-gh-release` finding the notes at `artifacts/release-notes/release-notes.md`.
   `download-artifact` nests by artifact name, and **if that path is wrong the release is created
   with an empty body rather than failing**;
-- two installers attached, `findra-<version>-x64.exe` and `findra-<version>-arm64.exe`, with
+- two installers attached, `findra-setup-x64.exe` and `findra-setup-arm64.exe`, with
   `fail_on_unmatched_files` catching it if either is missing;
 - the release body, the release page and the installers saying **nothing about being signed**. The
   signing step is a placeholder that prints one line and exits.
@@ -1228,7 +1228,10 @@ real **in the same commit**:
 `TheSigningPageSaysItIsNotInForceForAsLongAsTheSigningStepDoesNothing` couples the two in both
 directions and fails on whichever one moves alone.
 
-### 9.7 (catalogue 38) The first winget submission - one way
+### 9.7 (catalogue 38) The first winget submission - one way - DONE for 0.1.0
+
+microsoft/winget-pkgs#429668 carried 0.1.0 and merged on 21 September 2026. Every later release
+is the same run of this step, by a person, once per version: 0.2.0 has not been submitted yet.
 
 **Nothing but a person on the Actions tab publishes to the winget catalogue.** No `push`, `tag`,
 `release` or `schedule` trigger may ever reach `winget.yml`: a mis-tagged GitHub release can be
@@ -1237,7 +1240,7 @@ deleted, and one that reaches the catalogue is on other people's machines by the
 
 Go to the Actions tab, run **publish to winget** with the version and **submit unticked**:
 
-- the first step must find `findra-<version>-x64.exe` and `findra-<version>-arm64.exe` on the
+- the first step must find `findra-setup-x64.exe` and `findra-setup-arm64.exe` on the
   release and **stop if either is missing, before anything is built**;
 - the manifests are uploaded as the `winget-manifests` artefact. Download and read them: the
   identifier, the installer type, the `/INSTALLSOURCE=winget` switch and the description are
@@ -1252,14 +1255,13 @@ Only then re-run with **submit ticked**. That needs `WINGET_PKGS_TOKEN` to be a 
 to a fork of the catalogue repository, and it opens a pull request somebody else reviews. **This is
 the second thing that cannot be taken back.**
 
-### 9.8 (catalogue 41) Replace the install section's first paragraph
+### 9.8 (catalogue 41) Replace the install section's first paragraph - DONE
 
-The README currently opens the install section by saying there is no published release and nothing
-has been submitted to winget. That is true today, and it is the reason
-`winget install blakazulu.Findra` is written as the command for when that release exists rather
-than as an instruction.
-
-When step 9.7 succeeds, that paragraph is the thing that becomes false first.
+Done on 21 September 2026, the day the manifest merged. The README, the front page, its Markdown
+twin, the About page and `llms.txt` name `winget install blakazulu.Findra` as the install and say
+that the releases page has each release first, because the catalogue trails every release by one
+submission. `Repo.WingetIsInTheCatalogue` is true, so the hedge guard now fails any surface that
+still says the command does not resolve.
 
 ### 9.9 (catalogue 48) winget, end to end - needs a second machine
 

@@ -1,4 +1,4 @@
-# Findra - Windows Search. But it works.
+# Findra - Fast, private desktop search for Windows
 
 Desktop search for Windows. Filenames come back from an index held in RAM in 0.33 to 2.05 ms median across five measured
 queries, measured on one named desktop. It also finds files by what is written inside them, by what a photo
@@ -122,12 +122,11 @@ capability and ask for it.
 
 ### How do I install Findra?
 
-Today, the installer on the GitHub releases page, https://github.com/blakazulu/findra/releases/latest, which
-carries one for x64 and one for arm64.
-`winget install blakazulu.Findra` becomes the whole install once the submitted manifest clears
-moderation in the Microsoft catalogue; it does not resolve yet. Building from source needs the
-.NET 10 SDK and nothing else. Neither the installer nor the executables are
-signed yet, so Windows warns about an unknown publisher until that changes.
+`winget install blakazulu.Findra`, which picks the x64 or arm64 build for your machine. The same
+installer is on the GitHub releases page, https://github.com/blakazulu/findra/releases/latest, and
+that page carries each new release first: the Windows Package Manager catalogue can take a few days
+to pick one up. Building from source needs the .NET 10 SDK and nothing else. Neither the installer
+nor the executables are signed yet, so Windows warns about an unknown publisher until that changes.
 
 ### Can I find a photo by describing what is in it?
 
@@ -182,10 +181,9 @@ Full text: https://findra-search.netlify.app/privacy/
 
 ## Install
 
-The install that works today is the installer on the releases page,
-https://github.com/blakazulu/findra/releases/latest, which carries one for x64 and one for arm64.
-`winget install blakazulu.Findra` becomes the whole install once the submitted manifest clears
-moderation in the Microsoft catalogue; it is awaiting a moderator and does not resolve yet.
+`winget install blakazulu.Findra` is the whole install. The installer on the releases page,
+https://github.com/blakazulu/findra/releases/latest, carries one for x64 and one for arm64 and has
+each new release first; the Windows Package Manager catalogue can take a few days to pick one up.
 Building from source works too and needs the .NET 10 SDK and nothing else.
 
 ```
@@ -208,3 +206,14 @@ publisher until that changes.
 Uninstalling always removes the elevated logon task. It keeps your models, your index and your
 settings unless you say otherwise, and tells you the measured size it would free first.
 `findra --uninstall --dry-run` prints the whole plan and changes nothing.
+
+## Guides
+
+- [Windows Search is not finding my files](https://findra-search.netlify.app/windows-search-not-finding-files/):
+  why a file goes missing, and what finds it.
+- [Search inside PDFs and documents](https://findra-search.netlify.app/search-inside-pdfs/): the
+  words inside your files, with nothing else to install.
+- [Find photos by describing them](https://findra-search.netlify.app/find-photos-by-description/):
+  type what is in the picture, not what the file is called.
+- [Search recordings by what was said](https://findra-search.netlify.app/search-recordings-by-speech/):
+  find the recording by the sentence you remember hearing.

@@ -30,6 +30,10 @@ const TWIN: Record<string, string> = {
   '/privacy/': '/privacy.md',
   '/code-signing/': '/code-signing.md',
   '/changelog/': '/changelog.md',
+  '/windows-search-not-finding-files/': '/windows-search-not-finding-files.md',
+  '/search-inside-pdfs/': '/search-inside-pdfs.md',
+  '/find-photos-by-description/': '/find-photos-by-description.md',
+  '/search-recordings-by-speech/': '/search-recordings-by-speech.md',
 };
 
 /// Whether the caller would rather have Markdown than HTML.
@@ -108,5 +112,6 @@ export default async function handler(request: Request, context: Context): Promi
 }
 
 export const config: Config = {
-  path: ['/', '/about/', '/contact/', '/privacy/', '/code-signing/', '/changelog/'],
+  path: ['/', '/about/', '/contact/', '/privacy/', '/code-signing/', '/changelog/',
+         '/windows-search-not-finding-files/', '/search-inside-pdfs/', '/find-photos-by-description/', '/search-recordings-by-speech/'],
 };

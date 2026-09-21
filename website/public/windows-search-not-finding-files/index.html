@@ -1,0 +1,231 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Windows Search not finding your files? Why, and the fix - Findra</title>
+<meta name="description" content="The four reasons Windows Search misses a file you know is there, how to fix each one inside Windows, and where Findra takes a different route.">
+<link rel="canonical" href="https://findra-search.netlify.app/windows-search-not-finding-files/">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="Findra">
+<meta property="og:locale" content="en_US">
+<meta property="og:url" content="https://findra-search.netlify.app/windows-search-not-finding-files/">
+<meta property="og:title" content="Windows Search not finding your files? Why, and the fix - Findra">
+<meta property="og:description" content="The four reasons Windows Search misses a file you know is there, how to fix each one inside Windows, and where Findra takes a different route.">
+<meta property="og:image" content="https://findra-search.netlify.app/share/card.png">
+<meta property="og:image:type" content="image/png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Findra. Windows Search, but it works. Filenames in 0.33 to 2.05 ms median, straight from RAM. Nothing leaves your machine.">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="theme-color" content="#08090c">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="icon" href="/favicon.ico" sizes="32x32">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<link rel="alternate" type="text/markdown" href="/windows-search-not-finding-files.md" title="Windows Search not finding your files? Why, and the fix - Findra as Markdown">
+<link rel="alternate" type="text/markdown" href="/llms.txt" title="Findra for language models">
+<!-- The two faces are served from this site, so the page makes no request to anybody else - which
+     is the promise it exists to make. Quicksand is preloaded because it sets the headline, and a
+     font the browser only discovers inside styles.css is a font it starts fetching late. -->
+<link rel="preload" href="/fonts/Quicksand-wght.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="/styles.css">
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "WebPage",
+      "@id": "https://findra-search.netlify.app/windows-search-not-finding-files/#page",
+      "url": "https://findra-search.netlify.app/windows-search-not-finding-files/",
+      "name": "Windows Search not finding your files? Why, and the fix - Findra",
+      "description": "The four reasons Windows Search misses a file you know is there, how to fix each one inside Windows, and where Findra takes a different route.",
+      "inLanguage": "en",
+      "dateModified": "2026-09-21",
+      "isPartOf": {
+        "@id": "https://findra-search.netlify.app/#site"
+      },
+      "about": {
+        "@id": "https://findra-search.netlify.app/#findra"
+      },
+      "author": {
+        "@id": "https://findra-search.netlify.app/#blakazulu"
+      },
+      "publisher": {
+        "@id": "https://findra-search.netlify.app/#blakazulu"
+      },
+      "breadcrumb": {
+        "@id": "https://findra-search.netlify.app/windows-search-not-finding-files/#crumbs"
+      }
+    },
+    {
+      "@id": "https://findra-search.netlify.app/#findra",
+      "@type": "SoftwareApplication",
+      "name": "Findra",
+      "url": "https://findra-search.netlify.app/"
+    },
+    {
+      "@id": "https://findra-search.netlify.app/#blakazulu",
+      "@type": "Person",
+      "name": "Liraz Amir",
+      "alternateName": "blakazulu"
+    },
+    {
+      "@id": "https://findra-search.netlify.app/#site",
+      "@type": "WebSite",
+      "name": "Findra",
+      "url": "https://findra-search.netlify.app/"
+    },
+    {
+      "@type": "BreadcrumbList",
+      "@id": "https://findra-search.netlify.app/windows-search-not-finding-files/#crumbs",
+      "itemListElement": [
+        {
+          "@type": "ListItem",
+          "position": 1,
+          "name": "Findra",
+          "item": "https://findra-search.netlify.app/"
+        },
+        {
+          "@type": "ListItem",
+          "position": 2,
+          "name": "Guide",
+          "item": "https://findra-search.netlify.app/windows-search-not-finding-files/"
+        }
+      ]
+    }
+  ]
+}
+</script>
+</head>
+<body>
+<a class="skip" href="#top">Skip to content</a>
+
+<div class="bg" aria-hidden="true">
+  <div class="bg-blob a"></div>
+  <div class="bg-grid"></div>
+  <div class="bg-grain"></div>
+</div>
+
+<header class="nav">
+  <a class="brand" href="/">
+    <span class="brand-mark" aria-hidden="true"></span>
+    <span class="brand-name">Findra</span>
+  </a>
+  <nav class="nav-links">
+    <a href="/#finds">What it finds</a>
+    <a href="/#numbers">The numbers</a>
+    <a href="/#install">Install</a>
+  </nav>
+  <div class="nav-right">
+    <a class="btn btn-ghost btn-sm" href="/">Back to the front</a>
+  </div>
+</header>
+
+<main id="top" tabindex="-1">
+  <div class="wrap">
+    <section class="doc-head">
+      <span class="kicker">GUIDE</span>
+      <h1>Why Windows Search does not find your file, and what does.</h1>
+      <div class="doc-meta">
+        <span class="d">Findra 0.2.0 &middot; last reviewed 2026-09-21</span>
+        <a class="doc-chip on" href="/windows-search-not-finding-files.md">Read as Markdown</a>
+        <a class="doc-chip" href="https://github.com/blakazulu/findra/blob/main/website/content/guides/windows-search-not-finding-files.md" rel="noopener">History on GitHub</a>
+      </div>
+    </section>
+
+    <article class="doc">
+      <p>When Windows Search misses a file you know is there, it is nearly always one of four things: its index has not reached the file yet, the file is in a folder it does not index, you remember what the file says rather than what it is called, or the question went to the web instead of your disk. Each one has a fix inside Windows, and each one is a place where Findra takes a different route.</p>
+
+      <h2>The index has not got to it yet</h2>
+
+      <p>Windows Search answers from an index it builds in the background. A file copied in a minute ago, or a drive the indexer has only started walking, is not in that index yet, so a search for it comes back empty even though the file is right there.</p>
+
+      <p>In Windows 11, Settings &gt; Privacy &amp; security &gt; Searching Windows shows how far indexing has got. If the count is not moving or the results look stale, Advanced indexing options &gt; Advanced &gt; Rebuild starts it again from nothing, which can take hours on a large disk.</p>
+
+      <p>Findra does not wait for an index to catch up. It reads the NTFS file table when you sign in and keeps it current from the change journal, so a file's name is searchable the moment the file exists, and there is no index to rebuild.</p>
+
+      <h2>The folder is not one it indexes</h2>
+
+      <p>In its Classic mode, Windows Search indexes your libraries and your desktop, and a file anywhere else is found slowly or not at all. Settings &gt; Privacy &amp; security &gt; Searching Windows &gt; Find my files offers Enhanced, which indexes the whole PC, and Customize search locations adds a single folder.</p>
+
+      <p>Findra has no list of places to include. Every name on every NTFS volume is searchable from the start. When you ask it to read inside files it reads every drive except the folders on its exclusion list, which starts with build and package folders such as <code>node_modules</code>, <code>.git</code>, <code>bin</code> and <code>obj</code>, and which you can read and change in Settings.</p>
+
+      <h2>You remember what it says, not what it is called</h2>
+
+      <p>Windows reads inside a file only when its location is indexed with contents and a filter for that file type is installed. A PDF, a scanned receipt or a voice memo can easily fall outside all of that.</p>
+
+      <p>Findra reads PDF, Word, Excel, PowerPoint, EPUB, plain text, Markdown, CSV and HTML files itself, and the text inside pictures, with nothing extra to install. Reading inside files is off until you turn it on:</p>
+
+      <pre><code>findra --content on</code></pre>
+
+      <p>Findra can also find a photo by what it shows and a recording by what was said in it, each an optional download that runs on your own machine. See <a href="https://findra-search.netlify.app/find-photos-by-description/">finding photos by description</a> and <a href="https://findra-search.netlify.app/search-recordings-by-speech/">searching recordings by what was said</a>.</p>
+
+      <h2>The question went to the web</h2>
+
+      <p>The search box on the taskbar mixes web results in with your files, and on most editions of Windows 11 turning that off takes a policy or a registry change rather than a switch in Settings. A search for your own tax return can end with a suggestion to look for it online.</p>
+
+      <p>Findra never sends a query anywhere. There are no web results, no account and no telemetry. The one request it makes on its own is an anonymous check for a newer version, at most once a day, and it can be switched off.</p>
+
+      <h2>When Findra does not find it either</h2>
+
+      <p>Ask Findra about the one file. This prints the reason in plain words - not on the disk, not a kind of file Findra reads inside, excluded, still queued, failed, or read and edited since - and changes nothing:</p>
+
+      <pre><code>findra --searchindex &quot;why:C:\Users\you\Documents\report.pdf&quot;</code></pre>
+
+      <h2>Try it</h2>
+
+      <p>Findra is free and open source, for Windows 10 and 11:</p>
+
+      <pre><code>winget install blakazulu.Findra</code></pre>
+
+      <p>The installer is also on the releases page, <a href="https://github.com/blakazulu/findra/releases/latest" rel="noopener">https://github.com/blakazulu/findra/releases/latest</a>, for x64 and arm64.</p>
+    </article>
+  </div>
+</main>
+
+<footer class="wrap">
+  <div class="foot">
+    <div class="col">
+      <span class="brand" style="margin-bottom:6px">
+        <span class="brand-mark" aria-hidden="true"></span>
+        <span class="brand-name">Findra</span>
+      </span>
+      <span>Desktop search for Windows.</span>
+      <span>Built with .NET 10, Avalonia, SkiaSharp and SQLite.</span>
+    </div>
+    <div class="col">
+      <strong>PROJECT</strong>
+      <a href="https://github.com/blakazulu/findra" rel="noopener">Source</a>
+      <a href="/changelog/">Changelog</a>
+      <a href="https://github.com/blakazulu/findra/issues" rel="noopener">Issues</a>
+    </div>
+    <div class="col">
+      <strong>GUIDES</strong>
+      <a href="/windows-search-not-finding-files/">Windows Search not finding files</a>
+      <a href="/search-inside-pdfs/">Search inside PDFs</a>
+      <a href="/find-photos-by-description/">Find photos by description</a>
+      <a href="/search-recordings-by-speech/">Search recordings by speech</a>
+    </div>
+    <div class="col">
+      <strong>THE SMALL PRINT</strong>
+      <a href="/about/">About</a>
+      <a href="/contact/">Contact</a>
+      <a href="/privacy/">Privacy</a>
+      <a href="/code-signing/">Code signing policy</a>
+      <a href="https://github.com/blakazulu/findra/blob/main/SECURITY.md" rel="noopener">Security</a>
+      <a href="https://github.com/blakazulu/findra/blob/main/LICENSE" rel="noopener">Apache-2.0</a>
+      <a href="https://github.com/blakazulu/findra/blob/main/NOTICE" rel="noopener">Notice</a>
+      <a href="/llms.txt">For language models</a>
+    </div>
+    <div class="col">
+      <strong>ATTRIBUTION</strong>
+      <span>Findra by blakazulu.</span>
+      <span><a href="/fonts/Quicksand-OFL.txt">Quicksand</a> and <a href="/fonts/JetBrainsMono-OFL.txt">JetBrains Mono</a> under the SIL Open Font License 1.1.</span>
+      <span>&copy; <span id="year">2026</span></span>
+    </div>
+  </div>
+</footer>
+
+<script src="/app.js" defer></script>
+</body>
+</html>

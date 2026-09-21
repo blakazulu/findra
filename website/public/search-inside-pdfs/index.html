@@ -3,15 +3,15 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>About Findra - open-source desktop search for Windows</title>
-<meta name="description" content="Findra is a desktop search widget for Windows built on .NET 10, Avalonia, SkiaSharp and SQLite, by one person, under Apache-2.0.">
-<link rel="canonical" href="https://findra-search.netlify.app/about/">
-<meta property="og:type" content="website">
+<title>Search inside PDFs and documents on Windows - Findra</title>
+<meta name="description" content="How to search inside PDF, Word, Excel, PowerPoint, EPUB and text files on Windows 10 and 11, offline: what Findra reads, what it costs and what it skips.">
+<link rel="canonical" href="https://findra-search.netlify.app/search-inside-pdfs/">
+<meta property="og:type" content="article">
 <meta property="og:site_name" content="Findra">
 <meta property="og:locale" content="en_US">
-<meta property="og:url" content="https://findra-search.netlify.app/about/">
-<meta property="og:title" content="About Findra - open-source desktop search for Windows">
-<meta property="og:description" content="Findra is a desktop search widget for Windows built on .NET 10, Avalonia, SkiaSharp and SQLite, by one person, under Apache-2.0.">
+<meta property="og:url" content="https://findra-search.netlify.app/search-inside-pdfs/">
+<meta property="og:title" content="Search inside PDFs and documents on Windows - Findra">
+<meta property="og:description" content="How to search inside PDF, Word, Excel, PowerPoint, EPUB and text files on Windows 10 and 11, offline: what Findra reads, what it costs and what it skips.">
 <meta property="og:image" content="https://findra-search.netlify.app/share/card.png">
 <meta property="og:image:type" content="image/png">
 <meta property="og:image:width" content="1200">
@@ -22,7 +22,7 @@
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
 <link rel="icon" href="/favicon.ico" sizes="32x32">
 <link rel="apple-touch-icon" href="/apple-touch-icon.png">
-<link rel="alternate" type="text/markdown" href="/about.md" title="About Findra - open-source desktop search for Windows as Markdown">
+<link rel="alternate" type="text/markdown" href="/search-inside-pdfs.md" title="Search inside PDFs and documents on Windows - Findra as Markdown">
 <link rel="alternate" type="text/markdown" href="/llms.txt" title="Findra for language models">
 <!-- The two faces are served from this site, so the page makes no request to anybody else - which
      is the promise it exists to make. Quicksand is preloaded because it sets the headline, and a
@@ -34,11 +34,11 @@
   "@context": "https://schema.org",
   "@graph": [
     {
-      "@type": "AboutPage",
-      "@id": "https://findra-search.netlify.app/about/#page",
-      "url": "https://findra-search.netlify.app/about/",
-      "name": "About Findra - open-source desktop search for Windows",
-      "description": "Findra is a desktop search widget for Windows built on .NET 10, Avalonia, SkiaSharp and SQLite, by one person, under Apache-2.0.",
+      "@type": "WebPage",
+      "@id": "https://findra-search.netlify.app/search-inside-pdfs/#page",
+      "url": "https://findra-search.netlify.app/search-inside-pdfs/",
+      "name": "Search inside PDFs and documents on Windows - Findra",
+      "description": "How to search inside PDF, Word, Excel, PowerPoint, EPUB and text files on Windows 10 and 11, offline: what Findra reads, what it costs and what it skips.",
       "inLanguage": "en",
       "dateModified": "2026-09-21",
       "isPartOf": {
@@ -54,7 +54,7 @@
         "@id": "https://findra-search.netlify.app/#blakazulu"
       },
       "breadcrumb": {
-        "@id": "https://findra-search.netlify.app/about/#crumbs"
+        "@id": "https://findra-search.netlify.app/search-inside-pdfs/#crumbs"
       }
     },
     {
@@ -77,7 +77,7 @@
     },
     {
       "@type": "BreadcrumbList",
-      "@id": "https://findra-search.netlify.app/about/#crumbs",
+      "@id": "https://findra-search.netlify.app/search-inside-pdfs/#crumbs",
       "itemListElement": [
         {
           "@type": "ListItem",
@@ -88,8 +88,8 @@
         {
           "@type": "ListItem",
           "position": 2,
-          "name": "About",
-          "item": "https://findra-search.netlify.app/about/"
+          "name": "Guide",
+          "item": "https://findra-search.netlify.app/search-inside-pdfs/"
         }
       ]
     }
@@ -124,47 +124,68 @@
 <main id="top" tabindex="-1">
   <div class="wrap">
     <section class="doc-head">
-      <span class="kicker">ABOUT</span>
-      <h1>One person, one repository, no company behind it.</h1>
+      <span class="kicker">GUIDE</span>
+      <h1>Search the words inside your PDFs and documents, with nothing else to install.</h1>
       <div class="doc-meta">
         <span class="d">Findra 0.2.0 &middot; last reviewed 2026-09-21</span>
-        <a class="doc-chip on" href="/about.md">Read as Markdown</a>
-        <a class="doc-chip" href="https://github.com/blakazulu/findra/blob/main/website/content/about.md" rel="noopener">History on GitHub</a>
+        <a class="doc-chip on" href="/search-inside-pdfs.md">Read as Markdown</a>
+        <a class="doc-chip" href="https://github.com/blakazulu/findra/blob/main/website/content/guides/search-inside-pdfs.md" rel="noopener">History on GitHub</a>
       </div>
     </section>
 
     <article class="doc">
-      <p>Findra is a desktop search widget for Windows. A capsule sits on the desktop, a global hotkey brings it up from anywhere, and it unfolds into a card of results. It finds files by name, by what is written inside them, by what a photograph shows and by what somebody said out loud in a recording.</p>
+      <p>To search the words inside your PDFs and documents on Windows without installing a filter for each file type, turn on content reading in Findra. It reads the files itself, on your own machine, and from then on a search for a phrase finds the documents that contain it, whatever they are called.</p>
 
-      <p>It was written because Windows Search rebuilds its index at three in the morning, spends six minutes at a hundred percent disk activity, and still cannot find a file saved that morning.</p>
+      <pre><code>findra --content on</code></pre>
 
-      <h2>What it is built out of</h2>
+      <p>The same switch is under Content in Findra's settings, beside a Start now button.</p>
 
-      <p>.NET 10, Avalonia and SkiaSharp for a card that paints every pixel of itself, and SQLite for the parts that have to survive a restart. Quicksand is embedded in the application under the SIL Open Font License, one weight. This page is set in the same face, served from this site with its licence beside it rather than fetched from anybody else.</p>
-
-      <p>There are three processes, and the split is the whole architecture rather than an implementation detail:</p>
+      <h2>What it reads</h2>
 
       <ul>
-        <li>An elevated helper that opens the NTFS volume, holds the name index in RAM and does nothing else. Exactly one call in Findra needs administrator rights, and this is the process that makes it.</li>
-        <li>The interface, at normal integrity, which owns grammar, ranking, content search, settings, the card, the tray icon and the hotkey.</li>
-        <li>A content indexer, which is a child of the interface. Because it is a child, indexing stops when the application quits, by construction rather than by lifetime code.</li>
+        <li>PDF</li>
+        <li>Word (.docx), Excel (.xlsx) and PowerPoint (.pptx)</li>
+        <li>EPUB</li>
+        <li>Plain text, Markdown and CSV</li>
+        <li>HTML</li>
+        <li>The text inside pictures, such as a screenshot or a photographed receipt</li>
       </ul>
 
-      <p>The decoders that read arbitrary files found on a disk - PDF, ONNX, Whisper, image codecs - run in the indexer at normal integrity and never in the elevated helper. A malformed file is the most likely thing on a computer to be exploitable, and it does not get to be exploitable with administrator rights.</p>
+      <p>The older binary formats - .doc, .xls and .ppt - and RTF and the OpenDocument formats are found by name but not read inside yet. Code, JSON and logs are deliberately left to name search, because a search over the inside of every package file on a disk helps nobody.</p>
 
-      <h2>Who made it</h2>
+      <h2>What it costs</h2>
 
-      <p>Liraz Amir, who publishes as blakazulu: <a href="https://github.com/blakazulu" rel="noopener">https://github.com/blakazulu</a></p>
+      <p>Nothing to download. Searching the words in a document uses a full-text index on your own disk and no model at all.</p>
 
-      <p>There is no company behind Findra, no funding, no team and no roadmap document. The whole thing is Apache-2.0 with a NOTICE file, which was chosen over MIT specifically because NOTICE is the mechanism that carries attribution forward to anybody who forks it, ships it somewhere else, or takes it apart and never speaks to me again.</p>
+      <p>What it costs is time, once. The first pass walks every drive and can run for hours on a large disk, which is why it never starts on its own. It reads only while Findra is open, it shows its progress under the card, and it steps aside while a game is fullscreen or another program is working the graphics card. After the first pass, a new or changed file is read as soon as it is saved.</p>
 
-      <h2>Where it is</h2>
+      <h2>Searching by meaning, not only by the words</h2>
 
-      <p>Version 0.2.0, released on 21 September 2026. <code>winget install blakazulu.Findra</code> installs it from the Windows Package Manager catalogue, and the installer on the <a href="https://github.com/blakazulu/findra/releases/latest">releases page</a>, which carries one for x64 and one for arm64, is the same program as a download. The releases page has each new release first; the catalogue can take a few days to pick one up. Building from source still works and needs the .NET 10 SDK and nothing else. Neither the installer nor the executables are signed, and nothing in the product, the repository or on this site claims otherwise.</p>
+      <p>An optional 1.04 GB download teaches Findra what a passage means as well as which words it uses, so a search for &quot;notice period&quot; can find the paragraph that says &quot;either party may end this agreement with 30 days' warning&quot;. It runs on your own processor or graphics card:</p>
 
-      <h2>What it will not do</h2>
+      <pre><code>findra --models install meaning</code></pre>
 
-      <p>Findra does not have an account, a cloud service, analytics, crash reporting or telemetry. It makes one request on its own, once a day, to ask whether a newer version exists, and that request is described in full on the privacy page. It never installs an update by itself.</p>
+      <h2>Folders it leaves alone</h2>
+
+      <p>Reading skips the folders on the exclusion list, which starts with build and package folders such as <code>node_modules</code>, <code>.git</code>, <code>bin</code>, <code>obj</code>, <code>packages</code> and <code>site-packages</code>. The list is in Settings, where you can read it and change it. Nothing else is skipped.</p>
+
+      <h2>When a document is not found</h2>
+
+      <p>Ask Findra about that one file. It says why in plain words - excluded, still queued, failed to read, read and edited since, or a kind of file it does not read inside - and changes nothing:</p>
+
+      <pre><code>findra --searchindex &quot;why:C:\Users\you\Documents\contract.pdf&quot;</code></pre>
+
+      <h2>Nothing leaves your machine</h2>
+
+      <p>The words Findra reads stay in an index on your own disk. Nothing is uploaded to be read or searched, there is no account and there is no telemetry. See the <a href="https://findra-search.netlify.app/privacy/">privacy policy</a> for the one request Findra makes on its own.</p>
+
+      <h2>Try it</h2>
+
+      <p>Findra is free and open source, for Windows 10 and 11:</p>
+
+      <pre><code>winget install blakazulu.Findra</code></pre>
+
+      <p>The installer is also on the releases page, <a href="https://github.com/blakazulu/findra/releases/latest" rel="noopener">https://github.com/blakazulu/findra/releases/latest</a>, for x64 and arm64.</p>
     </article>
   </div>
 </main>

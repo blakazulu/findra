@@ -1,0 +1,52 @@
+name: tell the search engines
+
+# After a release, and only then, tell Bing and Yandex that the site changed. A release is the one
+# push that is certain to change what the pages say - a new version, a new changelog section, a
+# stamped date - so it is the one push whose submission is true. Every other push is left alone:
+# firing IndexNow on a push that only touched a test is how a site teaches an engine to stop
+# believing its signal.
+#
+# The release workflow builds and ships artefacts and must not need node, so this is a workflow of
+# its own. It starts when a release run finishes, waits until the deploy carrying that version is
+# actually live - a submission for pages that still say the old thing is worse than none - and then
+# runs the same script a person would. It can also be started by hand from the Actions tab.
+on:
+  workflow_run:
+    workflows: [release]
+    types: [completed]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  indexnow:
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+
+      # The front page's data-stamp is written by build/Make-Pages.mjs from Directory.Build.props,
+      # so the live page naming this version is the deploy having landed. Netlify publishes main
+      # within minutes; thirty is the ceiling, and a site that has not caught up by then is a
+      # deploy worth somebody looking at rather than a submission worth sending.
+      - name: wait for the release to be live
+        run: |
+          version=$(sed -n 's:.*<Version>\(.*\)</Version>.*:\1:p' Directory.Build.props | head -1)
+          echo "waiting for v$version on the live site"
+          for attempt in $(seq 1 60); do
+            if curl -fsS "https://findra-search.netlify.app/?v=$attempt" | grep -q "data-stamp=\"version\">v$version "; then
+              echo "live after $attempt checks"
+              exit 0
+            fi
+            sleep 30
+          done
+          echo "the live site still does not name v$version after thirty minutes"
+          exit 1
+
+      - name: tell the search engines
+        run: node build/Ping-IndexNow.mjs --send

@@ -12,7 +12,8 @@ minutes at a hundred percent disk activity, and still cannot find a file saved t
 
 .NET 10, Avalonia and SkiaSharp for a card that paints every pixel of itself, and SQLite for the
 parts that have to survive a restart. Quicksand is embedded in the application under the SIL Open
-Font License, one weight, and the same file sets the type on this page.
+Font License, one weight. This page is set in the same face, served from this site with its
+licence beside it rather than fetched from anybody else.
 
 There are three processes, and the split is the whole architecture rather than an implementation
 detail:
@@ -41,10 +42,11 @@ takes it apart and never speaks to me again.
 
 ## Where it is
 
-Version 0.2.0, released on 21 September 2026. The install that works today is the installer on the
+Version 0.2.0, released on 21 September 2026. `winget install blakazulu.Findra` installs it from the
+Windows Package Manager catalogue, and the installer on the
 [releases page](https://github.com/blakazulu/findra/releases/latest), which carries one for x64 and one
-for arm64. `winget install blakazulu.Findra` becomes the whole install once the submitted manifest
-clears moderation in the Microsoft catalogue; it is awaiting a moderator and does not resolve yet.
+for arm64, is the same program as a download. The releases page has each new release first; the
+catalogue can take a few days to pick one up.
 Building from source still works and needs the .NET 10 SDK and nothing else.
 Neither the installer nor the executables are signed, and nothing in the product, the repository
 or on this site claims otherwise.

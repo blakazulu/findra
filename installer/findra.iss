@@ -59,7 +59,11 @@ ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 #endif
 OutputDir=Output
-OutputBaseFilename=findra-{#AppVersion}-{#Arch}
+; No version in the file name. The site's download button is GitHub's
+; releases/latest/download/<name> link, which follows whichever release is newest only while the
+; name stays the same from one release to the next; the release's own tag in the URL is what tells
+; two versions apart.
+OutputBaseFilename=findra-setup-{#Arch}
 Compression=lzma2/max
 SolidCompression=yes
 WizardStyle=modern

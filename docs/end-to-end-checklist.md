@@ -324,7 +324,7 @@ moment rather than an elevation prompt at every launch.
     - `softprops/action-gh-release` finding the notes at
       `artifacts/release-notes/release-notes.md`. `download-artifact` nests by artifact name,
       and if that path is wrong the release is created with an empty body rather than failing;
-    - two installers attached, `findra-<version>-x64.exe` and `findra-<version>-arm64.exe`, and
+    - two installers attached, `findra-setup-x64.exe` and `findra-setup-arm64.exe`, and
       `fail_on_unmatched_files` catching it if either is missing;
     - the release body, the release page and the installers saying nothing about being signed.
       The signing step is a placeholder that prints one line and exits.
@@ -336,7 +336,9 @@ moment rather than an elevation prompt at every launch.
     `TheSigningPageSaysItIsNotInForceForAsLongAsTheSigningStepDoesNothing` couples the two in
     both directions and fails on whichever one moves alone.
 
-38. **The first winget submission, which nobody but you can start.** `.github/workflows/winget.yml`
+38. **The first winget submission, which nobody but you can start. DONE for 0.1.0**
+    (microsoft/winget-pkgs#429668, merged 21 September 2026); each later version is the same step
+    again. `.github/workflows/winget.yml`
     is reachable by `workflow_dispatch` and by nothing else: no push, no tag, no release and no
     schedule may ever be added to it, because a mis-tagged build that reaches a GitHub release can
     be deleted and one that reaches the catalogue is on other people's machines by their next
@@ -345,7 +347,7 @@ moment rather than an elevation prompt at every launch.
     Once step 36 has produced a release, go to the Actions tab, run **publish to winget** with the
     version and **submit unticked**, and then:
 
-    - the first step must find `findra-<version>-x64.exe` and `findra-<version>-arm64.exe` on the
+    - the first step must find `findra-setup-x64.exe` and `findra-setup-arm64.exe` on the
       release and stop if either is missing, before anything is built;
     - the manifests are uploaded as the `winget-manifests` artefact. Download and read them: the
       identifier, the installer type, the `/INSTALLSOURCE=winget` switch and the description are
@@ -379,7 +381,9 @@ moment rather than an elevation prompt at every launch.
     view until there is one. Look for six images that load, six commands underneath them that a
     reader could paste, and tables that do not run off the side of the column on a phone.
 
-41. **Replace the install section's first paragraph the day the catalogue accepts the package.**
+41. **Replace the install section's first paragraph the day the catalogue accepts the package. DONE**
+    on 21 September 2026, when microsoft/winget-pkgs#429668 merged 0.1.0. What follows is the
+    reasoning it was written under.
     It currently opens by saying there is no published release and nothing has been submitted to
     winget, which is true and is the reason `winget install blakazulu.Findra` is written as the
     command for when that release exists rather than as an instruction. When step 38 succeeds, that

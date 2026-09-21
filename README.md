@@ -59,14 +59,13 @@ Typing has a grammar, and there is a form for the parts of it nobody remembers.
 
 ## Install
 
-The install that works today is the installer on the
-[releases page](https://github.com/blakazulu/findra/releases/latest), which carries one for x64 and one for arm64,
-built by `installer/findra.iss`.
-
     winget install blakazulu.Findra
 
-becomes the whole install once the submitted manifest clears moderation in the Microsoft
-catalogue. It is awaiting a moderator, so the command does not resolve yet.
+is the whole install, from the Windows Package Manager catalogue. The same program is on the
+[releases page](https://github.com/blakazulu/findra/releases/latest) as an installer for x64 and one
+for arm64, built by `installer/findra.iss`, and that page has each new release first - the
+catalogue can take a few days to pick one up. The site's
+[install section](https://findra-search.netlify.app/#install) says the same thing with a button.
 
 Building from source works too, and needs the .NET 10 SDK and nothing else.
 

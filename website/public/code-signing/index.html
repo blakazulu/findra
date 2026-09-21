@@ -24,12 +24,10 @@
 <link rel="apple-touch-icon" href="/apple-touch-icon.png">
 <link rel="alternate" type="text/markdown" href="/code-signing.md" title="Code signing policy - Findra as Markdown">
 <link rel="alternate" type="text/markdown" href="/llms.txt" title="Findra for language models">
-<!-- Preconnected and linked rather than @import-ed from inside styles.css: an @import cannot
-     begin until the whole stylesheet has arrived, which put four serial round trips in front of
-     the first painted glyph. Both origins are already the only two the CSP permits. -->
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Quicksand:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap">
+<!-- The two faces are served from this site, so the page makes no request to anybody else - which
+     is the promise it exists to make. Quicksand is preloaded because it sets the headline, and a
+     font the browser only discovers inside styles.css is a font it starts fetching late. -->
+<link rel="preload" href="/fonts/Quicksand-wght.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="/styles.css">
 <script type="application/ld+json">
 {
@@ -111,7 +109,7 @@
 <header class="nav">
   <a class="brand" href="/">
     <span class="brand-mark" aria-hidden="true"></span>
-    <span class="brand-name">FINDRA</span>
+    <span class="brand-name">Findra</span>
   </a>
   <nav class="nav-links">
     <a href="/#finds">What it finds</a>
@@ -200,7 +198,7 @@
     <div class="col">
       <span class="brand" style="margin-bottom:6px">
         <span class="brand-mark" aria-hidden="true"></span>
-        <span class="brand-name">FINDRA</span>
+        <span class="brand-name">Findra</span>
       </span>
       <span>Desktop search for Windows.</span>
       <span>Built with .NET 10, Avalonia, SkiaSharp and SQLite.</span>
@@ -210,6 +208,13 @@
       <a href="https://github.com/blakazulu/findra" rel="noopener">Source</a>
       <a href="/changelog/">Changelog</a>
       <a href="https://github.com/blakazulu/findra/issues" rel="noopener">Issues</a>
+    </div>
+    <div class="col">
+      <strong>GUIDES</strong>
+      <a href="/windows-search-not-finding-files/">Windows Search not finding files</a>
+      <a href="/search-inside-pdfs/">Search inside PDFs</a>
+      <a href="/find-photos-by-description/">Find photos by description</a>
+      <a href="/search-recordings-by-speech/">Search recordings by speech</a>
     </div>
     <div class="col">
       <strong>THE SMALL PRINT</strong>
@@ -225,7 +230,7 @@
     <div class="col">
       <strong>ATTRIBUTION</strong>
       <span>Findra by blakazulu.</span>
-      <span>Quicksand under the SIL Open Font License 1.1.</span>
+      <span><a href="/fonts/Quicksand-OFL.txt">Quicksand</a> and <a href="/fonts/JetBrainsMono-OFL.txt">JetBrains Mono</a> under the SIL Open Font License 1.1.</span>
       <span>&copy; <span id="year">2026</span></span>
     </div>
   </div>

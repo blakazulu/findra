@@ -3,15 +3,15 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>About Findra - open-source desktop search for Windows</title>
-<meta name="description" content="Findra is a desktop search widget for Windows built on .NET 10, Avalonia, SkiaSharp and SQLite, by one person, under Apache-2.0.">
-<link rel="canonical" href="https://findra-search.netlify.app/about/">
-<meta property="og:type" content="website">
+<title>Search audio and video by what was said - Findra</title>
+<meta name="description" content="Transcribe and search voice memos, meetings and videos on Windows, offline, with a second pass for Hebrew. Nothing is uploaded.">
+<link rel="canonical" href="https://findra-search.netlify.app/search-recordings-by-speech/">
+<meta property="og:type" content="article">
 <meta property="og:site_name" content="Findra">
 <meta property="og:locale" content="en_US">
-<meta property="og:url" content="https://findra-search.netlify.app/about/">
-<meta property="og:title" content="About Findra - open-source desktop search for Windows">
-<meta property="og:description" content="Findra is a desktop search widget for Windows built on .NET 10, Avalonia, SkiaSharp and SQLite, by one person, under Apache-2.0.">
+<meta property="og:url" content="https://findra-search.netlify.app/search-recordings-by-speech/">
+<meta property="og:title" content="Search audio and video by what was said - Findra">
+<meta property="og:description" content="Transcribe and search voice memos, meetings and videos on Windows, offline, with a second pass for Hebrew. Nothing is uploaded.">
 <meta property="og:image" content="https://findra-search.netlify.app/share/card.png">
 <meta property="og:image:type" content="image/png">
 <meta property="og:image:width" content="1200">
@@ -22,7 +22,7 @@
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
 <link rel="icon" href="/favicon.ico" sizes="32x32">
 <link rel="apple-touch-icon" href="/apple-touch-icon.png">
-<link rel="alternate" type="text/markdown" href="/about.md" title="About Findra - open-source desktop search for Windows as Markdown">
+<link rel="alternate" type="text/markdown" href="/search-recordings-by-speech.md" title="Search audio and video by what was said - Findra as Markdown">
 <link rel="alternate" type="text/markdown" href="/llms.txt" title="Findra for language models">
 <!-- The two faces are served from this site, so the page makes no request to anybody else - which
      is the promise it exists to make. Quicksand is preloaded because it sets the headline, and a
@@ -34,11 +34,11 @@
   "@context": "https://schema.org",
   "@graph": [
     {
-      "@type": "AboutPage",
-      "@id": "https://findra-search.netlify.app/about/#page",
-      "url": "https://findra-search.netlify.app/about/",
-      "name": "About Findra - open-source desktop search for Windows",
-      "description": "Findra is a desktop search widget for Windows built on .NET 10, Avalonia, SkiaSharp and SQLite, by one person, under Apache-2.0.",
+      "@type": "WebPage",
+      "@id": "https://findra-search.netlify.app/search-recordings-by-speech/#page",
+      "url": "https://findra-search.netlify.app/search-recordings-by-speech/",
+      "name": "Search audio and video by what was said - Findra",
+      "description": "Transcribe and search voice memos, meetings and videos on Windows, offline, with a second pass for Hebrew. Nothing is uploaded.",
       "inLanguage": "en",
       "dateModified": "2026-09-21",
       "isPartOf": {
@@ -54,7 +54,7 @@
         "@id": "https://findra-search.netlify.app/#blakazulu"
       },
       "breadcrumb": {
-        "@id": "https://findra-search.netlify.app/about/#crumbs"
+        "@id": "https://findra-search.netlify.app/search-recordings-by-speech/#crumbs"
       }
     },
     {
@@ -77,7 +77,7 @@
     },
     {
       "@type": "BreadcrumbList",
-      "@id": "https://findra-search.netlify.app/about/#crumbs",
+      "@id": "https://findra-search.netlify.app/search-recordings-by-speech/#crumbs",
       "itemListElement": [
         {
           "@type": "ListItem",
@@ -88,8 +88,8 @@
         {
           "@type": "ListItem",
           "position": 2,
-          "name": "About",
-          "item": "https://findra-search.netlify.app/about/"
+          "name": "Guide",
+          "item": "https://findra-search.netlify.app/search-recordings-by-speech/"
         }
       ]
     }
@@ -124,47 +124,61 @@
 <main id="top" tabindex="-1">
   <div class="wrap">
     <section class="doc-head">
-      <span class="kicker">ABOUT</span>
-      <h1>One person, one repository, no company behind it.</h1>
+      <span class="kicker">GUIDE</span>
+      <h1>Find the recording by the sentence you remember hearing.</h1>
       <div class="doc-meta">
         <span class="d">Findra 0.2.0 &middot; last reviewed 2026-09-21</span>
-        <a class="doc-chip on" href="/about.md">Read as Markdown</a>
-        <a class="doc-chip" href="https://github.com/blakazulu/findra/blob/main/website/content/about.md" rel="noopener">History on GitHub</a>
+        <a class="doc-chip on" href="/search-recordings-by-speech.md">Read as Markdown</a>
+        <a class="doc-chip" href="https://github.com/blakazulu/findra/blob/main/website/content/guides/search-recordings-by-speech.md" rel="noopener">History on GitHub</a>
       </div>
     </section>
 
     <article class="doc">
-      <p>Findra is a desktop search widget for Windows. A capsule sits on the desktop, a global hotkey brings it up from anywhere, and it unfolds into a card of results. It finds files by name, by what is written inside them, by what a photograph shows and by what somebody said out loud in a recording.</p>
+      <p>To find a voice memo, a meeting recording or a video by something somebody said in it, install Findra's speech capability. It transcribes your audio and video on your own machine, offline, and searches each transcript exactly the way it searches a document - so typing a phrase you remember hearing finds the recording, and the result shows the line and where in the recording it was said.</p>
 
-      <p>It was written because Windows Search rebuilds its index at three in the morning, spends six minutes at a hundred percent disk activity, and still cannot find a file saved that morning.</p>
+      <pre><code>findra --models install speech
+      findra --content on</code></pre>
 
-      <h2>What it is built out of</h2>
+      <p>The same choice is on Findra's first screen and under Content in its settings.</p>
 
-      <p>.NET 10, Avalonia and SkiaSharp for a card that paints every pixel of itself, and SQLite for the parts that have to survive a restart. Quicksand is embedded in the application under the SIL Open Font License, one weight. This page is set in the same face, served from this site with its licence beside it rather than fetched from anybody else.</p>
+      <h2>What it costs</h2>
 
-      <p>There are three processes, and the split is the whole architecture rather than an implementation detail:</p>
+      <p>A 547 MB speech model, plus the 1.04 GB document models if you do not have them already, because a transcript is searched the way a document is. Everything runs on your own processor or graphics card: no recording is uploaded, there is no account and there is no cloud transcription service.</p>
+
+      <p>Transcribing takes real time, and it happens only while Findra is open. With a graphics card it goes faster; without one it runs on the processor, which is slower but supported.</p>
+
+      <h2>How long a recording is worth transcribing</h2>
+
+      <p>One number decides it, for sound files and videos alike: five minutes by default. A recording longer than the limit is passed over and says so, and raising the limit later goes back for exactly the recordings it passed over and nothing else. The choices are Off, 5 min, 30 min, 2 hr and No limit, in Settings or from a terminal:</p>
+
+      <pre><code>findra --content limit 30</code></pre>
+
+      <h2>What it listens to</h2>
 
       <ul>
-        <li>An elevated helper that opens the NTFS volume, holds the name index in RAM and does nothing else. Exactly one call in Findra needs administrator rights, and this is the process that makes it.</li>
-        <li>The interface, at normal integrity, which owns grammar, ranking, content search, settings, the card, the tray icon and the hotkey.</li>
-        <li>A content indexer, which is a child of the interface. Because it is a child, indexing stops when the application quits, by construction rather than by lifetime code.</li>
+        <li>Sound files: MP3, M4A, AAC, WAV, FLAC, OGG, Opus, WMA and AIFF</li>
+        <li>The sound track of videos: MP4, MOV, MKV, AVI, WebM, M4V, WMV, MTS and M2TS</li>
       </ul>
 
-      <p>The decoders that read arbitrary files found on a disk - PDF, ONNX, Whisper, image codecs - run in the indexer at normal integrity and never in the elevated helper. A malformed file is the most likely thing on a computer to be exploitable, and it does not get to be exploitable with administrator rights.</p>
+      <h2>Hebrew</h2>
 
-      <h2>Who made it</h2>
+      <p>Findra can take a second pass for Hebrew. The general model listens first and decides the language, and only the recordings it calls Hebrew are transcribed again with a model trained for Hebrew. It is a 1.51 GB download and needs the speech capability:</p>
 
-      <p>Liraz Amir, who publishes as blakazulu: <a href="https://github.com/blakazulu" rel="noopener">https://github.com/blakazulu</a></p>
+      <pre><code>findra --models install hebrew</code></pre>
 
-      <p>There is no company behind Findra, no funding, no team and no roadmap document. The whole thing is Apache-2.0 with a NOTICE file, which was chosen over MIT specifically because NOTICE is the mechanism that carries attribution forward to anybody who forks it, ships it somewhere else, or takes it apart and never speaks to me again.</p>
+      <h2>When a recording is not found</h2>
 
-      <h2>Where it is</h2>
+      <p>Ask Findra about that one file. It says why in plain words - longer than the limit, still queued, failed, or read - and changes nothing:</p>
 
-      <p>Version 0.2.0, released on 21 September 2026. <code>winget install blakazulu.Findra</code> installs it from the Windows Package Manager catalogue, and the installer on the <a href="https://github.com/blakazulu/findra/releases/latest">releases page</a>, which carries one for x64 and one for arm64, is the same program as a download. The releases page has each new release first; the catalogue can take a few days to pick one up. Building from source still works and needs the .NET 10 SDK and nothing else. Neither the installer nor the executables are signed, and nothing in the product, the repository or on this site claims otherwise.</p>
+      <pre><code>findra --searchindex &quot;why:C:\Users\you\Music\Voice 014.m4a&quot;</code></pre>
 
-      <h2>What it will not do</h2>
+      <h2>Try it</h2>
 
-      <p>Findra does not have an account, a cloud service, analytics, crash reporting or telemetry. It makes one request on its own, once a day, to ask whether a newer version exists, and that request is described in full on the privacy page. It never installs an update by itself.</p>
+      <p>Findra is free and open source, for Windows 10 and 11:</p>
+
+      <pre><code>winget install blakazulu.Findra</code></pre>
+
+      <p>The installer is also on the releases page, <a href="https://github.com/blakazulu/findra/releases/latest" rel="noopener">https://github.com/blakazulu/findra/releases/latest</a>, for x64 and arm64.</p>
     </article>
   </div>
 </main>

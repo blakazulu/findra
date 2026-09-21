@@ -40,7 +40,7 @@ const PAGES = [
     source: 'PRIVACY.md',
     kicker: 'Privacy',
     headline: 'Nothing leaves your machine, except one request.',
-    title: 'Privacy - Findra',
+    title: 'Findra privacy policy - nothing leaves your machine',
     description:
       'What Findra stores, where it stores it, and the single anonymous request it makes on ' +
       'its own. No account, no cloud, no analytics, no telemetry.',
@@ -55,7 +55,7 @@ const PAGES = [
     source: 'website/content/about.md',
     kicker: 'About',
     headline: 'One person, one repository, no company behind it.',
-    title: 'About - Findra',
+    title: 'About Findra - open-source desktop search for Windows',
     description:
       'Findra is a desktop search widget for Windows built on .NET 10, Avalonia, SkiaSharp and ' +
       'SQLite, by one person, under Apache-2.0.',
@@ -96,7 +96,7 @@ const PAGES = [
     source: 'CHANGELOG.md',
     kicker: 'Changelog',
     headline: 'Every release, and what it changed for you.',
-    title: 'Changelog - Findra',
+    title: 'Findra changelog - every release and what it changed',
     description:
       'What each Findra release added, changed and fixed, newest first. The release notes on ' +
       'GitHub are these same sections.',
@@ -110,13 +110,70 @@ const PAGES = [
     source: 'website/content/contact.md',
     kicker: 'Contact',
     headline: 'Four ways in, and none of them is a form.',
-    title: 'Contact - Findra',
+    title: 'Contact Findra - bugs, security reports and questions',
     description:
       'How to report a bug, report a security problem, or ask something else about Findra. ' +
       'No contact form, because Findra collects nothing and a form would.',
     reviewed: '2026-09-05',
     ogType: 'website',
     markdown: 'contact.md',
+  },
+  // The guides. Every page above answers a question somebody asks about Findra; these answer the
+  // questions people actually type, which start from the problem - a file Windows will not find, a
+  // PDF nobody can search, a photo with a useless name - and never from a product they have not
+  // heard of. Each opens on the answer in its first sentence, because that sentence is the one an
+  // answer engine quotes, and each says only what the code does today.
+  {
+    slug: 'windows-search-not-finding-files',
+    source: 'website/content/guides/windows-search-not-finding-files.md',
+    kicker: 'Guide',
+    headline: 'Why Windows Search does not find your file, and what does.',
+    title: 'Windows Search not finding your files? Why, and the fix - Findra',
+    description:
+      'The four reasons Windows Search misses a file you know is there, how to fix each one ' +
+      'inside Windows, and where Findra takes a different route.',
+    reviewed: '2026-09-21',
+    ogType: 'article',
+    markdown: 'windows-search-not-finding-files.md',
+  },
+  {
+    slug: 'search-inside-pdfs',
+    source: 'website/content/guides/search-inside-pdfs.md',
+    kicker: 'Guide',
+    headline: 'Search the words inside your PDFs and documents, with nothing else to install.',
+    title: 'Search inside PDFs and documents on Windows - Findra',
+    description:
+      'How to search inside PDF, Word, Excel, PowerPoint, EPUB and text files on Windows 10 and ' +
+      '11, offline: what Findra reads, what it costs and what it skips.',
+    reviewed: '2026-09-21',
+    ogType: 'article',
+    markdown: 'search-inside-pdfs.md',
+  },
+  {
+    slug: 'find-photos-by-description',
+    source: 'website/content/guides/find-photos-by-description.md',
+    kicker: 'Guide',
+    headline: 'Type what is in the picture, not what the file is called.',
+    title: 'Find photos on your PC by describing them - Findra',
+    description:
+      'Search your photos and videos on Windows by what they show, with a 629 MB model that runs ' +
+      'on your own machine. No uploads, no account, no cloud.',
+    reviewed: '2026-09-21',
+    ogType: 'article',
+    markdown: 'find-photos-by-description.md',
+  },
+  {
+    slug: 'search-recordings-by-speech',
+    source: 'website/content/guides/search-recordings-by-speech.md',
+    kicker: 'Guide',
+    headline: 'Find the recording by the sentence you remember hearing.',
+    title: 'Search audio and video by what was said - Findra',
+    description:
+      'Transcribe and search voice memos, meetings and videos on Windows, offline, with a second ' +
+      'pass for Hebrew. Nothing is uploaded.',
+    reviewed: '2026-09-21',
+    ogType: 'article',
+    markdown: 'search-recordings-by-speech.md',
   },
 ];
 
@@ -248,7 +305,7 @@ const FOOTER = `
     <div class="col">
       <span class="brand" style="margin-bottom:6px">
         <span class="brand-mark" aria-hidden="true"></span>
-        <span class="brand-name">FINDRA</span>
+        <span class="brand-name">Findra</span>
       </span>
       <span>Desktop search for Windows.</span>
       <span>Built with .NET 10, Avalonia, SkiaSharp and SQLite.</span>
@@ -258,6 +315,13 @@ const FOOTER = `
       <a href="https://github.com/blakazulu/findra" rel="noopener">Source</a>
       <a href="/changelog/">Changelog</a>
       <a href="https://github.com/blakazulu/findra/issues" rel="noopener">Issues</a>
+    </div>
+    <div class="col">
+      <strong>GUIDES</strong>
+      <a href="/windows-search-not-finding-files/">Windows Search not finding files</a>
+      <a href="/search-inside-pdfs/">Search inside PDFs</a>
+      <a href="/find-photos-by-description/">Find photos by description</a>
+      <a href="/search-recordings-by-speech/">Search recordings by speech</a>
     </div>
     <div class="col">
       <strong>THE SMALL PRINT</strong>
@@ -273,7 +337,7 @@ const FOOTER = `
     <div class="col">
       <strong>ATTRIBUTION</strong>
       <span>Findra by blakazulu.</span>
-      <span>Quicksand under the SIL Open Font License 1.1.</span>
+      <span><a href="/fonts/Quicksand-OFL.txt">Quicksand</a> and <a href="/fonts/JetBrainsMono-OFL.txt">JetBrains Mono</a> under the SIL Open Font License 1.1.</span>
       <span>&copy; <span id="year">2026</span></span>
     </div>
   </div>
@@ -288,8 +352,9 @@ function structuredData(page, url) {
   // five pages resolve as one entity and nothing new is claimed here.
   // There is no PrivacyPolicy class in schema.org - the WebPage subtypes are AboutPage,
   // CheckoutPage, CollectionPage, ContactPage, FAQPage, ItemPage, MedicalWebPage, ProfilePage,
-  // QAPage, RealEstateListing and SearchResultsPage. The privacy signal already lives where a
-  // consumer looks for it, on SoftwareApplication.privacyPolicy.
+  // QAPage, RealEstateListing and SearchResultsPage - and there is no privacyPolicy property
+  // either, whatever validators that accept it suggest. The privacy page is a WebPage, linked from
+  // every footer, and that is the whole of the signal schema.org has room for.
   const types = { about: 'AboutPage', contact: 'ContactPage' };
   const graph = [
     {
@@ -352,12 +417,10 @@ function shell(page, content) {
 <link rel="apple-touch-icon" href="/apple-touch-icon.png">
 <link rel="alternate" type="text/markdown" href="/${page.markdown}" title="${escape(page.title)} as Markdown">
 <link rel="alternate" type="text/markdown" href="/llms.txt" title="Findra for language models">
-<!-- Preconnected and linked rather than @import-ed from inside styles.css: an @import cannot
-     begin until the whole stylesheet has arrived, which put four serial round trips in front of
-     the first painted glyph. Both origins are already the only two the CSP permits. -->
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Quicksand:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap">
+<!-- The two faces are served from this site, so the page makes no request to anybody else - which
+     is the promise it exists to make. Quicksand is preloaded because it sets the headline, and a
+     font the browser only discovers inside styles.css is a font it starts fetching late. -->
+<link rel="preload" href="/fonts/Quicksand-wght.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="/styles.css">
 ${structuredData(page, url)}</head>
 <body>
@@ -372,7 +435,7 @@ ${structuredData(page, url)}</head>
 <header class="nav">
   <a class="brand" href="/">
     ${MARK}
-    <span class="brand-name">FINDRA</span>
+    <span class="brand-name">Findra</span>
   </a>
   <nav class="nav-links">
 ${NAV_LINKS.map(([href, label]) => `    <a href="${href}">${label}</a>`).join('\n')}

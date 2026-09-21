@@ -4,6 +4,20 @@
    Quicksand. Nothing here invents a colour the product does not use.
    ========================================================================== */
 
+/* Both faces are the upstream variable fonts, unmodified and rewrapped as WOFF2, served from
+   /fonts/ beside their licences. Nothing is subset: Quicksand's licence reserves its name for
+   the original, and a subset is a modified version. */
+@font-face {
+  font-family: 'Quicksand';
+  src: url('/fonts/Quicksand-wght.woff2') format('woff2');
+  font-weight: 300 700; font-style: normal; font-display: swap;
+}
+@font-face {
+  font-family: 'JetBrains Mono';
+  src: url('/fonts/JetBrainsMono-wght.woff2') format('woff2');
+  font-weight: 100 800; font-style: normal; font-display: swap;
+}
+
 
 :root {
   --ground: #08090c;
@@ -57,6 +71,12 @@ body {
 img { max-width: 100%; height: auto; display: block; }
 a { color: var(--accent); text-decoration: none; }
 a:hover { color: var(--accent-hi); }
+/* Read aloud and indexed, never drawn: the h1 names the product while the lockup above it
+   carries the name visually. */
+.sr-only {
+  position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden;
+  clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+}
 h1, h2, h3 { margin: 0; font-weight: 700; letter-spacing: -0.022em; color: var(--ink-bright); }
 p { margin: 0; text-wrap: pretty; }
 
@@ -138,7 +158,7 @@ main, header, footer { position: relative; z-index: 1; }
   background: center / contain no-repeat url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 256 256'%3E%3Cg transform='translate(128 128) scale(1.16) translate(-128 -128)'%3E%3Cpath fill='%23FA7E00' fill-rule='evenodd' d='M46 108a64 64 0 1 0 128 0a64 64 0 1 0 -128 0zM90 94h40a14 14 0 0 1 0 28h-40a14 14 0 0 1 0 -28z'/%3E%3Cline x1='158' y1='156' x2='200' y2='198' stroke='%23FA7E00' stroke-width='30' stroke-linecap='round'/%3E%3C/g%3E%3C/svg%3E");
   animation: mark-glow 2.4s ease-out infinite;
 }
-.brand-name { font-size: 20px; font-weight: 700; letter-spacing: 0.14em; color: var(--ink-bright); }
+.brand-name { font-size: 20px; font-weight: 700; letter-spacing: 0.14em; color: var(--ink-bright); text-transform: uppercase; }
 
 .nav-links { display: flex; align-items: center; gap: 28px; font-size: 15px; font-weight: 500; color: var(--ink-dim); }
 .nav-links a { color: inherit; }
@@ -222,6 +242,9 @@ main, header, footer { position: relative; z-index: 1; }
 }
 .lede-lockup .brand-name { font-size: 34px; }
 
+/* The capitals are a look, so they live here. Written in capitals in the markup they are what a
+   search snippet, a screen reader and every language model quoting the page would carry too. */
+.lede h1, .hero h2 { text-transform: uppercase; }
 .lede h1 { font-size: clamp(36px, 4.7vw, 58px); line-height: 1.02; }
 .lede h1 .accent { color: var(--accent); }
 
@@ -521,6 +544,19 @@ td.no { color: var(--ink-dim); }
 
 .install { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 22px; }
 .install .panel { gap: 16px; }
+/* the route that works today: the one panel on the page that should read as the answer */
+.install .panel.lead { box-shadow: 0 24px 70px rgba(250, 126, 0, 0.12); }
+.install .panel.lead h3 { font-size: 26px; }
+.install .panel.lead .get { display: flex; align-items: center; gap: 18px; }
+.install .panel.lead .get .btn { flex-grow: 1; }
+.install .panel.lead .get .alt {
+  flex-shrink: 0; font-family: var(--mono); font-size: 12.5px; letter-spacing: 0.06em;
+  color: var(--ink-dim); text-decoration: underline; text-decoration-color: var(--line);
+  text-underline-offset: 4px;
+}
+.install .panel.lead .get .alt:hover { color: var(--accent); text-decoration-color: var(--accent-line); }
+.install .panel.lead .cmd { font-size: 16px; padding: 17px 20px; border-color: var(--accent-line); }
+.install .panel.lead .cmd .c { font-size: 11.5px; }
 .badge {
   align-self: flex-start; padding: 5px 11px; border-radius: 999px;
   font-family: var(--mono); font-size: 10.5px; letter-spacing: 0.12em;
@@ -644,6 +680,11 @@ button.cmd { border-width: 1px; border-style: solid; text-align: left; width: 10
   .cmd::-webkit-scrollbar { display: none; }
   .cmd .t { white-space: nowrap; overflow-wrap: normal; }
   .cmd .c { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+  .install .panel.lead h3 { font-size: 22px; }
+  .install .panel.lead .get { flex-direction: column; align-items: stretch; gap: 10px; }
+  .install .panel.lead .get .alt { align-self: center; }
+  .install .panel.lead .get .btn { padding: 15px 14px; font-size: 15px; gap: 8px; white-space: nowrap; }
+  .install .panel.lead .cmd { font-size: 12.5px; padding: 14px 12px; gap: 8px; }
   .final .actions { min-width: 100%; }
 }
 

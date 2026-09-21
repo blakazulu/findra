@@ -10,12 +10,10 @@
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
 <link rel="icon" href="/favicon.ico" sizes="32x32">
 <link rel="apple-touch-icon" href="/apple-touch-icon.png">
-<!-- Preconnected and linked rather than @import-ed from inside styles.css: an @import cannot
-     begin until the whole stylesheet has arrived, which put four serial round trips in front of
-     the first painted glyph. Both origins are already the only two the CSP permits. -->
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Quicksand:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap">
+<!-- The two faces are served from this site, so the page makes no request to anybody else - which
+     is the promise it exists to make. Quicksand is preloaded because it sets the headline, and a
+     font the browser only discovers inside styles.css is a font it starts fetching late. -->
+<link rel="preload" href="/fonts/Quicksand-wght.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="/styles.css">
 </head>
 <body>
@@ -43,7 +41,7 @@
 <header class="nav">
   <a class="brand" href="/">
     <span class="brand-mark" aria-hidden="true"></span>
-    <span class="brand-name">FINDRA</span>
+    <span class="brand-name">Findra</span>
   </a>
   <nav class="nav-links">
     <a href="/#finds">What it finds</a>
@@ -79,6 +77,10 @@
         <li><a href="/privacy/">/privacy/</a> - what Findra stores, and the single request it makes on its own.</li>
         <li><a href="/code-signing/">/code-signing/</a> - who writes, approves and signs a Findra release.</li>
         <li><a href="/changelog/">/changelog/</a> - what each release added, changed and fixed.</li>
+        <li><a href="/windows-search-not-finding-files/">/windows-search-not-finding-files/</a> - why Windows Search misses a file, and what finds it.</li>
+        <li><a href="/search-inside-pdfs/">/search-inside-pdfs/</a> - searching the words inside PDFs and documents.</li>
+        <li><a href="/find-photos-by-description/">/find-photos-by-description/</a> - finding a photo by what it shows.</li>
+        <li><a href="/search-recordings-by-speech/">/search-recordings-by-speech/</a> - finding a recording by what was said in it.</li>
       </ul>
 
       <h2>Machine-readable</h2>
@@ -88,7 +90,11 @@
         <li><a href="/robots.txt">/robots.txt</a> - crawl policy. Everything is allowed.</li>
         <li><a href="/index.md">/index.md</a>, <a href="/about.md">/about.md</a>,
             <a href="/contact.md">/contact.md</a>, <a href="/privacy.md">/privacy.md</a>,
-            <a href="/code-signing.md">/code-signing.md</a>, <a href="/changelog.md">/changelog.md</a> - the same
+            <a href="/code-signing.md">/code-signing.md</a>, <a href="/changelog.md">/changelog.md</a>,
+            <a href="/windows-search-not-finding-files.md">/windows-search-not-finding-files.md</a>,
+            <a href="/search-inside-pdfs.md">/search-inside-pdfs.md</a>,
+            <a href="/find-photos-by-description.md">/find-photos-by-description.md</a>,
+            <a href="/search-recordings-by-speech.md">/search-recordings-by-speech.md</a> - the same
             pages as Markdown. They are also served from the page URLs themselves in response to
             <code>Accept: text/markdown</code>.</li>
       </ul>
@@ -109,7 +115,7 @@
     <div class="col">
       <span class="brand" style="margin-bottom:6px">
         <span class="brand-mark" aria-hidden="true"></span>
-        <span class="brand-name">FINDRA</span>
+        <span class="brand-name">Findra</span>
       </span>
       <span>Desktop search for Windows.</span>
     </div>
@@ -118,6 +124,13 @@
       <a href="https://github.com/blakazulu/findra" rel="noopener">Source</a>
       <a href="/changelog/">Changelog</a>
       <a href="https://github.com/blakazulu/findra/issues" rel="noopener">Issues</a>
+    </div>
+    <div class="col">
+      <strong>GUIDES</strong>
+      <a href="/windows-search-not-finding-files/">Windows Search not finding files</a>
+      <a href="/search-inside-pdfs/">Search inside PDFs</a>
+      <a href="/find-photos-by-description/">Find photos by description</a>
+      <a href="/search-recordings-by-speech/">Search recordings by speech</a>
     </div>
     <div class="col">
       <strong>THE SMALL PRINT</strong>
@@ -133,7 +146,7 @@
     <div class="col">
       <strong>ATTRIBUTION</strong>
       <span>Findra by blakazulu.</span>
-      <span>Quicksand under the SIL Open Font License 1.1.</span>
+      <span><a href="/fonts/Quicksand-OFL.txt">Quicksand</a> and <a href="/fonts/JetBrainsMono-OFL.txt">JetBrains Mono</a> under the SIL Open Font License 1.1.</span>
     </div>
   </div>
 </footer>

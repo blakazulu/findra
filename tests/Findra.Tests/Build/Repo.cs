@@ -70,6 +70,11 @@ public static class Repo
     /// repository and the suite runs offline - so it is one constant, flipped by hand on the day
     /// the manifest merges. <c>EverySurfaceThatPrintsTheWingetCommandSaysWhetherItResolves</c>
     /// then requires the opposite of every surface, so the hedge cannot outlive its reason.</para>
+    ///
+    /// <para>True since microsoft/winget-pkgs#429668 merged the 0.1.0 manifest on 21 September
+    /// 2026. The catalogue trails a release by however long the next submission takes, so the
+    /// surfaces say that the releases page has each release first rather than that winget is
+    /// always current.</para>
     /// </summary>
-    public static readonly bool WingetIsInTheCatalogue = false;
+    public static readonly bool WingetIsInTheCatalogue = true;
 }

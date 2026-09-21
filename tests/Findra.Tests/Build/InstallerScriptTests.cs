@@ -32,6 +32,33 @@ public class InstallerScriptTests
     }
 
     [Fact]
+    public void TheInstallerIsNamedTheSameInEveryReleaseAndEverythingThatFetchesItAgrees()
+    {
+        // The site's download button is releases/latest/download/<name>, which GitHub resolves
+        // against whichever release is newest - but only by NAME. A version in the file name makes
+        // that link a 404 the moment the next release ships, with nothing on the page looking wrong.
+        string name = Setting("OutputBaseFilename");
+        Assert.DoesNotContain("AppVersion", name, StringComparison.Ordinal);
+        Assert.DoesNotMatch(@"\d+\.\d+", name);
+        Assert.Equal("findra-setup-{#Arch}", name);
+
+        // Everything that fetches the file names it the same way, or the winget workflow refuses a
+        // release that is fine and the catalogue is pointed at a file that does not exist.
+        string winget = Repo.Read(".github/workflows/winget.yml");
+        Assert.Contains("\"findra-setup-$arch.exe\"", winget, StringComparison.Ordinal);
+        Assert.DoesNotMatch(@"findra-\$v-", winget);
+
+        string manifest = Repo.Read("packaging/winget/blakazulu.Findra.installer.yaml");
+        foreach (string arch in new[] { "x64", "arm64" })
+        {
+            Assert.Matches($@"InstallerUrl: https://github\.com/blakazulu/findra/releases/download/v\d+\.\d+\.\d+/findra-setup-{arch}\.exe",
+                           manifest);
+            Assert.Contains($"https://github.com/blakazulu/findra/releases/latest/download/findra-setup-{arch}.exe",
+                            Repo.Read("website/public/index.html"), StringComparison.Ordinal);
+        }
+    }
+
+    [Fact]
     public void TheApplicationIdIsAFixedGuidAndNotSomethingThatMoves()
     {
         // AppId is the identity Windows upgrades and uninstalls by. If it carries the version,

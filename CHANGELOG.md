@@ -21,6 +21,29 @@ and Findra follows [Semantic Versioning](https://semver.org/spec/v2.0.0/).
   is working the card hard, or something is fullscreen, Findra stops reading and lets go of its
   models, and the page and its answers to common questions now say so.
 
+- **Four guides on the site**, each answering a question people actually search for: why Windows
+  Search is not finding a file and what does, how to search inside PDFs and documents, how to find
+  a photo by describing it, and how to search recordings by what was said. Every page links them
+  from its footer, and each has a Markdown copy for tools that read Markdown.
+
+### Changed
+
+- **The installers have the same name in every release**: `findra-setup-x64.exe` and
+  `findra-setup-arm64.exe`, with no version number in them. The site's download button fetches the
+  newest one directly - x64, with a link beside it for Arm64 - instead of sending you to the
+  releases page to find it.
+
+- **winget is the install.** `winget install blakazulu.Findra` now works, and the README, the site
+  and its answers say so. The releases page still has each new release first, since the Windows
+  Package Manager catalogue can take a few days to pick one up.
+
+- **The site loads nothing from anybody else.** Its two typefaces are served from the site itself
+  rather than from Google Fonts, with their licences beside them, so the page that says nothing
+  leaves your machine no longer makes a request to a third party.
+
+- **The site's page titles say what Findra is** - fast, private desktop search for Windows - and
+  the pages behind the footer say what each one is about rather than only its name.
+
 ## [0.2.0] - 2026-09-21
 
 ### Added
