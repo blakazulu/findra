@@ -7,6 +7,10 @@ and Findra follows [Semantic Versioning](https://semver.org/spec/v2.0.0/).
 
 ## [Unreleased]
 
+### Removed
+
+- Documentation: a stray screenshot is gone from the root of the repository.
+
 ## [0.3.0] - 2026-09-22
 
 ### Added
