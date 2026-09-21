@@ -18,3 +18,6 @@ installer/redist/
 
 # Review renders. Regenerate with --searchshot; they are a conversation, not a record.
 /docs/shots/review/
+
+# Browser-automation scratch output (console logs and page snapshots), never source.
+.playwright-mcp/

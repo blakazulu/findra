@@ -139,7 +139,11 @@ public class IndexStatusTests
         // has to be checkable on its own rather than buried in a window no test can construct.
         Assert.True(IndexStatus.Alive("1000", Elsewhere, thisProcess: 7, nowUnixSeconds: 1000));
         Assert.True(IndexStatus.Alive("1000", Elsewhere, 7, 1000 + IndexStatus.BeatStaleSeconds));
-        Assert.False(IndexStatus.Alive("1000", Elsewhere, 7, 1000 + IndexStatus.BeatStaleSeconds + 1));
+        // A stale beat asks the operating system whether the writer is still there, and 4242 is
+        // somebody's process on some machines - a CI runner had one. The answer is injected, so
+        // this checks the heartbeat rule and nothing about the machine running it.
+        Assert.False(IndexStatus.Alive("1000", Elsewhere, 7, 1000 + IndexStatus.BeatStaleSeconds + 1,
+                                       stillRunning: _ => false));
     }
 
     [Fact]

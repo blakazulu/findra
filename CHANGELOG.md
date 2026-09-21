@@ -44,6 +44,9 @@ and Findra follows [Semantic Versioning](https://semver.org/spec/v2.0.0/).
 - **The site's page titles say what Findra is** - fast, private desktop search for Windows - and
   the pages behind the footer say what each one is about rather than only its name.
 
+- Documentation: the heartbeat test no longer depends on whether the machine running it happens
+  to have a process with the id it uses as somebody else's.
+
 ## [0.2.0] - 2026-09-21
 
 ### Added
