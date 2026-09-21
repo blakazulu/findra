@@ -1358,7 +1358,7 @@ internal sealed class Shell : ISettingsHost
         // rather than a sentence. Nothing to show is `default`, which draws no pill at all - not a
         // bar at zero, which is what makes an idle widget feel busy.
         IndexProgress pill = IndexStatus.Pill(reading, db.Get("indexer:kind") ?? "",
-                                              pending, indexed, alive);
+                                              pending, indexed, alive, state);
 
         if (line == _capsuleLine && pill == _capsulePill) return;
         _capsuleLine = line;

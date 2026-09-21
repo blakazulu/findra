@@ -36,8 +36,11 @@ public static class IndexerArgs
 // eligibility rules belong to the interface.
 //
 // It stays out of the way: BelowNormal priority, one file at a time with a rest between sized by
-// the power setting, and a full stop while the pause switch is on. It exits when the parent dies -
-// that check is the whole of its lifetime code, and it is why indexing stops when the app quits.
+// the power setting, a full stop while the pause switch is on, and a wait while something is
+// fullscreen or another program is using the graphics card (IndexGate). Whenever it waits it lets
+// its models go, so a waiting indexer is not gigabytes of video memory held against the program
+// it is waiting for. It exits when the parent dies - that check is the whole of its lifetime code,
+// and it is why indexing stops when the app quits.
 // Status goes back through the `meta` table, namespaced under `indexer:`.
 public sealed class Indexer
 {
@@ -107,7 +110,8 @@ public sealed class Indexer
             // disk - are read through delegates rather than captured, so each of them reaches the
             // next file rather than the next launch.
             using IDecoders decoders = Decoders.ForThisMachine(() => TranscribeMinutes(db), beat: beat);
-            Loop(db, parent, () => true, decoders);
+            using var gate = new MachineGate(() => decoders.Installed, parent);
+            Loop(db, parent, () => true, decoders, (isDelete, kind) => gate.Ask(isDelete, kind));
             Log.Info("index", "indexer down (clean)");
             Log.Flush();
             return 0;
@@ -215,15 +219,26 @@ public sealed class Indexer
     /// <summary>The child's whole working life, driven by a caller that decides when it is over.
     /// <paramref name="running"/> is asked once per pass, which is what lets something other than
     /// the process entry point - a diagnostic, a test - put files through the loop the child
-    /// actually runs rather than through a copy of it.</summary>
-    public static void Loop(ContentDb db, int parentPid, Func<bool> running, IDecoders decoders)
-        => new Indexer(db, parentPid, decoders).Loop(running);
+    /// actually runs rather than through a copy of it.
+    ///
+    /// <para><paramref name="gate"/> is asked before every file and answers whether the machine
+    /// can spare the work now - see <see cref="IndexGate"/>. Absent means always yes, which is what
+    /// a test and a diagnostic want: neither should wait on whatever the real card is doing.</para></summary>
+    public static void Loop(ContentDb db, int parentPid, Func<bool> running, IDecoders decoders,
+                            Func<bool, ResultKind, GateVerdict>? gate = null)
+        => new Indexer(db, parentPid, decoders).Loop(running, gate ?? ((_, _) => GateVerdict.Go));
 
-    private void Loop(Func<bool> running)
+    /// <summary>How long an empty queue keeps the models loaded. Long enough that a burst of new
+    /// files arriving a few seconds apart does not load and unload them for every one; short
+    /// enough that a finished queue is not gigabytes on the card for the rest of the day.</summary>
+    public const int KeepModelsIdleSeconds = 60;
+
+    private void Loop(Func<bool> running, Func<bool, ResultKind, GateVerdict> gate)
     {
         string lastState = "";
         long stuck = -1;
         var lastStatus = Stopwatch.StartNew();
+        var idleFor = new Stopwatch();
         while (running())
         {
             if (ParentGone()) { Status("stopped"); return; }
@@ -231,6 +246,7 @@ public sealed class Indexer
             if (_db.Get("index:paused") == "1")
             {
                 if (lastState != "paused") { Log.Info("index", "indexer paused"); lastState = "paused"; }
+                LetModelsGo("paused");
                 Status("paused");
                 Thread.Sleep(2000);
                 continue;
@@ -243,12 +259,31 @@ public sealed class Indexer
                 {
                     Log.Info("index", $"indexer idle: queue drained ({_done.ToString(CultureInfo.InvariantCulture)} done, {_failed.ToString(CultureInfo.InvariantCulture)} failed this session)");
                     lastState = "idle";
+                    idleFor.Restart();
                 }
+                if (idleFor.Elapsed.TotalSeconds >= KeepModelsIdleSeconds) LetModelsGo("idle");
                 Status("idle");
                 Thread.Sleep(2000);
                 continue;
             }
             ContentDb.Pending item = next.Value;
+
+            // Before the attempt is counted: a file held back is not a file that was tried, and
+            // counting it would write off a healthy recording because somebody played a game for
+            // an evening. TakeNext does not dequeue, so the row is simply there again next time.
+            GateVerdict verdict = gate(item.Reason == ContentDb.ReasonDelete, item.Kind);
+            if (!verdict.Run)
+            {
+                if (lastState != verdict.State)
+                {
+                    Log.Info("index", $"indexer waits: {verdict.State}" + (verdict.Reason.Length > 0 ? $" ({verdict.Reason})" : ""));
+                    lastState = verdict.State;
+                }
+                LetModelsGo(verdict.State);
+                Status(verdict.State, verdict.Reason);
+                Thread.Sleep(2000);
+                continue;
+            }
             if (item.Id == stuck)
             {
                 // Handle failed even at recording its own failure, so the row was never dequeued
@@ -304,6 +339,14 @@ public sealed class Indexer
             int rest = power >= 100 ? 30 : (int)Math.Min(8000, busy.ElapsedMilliseconds * (100.0 - power) / power) + 30;
             Thread.Sleep(rest);
         }
+    }
+
+    private void LetModelsGo(string why)
+    {
+        bool had = _decoders is Decoders d && d.Loaded;
+        try { _decoders.Unload(); }
+        catch (Exception ex) { Log.Once("index|unload", "WARN", "index", "the models could not be let go :: " + ex.Message); return; }
+        if (had) Log.Info("index", $"indexer released its models ({why})");
     }
 
     /// <summary>Count this attempt, and if the row has had its last, record it and take it out of

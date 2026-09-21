@@ -46,16 +46,18 @@ public class CapsuleTests
         // The pill's middle is ellipsised, so an overlong sentence does not clip or throw - it
         // stops mid-word, which is the defect the card's own placeholder had. The widest it gets
         // is the longest label against a machine with a million files to read.
+        // An indexer waiting for the machine puts its reason where the noun goes, so each of those
+        // is held to the same room.
         SKTypeface face = Parts.Face;
-        string worst = ProgressPill.Sentence(
-            IndexStatus.Pill(true, nameof(ResultKind.Audio), 1_000_000, 999_999, true));
-
+        foreach (string state in new[] { "indexing", IndexGate.GpuBusy, IndexGate.Fullscreen })
         foreach ((string where, SKRect r) in new[]
                  {
                      ("the capsule", CapsuleLayout.PillRect()),
                      ("the card", SearchCardLayout.ProgressRect(0, hasQuery: false)),
                  })
         {
+            string worst = ProgressPill.Sentence(
+                IndexStatus.Pill(true, nameof(ResultKind.Audio), 1_000_000, 999_999, true, state));
             float room = r.Right - (r.Left + ProgressPillLayout.Inset + ProgressPillLayout.Ring * 2 + 8f)
                        - ProgressPillLayout.PercentW;
             float w = CardText.Measure(worst, face, ProgressPillLayout.TextSize);

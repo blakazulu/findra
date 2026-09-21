@@ -46,16 +46,20 @@ public static class IndexStatus
     /// where the eye already is. What hung under the card was a second answer to a question
     /// already answered, in the shape of a progress bar resting at 100% for the rest of the day.
     /// The capsule has never done that and the card has no better claim to.</para>
+    ///
+    /// <para><paramref name="state"/> matters for one thing only: an indexer that has work in hand
+    /// and is WAITING for the machine (<see cref="IndexGate"/>) says so in place of the noun, so a
+    /// bar that is not moving is not read as one that is stuck.</para>
     /// </summary>
     public static IndexProgress Pill(bool contentEnabled, string kind, long pending, long indexed,
-                                     bool alive)
+                                     bool alive, string state = "")
     {
         long total = indexed + pending;
         string N(long v) => v.ToString("N0", Fixed);
 
         // Work in hand. The only state either surface draws, and the only one with a moving bar.
         if (contentEnabled && alive && pending > 0)
-            return new IndexProgress(Doing(kind), N(indexed) + " of " + N(total),
+            return new IndexProgress(Waiting(state) ?? Doing(kind), N(indexed) + " of " + N(total),
                                      total <= 0 ? 0f : (float)(indexed / (double)total), Show: true);
 
         // Everything else is a settled index: reading off, no indexer behind the queue, nothing
@@ -64,6 +68,16 @@ public static class IndexStatus
         // order, for anybody who goes looking for a pill that is correctly absent.
         return default;
     }
+
+    /// <summary>The pill's words for an indexer that is holding back for the machine, or null for
+    /// any state that is not a wait. As short as "indexing recordings", which is what the pill is
+    /// measured against.</summary>
+    public static string? Waiting(string? state) => state switch
+    {
+        IndexGate.GpuBusy => "waiting for the GPU",
+        IndexGate.Fullscreen => "waiting: fullscreen",
+        _ => null,
+    };
 
     /// <summary>
     /// "indexing photos" and not "indexing Photo". The kind comes off the queue row the indexer is
@@ -165,6 +179,10 @@ public static class IndexStatus
         // stuck.
         if (state == "paused") return $"{N(pending)} waiting - indexing paused";
         if (!alive) return $"{N(pending)} waiting - indexing is paused while Findra is closed";
+        // A live child holding back for somebody else. Said, because a count that does not move
+        // for an evening of gaming otherwise reads as an indexer that has broken.
+        if (state == IndexGate.GpuBusy) return $"{N(pending)} waiting - another program is using the graphics card";
+        if (state == IndexGate.Fullscreen) return $"{N(pending)} waiting - something is fullscreen";
         return $"indexing {N(pending)} · {N(indexed)} done";
     }
 

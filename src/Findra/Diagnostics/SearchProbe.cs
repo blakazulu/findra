@@ -28,6 +28,7 @@ public static class SearchProbe
             : "  ui                     : not running");
 
         Console.WriteLine(Indexer());
+        Console.WriteLine(Gate());
         Console.WriteLine(CapsulePill());
 
         NameClient client;
@@ -88,6 +89,27 @@ public static class SearchProbe
     }
 
     private const string Label = "  indexer                : ";
+    private const string GateLabel = "  indexer gate           : ";
+
+    /// <summary>What the indexer's gate would answer for a video right now - the file that needs
+    /// the most of the card. "It has not read anything all evening" is answered here: a count that
+    /// does not move is either a stuck indexer or one politely waiting, and only this says which.
+    /// One reading taken a second apart, so the card's one-minute hold is not in it.</summary>
+    private static string Gate()
+    {
+        try
+        {
+            using var gate = new MachineGate(() => CapabilitySet.Installed(), parentPid: 0);
+            GateVerdict v = gate.Probe();
+            return GateLabel + (v.Run
+                ? "would run - nothing fullscreen, and no other program on the graphics card"
+                : $"would wait - {v.State}" + (v.Reason.Length > 0 ? $" ({v.Reason})" : ""));
+        }
+        catch (Exception ex)
+        {
+            return GateLabel + $"could not be asked ({ex.GetType().Name}: {ex.Message})";
+        }
+    }
     private const string PillLabel = "  capsule pill           : ";
 
     /// <summary>
@@ -118,7 +140,7 @@ public static class SearchProbe
             string kind = db.Get("indexer:kind") ?? "";
             IndexProgress pill = IndexStatus.Pill(
                 reading, kind, db.PendingCount(), db.IndexedCount(),
-                IndexStatus.Alive(db.Get("indexer:beat"), db.Get("indexer:pid")));
+                IndexStatus.Alive(db.Get("indexer:beat"), db.Get("indexer:pid")), db.Get("indexer:state") ?? "");
 
             if (pill.Show)
                 return PillLabel + $"\"{pill.Label}\"  [{pill.Fraction * 100:F0}%]  \"{pill.Count}\"" +

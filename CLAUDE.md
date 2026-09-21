@@ -342,6 +342,42 @@ progress pill, one level along.
 - **The floors it prints come from `ContentBranch`'s own constants**, so it cannot describe a
   threshold the engine does not apply.
 
+## Staying out of the way
+
+**The power setting shapes how hard Findra works; it knows nothing about who else is working.**
+The journal hands every new file to the queue the moment it closes, so a program writing
+recordings - a transcription pipeline, a render, a local model - had the indexer loading whisper,
+e5 and the vision tower onto the same card for every file, in the middle of that program's own
+work. Nothing about that is fullscreen and nothing about it is the pause switch, so nothing
+stopped it.
+
+- **`IndexGate` is asked before every file, in `Indexer.Loop`**, after the pause switch and before
+  the attempt is counted - a held-back file was not tried, and counting it would write off a
+  healthy recording because somebody played a game for an evening. Fullscreen first
+  (`SHQueryUserNotificationState`, which is what Windows asks before showing a toast; `NotPresent`,
+  a locked screen, is the best time there is to read and does not count), then the card.
+- **The card is busy when another process works one of its engines over 30%**, or when other
+  programs' memory leaves less than the installed model set plus a margin - but only once they hold
+  more than an ordinary desktop does, or a small card would never read anything. Busy at once, free
+  only after a minute of free readings (`GpuHold`), because a pipeline pauses between steps and a
+  model load landing in that gap is the whole problem. The counters are PDH's English paths, keyed
+  by the adapter's LUID from `GpuAdapter`.
+- **Only a file that would load a model waits for the card.** A document with no meaning model is
+  words out of a file, and a delete is a row. Fullscreen holds back everything but deletes.
+- **Anything that cannot be measured is not busy.** A gate that blocked on a reading it could not
+  take would stop indexing for good on a machine with no counters, and say nothing.
+- **Waiting means holding no models.** `IDecoders.Unload` runs on every wait - paused, held back,
+  and a minute after the queue empties. A paused indexer that kept its models was holding gigabytes
+  against exactly the program it had paused for.
+- **The wait is said, not left to look like a stall.** The indexer writes the gate's state to
+  `indexer:state`, `IndexStatus` puts "waiting for the GPU" where the pill's noun goes, and
+  `--searchprobe` prints the verdict the indexer would get right now.
+- **There is deliberately no "wait until the machine is idle" rule.** Reading is something a person
+  turns on and "Start now" is a request for it now; a first pass that only ran with nobody at the
+  keyboard would make both lie. The gate steps aside for other WORK, not for a person being there.
+- Measured on one machine only, like everything in "Hardware portability": the counters have never
+  been read on an AMD or Intel card, and the thresholds come from one night of one pipeline.
+
 ## The progress pill
 
 Under the card and under the capsule's bar: a dial, what is being read, the count, and the

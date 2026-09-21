@@ -385,7 +385,7 @@ public sealed class CardWindow : Window
             // owes somebody who opened it is answered by the Content pill in its own header,
             // and a bar resting at 100% under it was a second answer to that question.
             Progress = IndexStatus.Pill(contentOn, db.Get("indexer:kind") ?? "", pending, indexed,
-                                        IndexStatus.Alive(beat, pid));
+                                        IndexStatus.Alive(beat, pid), state);
             return IndexStatus.Line(contentOn, state, pending, indexed, IndexStatus.Alive(beat, pid), rebuilt);
         }
 

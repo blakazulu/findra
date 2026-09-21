@@ -13,7 +13,10 @@ namespace Findra;
 /// of this - it borrows system memory - which is what makes it the discriminator.</param>
 /// <param name="Software">DXGI's own flag for a software rasteriser (WARP). Never chosen: it is
 /// slower than the CPU provider and would be picked over it silently.</param>
-public sealed record GpuChoice(int Index, string Name, long DedicatedBytes, bool Software);
+/// <param name="Luid">The adapter as the GPU performance counters name it,
+/// <c>luid_0x..._0x...</c>, which is how the indexer's gate finds out who else is using this card.
+/// Empty where DXGI did not say.</param>
+public sealed record GpuChoice(int Index, string Name, long DedicatedBytes, bool Software, string Luid = "");
 
 /// <summary>
 /// Which graphics adapter the accelerated work goes to.
@@ -98,7 +101,8 @@ public static class GpuAdapter
                 {
                     if (Call<GetDescFn>(adapter, GetDesc1)(adapter, out AdapterDesc1 d) == 0)
                         found.Add(new GpuChoice((int)i, (d.Description ?? "").Trim(), d.DedicatedVideoMemory,
-                                                (d.Flags & SoftwareFlag) != 0));
+                                                (d.Flags & SoftwareFlag) != 0,
+                                                $"luid_0x{d.LuidHigh:x8}_0x{d.LuidLow:x8}"));
                 }
                 finally { Call<ReleaseFn>(adapter, Release)(adapter); }
             }

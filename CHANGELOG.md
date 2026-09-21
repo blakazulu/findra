@@ -193,6 +193,19 @@ and Findra follows [Semantic Versioning](https://semver.org/spec/v2.0.0/).
 
 ### Fixed
 
+- **Indexing no longer fights other programs for the graphics card.** A program that writes
+  recordings or pictures - a transcription pipeline, a render, a local language model - used to
+  have Findra loading its models onto the same card for every new file, slowing that program badly
+  and making the desktop stutter. Findra now waits while another program is working the card hard
+  or has filled its memory, and while a game, a presentation or Focus Assist is fullscreen. The
+  card has to stay free for a minute before indexing resumes. Reading words out of documents
+  carries on, since it does not use the card. The progress pill and the tray say what Findra is
+  waiting for, and `--searchprobe` prints what the indexer would do right now.
+
+- **A paused or idle indexer holds no models.** It used to keep every model it had loaded until
+  Findra was closed, gigabytes of video memory that a game or another program could have used.
+  It now lets them go whenever it waits, and a minute after the queue runs empty.
+
 - **The diagnostics measured speech on the wrong chip.** `--searchmodels`, `--searchindex`,
   `--searchtest` and `--searchbench` transcribed on whichever graphics device Windows listed first,
   which on a machine with integrated graphics beside a card is the integrated one - so they were far

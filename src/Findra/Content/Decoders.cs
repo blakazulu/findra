@@ -68,6 +68,12 @@ public interface IDecoders : IDisposable
     /// that transaction commits: a tombstone is destructive, and a rollback that has already
     /// zeroed the old rows leaves the surviving segments pointing at nothing.</summary>
     void Release(IReadOnlyList<long> vectorRows);
+
+    /// <summary>Let go of every model that is loaded, and keep everything else. The next file that
+    /// needs one opens it again. Called whenever the indexer is going to wait - paused, held back
+    /// by <see cref="IndexGate"/>, or with nothing queued - because a waiting indexer that keeps
+    /// gigabytes on the card is holding them against exactly the program it is waiting for.</summary>
+    void Unload() { }
 }
 
 /// <summary>
@@ -321,6 +327,23 @@ public sealed class Decoders : IDecoders
         if (vectorRows.Count == 0) return;
         foreach (long row in vectorRows) _vectors.Tombstone(row);
         _dirty = true;
+    }
+
+    /// <summary>True when something was loaded and has now been let go, so the caller logs a
+    /// release that happened rather than one per idle tick.</summary>
+    public bool Loaded => _vision is not null || _e5 is not null || _whisper is not null || _whisperHe is not null;
+
+    public void Unload()
+    {
+        if (!Loaded) return;
+        // Between files, on the one flow that drains the queue - the same place Refresh drops a
+        // session whose files went away, and for the same reason: nothing is mid-decode. The
+        // vector store is not a model and stays open; it is the writer this process holds for
+        // its whole life.
+        _vision?.Dispose(); _vision = null;
+        _e5?.Dispose(); _e5 = null;
+        _whisper?.Dispose(); _whisper = null;
+        _whisperHe?.Dispose(); _whisperHe = null;
     }
 
     public void Dispose()
