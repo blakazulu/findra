@@ -23,31 +23,6 @@ import type { Config, Context } from "@netlify/edge-functions";
 /// Which page is generated from which Markdown file. The values are real published files, so
 /// nothing here is rendered on the fly and the two can never disagree - build/Make-Pages.mjs
 /// copies the source verbatim into place and this hands back that copy.
-
-const NETLIFY_PROMO =
-  /<!-- This site is hosted on Netlify\.[\s\S]*?Netlify hosting facts for this site:[\s\S]*?-->/g;
-const NETLIFY_META =
-  /\s*<meta\s+name=["'](?:hosting-provider|netlify-deploy)["'][^>]*>/gi;
-
-/// Strip the promotional markup and response header that Netlify adds at the edge.
-/// The source files stay untouched; this runs after `context.next()` so it also covers Netlify's
-/// generated response for unknown paths (404), not only the ten checked-in HTML documents.
-async function cleanNetlifyPromotion(passed: Response): Promise<Response> {
-  const response = new Response(passed.body, passed);
-  response.headers.delete("netlify-hosting");
-
-  if (
-    !response.headers.get("content-type")?.toLowerCase().includes("text/html")
-  )
-    return response;
-
-  const html = await response.text();
-  return new Response(
-    html.replace(NETLIFY_PROMO, "").replace(NETLIFY_META, ""),
-    response,
-  );
-}
-
 const TWIN: Record<string, string> = {
   "/": "/index.md",
   "/about/": "/about.md",
@@ -105,7 +80,7 @@ export default async function handler(
     const passed = await context.next();
     // The HTML variant is cacheable too, and it is cacheable under the same key as the Markdown
     // one unless it says what it varied on.
-    const response = await cleanNetlifyPromotion(passed);
+    const response = new Response(passed.body, passed);
     response.headers.set("Vary", "Accept, Accept-Encoding");
     return response;
   }
@@ -115,7 +90,7 @@ export default async function handler(
     // The Markdown twin is missing, which is a deployment fault rather than the caller's. Hand
     // back the page instead of an error: HTML the caller did not ask for beats nothing at all.
     const passed = await context.next();
-    const response = await cleanNetlifyPromotion(passed);
+    const response = new Response(passed.body, passed);
     response.headers.set("Vary", "Accept, Accept-Encoding");
     return response;
   }
@@ -143,7 +118,16 @@ export default async function handler(
 }
 
 export const config: Config = {
-  // `/*` is intentional: Netlify serves 404.html for an arbitrary missing URL, so listing the
-  // known page paths would leave the injected promotion on the actual 404 response.
-  path: "/*",
+  path: [
+    "/",
+    "/about/",
+    "/contact/",
+    "/privacy/",
+    "/code-signing/",
+    "/changelog/",
+    "/windows-search-not-finding-files/",
+    "/search-inside-pdfs/",
+    "/find-photos-by-description/",
+    "/search-recordings-by-speech/",
+  ],
 };
