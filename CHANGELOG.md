@@ -245,7 +245,13 @@ and Findra follows [Semantic Versioning](https://semver.org/spec/v2.0.0/).
   loop only reported progress once the whole sheet had been read, so one large sheet with few
   shared strings could run for minutes writing nothing - the exact shape that watchdog ends an
   attempt over, spending one of the three tries a file gets before it is set aside for good. It now
-  reports progress once per row, the same as every other format already does.
+  reports progress once per row.
+
+- **Large workbooks and long Word or PowerPoint files no longer look stopped either.** A
+  workbook's table of shared text is read before any sheet and could take minutes on its own, and
+  nearly all of a Word document sits in one part that reported progress only once it was finished.
+  Both now report as they go, per entry and per paragraph, so a big file is no longer ended by the
+  watchdog while it is still being read.
 
 - **The picture on the card for a video result is the moment that matched.** It came from the same
   slow path as indexing, so for many films it was a black rectangle after a long wait.
