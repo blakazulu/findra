@@ -472,9 +472,9 @@ public static class Uninstall
             // run may have just deleted.
             if (!taskGone)
                 Console.Error.WriteLine(
-                    "findra: the scheduled task 'Findra name index' could not be removed. It starts an " +
+                    $"findra: the scheduled task '{HelperTask.TaskName}' could not be removed. It starts an " +
                     "elevated helper at every sign-in and now points at a binary that is going away. " +
-                    "Remove it by hand: schtasks /delete /tn \"Findra name index\" /f");
+                    $"Remove it by hand: schtasks /delete /tn \"{HelperTask.TaskName}\" /f");
             foreach (Removal r in removed.Where(r => !r.Removed))
                 Console.Error.WriteLine($"findra: {r.Label} was not removed - {r.Problem}: {r.Path}");
             Console.WriteLine($"findra: delete {appFolder} yourself to finish removing it.");

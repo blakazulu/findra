@@ -118,7 +118,9 @@ public class PolicyPageTests
         // at a deleted binary stayed behind. This is one of the two places a text assertion is
         // right, because there is no code here to run.
         Assert.Matches(@"if\s*\(not ok\)\s*or\s*\(code <> 0\)\s*then", iss);
-        Assert.Contains(@"schtasks /delete /tn ""Findra name index"" /f", iss, StringComparison.Ordinal);
+        // The task's REAL name, read from the code that registers it. The message used to name a
+        // task that has never existed, so the one command it offered deleted nothing.
+        Assert.Contains($"schtasks /delete /tn \"{Findra.Startup.HelperTask.TaskName}\" /f", iss, StringComparison.Ordinal);
     }
 
     [Fact]

@@ -429,6 +429,6 @@ begin
          + 'starts its name helper at every sign-in may still be registered, and it now points at '
          + 'a program that is gone.' + #13#10#13#10
          + 'To remove it, open a Command Prompt as administrator and run:' + #13#10
-         + 'schtasks /delete /tn "Findra name index" /f',
+         + 'schtasks /delete /tn "Findra names helper" /f',
            mbError, MB_OK);
 end;

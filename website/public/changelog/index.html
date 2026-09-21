@@ -127,7 +127,7 @@
       <span class="kicker">CHANGELOG</span>
       <h1>Every release, and what it changed for you.</h1>
       <div class="doc-meta">
-        <span class="d">Findra 0.2.0 &middot; last reviewed 2026-09-21</span>
+        <span class="d">Findra 0.2.1 &middot; last reviewed 2026-09-21</span>
         <a class="doc-chip on" href="/changelog.md">Read as Markdown</a>
         <a class="doc-chip" href="https://github.com/blakazulu/findra/blob/main/CHANGELOG.md" rel="noopener">History on GitHub</a>
       </div>
@@ -137,6 +137,35 @@
       <p>All notable changes to Findra are documented here.</p>
 
       <p>The format follows <a href="https://keepachangelog.com/en/1.1.0/">Keep a Changelog 1.1.0</a>, and Findra follows <a href="https://semver.org/spec/v2.0.0/">Semantic Versioning</a>.</p>
+
+      <h2><a href="https://github.com/blakazulu/findra/releases/tag/v0.2.1">0.2.1 - 21 September 2026</a></h2>
+
+      <h3>Added</h3>
+
+      <ul>
+        <li><strong>The site has a changelog page.</strong> Every release, newest first, at <code>/changelog/</code> - the same sections GitHub shows as the release notes, without the entries about Findra's own documentation. The footer's Changelog link goes there now rather than to the raw file.</li>
+        <li><strong>The front page says which version is current</strong>, under the Get Findra button, and links to what it changed. The number and the date come from the build and the changelog, so a release cannot leave the page announcing the one before it.</li>
+        <li><strong>The site says Findra steps aside for other work on the graphics card.</strong> While another program is working the card hard, or something is fullscreen, Findra stops reading and lets go of its models, and the page and its answers to common questions now say so.</li>
+        <li><strong>Four guides on the site</strong>, each answering a question people actually search for: why Windows Search is not finding a file and what does, how to search inside PDFs and documents, how to find a photo by describing it, and how to search recordings by what was said. Every page links them from its footer, and each has a Markdown copy for tools that read Markdown.</li>
+      </ul>
+
+      <h3>Changed</h3>
+
+      <ul>
+        <li><strong>The installers have the same name in every release</strong>: <code>findra-setup-x64.exe</code> and <code>findra-setup-arm64.exe</code>, with no version number in them. The site's download button fetches the newest one directly - x64, with a link beside it for Arm64 - instead of sending you to the releases page to find it.</li>
+        <li><strong>winget is the install.</strong> <code>winget install blakazulu.Findra</code> now works, and the README, the site and its answers say so. The releases page still has each new release first, since the Windows Package Manager catalogue can take a few days to pick one up.</li>
+        <li><strong>The site loads nothing from anybody else.</strong> Its two typefaces are served from the site itself rather than from Google Fonts, with their licences beside them, so the page that says nothing leaves your machine no longer makes a request to a third party.</li>
+        <li><strong>The site's page titles say what Findra is</strong> - fast, private desktop search for Windows - and the pages behind the footer say what each one is about rather than only its name.</li>
+      </ul>
+
+      <h3>Fixed</h3>
+
+      <ul>
+        <li><strong>You can choose which drives Findra reads inside.</strong> Settings could open with &quot;All&quot; as the only choice, so no drive could be picked. It now lists every fixed drive on the machine from the start.</li>
+        <li><strong>Reading can be stopped from the button that shows it.</strong> While Findra is reading, the button under &quot;Look inside my files&quot; says Stop with the count beside it; pressing it turns reading off and keeps everything read so far. Start now turns it back on.</li>
+        <li><strong>The settings section for drives and skipped folders is called &quot;Where it searches&quot;</strong>, which is what it decides.</li>
+        <li><strong>The command offered when an uninstall cannot remove the scheduled task now names the real task.</strong> It named one that does not exist, so running it removed nothing.</li>
+      </ul>
 
       <h2><a href="https://github.com/blakazulu/findra/releases/tag/v0.2.0">0.2.0 - 21 September 2026</a></h2>
 

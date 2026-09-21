@@ -1,6 +1,6 @@
 # yaml-language-server: $schema=https://aka.ms/winget-manifest.installer.1.6.0.schema.json
 PackageIdentifier: blakazulu.Findra
-PackageVersion: 0.2.0
+PackageVersion: 0.2.1
 InstallerType: inno
 Scope: machine
 InstallModes:
@@ -18,10 +18,10 @@ Installers:
   # manifest submitted by hand without running the workflow fails validation immediately
   # rather than installing something nobody verified.
   - Architecture: x64
-    InstallerUrl: https://github.com/blakazulu/findra/releases/download/v0.2.0/findra-setup-x64.exe
+    InstallerUrl: https://github.com/blakazulu/findra/releases/download/v0.2.1/findra-setup-x64.exe
     InstallerSha256: 0000000000000000000000000000000000000000000000000000000000000000
   - Architecture: arm64
-    InstallerUrl: https://github.com/blakazulu/findra/releases/download/v0.2.0/findra-setup-arm64.exe
+    InstallerUrl: https://github.com/blakazulu/findra/releases/download/v0.2.1/findra-setup-arm64.exe
     InstallerSha256: 0000000000000000000000000000000000000000000000000000000000000000
 ManifestType: installer
 ManifestVersion: 1.6.0

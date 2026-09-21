@@ -208,7 +208,7 @@ public class RailTests
     [Fact]
     public void TheListStartsBelowTheRowsAndTheNotesAboveIt()
     {
-        // Two control rows sit above the list in "What it searches", and both carry a note - the
+        // Two control rows sit above the list in "Where it searches", and both carry a note - the
         // second saying how many folders are skipped. ListTop is a constant, so this is what
         // checks the constant against what those rows actually measure: raise a note to three
         // lines, or add a row, and the list starts drawing over it.
@@ -288,6 +288,6 @@ public class RailTests
         foreach (Section s in RailLayout.Sections)
             Assert.False(string.IsNullOrWhiteSpace(RailLayout.Title(s)), $"{s} has no title");
         Assert.Equal(5, RailLayout.Sections.Count);
-        Assert.Equal("What it searches", RailLayout.Title(Section.Searches));
+        Assert.Equal("Where it searches", RailLayout.Title(Section.Searches));
     }
 }

@@ -484,7 +484,34 @@ public class SettingsModelTests
         Assert.Equal(SettingsAction.RegisterHelper, o.Action);
     }
 
-    // ---- What it searches ------------------------------------------------------------------
+    // ---- Where it searches -----------------------------------------------------------------
+
+    [Fact]
+    public void TheDrivesOnOfferDoNotWaitForTheHelper()
+    {
+        // The row used to be built only from what the name helper had reported, which arrives once
+        // the content loop has connected. A window opened before that - or while the pipe was
+        // refusing - offered "All" and nothing else, and a click on the one option already chosen
+        // does nothing: no drive could be chosen at all.
+        Assert.Equal(["C", "D"], SettingsModel.DrivesToOffer([], ['D', 'C']));
+
+        // Both sources, once each, in letter order, whichever case either spoke in.
+        Assert.Equal(["C", "D", "E"], SettingsModel.DrivesToOffer(["e", "C"], ['c', 'D']));
+    }
+
+    [Fact]
+    public void ADriveCanBeChosenAndTheChoiceUndone()
+    {
+        SettingsState s = State(Config.Default with { IndexDrives = [] }, Section.Searches) with { Drives = ["C", "D"] };
+        Control row = Row(s, ControlId.Drives);
+        Assert.Equal(["All", "C:", "D:"], row.Options);
+
+        SettingsOutcome d = SettingsModel.Apply(s, new PanelHit(PanelTarget.Option, RowOf(s, ControlId.Drives), 2));
+        Assert.Equal(["D"], d.State.Config.IndexDrives);
+
+        SettingsOutcome all = SettingsModel.Apply(d.State, new PanelHit(PanelTarget.Option, RowOf(d.State, ControlId.Drives), 0));
+        Assert.Empty(all.State.Config.IndexDrives);
+    }
 
     [Fact]
     public void NoDriveTickedMeansEveryFixedVolumeAndSaysSo()
@@ -965,22 +992,26 @@ public class SettingsModelTests
         //
         // Indexed of the TOTAL, not "640 done, 1,333 to go": a fraction is read at a glance and
         // two counts have to be added up.
-        Assert.Equal("Indexing 640/1,973", Row(Reading(), ControlId.StartIndexing).Value);
+        Assert.Equal("Stop 640/1,973", Row(Reading(), ControlId.StartIndexing).Value);
+        Assert.Equal("Reading now", Row(Reading(), ControlId.StartIndexing).Label);
 
         // And it goes back to offering the moment there is something to offer.
         Assert.Equal("Start now", Row(Reading() with { Pending = 0 }, ControlId.StartIndexing).Value);
         Assert.Equal("Start now", Row(Reading() with { IndexerAlive = false }, ControlId.StartIndexing).Value);
+        Assert.Equal("Start reading now", Row(Reading() with { Pending = 0 }, ControlId.StartIndexing).Label);
     }
 
     [Fact]
-    public void TheStartButtonRefusesThePressItIsNoLongerOffering()
+    public void WhileReadingTheButtonStopsIt()
     {
-        // Relabelling is not enough. A pill that still answers a click is a pill somebody clicks,
-        // and this one would have written the config and woken a child that was already awake.
+        // The switch above it could always stop reading, but nobody looked there: the button that
+        // was counting was the one pressed, and it answered nothing. Stopping is the switch turned
+        // off - what was read is kept, and "Start now" is back on the same button.
         SettingsState busy = Reading();
-        SettingsOutcome ignored = SettingsModel.Apply(
+        SettingsOutcome stopped = SettingsModel.Apply(
             busy, new PanelHit(PanelTarget.Control, RowOf(busy, ControlId.StartIndexing), -1));
-        Assert.Equal(SettingsAction.None, ignored.Action);
+        Assert.Equal(SettingsAction.None, stopped.Action);
+        Assert.False(stopped.State.Config.IndexContent);
 
         // But it is a real request whenever it is really offered - including over a switch that is
         // already on, because Findra reads only while it is open.
@@ -999,7 +1030,7 @@ public class SettingsModelTests
         try
         {
             CultureInfo.CurrentCulture = new CultureInfo("de-DE");
-            Assert.Equal("Indexing 640/1,973", SettingsModel.StartReadingLabel(true, 1_333, 640));
+            Assert.Equal("Stop 640/1,973", SettingsModel.StartReadingLabel(true, 1_333, 640));
         }
         finally { CultureInfo.CurrentCulture = was; }
     }

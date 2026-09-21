@@ -1166,6 +1166,12 @@ internal sealed class Shell : ISettingsHost
         }
     }
 
+    private static IEnumerable<char> LocalFixedDrives()
+    {
+        try { return [.. NtfsVolume.Volumes().Where(v => v.Fixed).Select(v => v.Letter)]; }
+        catch (Exception ex) { Log.Warn("settings", "the drives could not be listed :: " + ex.Message); return []; }
+    }
+
     /// <summary>Which drives are fed. An empty setting means every volume the helper reports,
     /// which is what a fresh install does and what almost everyone wants.</summary>
     private static IReadOnlyList<char> ChosenDrives(Config config, StatusReply status)
@@ -1705,7 +1711,9 @@ internal sealed class Shell : ISettingsHost
                 BlockedVideos = _blockedVideos,
                 BlockedCodec = _blockedCodec,
                 BlockedForCodec = _blockedForCodec,
-                Drives = _drives,
+                // The machine's own fixed volumes as well as the helper's, which reach _drives only
+                // once the content loop has connected.
+                Drives = SettingsModel.DrivesToOffer(_drives, LocalFixedDrives()),
                 WindowsIsLight = Theme.WindowsIsLight(),
                 Version = BuildInfo.Version,
                 Update = _update,

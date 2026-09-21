@@ -7,6 +7,8 @@ and Findra follows [Semantic Versioning](https://semver.org/spec/v2.0.0/).
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-09-21
+
 ### Added
 
 - **The site has a changelog page.** Every release, newest first, at `/changelog/` - the same
@@ -46,6 +48,22 @@ and Findra follows [Semantic Versioning](https://semver.org/spec/v2.0.0/).
 
 - Documentation: the heartbeat test no longer depends on whether the machine running it happens
   to have a process with the id it uses as somebody else's.
+
+### Fixed
+
+- **You can choose which drives Findra reads inside.** Settings could open with "All" as the only
+  choice, so no drive could be picked. It now lists every fixed drive on the machine from the
+  start.
+
+- **Reading can be stopped from the button that shows it.** While Findra is reading, the button
+  under "Look inside my files" says Stop with the count beside it; pressing it turns reading off
+  and keeps everything read so far. Start now turns it back on.
+
+- **The settings section for drives and skipped folders is called "Where it searches"**, which is
+  what it decides.
+
+- **The command offered when an uninstall cannot remove the scheduled task now names the real
+  task.** It named one that does not exist, so running it removed nothing.
 
 ## [0.2.0] - 2026-09-21
 
@@ -1577,6 +1595,7 @@ all of it gets verified without a screen.
 - The named pipe is restricted to the current user, and the interface verifies the
   owner before trusting a connection.
 
-[Unreleased]: https://github.com/blakazulu/findra/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/blakazulu/findra/compare/v0.2.1...HEAD
+[0.2.1]: https://github.com/blakazulu/findra/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/blakazulu/findra/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/blakazulu/findra/releases/tag/v0.1.0

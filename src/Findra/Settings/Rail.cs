@@ -118,7 +118,7 @@ public static class RailLayout
     {
         Section.Look => "Look",
         Section.Opening => "Opening it",
-        Section.Searches => "What it searches",
+        Section.Searches => "Where it searches",
         Section.Content => "Content",
         Section.About => "About",
         _ => "",

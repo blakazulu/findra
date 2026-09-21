@@ -340,7 +340,25 @@ public static class SettingsModel
                     : "Not registered, so searching by name has nothing to search. One prompt, once."),
     ];
 
-    // ---- What it searches ------------------------------------------------------------------
+    // ---- Where it searches -----------------------------------------------------------------
+
+    /// <summary>
+    /// The drives the Drives row offers: what the name helper reported, and what this machine's
+    /// own volumes are, once each and in letter order.
+    ///
+    /// <para>Not the helper's list alone. That arrives only once the content loop has connected,
+    /// and a window opened before then offered "All" and nothing else - with no other option to
+    /// press, no drive could be chosen.</para>
+    /// </summary>
+    public static IReadOnlyList<string> DrivesToOffer(IReadOnlyList<string> fromHelper, IEnumerable<char> local)
+    {
+        ArgumentNullException.ThrowIfNull(fromHelper);
+        ArgumentNullException.ThrowIfNull(local);
+        return [.. fromHelper.Where(d => d.Length > 0).Select(d => char.ToUpperInvariant(d[0]))
+                             .Concat(local.Select(char.ToUpperInvariant))
+                             .Where(char.IsAsciiLetter)
+                             .Distinct().Order().Select(c => c.ToString())];
+    }
 
     private static IReadOnlyList<Control> Searches(SettingsState s)
     {
@@ -433,17 +451,17 @@ public static class SettingsModel
     ///
     /// <para>"Start now" is an offer, and an offer that cannot do anything is the defect this whole
     /// row keeps producing. While the indexer is alive with a backlog there is nothing to start, so
-    /// it stops offering and reports instead - and <see cref="Apply"/> refuses the press, because a
-    /// control that still answers a click is a control somebody will click.</para>
+    /// it offers the opposite - stopping - and carries the count beside it, and
+    /// <see cref="Apply"/> turns reading off on that press.</para>
     ///
     /// <para>Indexed of the TOTAL rather than "640 done, 1,333 to go": a fraction of a whole is
     /// read at a glance and two counts have to be added up. The total moves as the walk finds more,
     /// which is honest - it is a total that is genuinely still being discovered.</para>
     ///
     /// <para>A SLASH, not " of ". The pill is 176px and ellipsises at 164, and this label has to
-    /// hold at counts nobody will reach: "Indexing 999,999 of 1,999,999" measures 171.6px and would
-    /// be drawn with a dot-dot-dot through the only number on the row, while the slash form is
-    /// 159.0px. Shortening the label is the move here, never widening the pill - that width is
+    /// hold at counts nobody will reach: "Indexing 999,999 of 1,999,999" measured 171.6px and would
+    /// be drawn with a dot-dot-dot through the only number on the row, while the slash form was
+    /// 159.0px, and "Stop" is shorter than "Indexing". Shortening the label is the move here, never widening the pill - that width is
     /// shared with the hotkey chord and every capability row beside it.</para>
     ///
     /// <para>Invariant, like every other number Findra shows: <c>{n:N0}</c> renders "1.973" in
@@ -451,7 +469,7 @@ public static class SettingsModel
     /// </summary>
     public static string StartReadingLabel(bool indexerAlive, long pending, long indexed) =>
         Reading(indexerAlive, pending)
-            ? "Indexing " + indexed.ToString("N0", CultureInfo.InvariantCulture) + "/" +
+            ? "Stop " + indexed.ToString("N0", CultureInfo.InvariantCulture) + "/" +
               (indexed + pending).ToString("N0", CultureInfo.InvariantCulture)
             : "Start now";
 
@@ -478,7 +496,8 @@ public static class SettingsModel
                 ContentSentence(s.Config, s.EverIndexed, s.IndexerAlive), 0),
             // A toggle states a preference. This says begin - and while there is nothing left to
             // begin, it reports instead of offering.
-            Control.Plain(ControlId.StartIndexing, ControlKind.Button, "Start reading now",
+            Control.Plain(ControlId.StartIndexing, ControlKind.Button,
+                          Reading(s.IndexerAlive, s.Pending) ? "Reading now" : "Start reading now",
                           s.Waiting(ControlId.StartIndexing)
                               ? "Starting..."
                               : StartReadingLabel(s.IndexerAlive, s.Pending, s.Indexed)),
@@ -665,11 +684,11 @@ public static class SettingsModel
             // survives a restart, the action is what happens in front of the person who pressed it.
             // Asked for even when the switch is already on - Findra reads only while it is open,
             // so "start" over an idle session is a real request rather than a no-op.
-            // Nothing to start while a live indexer still has a backlog, and the button says so
-            // rather than offering. Refused HERE as well as relabelled, because a pill that still
-            // answers a click is a pill somebody clicks - which is exactly what happened, three
-            // times, on a machine that had been reading since before the settings window opened.
-            ControlId.StartIndexing when Reading(s.IndexerAlive, s.Pending) => SettingsOutcome.Nothing(s),
+            // While it is reading, the same button stops it: the switch above turned off, what was
+            // read kept. The switch was always the way to stop and nobody looked there - the
+            // button that was counting was the one pressed, and it used to answer nothing.
+            ControlId.StartIndexing when Reading(s.IndexerAlive, s.Pending) =>
+                SettingsOutcome.Changed(s with { Config = c with { IndexContent = false } }),
             ControlId.StartIndexing =>
                 SettingsOutcome.Ask(s with { Config = c with { IndexContent = true } }, SettingsAction.StartIndexing),
             // The NUMBER at that index, never the index itself: writing the option number here

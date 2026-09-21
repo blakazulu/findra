@@ -18,22 +18,22 @@
 //  - A request that does not ask for Markdown falls through untouched. This function must never
 //    become a router: everything else on this site is a file, and it stays a file.
 
-import type { Config, Context } from "@netlify/edge-functions";
+import type { Config, Context } from '@netlify/edge-functions';
 
 /// Which page is generated from which Markdown file. The values are real published files, so
 /// nothing here is rendered on the fly and the two can never disagree - build/Make-Pages.mjs
 /// copies the source verbatim into place and this hands back that copy.
 const TWIN: Record<string, string> = {
-  "/": "/index.md",
-  "/about/": "/about.md",
-  "/contact/": "/contact.md",
-  "/privacy/": "/privacy.md",
-  "/code-signing/": "/code-signing.md",
-  "/changelog/": "/changelog.md",
-  "/windows-search-not-finding-files/": "/windows-search-not-finding-files.md",
-  "/search-inside-pdfs/": "/search-inside-pdfs.md",
-  "/find-photos-by-description/": "/find-photos-by-description.md",
-  "/search-recordings-by-speech/": "/search-recordings-by-speech.md",
+  '/': '/index.md',
+  '/about/': '/about.md',
+  '/contact/': '/contact.md',
+  '/privacy/': '/privacy.md',
+  '/code-signing/': '/code-signing.md',
+  '/changelog/': '/changelog.md',
+  '/windows-search-not-finding-files/': '/windows-search-not-finding-files.md',
+  '/search-inside-pdfs/': '/search-inside-pdfs.md',
+  '/find-photos-by-description/': '/find-photos-by-description.md',
+  '/search-recordings-by-speech/': '/search-recordings-by-speech.md',
 };
 
 /// Whether the caller would rather have Markdown than HTML.
@@ -48,40 +48,35 @@ export function prefersMarkdown(accept: string | null): boolean {
   let markdown = -1;
   let html = -1;
 
-  for (const part of accept.split(",")) {
-    const [raw, ...params] = part.trim().split(";");
+  for (const part of accept.split(',')) {
+    const [raw, ...params] = part.trim().split(';');
     const type = raw.trim().toLowerCase();
     if (!type) continue;
 
     let q = 1;
     for (const p of params) {
-      const [k, v] = p.split("=");
-      if (k?.trim().toLowerCase() === "q") q = Number(v) || 0;
+      const [k, v] = p.split('=');
+      if (k?.trim().toLowerCase() === 'q') q = Number(v) || 0;
     }
 
     // A wildcard is a floor under everything, never a vote for Markdown in particular.
-    if (type === "text/markdown" || type === "text/x-markdown")
-      markdown = Math.max(markdown, q);
-    else if (type === "text/html" || type === "application/xhtml+xml")
-      html = Math.max(html, q);
+    if (type === 'text/markdown' || type === 'text/x-markdown') markdown = Math.max(markdown, q);
+    else if (type === 'text/html' || type === 'application/xhtml+xml') html = Math.max(html, q);
   }
 
   return markdown > 0 && markdown > html;
 }
 
-export default async function handler(
-  request: Request,
-  context: Context,
-): Promise<Response> {
+export default async function handler(request: Request, context: Context): Promise<Response> {
   const path = new URL(request.url).pathname;
   const twin = TWIN[path];
 
-  if (!twin || !prefersMarkdown(request.headers.get("accept"))) {
+  if (!twin || !prefersMarkdown(request.headers.get('accept'))) {
     const passed = await context.next();
     // The HTML variant is cacheable too, and it is cacheable under the same key as the Markdown
     // one unless it says what it varied on.
     const response = new Response(passed.body, passed);
-    response.headers.set("Vary", "Accept, Accept-Encoding");
+    response.headers.set('Vary', 'Accept, Accept-Encoding');
     return response;
   }
 
@@ -91,7 +86,7 @@ export default async function handler(
     // back the page instead of an error: HTML the caller did not ask for beats nothing at all.
     const passed = await context.next();
     const response = new Response(passed.body, passed);
-    response.headers.set("Vary", "Accept, Accept-Encoding");
+    response.headers.set('Vary', 'Accept, Accept-Encoding');
     return response;
   }
 
@@ -104,30 +99,19 @@ export default async function handler(
   return new Response(await source.text(), {
     status: 200,
     headers: {
-      "Content-Type": "text/markdown; charset=utf-8",
-      Vary: "Accept, Accept-Encoding",
-      "Cache-Control": "public, max-age=0, must-revalidate",
-      "X-Content-Type-Options": "nosniff",
-      "Referrer-Policy": "strict-origin-when-cross-origin",
-      "X-Frame-Options": "DENY",
-      "Permissions-Policy":
-        "camera=(), microphone=(), geolocation=(), interest-cohort=()",
-      Link: `<${twin}>; rel="alternate"; type="text/markdown"`,
+      'Content-Type': 'text/markdown; charset=utf-8',
+      'Vary': 'Accept, Accept-Encoding',
+      'Cache-Control': 'public, max-age=0, must-revalidate',
+      'X-Content-Type-Options': 'nosniff',
+      'Referrer-Policy': 'strict-origin-when-cross-origin',
+      'X-Frame-Options': 'DENY',
+      'Permissions-Policy': 'camera=(), microphone=(), geolocation=(), interest-cohort=()',
+      'Link': `<${twin}>; rel="alternate"; type="text/markdown"`,
     },
   });
 }
 
 export const config: Config = {
-  path: [
-    "/",
-    "/about/",
-    "/contact/",
-    "/privacy/",
-    "/code-signing/",
-    "/changelog/",
-    "/windows-search-not-finding-files/",
-    "/search-inside-pdfs/",
-    "/find-photos-by-description/",
-    "/search-recordings-by-speech/",
-  ],
+  path: ['/', '/about/', '/contact/', '/privacy/', '/code-signing/', '/changelog/',
+         '/windows-search-not-finding-files/', '/search-inside-pdfs/', '/find-photos-by-description/', '/search-recordings-by-speech/'],
 };

@@ -9,7 +9,7 @@ leaves your machine.
 - Source: https://github.com/blakazulu/findra
 - Licence: Apache-2.0
 - Platform: Windows 10 and 11, x64 and arm64
-- Version: 0.2.0
+- Version: 0.2.1
 
 ## What it finds
 

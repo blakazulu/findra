@@ -5,6 +5,61 @@ All notable changes to Findra are documented here.
 The format follows [Keep a Changelog 1.1.0](https://keepachangelog.com/en/1.1.0/),
 and Findra follows [Semantic Versioning](https://semver.org/spec/v2.0.0/).
 
+## [0.2.1 - 21 September 2026](https://github.com/blakazulu/findra/releases/tag/v0.2.1)
+
+### Added
+
+- **The site has a changelog page.** Every release, newest first, at `/changelog/` - the same
+  sections GitHub shows as the release notes, without the entries about Findra's own
+  documentation. The footer's Changelog link goes there now rather than to the raw file.
+
+- **The front page says which version is current**, under the Get Findra button, and links to
+  what it changed. The number and the date come from the build and the changelog, so a release
+  cannot leave the page announcing the one before it.
+
+- **The site says Findra steps aside for other work on the graphics card.** While another program
+  is working the card hard, or something is fullscreen, Findra stops reading and lets go of its
+  models, and the page and its answers to common questions now say so.
+
+- **Four guides on the site**, each answering a question people actually search for: why Windows
+  Search is not finding a file and what does, how to search inside PDFs and documents, how to find
+  a photo by describing it, and how to search recordings by what was said. Every page links them
+  from its footer, and each has a Markdown copy for tools that read Markdown.
+
+### Changed
+
+- **The installers have the same name in every release**: `findra-setup-x64.exe` and
+  `findra-setup-arm64.exe`, with no version number in them. The site's download button fetches the
+  newest one directly - x64, with a link beside it for Arm64 - instead of sending you to the
+  releases page to find it.
+
+- **winget is the install.** `winget install blakazulu.Findra` now works, and the README, the site
+  and its answers say so. The releases page still has each new release first, since the Windows
+  Package Manager catalogue can take a few days to pick one up.
+
+- **The site loads nothing from anybody else.** Its two typefaces are served from the site itself
+  rather than from Google Fonts, with their licences beside them, so the page that says nothing
+  leaves your machine no longer makes a request to a third party.
+
+- **The site's page titles say what Findra is** - fast, private desktop search for Windows - and
+  the pages behind the footer say what each one is about rather than only its name.
+
+### Fixed
+
+- **You can choose which drives Findra reads inside.** Settings could open with "All" as the only
+  choice, so no drive could be picked. It now lists every fixed drive on the machine from the
+  start.
+
+- **Reading can be stopped from the button that shows it.** While Findra is reading, the button
+  under "Look inside my files" says Stop with the count beside it; pressing it turns reading off
+  and keeps everything read so far. Start now turns it back on.
+
+- **The settings section for drives and skipped folders is called "Where it searches"**, which is
+  what it decides.
+
+- **The command offered when an uninstall cannot remove the scheduled task now names the real
+  task.** It named one that does not exist, so running it removed nothing.
+
 ## [0.2.0 - 21 September 2026](https://github.com/blakazulu/findra/releases/tag/v0.2.0)
 
 ### Added
