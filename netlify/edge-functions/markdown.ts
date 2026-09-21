@@ -29,6 +29,7 @@ const TWIN: Record<string, string> = {
   '/contact/': '/contact.md',
   '/privacy/': '/privacy.md',
   '/code-signing/': '/code-signing.md',
+  '/changelog/': '/changelog.md',
 };
 
 /// Whether the caller would rather have Markdown than HTML.
@@ -107,5 +108,5 @@ export default async function handler(request: Request, context: Context): Promi
 }
 
 export const config: Config = {
-  path: ['/', '/about/', '/contact/', '/privacy/', '/code-signing/'],
+  path: ['/', '/about/', '/contact/', '/privacy/', '/code-signing/', '/changelog/'],
 };

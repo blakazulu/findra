@@ -1,27 +1,11 @@
-﻿# Changelog
+# Changelog
 
 All notable changes to Findra are documented here.
 
 The format follows [Keep a Changelog 1.1.0](https://keepachangelog.com/en/1.1.0/),
 and Findra follows [Semantic Versioning](https://semver.org/spec/v2.0.0/).
 
-## [Unreleased]
-
-### Added
-
-- **The site has a changelog page.** Every release, newest first, at `/changelog/` - the same
-  sections GitHub shows as the release notes, without the entries about Findra's own
-  documentation. The footer's Changelog link goes there now rather than to the raw file.
-
-- **The front page says which version is current**, under the Get Findra button, and links to
-  what it changed. The number and the date come from the build and the changelog, so a release
-  cannot leave the page announcing the one before it.
-
-- **The site says Findra steps aside for other work on the graphics card.** While another program
-  is working the card hard, or something is fullscreen, Findra stops reading and lets go of its
-  models, and the page and its answers to common questions now say so.
-
-## [0.2.0] - 2026-09-21
+## [0.2.0 - 21 September 2026](https://github.com/blakazulu/findra/releases/tag/v0.2.0)
 
 ### Added
 
@@ -71,23 +55,6 @@ and Findra follows [Semantic Versioning](https://semver.org/spec/v2.0.0/).
 - **Transcripts are embedded a batch at a time.** Each window of speech was embedded on its own,
   which on the accelerator is several times slower than embedding them together - the way words in
   documents have always been done.
-
-- Documentation: how video frames are read, and what is checked end to end.
-
-- Documentation: the small findings the video frame reviews raised and chose not to act on are
-  written down beside the end-to-end steps, so that leaving them stays a decision somebody made
-  rather than something nobody noticed.
-
-- Documentation: the design note and the step plan behind the video frame work are in the
-  repository, beside the code they describe.
-
-- Documentation: two comments named a transcript helper that production no longer calls, and the
-  video decoder fingerprint is no longer checked in a way that asserts the machine running the
-  check rather than the code - an install without the Media Feature Pack has no decoders to list,
-  and that is a supported machine rather than a failure.
-
-- Documentation: named the two limits the give-up rule means, rather than leaving "these" to
-  reach for the attempts-versus-watchdog sentence beside it.
 
 - **The indexer says it is working while it reads one file.** A long recording or a large document
   used to leave every surface saying nothing was happening until the file was finished.
@@ -414,7 +381,7 @@ and Findra follows [Semantic Versioning](https://semver.org/spec/v2.0.0/).
   on being counted under Settings' "videos need a codec" row and is still picked up the moment the
   codec arrives - and its transcript, if it has one, is untouched either way.
 
-## [0.1.0] - 2026-09-04
+## [0.1.0 - 4 September 2026](https://github.com/blakazulu/findra/releases/tag/v0.1.0)
 
 The first release. Everything below is the whole of Findra as it stands: the three
 processes and the pipe between them, name search, content search and the capabilities
@@ -1550,7 +1517,3 @@ all of it gets verified without a screen.
 
 - The named pipe is restricted to the current user, and the interface verifies the
   owner before trusting a connection.
-
-[Unreleased]: https://github.com/blakazulu/findra/compare/v0.2.0...HEAD
-[0.2.0]: https://github.com/blakazulu/findra/compare/v0.1.0...v0.2.0
-[0.1.0]: https://github.com/blakazulu/findra/releases/tag/v0.1.0

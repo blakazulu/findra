@@ -76,7 +76,7 @@ There is no overnight pass and no index to rebuild, so a file saved a minute ago
 **Reading inside a PDF needs nothing installed.** Findra decodes documents itself, in a process of
 its own that never runs elevated. There is no filter to install, no file type to register and no
 index to rebuild afterwards. Turning a capability on later goes back for exactly the files that
-capability covers.
+capability covers. While another program is working the graphics card, or a game is fullscreen, it waits and lets go of its models rather than competing for the card.
 
 **Filename-only search cannot find what you remember.** A file-table index is fast because names
 are all it holds. Findra holds the table too, and then, only if you ask, the words in a document,
@@ -148,7 +148,7 @@ passed over.
 
 No. Findra tries DirectML for the picture and meaning models and Vulkan for speech, and falls back
 to the processor when neither answers. The processor is a supported configuration rather than a
-failure state: only the first pass through your files is slower. Findra's published measurements come from one machine, and it has an NVIDIA card; AMD and Intel graphics have not been tested on real hardware, and
+failure state: only the first pass through your files is slower. When another program is working the graphics card hard, or something is running fullscreen, Findra stops reading, lets go of the models it had loaded, and carries on once the card has been free for a minute. Findra's published measurements come from one machine, and it has an NVIDIA card; AMD and Intel graphics have not been tested on real hardware, and
 neither has an arm64 machine.
 
 ### Does Findra need administrator rights?

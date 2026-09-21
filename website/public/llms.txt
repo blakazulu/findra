@@ -55,10 +55,14 @@ addressable directly:
   PRIVACY.md.
 - [Code signing policy as Markdown](https://findra-search.netlify.app/code-signing.md): the team
   roles behind a release, and what Findra changes on the machine.
+- [Changelog as Markdown](https://findra-search.netlify.app/changelog.md): what each release
+  added, changed and fixed, newest first. It is CHANGELOG.md without the empty Unreleased section
+  and without the entries about Findra's own documentation; the page at
+  https://findra-search.netlify.app/changelog/ is generated from exactly this file.
 
-There is no llms-full.txt. Every page's Markdown is listed above at a stable URL and five assertions
-hold each one byte-identical to its source; a concatenated sixth copy would be one that nothing
-generates and nothing tests, which is the drift this file has already been caught by once.
+There is no llms-full.txt. Every page's Markdown is listed above at a stable URL and tests hold
+each one to its source; a concatenated seventh copy would be one that nothing generates and
+nothing tests, which is the drift this file has already been caught by once.
 
 ## Pages
 
@@ -82,8 +86,9 @@ phone number and no postal address, deliberately - the contact page says why.
 ## Source and packages
 
 - [Source on GitHub](https://github.com/blakazulu/findra): Apache-2.0 with a NOTICE file.
-- [CHANGELOG](https://github.com/blakazulu/findra/blob/main/CHANGELOG.md): Keep a Changelog 1.1.0.
-  The release notes for any version are that version's section.
+- [Changelog](https://findra-search.netlify.app/changelog/): every release, newest first. The
+  source is [CHANGELOG.md](https://github.com/blakazulu/findra/blob/main/CHANGELOG.md), in Keep a
+  Changelog 1.1.0, and the release notes for any version are that version's section.
 - [SECURITY.md](https://github.com/blakazulu/findra/blob/main/SECURITY.md): how to report a
   vulnerability, which is not the public issue tracker.
 - [Releases](https://github.com/blakazulu/findra/releases/latest): the releases page carries an
@@ -142,7 +147,7 @@ enumerated off the volume in 2.6 seconds at sign-in and held in 73.7 MB of RAM. 
 **Does it need a graphics card?** No. Findra tries DirectML for the picture and meaning models and
 Vulkan for speech, and falls back to the processor when neither answers. The processor is a
 supported configuration rather than a failure state: only the first pass through the files is
-slower, because a query embeds one short string. `findra --searchmodels` prints which provider it
+slower, because a query embeds one short string. When another program is working the graphics card hard, or something is running fullscreen, Findra stops reading, lets go of the models it had loaded, and carries on once the card has been free for a minute. `findra --searchmodels` prints which provider it
 chose and every one it turned down, with reasons. Everything has been measured on one desktop with
 a discrete NVIDIA card and on that machine's processor-only path; AMD and Intel graphics have not
 been tested on real hardware, and neither has an arm64 machine. The arm64 build ships because

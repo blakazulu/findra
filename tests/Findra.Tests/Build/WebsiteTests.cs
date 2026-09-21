@@ -37,6 +37,11 @@ public class WebsiteTests
         { "about", "website/content/about.md" },
         { "contact", "website/content/contact.md" },
         { "code-signing", "docs/code-signing-policy.md" },
+        // The one page whose twin is not its source verbatim: the changelog is published without
+        // its empty Unreleased section and its documentation entries, and the page is generated
+        // from the twin. So the page is compared with the twin here, and the twin with
+        // CHANGELOG.md by TheChangelogPageIsTheChangelogWithoutItsDocumentationEntries.
+        { "changelog", "website/public/changelog.md" },
     };
 
     // ------------------------------------------------------------------ the pages say their source
@@ -103,6 +108,87 @@ public class WebsiteTests
                 markdown.Contains(sentence, StringComparison.Ordinal),
                 $"website/public/{slug}/index.html says something {source} does not:\n  {sentence}");
         }
+    }
+
+    // ------------------------------------------------------------------ the changelog and the version
+
+    /// <summary>
+    /// The published changelog is CHANGELOG.md, less exactly what the generator says it drops.
+    ///
+    /// <para>CHANGELOG.md is the release notes: the release workflow reads a tag's section out of
+    /// it as the notes GitHub shows. So the page cannot be a rewrite, and it is not a verbatim copy
+    /// either - the empty Unreleased section and the "Documentation:" entries are true and mean
+    /// nothing to somebody deciding whether to install. Both directions are checked: nothing on
+    /// the page that the file does not say, and nothing the file says about the program that the
+    /// page leaves out. The second half is the one a filter gets wrong, by eating a real entry.
+    /// </para>
+    /// </summary>
+    [Fact]
+    public void TheChangelogPageIsTheChangelogWithoutItsDocumentationEntries()
+    {
+        string source = Repo.Read("CHANGELOG.md");
+        string twin = Repo.Read("website/public/changelog.md");
+
+        string sourceProse = Unbroken(Strip(source));
+        foreach (string sentence in Sentences(twin))
+        {
+            Assert.True(sourceProse.Contains(sentence, StringComparison.Ordinal),
+                        $"website/public/changelog.md says something CHANGELOG.md does not:\n  {sentence}");
+        }
+
+        // What the page should carry: every released section, with the documentation bullets and
+        // the link references taken out, and nothing else.
+        string released = Regex.Replace(source, @"(?ms)^## \[Unreleased\].*?(?=^## \[)", "");
+        released = Regex.Replace(released, @"(?ms)^- Documentation:.*?(?=\n[ \t]*\n|\z)", "");
+        released = Regex.Replace(released, @"(?m)^\[[^\]]+\]: .*$", "");
+
+        string twinProse = Unbroken(Strip(twin));
+        foreach (string sentence in Sentences(released))
+        {
+            Assert.True(twinProse.Contains(sentence, StringComparison.Ordinal),
+                        "CHANGELOG.md says this about the program and the published changelog does not " +
+                        $"- run `node build/Make-Pages.mjs`:\n  {sentence}");
+        }
+
+        Assert.DoesNotContain("Documentation:", twin, StringComparison.Ordinal);
+        Assert.DoesNotContain("Unreleased", twin, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// The version the front page names is the version the repository builds, released on the
+    /// date its changelog section says.
+    ///
+    /// <para>The front page is written by hand and every other number on it is typed. These are
+    /// not: <c>build/Make-Pages.mjs</c> stamps each <c>data-stamp</c> element and the structured
+    /// data from <c>Directory.Build.props</c> and the matching CHANGELOG heading. What this catches
+    /// is the release commit that bumps the version and forgets to run the generator - the page
+    /// would go on announcing the previous release as the current one.</para>
+    /// </summary>
+    [Fact]
+    public void TheFrontPageNamesTheVersionTheRepositoryBuilds()
+    {
+        string version = System.Xml.Linq.XDocument.Load(Repo.Path_("Directory.Build.props"))
+            .Descendants("Version").Single().Value.Trim();
+
+        Match section = Regex.Match(Repo.Read("CHANGELOG.md"),
+                                    $@"(?m)^## \[{Regex.Escape(version)}\] - (\d{{4}}-\d{{2}}-\d{{2}})");
+        Assert.True(section.Success, $"CHANGELOG.md has no section for {version}");
+        DateOnly released = DateOnly.ParseExact(section.Groups[1].Value, "yyyy-MM-dd",
+                                                System.Globalization.CultureInfo.InvariantCulture);
+        var english = System.Globalization.CultureInfo.InvariantCulture;
+
+        Assert.Contains(
+            $@"href=""/changelog/"" data-stamp=""version"">v{version} - {released.ToString("d MMM yyyy", english)}</a>",
+            Index, StringComparison.Ordinal);
+        Assert.Contains(
+            $@"data-stamp=""release"">Findra {version}, released on {released.ToString("d MMMM yyyy", english)}</span>",
+            Index, StringComparison.Ordinal);
+        Assert.Contains($@"""softwareVersion"": ""{version}""", Index, StringComparison.Ordinal);
+        Assert.Contains($@"releases/tag/v{version}""", Index, StringComparison.Ordinal);
+
+        // And the changelog page opens on that same release.
+        Match first = Regex.Match(Repo.Read("website/public/changelog.md"), @"(?m)^## \[(\S+) - ");
+        Assert.Equal(version, first.Groups[1].Value);
     }
 
     // ------------------------------------------------------------------ the share card
@@ -279,7 +365,7 @@ public class WebsiteTests
             .ToHashSet(StringComparer.Ordinal);
 
         HashSet<string> onDisk = new(StringComparer.Ordinal) { $"{Site}/" };
-        foreach (string slug in new[] { "privacy", "about", "contact", "code-signing" })
+        foreach (string slug in new[] { "privacy", "about", "contact", "code-signing", "changelog" })
         {
             Assert.True(Repo.Exists($"website/public/{slug}/index.html"), $"/{slug}/ is missing");
             onDisk.Add($"{Site}/{slug}/");
@@ -306,7 +392,7 @@ public class WebsiteTests
     {
         foreach (string href in new[]
                  { "\"/\"", "\"/about/\"", "\"/contact/\"", "\"/privacy/\"",
-                   "\"/code-signing/\"",
+                   "\"/code-signing/\"", "\"/changelog/\"",
                    "\"/llms.txt\"", "\"/sitemap.xml\"", "\"/robots.txt\"" })
         {
             Assert.Contains($"href={href}", NotFound, StringComparison.Ordinal);
@@ -377,7 +463,9 @@ public class WebsiteTests
         // than an index, and an agent still has to guess at URLs.
         foreach (string url in new[]
                  { $"{Site}/", $"{Site}/about/", $"{Site}/contact/", $"{Site}/privacy/",
-                   $"{Site}/index.md", $"{Site}/about.md", $"{Site}/contact.md", $"{Site}/privacy.md" })
+                   $"{Site}/changelog/",
+                   $"{Site}/index.md", $"{Site}/about.md", $"{Site}/contact.md", $"{Site}/privacy.md",
+                   $"{Site}/changelog.md" })
         {
             Assert.Contains(url, Llms, StringComparison.Ordinal);
         }
@@ -399,7 +487,7 @@ public class WebsiteTests
         foreach ((string path, string twin) in new[]
                  { ("/", "/index.md"), ("/about/", "/about.md"),
                    ("/contact/", "/contact.md"), ("/privacy/", "/privacy.md"),
-                   ("/code-signing/", "/code-signing.md") })
+                   ("/code-signing/", "/code-signing.md"), ("/changelog/", "/changelog.md") })
         {
             Assert.Contains($"'{path}': '{twin}'", edge, StringComparison.Ordinal);
             Assert.True(Repo.Exists($"website/public{twin}"), $"{twin} is declared but not published");
@@ -468,7 +556,8 @@ public class WebsiteTests
                    "website/public/about/index.html", "website/public/contact/index.html",
                    "website/public/privacy/index.html", "website/public/code-signing/index.html",
                    "website/public/index.md", "website/public/about.md", "website/public/contact.md",
-                   "website/public/privacy.md", "website/public/code-signing.md" })
+                   "website/public/privacy.md", "website/public/code-signing.md",
+                   "CHANGELOG.md", "website/public/changelog/index.html", "website/public/changelog.md" })
         {
             string text = Repo.Read(path);
             foreach (string name in Repo.Competitors)
@@ -1069,6 +1158,7 @@ public class WebsiteTests
             "website/public/index.html", "website/public/404.html",
             "website/public/about/index.html", "website/public/contact/index.html",
             "website/public/privacy/index.html", "website/public/code-signing/index.html",
+            "website/public/changelog/index.html",
         };
 
         List<(string Text, string Href)>? expected = null;

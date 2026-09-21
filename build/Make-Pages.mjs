@@ -85,6 +85,27 @@ const PAGES = [
     markdown: 'code-signing.md',
   },
   {
+    // The release notes, as a page. CHANGELOG.md is the source for the same reason PRIVACY.md is:
+    // the release workflow reads its sections as each release's notes, so a second copy written
+    // out here would be a second set of release notes. Unlike the other pages the twin is NOT the
+    // file verbatim - it is the file as `releaseNotes` below leaves it, without the empty
+    // Unreleased section and without the lines about Findra's own documentation, which are true
+    // and mean nothing to somebody deciding whether to install it. The page is generated from the
+    // twin, so the two still say exactly the same thing.
+    slug: 'changelog',
+    source: 'CHANGELOG.md',
+    kicker: 'Changelog',
+    headline: 'Every release, and what it changed for you.',
+    title: 'Changelog - Findra',
+    description:
+      'What each Findra release added, changed and fixed, newest first. The release notes on ' +
+      'GitHub are these same sections.',
+    reviewed: null,  // the date the current version was released, filled in below
+    ogType: 'website',
+    markdown: 'changelog.md',
+    transform: (md) => releaseNotes(md),
+  },
+  {
     slug: 'contact',
     source: 'website/content/contact.md',
     kicker: 'Contact',
@@ -179,7 +200,15 @@ function body(markdown) {
         if (/^- /.test(line)) items.push(line.slice(2));
         else items[items.length - 1] += ' ' + line.trim();
       }
-      html.push(`<ul>\n${items.map((i) => `  <li>${inline(i)}</li>`).join('\n')}\n</ul>`);
+      // A loose list - bullets with a blank line between them, which is how the changelog is
+      // written - is still ONE list, so a run of bullet blocks joins the list before it.
+      const li = items.map((i) => `  <li>${inline(i)}</li>`).join('\n');
+      const last = html.length - 1;
+      if (last >= 0 && html[last].endsWith('\n</ul>')) {
+        html[last] = html[last].slice(0, -'</ul>'.length) + li + '\n</ul>';
+      } else {
+        html.push(`<ul>\n${li}\n</ul>`);
+      }
       continue;
     }
 
@@ -227,7 +256,7 @@ const FOOTER = `
     <div class="col">
       <strong>PROJECT</strong>
       <a href="https://github.com/blakazulu/findra" rel="noopener">Source</a>
-      <a href="https://github.com/blakazulu/findra/blob/main/CHANGELOG.md" rel="noopener">Changelog</a>
+      <a href="/changelog/">Changelog</a>
       <a href="https://github.com/blakazulu/findra/issues" rel="noopener">Issues</a>
     </div>
     <div class="col">
@@ -390,19 +419,113 @@ const VERSION = (() => {
   return m[1].trim();
 })();
 
+// ---------------------------------------------------------------- the release notes
+
+const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August',
+                'September', 'October', 'November', 'December'];
+const longDate = (iso) => { const [y, m, d] = iso.split('-').map(Number); return `${d} ${MONTHS[m - 1]} ${y}`; };
+const shortDate = (iso) => { const [y, m, d] = iso.split('-').map(Number); return `${d} ${MONTHS[m - 1].slice(0, 3)} ${y}`; };
+
+/// CHANGELOG.md as a reader of the site should see it. Four things change and nothing else:
+///
+///  - the Unreleased section goes, because it is either empty or describes a build nobody can
+///    download yet;
+///  - a bullet opening "Documentation:" goes, whole, because it records a change to Findra's own
+///    notes and comments rather than to the program anybody installs;
+///  - a version heading loses its brackets and gains a link to that release on GitHub, and its date
+///    is written out, since `## [0.2.0] - 2026-09-21` is Keep a Changelog's syntax for a link
+///    reference and reads as punctuation on a page;
+///  - the link references at the foot go with the brackets that used them.
+///
+/// A heading left with nothing under it - a Changed section that was only documentation - goes too.
+function releaseNotes(markdown) {
+  const lines = markdown.replace(/^\uFEFF/, '').replace(/\r\n?/g, '\n').split('\n');
+  const out = [];
+  let skippingSection = false;
+  let skippingBullet = false;
+
+  for (const line of lines) {
+    if (/^## /.test(line)) skippingSection = /^## \[Unreleased\]/.test(line);
+    if (skippingSection) continue;
+    if (/^\[[^\]]+\]: /.test(line)) continue;
+
+    if (/^- Documentation:/.test(line)) { skippingBullet = true; continue; }
+    if (skippingBullet) {
+      if (/^\s+\S/.test(line)) continue;
+      skippingBullet = false;
+    }
+
+    const version = line.match(/^## \[(\d+\.\d+\.\d+)\] - (\d{4}-\d{2}-\d{2})\s*$/);
+    if (version) {
+      out.push(`## [${version[1]} - ${longDate(version[2])}](https://github.com/blakazulu/findra/releases/tag/v${version[1]})`);
+      continue;
+    }
+    out.push(line);
+  }
+
+  // Empty headings, then the runs of blank lines the removals left behind.
+  const blocks = out.join('\n').split(/\n{2,}/).map((b) => b.trim()).filter(Boolean);
+  const level = (b) => (/^#+ /.test(b) ? b.match(/^#+/)[0].length : 99);
+  const kept = blocks.filter((b, i) => level(b) === 99 || (i + 1 < blocks.length && level(blocks[i + 1]) > level(b)));
+  return kept.join('\n\n') + '\n';
+}
+
+/// The date the current version was released, read from its own CHANGELOG heading. A version
+/// with no section has not been released, and the release workflow would refuse the tag too.
+const RELEASED = (() => {
+  const log = readFileSync(join(ROOT, 'CHANGELOG.md'), 'utf8');
+  const escaped = VERSION.replace(/\./g, '\\.');
+  const m = log.match(new RegExp(`^## \\[${escaped}\\] - (\\d{4}-\\d{2}-\\d{2})`, 'm'));
+  if (!m) throw new Error(`CHANGELOG.md has no section for ${VERSION}`);
+  return m[1];
+})();
+
+for (const page of PAGES) if (page.reviewed === null) page.reviewed = RELEASED;
+
 const wrote = [];
 for (const page of PAGES) {
   const source = join(ROOT, ...page.source.split('/'));
-  const markdown = readFileSync(source, 'utf8');
+  const markdown = page.transform
+    ? page.transform(readFileSync(source, 'utf8'))
+    : readFileSync(source, 'utf8');
 
   const dir = join(ROOT, 'website', 'public', page.slug);
   mkdirSync(dir, { recursive: true });
   writeFileSync(join(dir, 'index.html'), shell(page, body(markdown)));
   wrote.push(`  website/public/${page.slug}/index.html`);
 
-  // Verbatim, not re-rendered. The point of publishing the Markdown is that it is the same file.
-  copyFileSync(source, join(ROOT, 'website', 'public', page.markdown));
-  wrote.push(`  website/public/${page.markdown} - copied from ${page.source}`);
+  // Verbatim, not re-rendered. The point of publishing the Markdown is that it is the same file -
+  // or, for a page with a transform, the same text the page was generated from.
+  if (page.transform) {
+    writeFileSync(join(ROOT, 'website', 'public', page.markdown), markdown);
+    wrote.push(`  website/public/${page.markdown} - from ${page.source}, as the page shows it`);
+  } else {
+    copyFileSync(source, join(ROOT, 'website', 'public', page.markdown));
+    wrote.push(`  website/public/${page.markdown} - copied from ${page.source}`);
+  }
+}
+
+// The front page is written by hand, but the version it names is not. Every element carrying a
+// data-stamp attribute has its text replaced here, from Directory.Build.props and the matching
+// CHANGELOG heading, and so do the structured data's version and release notes link - a number
+// typed into the page by hand is the number nobody bumps at the next release.
+{
+  const front = join(ROOT, 'website', 'public', 'index.html');
+  const stamps = {
+    version: `v${VERSION} - ${shortDate(RELEASED)}`,
+    release: `Findra ${VERSION}, released on ${longDate(RELEASED)}`,
+  };
+  let index = readFileSync(front, 'utf8');
+  for (const [name, text] of Object.entries(stamps)) {
+    const re = new RegExp(`(<[a-z]+[^>]*\\sdata-stamp="${name}"[^>]*>)[^<]*(</[a-z]+>)`, 'g');
+    if (!re.test(index)) throw new Error(`index.html has no data-stamp="${name}"`);
+    index = index.replace(re, `$1${text}$2`);
+  }
+  index = index
+    .replace(/("softwareVersion":\s*")[^"]*(")/, `$1${VERSION}$2`)
+    .replace(/("releaseNotes":\s*"https:\/\/github\.com\/blakazulu\/findra\/releases\/tag\/v)[^"]*(")/, `$1${VERSION}$2`);
+  writeFileSync(front, index);
+  wrote.push('  website/public/index.html - version stamped');
 }
 
 copyFileSync(join(ROOT, 'website', 'content', 'home.md'),

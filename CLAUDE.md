@@ -1191,6 +1191,15 @@ running it, and shipping a page that still says the old thing.
   and not the other, **in both directions**. It compares the SHIPPED bytes rather than reading the
   generator, because a test that read the generator would pass on the day somebody forgot to run
   it, which is the only day it matters.
+- **`/changelog/` is the one page whose twin is not its source verbatim.** `releaseNotes` in the
+  generator drops the Unreleased section, every `- Documentation:` bullet and the link references,
+  and writes that as `changelog.md`; the page is generated from the twin, so the two still match
+  and `TheChangelogPageIsTheChangelogWithoutItsDocumentationEntries` holds the twin to
+  `CHANGELOG.md` in both directions. **The front page's version is stamped, not typed**: every
+  `data-stamp` element and the structured data's `softwareVersion` and release notes link are
+  rewritten from `Directory.Build.props` and that version's CHANGELOG heading, so **a release
+  commit runs `node build/Make-Pages.mjs`** or `TheFrontPageNamesTheVersionTheRepositoryBuilds`
+  fails.
 - **The page's headline is not the Markdown's H1.** `# Privacy` is right for somebody who opened
   the file looking for the policy; "Nothing leaves your machine, except one request" is right for
   somebody deciding whether to trust the product. The generator drops the H1 and the tests exclude
