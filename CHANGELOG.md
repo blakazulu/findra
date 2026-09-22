@@ -7,6 +7,11 @@ and Findra follows [Semantic Versioning](https://semver.org/spec/v2.0.0/).
 
 ## [Unreleased]
 
+### Added
+
+- Documentation: the project notes describe the Microsoft Store packaging - how the package is
+  built, the identity it carries, and what still behaves differently inside a package.
+
 ### Fixed
 
 - **The website no longer carries Netlify's advertisement.** Netlify writes a comment and two tags

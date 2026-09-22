@@ -34,7 +34,10 @@ pwsh -File build/Make-Shots.ps1 -Exe publish/win-x64/findra.exe   # redraw READM
                                                # docs/shots, copy the site's; list read from README
 node build/Make-Icon.mjs                       # regenerate the mark (ico, SVGs, wizard image,
                                                # favicon.svg/.ico, apple-touch-icon, share images,
-                                               # share/card.txt). By hand only
+                                               # share/card.txt, Store tiles and listing icon).
+                                               # By hand only
+pwsh -File build/Make-Msix.ps1 -Rid win-x64    # Store MSIX for one RID (then -Rid win-arm64, then
+                                               # -Bundle); refuses the identity placeholders
 node build/Make-Pages.mjs                      # regenerate every written page, copy sources beside
                                                # them, stamp the version, write the sitemap. By
                                                # hand; CI re-runs it and fails on any diff
@@ -682,6 +685,50 @@ URI) and `SiteShotTests`; the rest holds because somebody reads it.
   is `AnsiString` (for `LoadStringFromFile`).
 - **No version in the install directory**, and `AppId` is a fixed GUID (the task stores an absolute
   path to `findra.exe`).
+
+## The Microsoft Store
+
+**`docs/store.md` is the record**: the decision, registration, submission pages, listing text and
+the per-release routine. **Status: name reserved, not submitted** - "Findra" is reserved on the
+existing developer account (the one that publishes Scalpel PDF), Store ID `9P78Z9KT48PR`; nothing has
+been sent for certification.
+The Store is a fourth distribution route beside the releases page, the installer and winget, not a
+replacement.
+
+- **MSIX, not the EXE installer.** The Store does not re-sign EXE/MSI, which would need an
+  Authenticode certificate Findra lacks; MSIX is re-signed by Microsoft after certification. So the
+  bundle is **unsigned on purpose** - never add a signing step to it.
+- **`packaging/store/Package.appxmanifest`** is a desktop-bridge package (`Windows.FullTrustApplication`)
+  with `runFullTrust`, **`allowElevation`** (restricted, human-reviewed: the one UAC prompt that
+  registers the names-helper task) and a `windows.startupTask`. `Version` and
+  `ProcessorArchitecture` are filled by the script, never committed.
+- **The identity is final and permanent**: `Name` `LirazShakaAmir.Findra`, the account's
+  `CN=...` `Publisher`, `PublisherDisplayName` "Liraz Shaka Amir", all copied from Partner Center
+  (case-sensitive). **Never edit or invent them.** `Make-Msix.ps1` still refuses the old placeholders
+  (`__PACKAGE_IDENTITY_NAME__`, `__PACKAGE_PUBLISHER__`, `__PUBLISHER_DISPLAY_NAME__`) should one
+  ever return; `StorePackagingTests` validates each field on its own.
+- **`build/Make-Msix.ps1`** calls `Publish.ps1` (the publish stays its job), lays out
+  `store/layout/<rid>` with the manifest and tiles, packs `store/msix/findra_<ver>_<arch>.msix`, and
+  `-Bundle` makes `store/bundle/findra_<ver>.msixbundle` from both. The version is
+  `Directory.Build.props` plus a fourth `.0`. `makeappx` is the newest Windows Kit found (a floor,
+  not a pin).
+- **`.github/workflows/store.yml` is `workflow_dispatch` only**, same rule as winget (`WorkflowTests`
+  asserts it): build, test, pack both RIDs, bundle, upload the `store-msixbundle` artefact. No tag
+  triggers it; a release does not touch the Store. Workflow files are committed through the web
+  editor, because the fine-grained token cannot carry the `workflow` scope.
+- **The tiles in `packaging/store/Assets` and `listing/AppTileIcon300.png` come from
+  `build/Make-Icon.mjs`** - never hand-edit them; `StorePackagingTests` checks each is at its named
+  size and that the script draws them. The four listing screenshots are `docs/shots` renders centred
+  on the plate at 1366x768 (the Store's floor), unscaled.
+- **Known gaps inside a package, queued as code changes** (none blocks a first submission):
+  1. The helper task stores the `WindowsApps\<package>_<version>` path, which moves on every update;
+     it needs a startup check that re-registers when the recorded path is not the running exe.
+  2. `InstallSource` has no Store value, so the update check would send Store users to GitHub; a
+     packaged build should say "updated through the Microsoft Store" and skip the check.
+  3. `Autostart`'s HKCU Run write is virtualised in a package; the toggle should drive the
+     StartupTask API when packaged.
+- **If review refuses `allowElevation`**, the fallback is a Store build with name search disabled
+  and content search intact, said in the listing - decided only after an actual refusal.
 
 ## The log
 
