@@ -19,7 +19,7 @@
          xmlns:desktop="http://schemas.microsoft.com/appx/manifest/desktop/windows10"
          IgnorableNamespaces="uap uap10 rescap desktop">
 
-  <Identity Name="__PACKAGE_IDENTITY_NAME__"
+  <Identity Name="LirazShakaAmir.Findra"
             Publisher="CN=8B3919EF-5B9D-4935-A322-FC9435A969F6"
             Version="0.0.0.0"
             ProcessorArchitecture="__ARCH__" />

@@ -1,9 +1,9 @@
 # Publishing Findra to the Microsoft Store
 
-> **Status: prepared, not submitted.** The packaging path exists in the repository and the
-> steps below are in order. Nothing has been sent to Microsoft. Two of the three identity
-> values are filled from the existing developer account; the third - the package Name - exists
-> once the app name is reserved (step 3).
+> **Status: name reserved, not submitted.** "Findra" is reserved on the existing developer
+> account (step 3 done), all three identity values are final in
+> `packaging/store/Package.appxmanifest`, and the `store` workflow can produce the bundle.
+> Nothing has been sent to Microsoft for review.
 
 ## The decision
 
@@ -98,10 +98,10 @@ Partner Center > the app > Product management > App identity shows three values:
 - **Package/Identity/Publisher** (a `CN=...` string)
 - **Package/Properties/PublisherDisplayName**
 
-Paste it over `__PACKAGE_IDENTITY_NAME__` in `packaging/store/Package.appxmanifest`,
-exactly - the value is case-sensitive. Commit. `build/Make-Msix.ps1` refuses to pack until
-this is done. (Publisher and PublisherDisplayName are account-level and already filled in
-from the existing account.)
+Done 2026-09-22: "Findra" reserved; Name is `LirazShakaAmir.Findra`, PFN
+`LirazShakaAmir.Findra_6wbaw9fmp3y9t`, Store ID `9P78Z9KT48PR`. All three values are final
+in the manifest; `build/Make-Msix.ps1` refuses to pack while any placeholder survives, and
+none do.
 
 ### 4. Build the bundle
 
