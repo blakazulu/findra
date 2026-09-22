@@ -20,13 +20,13 @@
          IgnorableNamespaces="uap uap10 rescap desktop">
 
   <Identity Name="__PACKAGE_IDENTITY_NAME__"
-            Publisher="__PACKAGE_PUBLISHER__"
+            Publisher="CN=8B3919EF-5B9D-4935-A322-FC9435A969F6"
             Version="0.0.0.0"
             ProcessorArchitecture="__ARCH__" />
 
   <Properties>
     <DisplayName>Findra</DisplayName>
-    <PublisherDisplayName>__PUBLISHER_DISPLAY_NAME__</PublisherDisplayName>
+    <PublisherDisplayName>Liraz Shaka Amir</PublisherDisplayName>
     <Logo>Assets\StoreLogo.png</Logo>
     <Description>Fast, private desktop search for Windows.</Description>
   </Properties>

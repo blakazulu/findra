@@ -1,8 +1,9 @@
 # Publishing Findra to the Microsoft Store
 
 > **Status: prepared, not submitted.** The packaging path exists in the repository and the
-> steps below are in order. Nothing has been sent to Microsoft, and the three identity values
-> in `packaging/store/Package.appxmanifest` are placeholders until step 4 below produces them.
+> steps below are in order. Nothing has been sent to Microsoft. Two of the three identity
+> values are filled from the existing developer account; the third - the package Name - exists
+> once the app name is reserved (step 3).
 
 ## The decision
 
@@ -57,7 +58,18 @@ repository can honestly produce is exactly what the MSIX route wants.
 
 ## The steps, in order
 
-### 1. Developer account (free)
+### 1. Developer account: ALREADY EXISTS
+
+The Microsoft account liraz1234@hotmail.com already holds an active developer account - it
+publishes Scalpel PDF today. No registration, no ID verification, no fee. The account-level
+identity values are already in the manifest:
+
+- Package/Identity/Publisher: `CN=8B3919EF-5B9D-4935-A322-FC9435A969F6`
+- Package/Properties/PublisherDisplayName: `Liraz Shaka Amir`
+
+The steps below are kept for the record; the account they describe creating is this one.
+
+### 1a. (record) Developer account (free)
 
 Registration is free for individuals since September 2025 - no fee for either account type.
 (Sources: https://learn.microsoft.com/en-us/windows/apps/publish/partner-center/open-a-developer-account ,
@@ -86,9 +98,10 @@ Partner Center > the app > Product management > App identity shows three values:
 - **Package/Identity/Publisher** (a `CN=...` string)
 - **Package/Properties/PublisherDisplayName**
 
-Paste them over `__PACKAGE_IDENTITY_NAME__`, `__PACKAGE_PUBLISHER__` and
-`__PUBLISHER_DISPLAY_NAME__` in `packaging/store/Package.appxmanifest`, exactly - they are
-case-sensitive. Commit. `build/Make-Msix.ps1` refuses to pack until this is done.
+Paste it over `__PACKAGE_IDENTITY_NAME__` in `packaging/store/Package.appxmanifest`,
+exactly - the value is case-sensitive. Commit. `build/Make-Msix.ps1` refuses to pack until
+this is done. (Publisher and PublisherDisplayName are account-level and already filled in
+from the existing account.)
 
 ### 4. Build the bundle
 
