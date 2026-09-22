@@ -68,10 +68,12 @@ if ($Bundle) {
     $bundleDir = Join-Path $Root 'store/bundle'
     if (Test-Path -LiteralPath $bundleDir) { Remove-Item -LiteralPath $bundleDir -Recurse -Force }
     New-Item -ItemType Directory -Path $bundleDir | Out-Null
-    $bundle = Join-Path $bundleDir "findra_$packageVersion.msixbundle"
-    & $makeappx bundle /d $msixDir /p $bundle
+    # $bundlePath, never $bundle: variables are case-insensitive, so $bundle IS the [switch]
+    # $Bundle parameter, and assigning the path string into it dies on the type conversion.
+    $bundlePath = Join-Path $bundleDir "findra_$packageVersion.msixbundle"
+    & $makeappx bundle /d $msixDir /p $bundlePath
     if ($LASTEXITCODE -ne 0) { throw "makeappx bundle exited with $LASTEXITCODE" }
-    Write-Output $bundle
+    Write-Output $bundlePath
     return
 }
 

@@ -1,3 +1,4 @@
+using System.Text.RegularExpressions;
 using System.Xml.Linq;
 
 using Findra;
@@ -52,6 +53,28 @@ public class StorePackagingTests
                                      .ToList();
         Assert.Contains("runFullTrust", capabilities);
         Assert.Contains("allowElevation", capabilities);
+    }
+
+    [Fact]
+    public void NoAssignmentCaseCollidesWithAParameterName()
+    {
+        // Variables are case-insensitive, so a local $bundle IS the [switch] $Bundle
+        // parameter: assigning the bundle path into it dies on the switch's type conversion
+        // and the bundle step never runs. Read every assignment target and every parameter
+        // name, and refuse any pair that matches case-insensitively.
+        string script = Repo.Read("build/Make-Msix.ps1");
+
+        var parameters = Regex.Matches(script, @"\[(?:switch|string)\]\s*\$(\w+)")
+            .Select(m => m.Groups[1].Value)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        Assert.NotEmpty(parameters);
+
+        foreach (Match assignment in Regex.Matches(script, @"^\s*\$(\w+)\s*=", RegexOptions.Multiline))
+        {
+            string target = assignment.Groups[1].Value;
+            Assert.False(parameters.Contains(target),
+                $"${target} is assigned to and is also a parameter name - case-insensitive variables make them one variable");
+        }
     }
 
     [Fact]
