@@ -12,6 +12,9 @@ and Findra follows [Semantic Versioning](https://semver.org/spec/v2.0.0/).
 - **The website no longer carries Netlify's advertisement.** Netlify writes a comment and two tags
   into every page it serves, one of them a tracking link to its own sign-up page. They are taken
   back out before the page reaches you, on every page including "not found".
+- **A link to the website shared on WhatsApp, Facebook and the like now says what Findra does**
+  (search by name, documents, photos and speech; free, private, open source) instead of quoting
+  benchmark figures.
 - Documentation: the "not found" page's own notes no longer say nothing can remove Netlify's
   additions.
 
