@@ -805,5 +805,13 @@ put('packaging/store/Assets/SplashScreen.png', pngOf(tile(620, 300)));
 mkdirSync(join(ROOT, 'packaging', 'store', 'listing'), { recursive: true });
 put('packaging/store/listing/AppTileIcon300.png', png(300, raster(300)));
 
+// Two more listing images, same rule: the Store's product page offers optional 1:1 box art at
+// 1080x1080 and 9:16 poster art at 720x1080. The box art is the plated mark one size up from
+// the app tile; the poster is the full-bleed treatment the wide tile and splash screen already
+// use, because a square plate on a 9:16 canvas would be two transparent bars and a guess at
+// what the Store does with them.
+put('packaging/store/listing/BoxArt1080x1080.png', png(1080, raster(1080)));
+put('packaging/store/listing/PosterArt720x1080.png', pngOf(tile(720, 1080)));
+
 console.log(`findra.ico carries ${SIZES.join(', ')}`);
 for (const line of wrote) console.log(line);
