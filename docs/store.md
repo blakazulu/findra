@@ -1,11 +1,11 @@
 # Publishing Findra to the Microsoft Store
 
-> **Status: submission 1 filled, not submitted.** "Findra" is reserved on the existing
+> **Status: submission 1 complete, not submitted.** "Findra" is reserved on the existing
 > developer account (step 3 done), all three identity values are final in
 > `packaging/store/Package.appxmanifest`, and the `store` workflow can produce the bundle.
-> On 22 September 2026 submission 1 (id `1152921505701952194`) was filled in Partner Center
-> and saved up to the Submit button; the package upload is the only section not done.
-> Nothing has been sent to Microsoft for review.
+> On 22 September 2026 submission 1 (id `1152921505701952194`) was filled in Partner Center,
+> the bundle uploaded, and every section shows Complete. Nothing has been sent to Microsoft
+> for review; the owner clicks Submit after a final read-through.
 
 ## The decision
 
@@ -135,12 +135,11 @@ Saved in Partner Center, submission id `1152921505701952194`:
 | Properties | **Complete.** Category Productivity (secondary: Utilities > tools). Privacy: "Yes, my product uses personal information" with `https://findra-search.netlify.app/privacy`. Website `https://findra-search.netlify.app/`, support contact the GitHub issues URL. |
 | Age ratings | **Complete.** IARC questionnaire, every content question answered No; generated ESRB Everyone / PEGI 3 (lowest band). IARC Terms of Use acknowledged. |
 | Store listing (en-US) | **Complete.** Description, short description, the six product features, copyright, license-terms URL and keywords exactly as in the text below; "What's new" left blank for the first submission. Four Desktop screenshots (1366x768 PNG from `packaging/store/listing/`) uploaded in the order firstrun, results, advanced, settings, each with its one-line caption from this page. Store logos filled: 1:1 app tile icon 300x300 (`AppTileIcon300.png`), 1:1 box art 1080x1080 and 9:16 poster art 720x1080 (both drawn by Make-Icon.mjs from the same mark geometry). |
-| Submission options | Publishing hold left at the default (publish when certified). Notes for certification filled - for MSIX products the field lives on the product-level Additional Testing Information page, not in the submission's Submission options section. |
-| Packages | **Not started.** The 289 MB `.msixbundle` exceeds the 25 MB upload cap of the automation browser bridge used on the day; upload still pending (Partner Center in a normal browser session, or the Microsoft Store submission API with a Microsoft Entra app associated to the account). The restricted-capability justification field for `allowElevation` appears in this section once a package is uploaded. |
+| Submission options | **Complete.** Publishing hold left at the default (publish when certified). Notes for certification filled - for MSIX products the field lives on the product-level Additional Testing Information page, not in the submission's Submission options section. The restricted-capability justification for `allowElevation` (text below) was pasted into the Restricted capabilities field that appeared in Submission options after the package upload. |
+| Packages | **Complete.** `findra_0.3.1.0.msixbundle` (275.9 MB, shown as v2026.922.1406.0 Neutral) uploaded by the owner in his own browser on 22 September 2026 - it exceeded the 25 MB upload cap of the automation browser bridge. Device families: only Windows 10/11 Desktop checked, plus the default "future device families" box. Package validation passed. |
 
-What remains before release: upload the bundle, paste the allowElevation justification
-into the restricted-capability field that appears with the package, review, then the owner
-clicks Submit. Submit was deliberately not clicked during the fill.
+What remains before release: the owner reviews the submission and clicks Submit.
+Submit was deliberately not clicked during the fill.
 
 ### 6. Certification
 
