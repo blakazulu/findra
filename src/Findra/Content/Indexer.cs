@@ -274,6 +274,9 @@ public sealed class Indexer
             GateVerdict verdict = gate(item.Reason == ContentDb.ReasonDelete, item.Kind);
             if (!verdict.Run)
             {
+                // Only for the card. Fullscreen holds these too: a game may be loading from the
+                // same disk, and a batch of stats is still disk work.
+                if (verdict.State == IndexGate.GpuBusy && SettledWhileTheCardIsBusy(item)) continue;
                 if (lastState != verdict.State)
                 {
                     Log.Info("index", $"indexer waits: {verdict.State}" + (verdict.Reason.Length > 0 ? $" ({verdict.Reason})" : ""));
@@ -402,6 +405,53 @@ public sealed class Indexer
         }
     }
 
+    /// <summary>Take a row off the queue without opening its file, when nothing about the file
+    /// needs reading: it is gone, or its bytes are the ones already indexed. Null means it has to
+    /// be read. A stat and a lookup, with no model anywhere near it.</summary>
+    private string? Settle(ContentDb.Pending item, FileInfo fi)
+    {
+        if (!fi.Exists)
+        {
+            // Moved or deleted between queuing and now. The journal will say which, and a file
+            // that is simply gone is not a failure - recording one would fill the report with
+            // rows nobody can act on.
+            using var tx = _db.Begin();
+            _db.Dequeue(item.Id, tx);
+            tx.Commit();
+            return "gone";
+        }
+        // "Finished" here is not the freshness check on its own. A skipped file carries its
+        // real modification time, so the bytes ARE current - and it was never opened, because
+        // nothing could read it at the time. Re-queueing is how a capability picks those rows
+        // up, and it arrives carrying whatever reason the caller wrote; deciding from that
+        // string alone would dequeue every one of them untouched, move no counter and log
+        // nothing. Recheck stays for reopening a file that genuinely was indexed.
+        if (item.Reason != Recheck && item.Reason != Reframe
+            && _db.StateOf(item.Vol, item.Frn) != ContentDb.StateSkipped
+            && _db.IsCurrent(item.Vol, item.Frn, fi.LastWriteTimeUtc.Ticks))
+        {
+            using var tx = _db.Begin();
+            _db.Dequeue(item.Id, tx);
+            tx.Commit();
+            return "current";
+        }
+        return null;
+    }
+
+    /// <summary><see cref="Settle"/> for a row the card is holding back. Moving a folder's worth
+    /// of photos queues one row each with bytes that did not change; waiting on somebody else's
+    /// model for those left the whole batch in the count, and everything queued behind it waiting
+    /// too. Anything that goes wrong leaves the row for the ordinary path.</summary>
+    private bool SettledWhileTheCardIsBusy(ContentDb.Pending item)
+    {
+        try { return Settle(item, new FileInfo(item.Path)) is not null; }
+        catch (Exception ex)
+        {
+            Log.Once("index|settle", "WARN", "index", "a queued file could not be checked while waiting :: " + ex.Message);
+            return false;
+        }
+    }
+
     /// <summary>Deal with one queued file and take it off the queue. Returns the word that
     /// describes what happened, which is what a drain prints beside the file name.</summary>
     private string Handle(ContentDb.Pending item)
@@ -427,32 +477,8 @@ public sealed class Indexer
             }
 
             var fi = new FileInfo(item.Path);
-            if (!fi.Exists)
-            {
-                // Moved or deleted between queuing and now. The journal will say which, and a file
-                // that is simply gone is not a failure - recording one would fill the report with
-                // rows nobody can act on.
-                using var tx = _db.Begin();
-                _db.Dequeue(item.Id, tx);
-                tx.Commit();
-                return "gone";
-            }
+            if (Settle(item, fi) is { } settled) return settled;
             long mtime = fi.LastWriteTimeUtc.Ticks;
-            // "Finished" here is not the freshness check on its own. A skipped file carries its
-            // real modification time, so the bytes ARE current - and it was never opened, because
-            // nothing could read it at the time. Re-queueing is how a capability picks those rows
-            // up, and it arrives carrying whatever reason the caller wrote; deciding from that
-            // string alone would dequeue every one of them untouched, move no counter and log
-            // nothing. Recheck stays for reopening a file that genuinely was indexed.
-            if (item.Reason != Recheck && item.Reason != Reframe
-                && _db.StateOf(item.Vol, item.Frn) != ContentDb.StateSkipped
-                && _db.IsCurrent(item.Vol, item.Frn, mtime))
-            {
-                using var tx = _db.Begin();
-                _db.Dequeue(item.Id, tx);
-                tx.Commit();
-                return "current";
-            }
 
             if (!_decoders.CanRead(item.Kind))
             {

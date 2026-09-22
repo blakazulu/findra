@@ -14,6 +14,11 @@ and Findra follows [Semantic Versioning](https://semver.org/spec/v2.0.0/).
 
 ### Fixed
 
+- **Files that have not changed no longer wait for the graphics card.** Moving a folder of photos
+  or recordings queues each file again. While another program was using the card, Findra held
+  every one of them back, and the count said they were waiting, even though checking that the
+  file had not changed needs no card at all. Findra now clears those at once and waits only for
+  files it really has to read. A fullscreen game still holds everything back.
 - **The website no longer carries Netlify's advertisement.** Netlify writes a comment and two tags
   into every page it serves, one of them a tracking link to its own sign-up page. They are taken
   back out before the page reaches you, on every page including "not found".

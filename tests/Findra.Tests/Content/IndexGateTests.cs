@@ -129,6 +129,98 @@ public sealed class IndexGateTests : IDisposable
         Assert.Equal(0, next.Value.Attempts);
     }
 
+    private static readonly GateVerdict CardBusy = new(false, IndexGate.GpuBusy, "python is using 90% of the card");
+
+    private static void Indexed(ContentDb db, ulong frn, string path, ResultKind kind)
+    {
+        using var tx = db.Begin();
+        db.Upsert("C", frn, path, kind, new FileInfo(path).LastWriteTimeUtc.Ticks, new FileInfo(path).Length,
+                  ContentDb.StateIndexed, null, Array.Empty<ContentDb.Segment>(), tx);
+        tx.Commit();
+    }
+
+    [Fact]
+    public void ABusyCardDoesNotHoldBackARowThatOnlyNeedsItsDateCompared()
+    {
+        // Photos moved between folders arrive from the journal one row each, with bytes that did
+        // not change. Settling one is a stat and a lookup; waiting on the card for it left the
+        // whole batch sitting in the count for as long as somebody else's model was loaded.
+        Directory.CreateDirectory(_dir);
+        string photo = Path.Combine(_dir, "harbour.jpg");
+        File.WriteAllBytes(photo, new byte[64]);
+
+        using var db = new ContentDb(Path.Combine(_dir, "search.db"));
+        Indexed(db, 1, photo, ResultKind.Photo);
+        db.Enqueue("C", 1, photo, ResultKind.Photo, "change");
+        var d = new UnloadCounting(new CapabilitySet(new HashSet<Capability> { Capability.Photos }));
+
+        int passes = 0;
+        Indexer.Loop(db, parentPid: 0, running: () => passes++ < 1, decoders: d, gate: (_, _) => CardBusy);
+
+        Assert.Equal(0, d.DecodeCalls);
+        Assert.Null(db.TakeNext());
+    }
+
+    [Fact]
+    public void ABusyCardDoesNotHoldBackARowWhoseFileIsGone()
+    {
+        Directory.CreateDirectory(_dir);
+        using var db = new ContentDb(Path.Combine(_dir, "search.db"));
+        db.Enqueue("C", 1, Path.Combine(_dir, "moved-away.jpg"), ResultKind.Photo, "change");
+        var d = new UnloadCounting(new CapabilitySet(new HashSet<Capability> { Capability.Photos }));
+
+        int passes = 0;
+        Indexer.Loop(db, parentPid: 0, running: () => passes++ < 1, decoders: d, gate: (_, _) => CardBusy);
+
+        Assert.Null(db.TakeNext());
+    }
+
+    [Fact]
+    public void ABusyCardStillHoldsBackAFileThatHasToBeRead()
+    {
+        Directory.CreateDirectory(_dir);
+        string photo = Path.Combine(_dir, "harbour.jpg");
+        File.WriteAllBytes(photo, new byte[64]);
+
+        using var db = new ContentDb(Path.Combine(_dir, "search.db"));
+        Indexed(db, 1, photo, ResultKind.Photo);
+        File.SetLastWriteTimeUtc(photo, DateTime.UtcNow.AddMinutes(5));
+        db.Enqueue("C", 1, photo, ResultKind.Photo, "change");
+        // A recheck is a request to read again whatever the date says.
+        string other = Path.Combine(_dir, "quay.jpg");
+        File.WriteAllBytes(other, new byte[64]);
+        Indexed(db, 2, other, ResultKind.Photo);
+        db.Enqueue("C", 2, other, ResultKind.Photo, Indexer.Recheck);
+        var d = new UnloadCounting(new CapabilitySet(new HashSet<Capability> { Capability.Photos }));
+
+        int passes = 0;
+        Indexer.Loop(db, parentPid: 0, running: () => passes++ < 1, decoders: d, gate: (_, _) => CardBusy);
+
+        Assert.Equal(0, d.DecodeCalls);
+        Assert.Equal(2L, db.PendingCount());
+        Assert.Equal(IndexGate.GpuBusy, db.Get("indexer:state"));
+    }
+
+    [Fact]
+    public void FullscreenHoldsBackEvenARowThatOnlyNeedsItsDateCompared()
+    {
+        // A game may be loading from the same disk; a batch of stats is still disk work.
+        Directory.CreateDirectory(_dir);
+        string photo = Path.Combine(_dir, "harbour.jpg");
+        File.WriteAllBytes(photo, new byte[64]);
+
+        using var db = new ContentDb(Path.Combine(_dir, "search.db"));
+        Indexed(db, 1, photo, ResultKind.Photo);
+        db.Enqueue("C", 1, photo, ResultKind.Photo, "change");
+        var d = new UnloadCounting(new CapabilitySet(new HashSet<Capability> { Capability.Photos }));
+
+        int passes = 0;
+        Indexer.Loop(db, parentPid: 0, running: () => passes++ < 1, decoders: d,
+                     gate: (_, _) => new GateVerdict(false, IndexGate.Fullscreen, "a fullscreen game"));
+
+        Assert.Equal(1L, db.PendingCount());
+    }
+
     [Fact]
     public void APausedIndexerHoldsNoModels()
     {
