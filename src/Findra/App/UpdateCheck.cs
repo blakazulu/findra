@@ -25,8 +25,9 @@ public enum UpdateState
 public sealed record UpdateResult(UpdateState State, string? Latest, string? Advice, Config Config);
 
 /// <summary>
-/// The one thing Findra sends off this machine (spec 9b): an anonymous check against the
-/// GitHub Releases API, at most once a day, that never blocks and never installs anything.
+/// The one thing Findra sends off this machine (spec 9b): an anonymous check against GitHub - the
+/// releases page, or for a winget copy the winget catalogue's listing - at most once a day, that
+/// never blocks and never installs anything.
 /// Every comparison here is on parsed version numbers, never string ordering, and a version
 /// that fails to parse is never treated as newer than one that does.
 /// </summary>
@@ -200,28 +201,71 @@ public static class UpdateCheck
     /// </summary>
     public const long ResponseCap = 4L * 1024 * 1024;
 
-    /// <summary>The real fetch (spec 9b): a single anonymous GET to the GitHub Releases API
-    /// for this repository, User-Agent only, no query parameters, no machine or install
-    /// identifier - provided <paramref name="client"/> came from <see cref="CreateClient"/>;
-    /// see its doc comment for why a default <c>HttpClient</c> would not hold that guarantee.
-    /// Not called by any test beyond <see cref="CreateClient"/>'s own, and not wired into the
-    /// app - a later task passes <c>CreateClient()</c>'s result and this method as the
-    /// <c>fetch</c> delegate to <see cref="CheckAsync"/>.
-    ///
-    /// GitHub's <c>/releases/latest</c> endpoint already excludes drafts and prereleases, so
-    /// there is no separate prerelease filter to apply here.
+    /// <summary>The newest release of this repository. GitHub's <c>/releases/latest</c> already
+    /// excludes drafts and prereleases, so there is no separate prerelease filter to apply.
     ///
     /// Note: spec 9b also says prereleases are ignored "unless the running build is itself a
     /// prerelease". That half is deferred, not implemented: <see cref="Log.Version"/> emits
     /// only <c>Major.Minor.Build</c>, so a prerelease running build currently has no tag to
     /// carry that fact, and there is nothing here to key the filter off.</summary>
-    public static async Task<string?> FetchLatestTagAsync(HttpClient client, string version, CancellationToken ct)
+    public const string ReleasesUrl = "https://api.github.com/repos/blakazulu/findra/releases/latest";
+
+    /// <summary>The winget catalogue's folder for Findra, in the repository the catalogue is built
+    /// from: one folder per version it can install. A winget copy asks here instead, because
+    /// <c>winget upgrade</c> can only install what the catalogue has, and the catalogue trails the
+    /// releases page by a submission somebody makes by hand. Asking the releases page told winget
+    /// users about versions their update command could not find.</summary>
+    public const string CatalogueUrl =
+        "https://api.github.com/repos/microsoft/winget-pkgs/contents/manifests/b/blakazulu/Findra";
+
+    /// <summary>Where a copy asks, by how it was installed: the catalogue for winget, the releases
+    /// page for everything else. Either way it is one anonymous request to the same host.</summary>
+    public static string SourceUrl(string? installSource) =>
+        string.Equals(installSource, "winget", StringComparison.OrdinalIgnoreCase) ? CatalogueUrl : ReleasesUrl;
+
+    /// <summary>A release's tag, as the releases page answers it.</summary>
+    public static string? TagOf(JsonElement release) =>
+        release.ValueKind == JsonValueKind.Object && release.TryGetProperty("tag_name", out var tag)
+            ? tag.GetString() : null;
+
+    /// <summary>The newest version the catalogue lists, compared as a version and never as a name:
+    /// the listing is in name order, where 0.10.0 comes before 0.9.0. Only folders count, and only
+    /// those named like a version. Null when there is none, which the check reports as Unknown.</summary>
+    public static string? NewestInCatalogue(JsonElement listing)
+    {
+        if (listing.ValueKind != JsonValueKind.Array) return null;
+
+        string? newest = null;
+        Version? best = null;
+        foreach (JsonElement entry in listing.EnumerateArray())
+        {
+            if (entry.ValueKind != JsonValueKind.Object ||
+                !entry.TryGetProperty("type", out var type) || type.GetString() != "dir" ||
+                !entry.TryGetProperty("name", out var name)) continue;
+
+            string? folder = name.GetString();
+            Version? v = ParseVersion(folder);
+            if (v is null || (best is not null && v <= best)) continue;
+            best = v;
+            newest = folder;
+        }
+        return newest;
+    }
+
+    /// <summary>The real fetch (spec 9b): a single anonymous GET to <see cref="SourceUrl"/>,
+    /// User-Agent only, no query parameters, no machine or install identifier - provided
+    /// <paramref name="client"/> came from <see cref="CreateClient"/>; see its doc comment for why
+    /// a default <c>HttpClient</c> would not hold that guarantee. No test calls it, since every
+    /// test runs offline; <c>App.RunUpdateCheck</c> passes it, over <c>CreateClient()</c>'s
+    /// client, as the <c>fetch</c> delegate to <see cref="CheckAsync"/>.</summary>
+    public static async Task<string?> FetchLatestAsync(HttpClient client, string version, string? installSource,
+                                                       CancellationToken ct)
     {
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
         timeout.CancelAfter(TimeSpan.FromSeconds(10));
 
-        using var request = new HttpRequestMessage(HttpMethod.Get,
-            "https://api.github.com/repos/blakazulu/findra/releases/latest");
+        string url = SourceUrl(installSource);
+        using var request = new HttpRequestMessage(HttpMethod.Get, url);
         request.Headers.UserAgent.ParseAdd($"findra/{version}");
 
         using HttpResponseMessage response = await client.SendAsync(request, timeout.Token).ConfigureAwait(false);
@@ -230,6 +274,6 @@ public static class UpdateCheck
         using Stream stream = await response.Content.ReadAsStreamAsync(timeout.Token).ConfigureAwait(false);
         using JsonDocument doc = await JsonDocument.ParseAsync(stream, cancellationToken: timeout.Token).ConfigureAwait(false);
 
-        return doc.RootElement.TryGetProperty("tag_name", out var tag) ? tag.GetString() : null;
+        return url == CatalogueUrl ? NewestInCatalogue(doc.RootElement) : TagOf(doc.RootElement);
     }
 }

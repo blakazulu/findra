@@ -161,6 +161,35 @@ public class BenchTests
     }
 
     [Fact]
+    public void TheHelpersWholeMemoryIsPrintedBesideTheIndex()
+    {
+        // The index is one part of what the helper holds; the process is what a person pays.
+        string md = Bench.Fragment(Sample(names: SomeNames()) with { HelperWorkingSet = 262_144_000 });
+
+        Assert.Contains("Name helper working set: 250.0 MB", Section(md, "Volumes"), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void AnUnmeasuredHelperMemoryIsNotPrintedAsZero()
+    {
+        string md = Bench.Fragment(Sample(names: SomeNames()));
+        Assert.DoesNotContain("Name helper working set", md, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void HowFastANameComesBackIsTheFirstTable()
+    {
+        // It is the number people come for, and the fragment is pasted verbatim, so its order is
+        // the README's order: name latency first, the machine after it.
+        string md = Bench.Fragment(Sample(names: SomeNames()));
+
+        int names = md.IndexOf("### Name query latency", StringComparison.Ordinal);
+        Assert.True(names >= 0);
+        Assert.True(names < md.IndexOf("### Machine", StringComparison.Ordinal));
+        Assert.True(names < md.IndexOf("### Volumes", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public void NameLatencySeparatesThePipeFromTheScan()
     {
         // Spec §9: "separating the pipe round trip from the index scan". One combined number

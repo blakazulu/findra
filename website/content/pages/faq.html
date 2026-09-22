@@ -1,0 +1,213 @@
+  <!-- ================= questions ================= -->
+  <!-- Every answer is self-contained on purpose: an answer engine lifts one paragraph and gets
+       none of the page around it. Each is checkable against the numbers page or the pages it links. -->
+  <div class="wrap">
+    <section id="questions">
+      <div class="sec-head reveal">
+        <span class="kicker">STRAIGHT ANSWERS</span>
+        <h1>Questions people ask before they install it</h1>
+      </div>
+
+      <div class="grid-2">
+        <article class="excuse reveal">
+          <h3>What is Findra?</h3>
+          <p>Findra is a free, open-source desktop search program for Windows 10 and 11. A capsule sits on the desktop and a global hotkey opens it from anywhere. It finds files by name from an index held in RAM, and, if you turn it on, by the words inside documents, by what a photograph shows, and by what was said in a recording.</p>
+          <p>Findra is an independent application written by one person. It is not made by, affiliated with or endorsed by Microsoft, and it is not a version, component, fork or replacement of the Windows Search service that ships inside Windows.</p>
+        </article>
+
+        <article class="excuse reveal">
+          <h3>Does Findra search inside files, or only filenames?</h3>
+          <p>Both, but not at the same time. Filenames are searchable the second Findra starts, because a name index costs seconds to build. Reading inside files is off until you turn it on, because it walks every drive and can run for hours. <code>findra --content on</code> starts it and <code>findra --content off</code> stops it without discarding anything already read.</p>
+        </article>
+
+        <article class="excuse reveal">
+          <h3>How fast is Findra?</h3>
+          <p>0.60 to 3.78 ms median round trip for a filename across five measured queries - 0.60 ms for "config" and 3.78 ms for "sunset" - including the hop between processes; the worst single sample across the five measured name queries was 5.36 ms. 1,780,595 names were enumerated in 5.4 seconds when the name helper started, and the index holding them takes 200.3 MB of RAM. Measured with <code>findra --searchbench</code> on an AMD Ryzen 9 9900X3D, 47.1 GB of RAM, an NVMe SSD, Windows 11 Pro 10.0.26200.9445. Yours will differ.</p>
+        </article>
+
+        <article class="excuse reveal">
+          <h3>Does anything leave my machine?</h3>
+          <p>One request, and it is not about you. Once every 24 hours on startup, Findra makes an anonymous HTTPS GET to GitHub - the releases API, or the winget catalogue's listing for a winget install - to ask whether a newer version exists: no query parameters, no machine identifier, no install identifier, nothing about your files or your searches. It can be switched off, and off means the request is not made. Model downloads happen only when you choose a capability and ask for it.</p>
+        </article>
+
+        <article class="excuse reveal">
+          <h3>How do I install Findra?</h3>
+          <p><code>winget install blakazulu.Findra</code>, which picks the x64 or arm64 build for your machine. The same installer is on the GitHub releases page, <a href="https://github.com/blakazulu/findra/releases/latest" rel="noopener">https://github.com/blakazulu/findra/releases/latest</a>, and that page carries each new release first: the Windows Package Manager catalogue can take a few days to pick one up. Building from source needs the .NET 10 SDK and nothing else. Neither the installer nor the executables are signed yet, so Windows warns about an unknown publisher until that changes.</p>
+        </article>
+
+        <article class="excuse reveal">
+          <h3>Can I find a photo by describing what is in it?</h3>
+          <p>Yes, if you install the picture capability, which is a 629 MB download of model files that run on your own machine. Findra compares what you typed against what the model saw in each image, so a photograph of a receipt on a shop counter turns up for "paper receipt" with none of those words anywhere in its filename. No image is ever uploaded to be understood.</p>
+        </article>
+
+        <article class="excuse reveal">
+          <h3>Can I search recordings by what was said in them?</h3>
+          <p>Yes, if you install the speech capability. Findra transcribes audio and video on your own machine and searches the transcript exactly as it searches a document, which is why speech brings the document models with it: 547 MB on top of them. One number, in minutes, sets how long a recording is worth transcribing - five by default - and raising it later goes back for exactly the files it passed over.</p>
+        </article>
+
+        <article class="excuse reveal">
+          <h3>Does Findra need a graphics card?</h3>
+          <p>No. Findra tries DirectML for the picture and meaning models and Vulkan for speech, and falls back to the processor when neither answers. The processor is a supported configuration rather than a failure state: only the first pass through your files is slower. When another program is working the graphics card hard, or something is running fullscreen, Findra stops reading, lets go of the models it had loaded, and carries on once the card has been free for a minute. Findra's published measurements come from one machine, and it has an NVIDIA card; AMD and Intel graphics have not been tested on real hardware, and neither has an arm64 machine.</p>
+        </article>
+
+        <article class="excuse reveal">
+          <h3>Does Findra need administrator rights?</h3>
+          <p>Once, for one call. A helper process opens the NTFS volume to read the file table, which is the only thing in Findra that needs them. Everything else runs at normal integrity, including the part that opens and decodes your files, so a malformed document never meets an elevated process. Uninstalling always removes that elevated logon task.</p>
+        </article>
+
+        <article class="excuse reveal">
+          <h3>How much disk space does Findra need?</h3>
+          <p>Nothing extra, if you only want filenames. The capabilities that use a model are separate downloads you can decline: 629 MB for photos and video, 1.04 GB for meaning in documents, 547 MB for speech on top of the document models, and 1.51 GB for the Hebrew second pass. Taking every one of them is 3.7 GB. A missing model is a normal state, not an error - that capability is skipped and nothing else changes.</p>
+        </article>
+      </div>
+    </section>
+  </div>
+
+  <!-- ================= privacy ================= -->
+  <div class="wrap">
+    <section id="privacy">
+      <div class="sec-head reveal">
+        <span class="kicker">WHAT LEAVES YOUR MACHINE</span>
+        <h2>Does anything leave your machine?</h2>
+        <p>One request. Written down, not buried.</p>
+      </div>
+
+      <div class="privacy">
+        <div class="panel reveal">
+          <h3>Never leaves</h3>
+          <ul class="never" style="list-style:none;margin:0;padding:0">
+            <li><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fa7e00" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg> Your files, and their contents</li>
+            <li><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fa7e00" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg> Their names, and where they live</li>
+            <li><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fa7e00" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg> What you searched for, and when</li>
+            <li><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fa7e00" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg> Anything at all about who you are</li>
+          </ul>
+          <p>
+            There is no account, no cloud service, no analytics, no crash reporting and no
+            telemetry. The models run on your own processor or graphics card; a photograph is
+            never uploaded to be understood.
+          </p>
+        </div>
+
+        <div class="panel accent reveal">
+          <h3>The one exception</h3>
+          <p>
+            Once every 24 hours, on startup, in the background, Findra makes an anonymous HTTPS GET
+            to the GitHub releases API - or, for a winget install, to the winget catalogue's listing
+            on GitHub - to learn whether a newer version exists. No query
+            parameters, no machine identifier, no install identifier, nothing about your files or
+            your searches.
+          </p>
+          <p>
+            It never blocks anything, a failure is a line in the log rather than a dialog, it is
+            disclosed on the first-run screen, and you can switch it off. Off means the request is
+            not made at all.
+          </p>
+          <p style="color:var(--ink-dim)">
+            Findra never installs an update by itself. Replacing a running executable and
+            re-registering an elevated task are the two operations most likely to leave a machine
+            broken, and it declines to do either behind your back.
+          </p>
+          <p style="font-size:14px">
+            The full <a href="/privacy/">privacy policy</a> lists what Findra stores, where it
+            stores it, and how to delete it.
+          </p>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "FAQPage",
+  "@id": "https://findra-search.netlify.app/faq/#faq",
+  "isPartOf": {
+    "@id": "https://findra-search.netlify.app/#site"
+  },
+  "about": {
+    "@id": "https://findra-search.netlify.app/#findra"
+  },
+  "mainEntity": [
+    {
+      "@type": "Question",
+      "name": "What is Findra?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Findra is a free, open-source desktop search program for Windows 10 and 11. A capsule sits on the desktop and a global hotkey opens it from anywhere. It finds files by name from an index held in RAM, and, if you turn it on, by the words inside documents, by what a photograph shows, and by what was said in a recording. Findra is an independent application written by one person. It is not made by, affiliated with or endorsed by Microsoft, and it is not a version, component, fork or replacement of the Windows Search service that ships inside Windows."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "Does Findra search inside files, or only filenames?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Both, but not at the same time. Filenames are searchable the second Findra starts, because a name index costs seconds to build. Reading inside files is off until you turn it on, because it walks every drive and can run for hours. findra --content on starts it and findra --content off stops it without discarding anything already read."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "How fast is Findra?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "0.60 to 3.78 ms median round trip for a filename across five measured queries - 0.60 ms for \"config\" and 3.78 ms for \"sunset\" - including the hop between processes; the worst single sample across the five measured name queries was 5.36 ms. 1,780,595 names were enumerated in 5.4 seconds when the name helper started, and the index holding them takes 200.3 MB of RAM. Measured with findra --searchbench on an AMD Ryzen 9 9900X3D, 47.1 GB of RAM, an NVMe SSD, Windows 11 Pro 10.0.26200.9445. Yours will differ."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "Does anything leave my machine?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "One request, and it is not about you. Once every 24 hours on startup, Findra makes an anonymous HTTPS GET to GitHub - the releases API, or the winget catalogue's listing for a winget install - to ask whether a newer version exists: no query parameters, no machine identifier, no install identifier, nothing about your files or your searches. It can be switched off, and off means the request is not made. Model downloads happen only when you choose a capability and ask for it."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "How do I install Findra?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "winget install blakazulu.Findra, which picks the x64 or arm64 build for your machine. The same installer is on the GitHub releases page, https://github.com/blakazulu/findra/releases/latest, and that page carries each new release first: the Windows Package Manager catalogue can take a few days to pick one up. Building from source needs the .NET 10 SDK and nothing else. Neither the installer nor the executables are signed yet, so Windows warns about an unknown publisher until that changes."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "Can I find a photo by describing what is in it?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Yes, if you install the picture capability, which is a 629 MB download of model files that run on your own machine. Findra compares what you typed against what the model saw in each image, so a photograph of a receipt on a shop counter turns up for \"paper receipt\" with none of those words anywhere in its filename. No image is ever uploaded to be understood."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "Can I search recordings by what was said in them?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Yes, if you install the speech capability. Findra transcribes audio and video on your own machine and searches the transcript exactly as it searches a document, which is why speech brings the document models with it: 547 MB on top of them. One number, in minutes, sets how long a recording is worth transcribing - five by default - and raising it later goes back for exactly the files it passed over."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "Does Findra need a graphics card?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "No. Findra tries DirectML for the picture and meaning models and Vulkan for speech, and falls back to the processor when neither answers. The processor is a supported configuration rather than a failure state: only the first pass through your files is slower. When another program is working the graphics card hard, or something is running fullscreen, Findra stops reading, lets go of the models it had loaded, and carries on once the card has been free for a minute. Findra's published measurements come from one machine, and it has an NVIDIA card; AMD and Intel graphics have not been tested on real hardware, and neither has an arm64 machine."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "Does Findra need administrator rights?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Once, for one call. A helper process opens the NTFS volume to read the file table, which is the only thing in Findra that needs them. Everything else runs at normal integrity, including the part that opens and decodes your files, so a malformed document never meets an elevated process. Uninstalling always removes that elevated logon task."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "How much disk space does Findra need?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Nothing extra, if you only want filenames. The capabilities that use a model are separate downloads you can decline: 629 MB for photos and video, 1.04 GB for meaning in documents, 547 MB for speech on top of the document models, and 1.51 GB for the Hebrew second pass. Taking every one of them is 3.7 GB. A missing model is a normal state, not an error - that capability is skipped and nothing else changes."
+      }
+    }
+  ]
+}
+  </script>

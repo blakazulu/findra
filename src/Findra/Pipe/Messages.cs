@@ -30,10 +30,12 @@ public sealed record StatusRequest();
 /// there reads as "not measured", which is exactly what a caller that never had the numbers is
 /// saying. <see cref="NameServer"/> always fills all three from the volume's view.
 /// </summary>
-public sealed record VolumeStatus(char Letter, int Count, long BufferBytes, bool Live,
+public sealed record VolumeStatus(char Letter, int Count, long ResidentBytes, bool Live,
                                   double EnumerateMs = 0, long NextUsn = 0, long Dropped = 0);
 
-public sealed record StatusReply(int ProcessId, IReadOnlyList<VolumeStatus> Volumes);
+/// <summary><c>WorkingSetBytes</c> is the helper's whole process, read by the helper itself: nothing
+/// at normal integrity can read an elevated process's memory. Zero means not measured.</summary>
+public sealed record StatusReply(int ProcessId, IReadOnlyList<VolumeStatus> Volumes, long WorkingSetBytes = 0);
 
 /// <summary>
 /// One journal record on its way to the UI.

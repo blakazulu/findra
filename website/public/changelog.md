@@ -5,6 +5,41 @@ All notable changes to Findra are documented here.
 The format follows [Keep a Changelog 1.1.0](https://keepachangelog.com/en/1.1.0/),
 and Findra follows [Semantic Versioning](https://semver.org/spec/v2.0.0/).
 
+## [0.3.1 - 22 September 2026](https://github.com/blakazulu/findra/releases/tag/v0.3.1)
+
+### Added
+
+- **`findra --searchbench` shows the name helper's whole memory**, not only its index, and prints
+  how fast a filename comes back first, since that is the number most people run it for.
+
+### Changed
+
+- **The website's front page is short.** It says what Findra is, how fast a filename search is,
+  and how to install it. What it finds, why it differs, every measured table, the questions and
+  the full install instructions each have a page of their own.
+
+- **Search by meaning and by picture loads only when there is something to find.** Findra used to
+  load both search models at startup whenever they were on disk - about 1.7 GB of memory, even
+  for "Just names" after a reinstall that kept the models. It now loads each one only once the
+  index holds something it can match, in the background, and a model installed while Findra is
+  running is searchable without restarting it. A search in the few seconds a model takes to load
+  answers by names and words.
+
+### Fixed
+
+- **A copy installed with winget is told about the versions winget can install.** The update
+  check used to ask the releases page, which gets each version days before the winget catalogue
+  does, so "Update now" could run `winget upgrade` and find nothing newer. A winget copy now asks
+  the winget catalogue's listing on GitHub instead - still one anonymous request, at most once a
+  day - and when it is up to date it says so in winget's terms.
+- **The name helper gives back the memory it used while building.** Building the name index for
+  a large disk left about 300 MB of spare memory held by the background helper for the rest of
+  the session; it now returns it once the build is done. On 1.78 million files the helper drops
+  from about 560 MB to about 210 MB.
+- **The name index's memory is reported whole.** `findra --searchbench`, `findra --searchprobe`
+  and the log counted only the stored names, about a third of what the index holds. They now
+  count everything it keeps in memory.
+
 ## [0.3.0 - 22 September 2026](https://github.com/blakazulu/findra/releases/tag/v0.3.0)
 
 ### Added

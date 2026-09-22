@@ -261,6 +261,72 @@ public class UpdateCheckTests
         Assert.Equal(UpdateState.Current, r.State);
     }
 
+    // ---- where a copy asks ----
+
+    [Theory]
+    [InlineData("winget", UpdateCheck.CatalogueUrl)]
+    [InlineData("WinGet", UpdateCheck.CatalogueUrl)]
+    [InlineData("installer", UpdateCheck.ReleasesUrl)]
+    [InlineData("source", UpdateCheck.ReleasesUrl)]
+    [InlineData("unknown", UpdateCheck.ReleasesUrl)]
+    [InlineData(null, UpdateCheck.ReleasesUrl)]
+    public void AWingetCopyAsksTheCatalogueAndEveryOtherAsksTheReleases(string? source, string url)
+    {
+        // A winget copy is updated by `winget upgrade`, which can only install what the catalogue
+        // has - and the catalogue trails the releases page by a manual submission. Asking the
+        // releases page told winget users about a version their update command could not find.
+        Assert.Equal(url, UpdateCheck.SourceUrl(source));
+    }
+
+    [Fact]
+    public void BothAddressesAreOneAnonymousRequestToTheSameHost()
+    {
+        // The disclosure promises one request, with no query parameters, to GitHub.
+        foreach (string url in new[] { UpdateCheck.ReleasesUrl, UpdateCheck.CatalogueUrl })
+        {
+            var uri = new Uri(url);
+            Assert.Equal("https", uri.Scheme);
+            Assert.Equal("api.github.com", uri.Host);
+            Assert.Equal("", uri.Query);
+        }
+    }
+
+    [Fact]
+    public void TheCatalogueIsReadAsItsNewestVersionFolderByNumberNotByName()
+    {
+        // The catalogue's listing is one folder per version, in name order. 0.10.0 sorts before
+        // 0.9.0 as a string, and a stray file or a folder that is not a version is not a version.
+        const string listing = """
+            [
+              { "name": "0.1.0", "type": "dir" },
+              { "name": "0.10.0", "type": "dir" },
+              { "name": "0.9.0", "type": "dir" },
+              { "name": "99.0.0", "type": "file" },
+              { "name": "notes", "type": "dir" }
+            ]
+            """;
+        using var doc = System.Text.Json.JsonDocument.Parse(listing);
+        Assert.Equal("0.10.0", UpdateCheck.NewestInCatalogue(doc.RootElement));
+    }
+
+    [Theory]
+    [InlineData("[]")]
+    [InlineData("""[{ "name": "readme.md", "type": "file" }]""")]
+    [InlineData("""{ "message": "Not Found" }""")]
+    public void ACatalogueWithNoVersionInItAnswersNothing(string listing)
+    {
+        // Nothing, which CheckAsync reports as Unknown - never "up to date" on no information.
+        using var doc = System.Text.Json.JsonDocument.Parse(listing);
+        Assert.Null(UpdateCheck.NewestInCatalogue(doc.RootElement));
+    }
+
+    [Fact]
+    public void AReleaseIsReadAsItsTag()
+    {
+        using var doc = System.Text.Json.JsonDocument.Parse("""{ "tag_name": "v0.3.0", "draft": false }""");
+        Assert.Equal("v0.3.0", UpdateCheck.TagOf(doc.RootElement));
+    }
+
     [Fact]
     public async Task NewerReleaseIsAvailableWithAdvice()
     {

@@ -1,0 +1,82 @@
+  <!-- ================= install ================= -->
+  <div class="wrap">
+    <section id="install">
+      <div class="sec-head reveal">
+        <span class="kicker">INSTALL</span>
+        <h1>Get Findra</h1>
+        <p>
+          <b>Download the installer from the
+          <a href="https://github.com/blakazulu/findra/releases/latest" rel="noopener">releases page</a></b>, which
+          carries one for x64 and one for arm64. That is the whole install of
+          <span data-stamp="release">Findra 0.3.0, released on 22 September 2026</span>.
+          Or run
+          <code style="font-family:var(--mono);font-size:15px;color:var(--ink-dim)">winget install blakazulu.Findra</code>,
+          which installs the same program from the Windows Package Manager catalogue; the catalogue
+          can take a few days to pick up a new release. Building from source
+          still works and needs the .NET 10 SDK and nothing else. Every release note is that
+          version's section of the
+          <a href="/changelog/">changelog</a>.
+        </p>
+      </div>
+
+      <div class="install">
+        <div class="panel accent lead reveal">
+          <span class="badge now">INSTALLER OR WINGET</span>
+          <h3>Installer and winget</h3>
+          <p>
+            The installer and winget install the same program, on x64 and arm64 alike. Every
+            release carries an installer for each architecture on its
+            <a href="https://github.com/blakazulu/findra/releases/latest" rel="noopener">releases
+            page</a>, and winget picks it up from there.
+          </p>
+          <div class="get">
+            <a class="btn btn-primary" href="https://github.com/blakazulu/findra/releases/latest/download/findra-setup-x64.exe">
+              <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v11"/><polyline points="7 9.5 12 14.5 17 9.5"/><path d="M4 20h16"/></svg>
+              Download for Windows x64
+            </a>
+            <a class="alt" href="https://github.com/blakazulu/findra/releases/latest/download/findra-setup-arm64.exe">Arm64</a>
+          </div>
+          <button type="button" class="cmd" aria-label="Copy the command: winget install blakazulu.Findra" data-copy="winget install blakazulu.Findra">
+            <span class="p">&gt;</span><span class="t">winget install blakazulu.Findra</span><span class="c" aria-hidden="true">COPY</span>
+          </button>
+          <span class="said" role="status"></span>
+          <p style="font-size:14px">
+            winget installs from the Windows Package Manager catalogue, which can take a few days
+            to pick up a new release; the releases page always has the newest.
+            Neither the installer nor the executables are signed yet, so Windows will warn about an
+            unknown publisher until that changes. The
+            <a href="/code-signing/">Code signing policy</a> says who writes Findra, who approves a
+            release and who signs it, and it will say what the signature is when there is one.
+          </p>
+          <h3 style="font-size:17px;margin-top:6px">How do I uninstall Findra?</h3>
+          <p style="font-size:14px">
+            Uninstalling always removes the elevated logon task, because a scheduled task pointing
+            at a binary that is no longer there is a defect and not an inconvenience. It keeps your
+            models, your index and your settings unless you say otherwise, and tells you the
+            measured size it would free before it deletes anything.
+          </p>
+          <div class="cmd-block"><span class="p">$</span> findra --uninstall --dry-run</div>
+        </div>
+
+        <div class="panel reveal">
+          <span class="badge soon">FOR HACKING ON IT</span>
+          <h3>Build it from source</h3>
+          <p>Four commands, and you have a self-contained build. The tests run on your machine too.</p>
+          <div class="cmd-block"><span class="p">$</span> git clone https://github.com/blakazulu/findra
+<span class="p">$</span> cd findra
+<span class="p">$</span> dotnet build
+<span class="p">$</span> dotnet publish src/Findra -c Release --self-contained</div>
+          <p style="font-size:14px">
+            Name search needs the helper, which asks for administrator rights exactly once, to open
+            the volume. Nothing else in Findra ever needs them, and the part that reads your files
+            deliberately runs without them.
+          </p>
+          <div class="cmd-block"><span class="p">$</span> dotnet run --project src/Findra -- --names</div>
+          <a class="btn btn-ghost" href="https://github.com/blakazulu/findra" rel="noopener">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 .5C5.73.5.9 5.34.9 11.6c0 4.9 3.17 9.06 7.57 10.53.55.1.76-.24.76-.53v-2.07c-3.08.67-3.73-1.3-3.73-1.3-.5-1.29-1.23-1.63-1.23-1.63-1-.69.08-.67.08-.67 1.11.08 1.7 1.15 1.7 1.15.99 1.7 2.6 1.21 3.23.93.1-.72.39-1.21.7-1.49-2.46-.28-5.05-1.24-5.05-5.5 0-1.22.43-2.21 1.14-2.99-.11-.28-.5-1.41.11-2.94 0 0 .93-.3 3.05 1.14a10.5 10.5 0 0 1 5.56 0c2.12-1.44 3.05-1.14 3.05-1.14.61 1.53.22 2.66.11 2.94.71.78 1.14 1.77 1.14 2.99 0 4.27-2.6 5.21-5.07 5.49.4.35.76 1.03.76 2.08v3.08c0 .3.2.64.77.53 4.4-1.47 7.56-5.63 7.56-10.53C23.1 5.34 18.27.5 12 .5z"/></svg>
+            Source on GitHub
+          </a>
+        </div>
+      </div>
+    </section>
+  </div>

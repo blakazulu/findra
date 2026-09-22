@@ -1,0 +1,265 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Install Findra - winget, the installer, or from source</title>
+<meta name="description" content="Install Findra with winget or the installer from the releases page, build it from source with the .NET 10 SDK, and uninstall it cleanly.">
+<link rel="canonical" href="https://findra-search.netlify.app/install/">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Findra">
+<meta property="og:locale" content="en_US">
+<meta property="og:url" content="https://findra-search.netlify.app/install/">
+<meta property="og:title" content="Install Findra - winget, the installer, or from source">
+<meta property="og:description" content="Install Findra with winget or the installer from the releases page, build it from source with the .NET 10 SDK, and uninstall it cleanly.">
+<meta property="og:image" content="https://findra-search.netlify.app/share/card.png">
+<meta property="og:image:type" content="image/png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Findra. Windows Search, but it works. Filenames in 0.60 to 3.78 ms median, straight from RAM. Nothing leaves your machine.">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="theme-color" content="#08090c">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="icon" href="/favicon.ico" sizes="32x32">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<link rel="alternate" type="text/markdown" href="/install.md" title="Install Findra - winget, the installer, or from source as Markdown">
+<link rel="alternate" type="text/markdown" href="/llms.txt" title="Findra for language models">
+<!-- The two faces are served from this site, so the page makes no request to anybody else - which
+     is the promise it exists to make. Quicksand is preloaded because it sets the headline, and a
+     font the browser only discovers inside styles.css is a font it starts fetching late. -->
+<link rel="preload" href="/fonts/Quicksand-wght.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="/styles.css">
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "WebPage",
+      "@id": "https://findra-search.netlify.app/install/#page",
+      "url": "https://findra-search.netlify.app/install/",
+      "name": "Install Findra - winget, the installer, or from source",
+      "description": "Install Findra with winget or the installer from the releases page, build it from source with the .NET 10 SDK, and uninstall it cleanly.",
+      "inLanguage": "en",
+      "dateModified": "2026-09-22",
+      "isPartOf": {
+        "@id": "https://findra-search.netlify.app/#site"
+      },
+      "about": {
+        "@id": "https://findra-search.netlify.app/#findra"
+      },
+      "author": {
+        "@id": "https://findra-search.netlify.app/#blakazulu"
+      },
+      "publisher": {
+        "@id": "https://findra-search.netlify.app/#blakazulu"
+      },
+      "breadcrumb": {
+        "@id": "https://findra-search.netlify.app/install/#crumbs"
+      }
+    },
+    {
+      "@id": "https://findra-search.netlify.app/#findra",
+      "@type": "SoftwareApplication",
+      "name": "Findra",
+      "url": "https://findra-search.netlify.app/"
+    },
+    {
+      "@id": "https://findra-search.netlify.app/#blakazulu",
+      "@type": "Person",
+      "name": "Liraz Amir",
+      "alternateName": "blakazulu"
+    },
+    {
+      "@id": "https://findra-search.netlify.app/#site",
+      "@type": "WebSite",
+      "name": "Findra",
+      "url": "https://findra-search.netlify.app/"
+    },
+    {
+      "@type": "BreadcrumbList",
+      "@id": "https://findra-search.netlify.app/install/#crumbs",
+      "itemListElement": [
+        {
+          "@type": "ListItem",
+          "position": 1,
+          "name": "Findra",
+          "item": "https://findra-search.netlify.app/"
+        },
+        {
+          "@type": "ListItem",
+          "position": 2,
+          "name": "Install",
+          "item": "https://findra-search.netlify.app/install/"
+        }
+      ]
+    }
+  ]
+}
+</script>
+</head>
+<body>
+<a class="skip" href="#top">Skip to content</a>
+
+<div class="bg" aria-hidden="true">
+  <div class="bg-blob a"></div>
+  <div class="bg-grid"></div>
+  <div class="bg-grain"></div>
+</div>
+
+<header class="nav">
+  <a class="brand" href="/">
+    <span class="brand-mark" aria-hidden="true"></span>
+    <span class="brand-name">Findra</span>
+  </a>
+  <nav class="nav-links">
+    <a href="/features/">What it finds</a>
+    <a href="/why/">Why Findra</a>
+    <a href="/numbers/">The numbers</a>
+    <a href="/faq/">Questions</a>
+    <a href="/privacy/">Privacy</a>
+  </nav>
+  <div class="nav-right">
+    <a class="btn btn-primary btn-sm" href="/#install">Get Findra</a>
+  </div>
+</header>
+
+<main id="top" tabindex="-1">
+  <!-- ================= install ================= -->
+  <div class="wrap">
+    <section id="install">
+      <div class="sec-head reveal">
+        <span class="kicker">INSTALL</span>
+        <h1>Get Findra</h1>
+        <p>
+          <b>Download the installer from the
+          <a href="https://github.com/blakazulu/findra/releases/latest" rel="noopener">releases page</a></b>, which
+          carries one for x64 and one for arm64. That is the whole install of
+          <span data-stamp="release">Findra 0.3.1, released on 22 September 2026</span>.
+          Or run
+          <code style="font-family:var(--mono);font-size:15px;color:var(--ink-dim)">winget install blakazulu.Findra</code>,
+          which installs the same program from the Windows Package Manager catalogue; the catalogue
+          can take a few days to pick up a new release. Building from source
+          still works and needs the .NET 10 SDK and nothing else. Every release note is that
+          version's section of the
+          <a href="/changelog/">changelog</a>.
+        </p>
+      </div>
+
+      <div class="install">
+        <div class="panel accent lead reveal">
+          <span class="badge now">INSTALLER OR WINGET</span>
+          <h3>Installer and winget</h3>
+          <p>
+            The installer and winget install the same program, on x64 and arm64 alike. Every
+            release carries an installer for each architecture on its
+            <a href="https://github.com/blakazulu/findra/releases/latest" rel="noopener">releases
+            page</a>, and winget picks it up from there.
+          </p>
+          <div class="get">
+            <a class="btn btn-primary" href="https://github.com/blakazulu/findra/releases/latest/download/findra-setup-x64.exe">
+              <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v11"/><polyline points="7 9.5 12 14.5 17 9.5"/><path d="M4 20h16"/></svg>
+              Download for Windows x64
+            </a>
+            <a class="alt" href="https://github.com/blakazulu/findra/releases/latest/download/findra-setup-arm64.exe">Arm64</a>
+          </div>
+          <button type="button" class="cmd" aria-label="Copy the command: winget install blakazulu.Findra" data-copy="winget install blakazulu.Findra">
+            <span class="p">&gt;</span><span class="t">winget install blakazulu.Findra</span><span class="c" aria-hidden="true">COPY</span>
+          </button>
+          <span class="said" role="status"></span>
+          <p style="font-size:14px">
+            winget installs from the Windows Package Manager catalogue, which can take a few days
+            to pick up a new release; the releases page always has the newest.
+            Neither the installer nor the executables are signed yet, so Windows will warn about an
+            unknown publisher until that changes. The
+            <a href="/code-signing/">Code signing policy</a> says who writes Findra, who approves a
+            release and who signs it, and it will say what the signature is when there is one.
+          </p>
+          <h3 style="font-size:17px;margin-top:6px">How do I uninstall Findra?</h3>
+          <p style="font-size:14px">
+            Uninstalling always removes the elevated logon task, because a scheduled task pointing
+            at a binary that is no longer there is a defect and not an inconvenience. It keeps your
+            models, your index and your settings unless you say otherwise, and tells you the
+            measured size it would free before it deletes anything.
+          </p>
+          <div class="cmd-block"><span class="p">$</span> findra --uninstall --dry-run</div>
+        </div>
+
+        <div class="panel reveal">
+          <span class="badge soon">FOR HACKING ON IT</span>
+          <h3>Build it from source</h3>
+          <p>Four commands, and you have a self-contained build. The tests run on your machine too.</p>
+          <div class="cmd-block"><span class="p">$</span> git clone https://github.com/blakazulu/findra
+<span class="p">$</span> cd findra
+<span class="p">$</span> dotnet build
+<span class="p">$</span> dotnet publish src/Findra -c Release --self-contained</div>
+          <p style="font-size:14px">
+            Name search needs the helper, which asks for administrator rights exactly once, to open
+            the volume. Nothing else in Findra ever needs them, and the part that reads your files
+            deliberately runs without them.
+          </p>
+          <div class="cmd-block"><span class="p">$</span> dotnet run --project src/Findra -- --names</div>
+          <a class="btn btn-ghost" href="https://github.com/blakazulu/findra" rel="noopener">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 .5C5.73.5.9 5.34.9 11.6c0 4.9 3.17 9.06 7.57 10.53.55.1.76-.24.76-.53v-2.07c-3.08.67-3.73-1.3-3.73-1.3-.5-1.29-1.23-1.63-1.23-1.63-1-.69.08-.67.08-.67 1.11.08 1.7 1.15 1.7 1.15.99 1.7 2.6 1.21 3.23.93.1-.72.39-1.21.7-1.49-2.46-.28-5.05-1.24-5.05-5.5 0-1.22.43-2.21 1.14-2.99-.11-.28-.5-1.41.11-2.94 0 0 .93-.3 3.05 1.14a10.5 10.5 0 0 1 5.56 0c2.12-1.44 3.05-1.14 3.05-1.14.61 1.53.22 2.66.11 2.94.71.78 1.14 1.77 1.14 2.99 0 4.27-2.6 5.21-5.07 5.49.4.35.76 1.03.76 2.08v3.08c0 .3.2.64.77.53 4.4-1.47 7.56-5.63 7.56-10.53C23.1 5.34 18.27.5 12 .5z"/></svg>
+            Source on GitHub
+          </a>
+        </div>
+      </div>
+    </section>
+  </div>
+
+</main>
+
+<footer class="wrap">
+  <div class="foot">
+    <div class="col">
+      <span class="brand" style="margin-bottom:6px">
+        <span class="brand-mark" aria-hidden="true"></span>
+        <span class="brand-name">Findra</span>
+      </span>
+      <span>Desktop search for Windows.</span>
+      <span>Built with .NET 10, Avalonia, SkiaSharp and SQLite.</span>
+    </div>
+    <div class="col">
+      <strong>FINDRA</strong>
+      <a href="/features/">What it finds</a>
+      <a href="/why/">Why Findra</a>
+      <a href="/numbers/">The numbers</a>
+      <a href="/faq/">Questions</a>
+      <a href="/install/">Install</a>
+    </div>
+    <div class="col">
+      <strong>PROJECT</strong>
+      <a href="https://github.com/blakazulu/findra" rel="noopener">Source</a>
+      <a href="/changelog/">Changelog</a>
+      <a href="https://github.com/blakazulu/findra/issues" rel="noopener">Issues</a>
+    </div>
+    <div class="col">
+      <strong>GUIDES</strong>
+      <a href="/windows-search-not-finding-files/">Windows Search not finding files</a>
+      <a href="/search-inside-pdfs/">Search inside PDFs</a>
+      <a href="/find-photos-by-description/">Find photos by description</a>
+      <a href="/search-recordings-by-speech/">Search recordings by speech</a>
+    </div>
+    <div class="col">
+      <strong>THE SMALL PRINT</strong>
+      <a href="/about/">About</a>
+      <a href="/contact/">Contact</a>
+      <a href="/privacy/">Privacy</a>
+      <a href="/code-signing/">Code signing policy</a>
+      <a href="https://github.com/blakazulu/findra/blob/main/SECURITY.md" rel="noopener">Security</a>
+      <a href="https://github.com/blakazulu/findra/blob/main/LICENSE" rel="noopener">Apache-2.0</a>
+      <a href="https://github.com/blakazulu/findra/blob/main/NOTICE" rel="noopener">Notice</a>
+      <a href="/llms.txt">For language models</a>
+    </div>
+    <div class="col">
+      <strong>ATTRIBUTION</strong>
+      <span>Findra by blakazulu.</span>
+      <span><a href="/fonts/Quicksand-OFL.txt">Quicksand</a> and <a href="/fonts/JetBrainsMono-OFL.txt">JetBrains Mono</a> under the SIL Open Font License 1.1.</span>
+      <span>&copy; <span id="year">2026</span></span>
+    </div>
+  </div>
+</footer>
+
+<script src="/app.js" defer></script>
+</body>
+</html>

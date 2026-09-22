@@ -13,7 +13,9 @@ Findra checks whether a newer version has been released. That is the only time F
 reaches the network without being asked. The one other time it goes out at all is when you
 choose a capability and tell it to download the models, which is described further down.
 
-- It is an anonymous HTTPS GET to the GitHub releases API.
+- It is an anonymous HTTPS GET to the GitHub releases API. A copy installed with winget asks
+  the winget catalogue's listing on GitHub instead, because that is what `winget upgrade` can
+  install; it is the same single request to the same host.
 - It happens at most once every 24 hours, on startup, in the background.
 - It carries no query parameters, no machine identifier, no install identifier, and nothing
   about your files or your searches.

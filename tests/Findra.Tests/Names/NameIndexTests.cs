@@ -16,6 +16,21 @@ public class NameIndexTests
     }
 
     [Fact]
+    public void ResidentBytesCountsEveryArrayAndNotOnlyTheNames()
+    {
+        // The name buffers were once published as the index's memory, and they are about a third
+        // of it: every record also carries its FRN, parent, attributes, offset and two lengths
+        // (28 bytes), a segment-table entry (8) and a slot in the FRN map (12, at most 60% full).
+        var ix = new NameIndex('C');
+        for (int i = 0; i < 200_000; i++)
+            ix.Upsert((ulong)(i + 100), 5, 0, $"file number {i}.txt");
+        ix.Trim();
+
+        long floor = ix.BufferBytes + (long)ix.Count * (28 + 8 + 12);
+        Assert.InRange(ix.ResidentBytes, floor, floor * 2);
+    }
+
+    [Fact]
     public void FindsBySubstringCaseInsensitively()
     {
         var hits = new List<NameIndex.Hit>();

@@ -60,7 +60,7 @@ public static class SearchProbe
             Console.WriteLine($"  answered by            : pid {status.ProcessId}" +
                               $"{(status.ProcessId == Environment.ProcessId ? "  (THIS process - wrong!)" : "  (the helper)")}");
             foreach (VolumeStatus v in status.Volumes)
-                Console.WriteLine($"  volume {v.Letter}               : {v.Count:N0} names, {v.BufferBytes / 1048576} MB");
+                Console.WriteLine($"  volume {v.Letter}               : {v.Count:N0} names, {v.ResidentBytes / 1048576} MB");
 
             long started = Stopwatch.GetTimestamp();
             QueryReply? reply = await client.SearchAsync(query, 20, default);

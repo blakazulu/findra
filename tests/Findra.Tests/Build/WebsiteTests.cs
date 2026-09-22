@@ -23,6 +23,9 @@ public class WebsiteTests
     private const string Site = "https://findra-search.netlify.app";
 
     private static readonly string Index = Repo.Read("website/public/index.html");
+    private static readonly string NumbersPage = Repo.Read("website/public/numbers/index.html");
+    // Every page that shows a screenshot: the front page's lede, and the gallery on /features/.
+    private static readonly string Gallery = Index + Repo.Read("website/public/features/index.html");
     private static readonly string NotFound = Repo.Read("website/public/404.html");
     private static readonly string Llms = Repo.Read("website/public/llms.txt");
     private static readonly string Sitemap = Repo.Read("website/public/sitemap.xml");
@@ -53,6 +56,37 @@ public class WebsiteTests
     /// </summary>
     private static readonly string[] Guides =
         { "windows-search-not-finding-files", "search-inside-pdfs", "find-photos-by-description", "search-recordings-by-speech" };
+
+    /// <summary>The pages that used to be sections of the front page. Each is a hand-written HTML
+    /// body in <c>website/content/pages/</c> with its Markdown twin written beside it - the front
+    /// page's own pattern - and <c>build/Make-Pages.mjs</c> wraps the body in the shared shell.</summary>
+    private static readonly string[] Pages = { "features", "why", "numbers", "faq", "install" };
+
+    /// <summary>
+    /// A hand-written page is its body inside the shell, and its twin is the one written beside it.
+    ///
+    /// <para>The generator is run by hand, so the failure this catches is an edited body or twin
+    /// committed without running it. A body line carrying a version stamp is skipped: the generator
+    /// rewrites exactly those.</para>
+    /// </summary>
+    [Fact]
+    public void EveryHandWrittenPageIsItsBodyInsideTheShellAndItsTwinIsTheOneBesideIt()
+    {
+        foreach (string slug in Pages)
+        {
+            Assert.Equal(Repo.Read($"website/content/pages/{slug}.md"), Repo.Read($"website/public/{slug}.md"));
+
+            string page = Repo.Read($"website/public/{slug}/index.html");
+            foreach (string line in Repo.Read($"website/content/pages/{slug}.html").Split('\n'))
+            {
+                if (line.Contains("data-stamp=", StringComparison.Ordinal)) continue;
+                Assert.True(page.Contains(line, StringComparison.Ordinal),
+                    $"website/public/{slug}/index.html is missing a line of its body - run `node build/Make-Pages.mjs`:\n  {line}");
+            }
+
+            Assert.Single(Regex.Matches(page, "<h1[ >]"));
+        }
+    }
 
     // ------------------------------------------------------------------ the pages say their source
 
@@ -381,7 +415,7 @@ public class WebsiteTests
             .ToHashSet(StringComparer.Ordinal);
 
         HashSet<string> onDisk = new(StringComparer.Ordinal) { $"{Site}/" };
-        foreach (string slug in new[] { "privacy", "about", "contact", "code-signing", "changelog" }.Concat(Guides))
+        foreach (string slug in new[] { "privacy", "about", "contact", "code-signing", "changelog" }.Concat(Guides).Concat(Pages))
         {
             Assert.True(Repo.Exists($"website/public/{slug}/index.html"), $"/{slug}/ is missing");
             onDisk.Add($"{Site}/{slug}/");
@@ -638,7 +672,14 @@ public class WebsiteTests
     {
         string readme = Repo.Read("README.md");
         string home = Repo.Read("website/content/home.md");
+        string numbersTwin = Repo.Read("website/content/pages/numbers.md");
+        string questions = Repo.Read("website/public/faq/index.html");
+        string questionsTwin = Repo.Read("website/content/pages/faq.md");
 
+        // ---- the name queries: every column of every row, on the page that carries the table ----
+
+        var medians = new Dictionary<string, double>(StringComparer.Ordinal);
+        var worsts = new List<double>();
         foreach (string query in new[] { "config", "report", "readme", "invoice", "sunset" })
         {
             // Every column, not the first one. Guarding p50 alone left p95, the index scan, the
@@ -650,96 +691,109 @@ public class WebsiteTests
 
             string p50 = row.Groups[1].Value, p95 = row.Groups[2].Value;
             string scan = row.Groups[3].Value, worst = row.Groups[4].Value, hits = row.Groups[5].Value;
+            medians[query] = double.Parse(p50);
+            worsts.Add(double.Parse(worst));
 
             Assert.Contains($"| {query} | {p50} ms | {p95} ms | {scan} ms | {worst} ms | {hits} |",
-                            home, StringComparison.Ordinal);
+                            numbersTwin, StringComparison.Ordinal);
 
-            // The whole ROW, not just the number. ">0.33 ms<" also matches the stat card above the
-            // table, so a table cell left behind at the old figure passed while the card carried
-            // the new one - which is the same two-copies-of-one-number defect one level down.
+            // The whole ROW, not just the number: a table cell left behind at an old figure passed
+            // once while a card above it carried the new one.
             Assert.Contains(
                 $@"<tr><td>{query}</td><td class=""num"">{p50} ms</td><td class=""num"">{p95} ms</td>" +
                 $@"<td class=""num"">{scan} ms</td><td class=""num"">{worst} ms</td><td>{hits}</td></tr>",
-                Index, StringComparison.Ordinal);
+                NumbersPage, StringComparison.Ordinal);
         }
 
-        // The headline figure is repeated in prose, in the share card the icon generator bakes,
-        // in the alt text the page generator emits, and in the file agents read first. The share
-        // card is the copy that actually went stale, and nothing was reading it.
-        string headline = Regex.Match(readme, @"(?m)^\|\sconfig\s\|\s([\d.]+) ms").Groups[1].Value;
-        string p50Headline = headline;
+        // ---- the headline, derived and never typed ----
 
-        // The range and the worst sample are derived, never typed. The five name-query rows give
-        // both: the slowest median is the top of the published range, and the largest Worst cell
-        // is the figure the prose calls the worst single sample.
-        MatchCollection rows = Regex.Matches(
-            readme,
-            @"(?m)^\|\s\w+\s\|\s([\d.]+) ms\s\|\s[\d.]+ ms\s\|\s[\d.]+ ms\s\|\s[\d.]+ ms\s\|\s([\d.]+) ms\s\|");
-        Assert.Equal(5, rows.Count);
-
-        double[] medians = rows.Select(m => double.Parse(m.Groups[1].Value)).ToArray();
-        double[] worsts = rows.Select(m => double.Parse(m.Groups[2].Value)).ToArray();
-        string range = $"{medians.Min():0.00} to {medians.Max():0.00} ms";
+        // "Under N ms", where N is the slowest median's next whole millisecond. It is the claim the
+        // front page leads with, so it has to be true of every query measured, not of the best one.
+        double slowest = medians.Values.Max();
+        int ceiling = (int)Math.Floor(slowest) + 1;
+        string range = $"{medians.Values.Min():0.00} to {slowest:0.00} ms";
         string worstSample = $"{worsts.Max():0.00} ms";
-        foreach (string path in new[]
-                 { "build/Make-Icon.mjs", "build/Make-Pages.mjs",
-                   "website/public/llms.txt", "website/public/index.md" })
+
+        foreach (string page in new[] { Index, NumbersPage })
         {
-            Assert.Contains(headline, Repo.Read(path), StringComparison.Ordinal);
+            Assert.Contains($@"<div class=""big"" aria-hidden=""true"">&lt;{ceiling}<small>ms</small></div>", page, StringComparison.Ordinal);
+            Assert.Contains($@"<p class=""sr-only"">Under {ceiling} ms.</p>", page, StringComparison.Ordinal);
+
+            // One bar per query, each labelled with its own median and drawn to the same scale as
+            // the axis, whose last tick is the headline.
+            foreach ((string query, double median) in medians)
+            {
+                string width = (median / ceiling * 100).ToString("0.##", System.Globalization.CultureInfo.InvariantCulture);
+                Assert.Contains(
+                    $@"<div class=""bar""><span>{query}</span><span class=""track""><span class=""fill"" style=""width:{width}%""></span></span><span class=""ms"">{median:0.00} ms</span></div>",
+                    page, StringComparison.Ordinal);
+            }
+            Assert.Contains($"<span>{ceiling} ms</span></span>", page, StringComparison.Ordinal);
         }
 
-        // Every surface that publishes the range publishes the derived one. app.js is in the
-        // list because the ticker now carries the figures and no test read that file at all.
+        foreach (string twin in new[] { home, numbersTwin })
+        {
+            Assert.Contains($"**Under {ceiling} ms.**", twin, StringComparison.Ordinal);
+        }
+
+        // ---- the range and the worst sample, wherever prose repeats them ----
+
+        foreach (string path in new[]
+                 { "build/Make-Icon.mjs", "build/Make-Pages.mjs", "website/public/share/card.txt",
+                   "website/public/llms.txt", "website/public/index.md", "README.md" })
+        {
+            Assert.Contains(medians["config"].ToString("0.00"), Repo.Read(path), StringComparison.Ordinal);
+        }
+
         foreach (string path in new[]
                  { "website/public/index.html", "website/content/home.md", "website/public/index.md",
-                   "website/public/llms.txt", "build/Make-Icon.mjs", "build/Make-Pages.mjs" })
+                   "website/content/pages/numbers.md", "website/public/faq/index.html",
+                   "website/content/pages/faq.md", "website/public/llms.txt", "README.md",
+                   "build/Make-Icon.mjs", "build/Make-Pages.mjs" })
         {
-            // With the word, not just the figures: "0.33 to 2.05 ms" is a range of MEDIANS and
-            // the worst sample sits above it, so the bare range is the claim that was retired.
+            // With the word, not just the figures: the range is of MEDIANS and the worst sample
+            // sits above it, so the bare range is the claim that was retired.
             Assert.Contains($"{range} median", Regex.Replace(Repo.Read(path), @"\s+", " "),
                             StringComparison.Ordinal);
         }
 
-        Assert.Contains($"{range.Replace(" to ", "-")} MEDIAN".ToUpperInvariant(),
-                        Repo.Read("website/public/app.js").ToUpperInvariant(), StringComparison.Ordinal);
-
-        foreach (string path in new[]
-                 { "website/public/index.html", "website/content/home.md",
-                   "website/public/index.md", "website/public/llms.txt" })
+        foreach (string text in new[] { questions, questionsTwin, numbersTwin, Llms })
         {
             Assert.Contains($"worst single sample across the five measured name queries was {worstSample}",
-                            Regex.Replace(Repo.Read(path), @"\s+", " "), StringComparison.Ordinal);
+                            Regex.Replace(text, @"\s+", " "), StringComparison.Ordinal);
         }
 
-        Assert.Contains($"The slowest of the five medians was {medians.Max():0.00} ms",
+        Assert.Contains($"The slowest of the five medians was {slowest:0.00} ms",
                         Regex.Replace(Index, @"\s+", " "), StringComparison.Ordinal);
 
-        // The four stat cards sit above the table and were bound by nothing, which is precisely
-        // where the last drift landed: 2.8 s, 73.1 MB and 1,573,675 all lived here.
+        // Every latency the ticket's mock window prints is one the benchmark produced. Three
+        // invented figures lived there once under a heading promising the opposite.
+        foreach (Match shown in Regex.Matches(Index, @"<span class=""ms"">([\d.]+) ms</span>"))
+        {
+            Assert.Contains(shown.Groups[1].Value, medians.Values.Select(m => $"{m:0.00}"));
+        }
+
+        // ---- the tiles: names, cold start and memory, from the volumes row ----
+
         Match volumes = Regex.Match(readme, @"(?m)^\|\sC:\s\|\s([\d,]+)\s\|\s([\d.]+) MB\s\|\s([\d,]+) ms\s\|");
         Assert.True(volumes.Success, "the README has no volumes row");
 
         string names = volumes.Groups[1].Value, resident = volumes.Groups[2].Value;
         double seconds = double.Parse(volumes.Groups[3].Value.Replace(",", "")) / 1000.0;
 
-        string cards = Between(Index, @"<div class=""stat-row"">", "</div>\n\n      <div class=\"table-wrap");
-        Assert.Contains($"{names} names", cards, StringComparison.Ordinal);
-        Assert.Contains($@"<span class=""v"">{p50Headline} ms</span>", cards, StringComparison.Ordinal);
-
-        // The stat card names one query. Whatever else it says, it must not go on to credit that
-        // query with a figure drawn from the whole set - which is exactly how it read before.
-        Assert.DoesNotMatch($@"""config""[^.]*{Regex.Escape(worstSample)}", Regex.Replace(cards, @"\s+", " "));
-
-        // Every latency the page prints in the mock window is one the benchmark produced. Three
-        // invented figures lived there under a heading promising the opposite.
-        foreach (Match shown in Regex.Matches(Index, @"<span class=""ms"">([\d.]+) ms</span>"))
+        foreach (string page in new[] { Index, NumbersPage })
         {
-            Assert.Contains(shown.Groups[1].Value, medians.Select(m => $"{m:0.00}"));
+            Assert.Contains($"{names} names", page, StringComparison.Ordinal);
+            Assert.Contains($@"<span class=""v"">{seconds:0.0} s</span>", page, StringComparison.Ordinal);
+            Assert.Contains($@"<span class=""v"">{resident} MB</span>", page, StringComparison.Ordinal);
         }
-        Assert.Contains($@"<span class=""v"">{resident} MB</span>", Index, StringComparison.Ordinal);
-        Assert.Contains($@"<span class=""v"">{seconds:0.0} s</span>", Index, StringComparison.Ordinal);
+        foreach (string twin in new[] { home, numbersTwin })
+        {
+            Assert.Contains($"- {seconds:0.0} s from cold to ready, for {names} names", twin, StringComparison.Ordinal);
+            Assert.Contains($"- {resident} MB for the name index of those {names} names.", twin, StringComparison.Ordinal);
+        }
 
-        // index.md is a copy of home.md that build/Make-Pages.mjs makes. Nothing asserted it.
+        // index.md is a copy of home.md that build/Make-Pages.mjs makes. Nothing asserted it once.
         Assert.Equal(home, Repo.Read("website/public/index.md"));
     }
 
@@ -796,7 +850,9 @@ public class WebsiteTests
     [Fact]
     public void EverySurfaceQuotesTheSameCapabilitySizes()
     {
-        string[] surfaces = { "website/content/home.md", "website/public/index.md",
+        string[] surfaces = { "website/content/pages/features.md", "website/public/features.md",
+                              "website/content/pages/faq.md", "website/public/faq.md",
+                              "website/public/faq/index.html",
                               "website/public/llms.txt", "website/public/index.html" };
 
         foreach (string path in surfaces)
@@ -817,7 +873,8 @@ public class WebsiteTests
         // Presence is not attachment: with the five figures merely present, swapping the photo
         // and speech numbers over left every assertion above satisfied. Each number is bound to
         // the capability it prices, in whichever shape that surface writes it.
-        foreach (string path in new[] { "website/public/index.html", "website/public/llms.txt" })
+        foreach (string path in new[] { "website/public/index.html", "website/public/faq/index.html",
+                                        "website/public/llms.txt" })
         {
             // Collapsed: llms.txt wraps its prose, and a phrase split over two lines is not a
             // different phrase.
@@ -826,24 +883,24 @@ public class WebsiteTests
             Assert.Contains("1.04 GB for meaning in documents", text, StringComparison.Ordinal);
             Assert.Contains("547 MB for speech", text, StringComparison.Ordinal);
             Assert.Contains("1.51 GB for the Hebrew", text, StringComparison.Ordinal);
-
-            // The same figures again in the answers, where they were unbound on these two
-            // surfaces while being bound on the Markdown twins.
-            Assert.Contains("629 MB download", text, StringComparison.Ordinal);
-            Assert.Contains("547 MB on top of them", text, StringComparison.Ordinal);
         }
 
-        foreach (string path in new[] { "website/content/home.md", "website/public/index.md" })
+        // The same figures again in the answers, where they were once unbound while being bound
+        // on the Markdown twins. The answers live on /faq/ now; the front page keeps the prices in
+        // its structured data only.
+        foreach (string path in new[] { "website/public/faq/index.html", "website/public/llms.txt",
+                                        "website/content/pages/faq.md", "website/public/faq.md" })
         {
             string text = Regex.Replace(Repo.Read(path), @"\s+", " ");
-
-            // These files carry the figures twice: once in the table and once in the answers.
-            // Only the table was bound, so "1.51 GB for meaning in documents" in a paragraph
-            // satisfied every assertion above.
             Assert.Contains("629 MB download", text, StringComparison.Ordinal);
             Assert.Contains("547 MB on top of them", text, StringComparison.Ordinal);
             Assert.Contains("1.04 GB for meaning in documents", text, StringComparison.Ordinal);
             Assert.Contains("1.51 GB for the Hebrew", text, StringComparison.Ordinal);
+        }
+
+        foreach (string path in new[] { "website/content/pages/features.md", "website/public/features.md" })
+        {
+            string text = Regex.Replace(Repo.Read(path), @"\s+", " ");
 
             Assert.Contains("| Photos and video | SigLIP-2 vision, text and spm | 629 MB |", text, StringComparison.Ordinal);
             Assert.Contains("| Meaning in documents | e5-base and e5-spm | 1.04 GB |", text, StringComparison.Ordinal);
@@ -866,11 +923,11 @@ public class WebsiteTests
     public void EveryScreenshotIsDeclaredAtTheSizeItActuallyIs()
     {
         MatchCollection tags = Regex.Matches(
-            Index, @"<img src=""(?<src>shots/[^""]+)""[^>]*?width=""(?<w>\d+)"" height=""(?<h>\d+)""");
+            Gallery, @"<img src=""/?(?<src>shots/[^""]+)""[^>]*?width=""(?<w>\d+)"" height=""(?<h>\d+)""");
         // Counting the images independently and requiring equality. ">= 6" against seven images
         // meant that deleting one image's width/height, or reversing them, dropped it out of the
         // match set and the test went on passing - for exactly the image it exists to check.
-        int shown = Regex.Matches(Index, @"<img\s[^>]*?src=""shots/").Count;
+        int shown = Regex.Matches(Gallery, @"<img\s[^>]*?src=""/?shots/").Count;
         Assert.Equal(shown, tags.Count);
         Assert.True(tags.Count >= 6, $"expected every shot to declare a size, found {tags.Count}");
 
@@ -889,39 +946,46 @@ public class WebsiteTests
 
 
     /// <summary>
-    /// The front page and its Markdown twin ask the same questions, and answer them the same way.
+    /// The questions page and its Markdown twin ask the same questions, and answer them the same way.
     ///
     /// <para>Both are hand-written, so nothing generated holds them together - and they had
-    /// already parted in the commit that created them, the Markdown carrying two questions the
-    /// visible page did not. One of the two was whether Findra needs administrator rights, which
-    /// is the largest install objection a Windows utility has, and it existed only in the layer a
-    /// reader does not read.</para>
+    /// already parted in the commit that created them, back when the questions were on the front
+    /// page: the Markdown carried two questions the visible page did not. One of the two was
+    /// whether Findra needs administrator rights, which is the largest install objection a Windows
+    /// utility has, and it existed only in the layer a reader does not read.</para>
     ///
-    /// <para>The generated pages have <c>EverySentenceInTheMarkdownReachesThePage</c> for this
-    /// and the front page had nothing, because it is the one page the generator does not write.
-    /// That is a reason to test it, not a reason to leave it alone.</para>
+    /// <para>The generated pages have <c>EverySentenceInTheMarkdownReachesThePage</c> for this,
+    /// and a hand-written page has nothing like it. That is a reason to test it, not a reason to
+    /// leave it alone.</para>
     /// </summary>
     [Fact]
-    public void TheFrontPageAndItsMarkdownTwinAskTheSameQuestions()
+    public void TheQuestionsPageAndItsMarkdownTwinAskTheSameQuestions()
     {
-        string section = Between(Index, @"<section id=""questions"">", "<!-- ================= install");
+        string questionsPage = Repo.Read("website/public/faq/index.html");
+        string section = Between(questionsPage, @"<section id=""questions"">", "<!-- ================= privacy");
 
         List<string> onThePage = Regex.Matches(section, @"<h3>(.*?)</h3>")
             .Select(m => WebUtility.HtmlDecode(m.Groups[1].Value).Trim())
             .ToList();
 
-        List<string> inTheMarkdown = Regex.Matches(Repo.Read("website/content/home.md"), @"(?m)^### (.+)$")
+        string markdown = Repo.Read("website/content/pages/faq.md");
+        string questionsBlock = Between(markdown, "## What is Findra?", "## What leaves your machine");
+
+        List<string> inTheMarkdown = Regex.Matches(questionsBlock, @"(?m)^## (.+)$")
             .Select(m => m.Groups[1].Value.Trim())
             .ToList();
 
         Assert.Equal(inTheMarkdown, onThePage);
 
         // And the structured data says what the prose says, rather than a third version of it.
-        Match block = Regex.Match(
-            Index, @"<script type=""application/ld\+json"">(?<json>.*?)</script>", RegexOptions.Singleline);
+        // The page carries two blocks - the shell's, and the questions' own - so the one that
+        // holds the FAQPage is the one read.
+        Match block = Regex.Matches(
+                questionsPage, @"<script type=""application/ld\+json"">(?<json>.*?)</script>", RegexOptions.Singleline)
+            .Single(m => m.Groups["json"].Value.Contains("\"FAQPage\"", StringComparison.Ordinal));
         using JsonDocument document = JsonDocument.Parse(block.Groups["json"].Value);
-        JsonElement faq = document.RootElement.GetProperty("@graph")
-            .EnumerateArray().Single(n => n.GetProperty("@type").GetString() == "FAQPage");
+        JsonElement faq = document.RootElement;
+        Assert.Equal("FAQPage", faq.GetProperty("@type").GetString());
 
         Assert.Equal(onThePage,
                      faq.GetProperty("mainEntity").EnumerateArray()
@@ -944,11 +1008,8 @@ public class WebsiteTests
 
         // And the Markdown twin's answers, which were compared to nothing at all - so the copy an
         // agent fetches could say something the page does not, which is what it had begun to do.
-        string markdown = Repo.Read("website/content/home.md");
-        string questionsBlock = Between(markdown, "## Questions people ask before they install it", "## Privacy");
-
         List<string> answersInTheMarkdown = Regex
-            .Split(questionsBlock, @"(?m)^### .+$")
+            .Split("\n" + questionsBlock, @"(?m)^## .+$")
             .Skip(1)
             .Select(body => FlattenMarkdown(body))
             .ToList();
@@ -1046,6 +1107,8 @@ public class WebsiteTests
     [InlineData("website/public/index.html")]
     [InlineData("website/content/home.md")]
     [InlineData("website/public/index.md")]
+    [InlineData("website/public/numbers/index.html")]
+    [InlineData("website/content/pages/numbers.md")]
     [InlineData("website/public/llms.txt")]
     public void EverySurfaceThatPrintsTheNumbersSaysWhichHardwareRanThem(string path)
     {
@@ -1229,9 +1292,9 @@ public class WebsiteTests
     [Fact]
     public void EveryShotIsServedThroughTheImageCdnAndNamesItsOwnFile()
     {
-        MatchCollection pictures = Regex.Matches(Index, "<picture>(?<body>.*?)</picture>", RegexOptions.Singleline);
+        MatchCollection pictures = Regex.Matches(Gallery, "<picture>(?<body>.*?)</picture>", RegexOptions.Singleline);
 
-        int shots = Regex.Matches(Index, @"<img\s[^>]*?src=""shots/").Count;
+        int shots = Regex.Matches(Gallery, @"<img\s[^>]*?src=""/?shots/").Count;
         Assert.Equal(shots, pictures.Count);
         Assert.True(shots >= 7, $"expected every shot to be wrapped, found {shots}");
 
@@ -1239,7 +1302,7 @@ public class WebsiteTests
         {
             string body = picture.Groups["body"].Value;
 
-            string file = Regex.Match(body, @"<img\s[^>]*?src=""shots/(?<name>[^""]+)""").Groups["name"].Value;
+            string file = Regex.Match(body, @"<img\s[^>]*?src=""/?shots/(?<name>[^""]+)""").Groups["name"].Value;
             Assert.True(file.Length > 0, "a <picture> carries no <img> pointing at shots/");
 
             // Both formats, so a browser without AVIF still gets something smaller than the PNG.

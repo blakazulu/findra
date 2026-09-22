@@ -134,6 +134,23 @@ public class JournalTests
     }
 
     [Fact]
+    public async Task TheStatusReplyCarriesTheHelpersOwnMemory()
+    {
+        // The whole process, not the index: what somebody sees in Task Manager beside findra.exe.
+        // Nothing at normal integrity can read an elevated process's memory, so it has to come
+        // from the helper itself or --searchbench cannot publish it.
+        var (server, client) = NameServerTests.PairForTests();
+        using var cts = Deadline();
+        _ = NameServer.Serve(server, One(), new IndexLock(), new JournalBroadcast(), Gap(true), cts.Token);
+
+        await Frame.WriteAsync(client, Envelope.Pack(Envelope.KindStatus, new StatusRequest()), cts.Token);
+        StatusReply status = Envelope.Unpack((await Frame.ReadAsync(client, cts.Token))!).Body<StatusReply>();
+
+        Assert.True(status.WorkingSetBytes > 0);
+        await cts.CancelAsync();
+    }
+
+    [Fact]
     public async Task AQueryAnsweredWhileEventsAreBeingPushedStaysAWholeFrame()
     {
         // The adversarial one. Two writers on one transport - the reply path and the push

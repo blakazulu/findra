@@ -801,6 +801,8 @@ public class SettingsModelTests
         Assert.DoesNotContain("winget upgrade", line, StringComparison.Ordinal);
         Assert.Contains("1.3.0", line, StringComparison.Ordinal);
         Assert.Contains("newest", line, StringComparison.OrdinalIgnoreCase);
+        // It asked the catalogue, so it says the catalogue; the releases page may be ahead.
+        Assert.DoesNotContain("newest release", line, StringComparison.Ordinal);
     }
 
     [Fact]

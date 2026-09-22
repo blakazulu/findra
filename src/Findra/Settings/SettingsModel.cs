@@ -558,6 +558,8 @@ public static class SettingsModel
         state switch
         {
             UpdateState.Available when latest is not null => UpdateCheck.Advice(installSource ?? "unknown", latest),
+            UpdateState.Current when string.Equals(installSource, "winget", StringComparison.OrdinalIgnoreCase)
+                => $"{version} is the newest version winget has.",
             UpdateState.Current => $"{version} is the newest release.",
             UpdateState.Disabled => "Not checked - the check is turned off below.",
             UpdateState.Unknown => "The last check could not reach GitHub. Nothing is wrong with this copy.",

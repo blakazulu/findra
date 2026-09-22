@@ -1,0 +1,335 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>What Findra finds - filenames, words, photos and speech</title>
+<meta name="description" content="Findra finds files by name the moment it starts, and - if you turn them on - by the words inside documents, by what a photo shows and by what was said in a recording.">
+<link rel="canonical" href="https://findra-search.netlify.app/features/">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Findra">
+<meta property="og:locale" content="en_US">
+<meta property="og:url" content="https://findra-search.netlify.app/features/">
+<meta property="og:title" content="What Findra finds - filenames, words, photos and speech">
+<meta property="og:description" content="Findra finds files by name the moment it starts, and - if you turn them on - by the words inside documents, by what a photo shows and by what was said in a recording.">
+<meta property="og:image" content="https://findra-search.netlify.app/share/card.png">
+<meta property="og:image:type" content="image/png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Findra. Windows Search, but it works. Filenames in 0.60 to 3.78 ms median, straight from RAM. Nothing leaves your machine.">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="theme-color" content="#08090c">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="icon" href="/favicon.ico" sizes="32x32">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<link rel="alternate" type="text/markdown" href="/features.md" title="What Findra finds - filenames, words, photos and speech as Markdown">
+<link rel="alternate" type="text/markdown" href="/llms.txt" title="Findra for language models">
+<!-- The two faces are served from this site, so the page makes no request to anybody else - which
+     is the promise it exists to make. Quicksand is preloaded because it sets the headline, and a
+     font the browser only discovers inside styles.css is a font it starts fetching late. -->
+<link rel="preload" href="/fonts/Quicksand-wght.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="/styles.css">
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "WebPage",
+      "@id": "https://findra-search.netlify.app/features/#page",
+      "url": "https://findra-search.netlify.app/features/",
+      "name": "What Findra finds - filenames, words, photos and speech",
+      "description": "Findra finds files by name the moment it starts, and - if you turn them on - by the words inside documents, by what a photo shows and by what was said in a recording.",
+      "inLanguage": "en",
+      "dateModified": "2026-09-22",
+      "isPartOf": {
+        "@id": "https://findra-search.netlify.app/#site"
+      },
+      "about": {
+        "@id": "https://findra-search.netlify.app/#findra"
+      },
+      "author": {
+        "@id": "https://findra-search.netlify.app/#blakazulu"
+      },
+      "publisher": {
+        "@id": "https://findra-search.netlify.app/#blakazulu"
+      },
+      "breadcrumb": {
+        "@id": "https://findra-search.netlify.app/features/#crumbs"
+      }
+    },
+    {
+      "@id": "https://findra-search.netlify.app/#findra",
+      "@type": "SoftwareApplication",
+      "name": "Findra",
+      "url": "https://findra-search.netlify.app/"
+    },
+    {
+      "@id": "https://findra-search.netlify.app/#blakazulu",
+      "@type": "Person",
+      "name": "Liraz Amir",
+      "alternateName": "blakazulu"
+    },
+    {
+      "@id": "https://findra-search.netlify.app/#site",
+      "@type": "WebSite",
+      "name": "Findra",
+      "url": "https://findra-search.netlify.app/"
+    },
+    {
+      "@type": "BreadcrumbList",
+      "@id": "https://findra-search.netlify.app/features/#crumbs",
+      "itemListElement": [
+        {
+          "@type": "ListItem",
+          "position": 1,
+          "name": "Findra",
+          "item": "https://findra-search.netlify.app/"
+        },
+        {
+          "@type": "ListItem",
+          "position": 2,
+          "name": "What it finds",
+          "item": "https://findra-search.netlify.app/features/"
+        }
+      ]
+    }
+  ]
+}
+</script>
+</head>
+<body>
+<a class="skip" href="#top">Skip to content</a>
+
+<div class="bg" aria-hidden="true">
+  <div class="bg-blob a"></div>
+  <div class="bg-grid"></div>
+  <div class="bg-grain"></div>
+</div>
+
+<header class="nav">
+  <a class="brand" href="/">
+    <span class="brand-mark" aria-hidden="true"></span>
+    <span class="brand-name">Findra</span>
+  </a>
+  <nav class="nav-links">
+    <a href="/features/">What it finds</a>
+    <a href="/why/">Why Findra</a>
+    <a href="/numbers/">The numbers</a>
+    <a href="/faq/">Questions</a>
+    <a href="/privacy/">Privacy</a>
+  </nav>
+  <div class="nav-right">
+    <a class="btn btn-primary btn-sm" href="/#install">Get Findra</a>
+  </div>
+</header>
+
+<main id="top" tabindex="-1">
+  <!-- ================= what it finds ================= -->
+  <div class="wrap">
+    <section id="finds">
+      <div class="sec-head reveal">
+        <span class="kicker">WHAT IT FINDS</span>
+        <h1>What can Findra actually find?</h1>
+        <p>
+          <b>Names first. Then, if you ask, everything else.</b> Names cost seconds to index, so they are on from the moment
+          Findra starts. Reading inside files walks every drive and can run for hours, so it never
+          begins on its own. You turn it on, one capability at a time, and each one is a separate
+          download you can decline.
+        </p>
+      </div>
+
+      <div class="table-wrap reveal">
+        <table>
+          <thead>
+            <tr>
+              <th scope="col">What you can search for</th>
+              <th scope="col">Needs a model</th>
+              <th scope="col">On by default</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><td>Names of files and folders, across every NTFS volume</td><td class="no">no</td><td class="yes">yes, the moment Findra starts</td></tr>
+            <tr><td>Words in documents, and the text inside pictures</td><td class="no">no</td><td class="no">no, until you turn content indexing on</td></tr>
+            <tr><td>Photos and video, by what is in the frame</td><td class="yes">yes</td><td class="no">no</td></tr>
+            <tr><td>Documents by what they mean, not only the words they use</td><td class="yes">yes</td><td class="no">no</td></tr>
+            <tr><td>Speech in recordings, with a second pass for Hebrew</td><td class="yes">yes</td><td class="no">no</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <p class="hero-sub reveal" style="margin-top:22px;max-width:900px">
+        Everything Findra can install adds up to 3.7 GB, and that is the figure only if you take
+        all of it. Take none and it still searches every name on the machine. On the first screen
+        each row is priced at its own files, so the number never moves when you tick it and the
+        four rows add up to that 3.7 GB; the line along the bottom is what your selection actually
+        costs, and it is smaller whenever two capabilities share a file. Settings prices the same
+        capabilities differently, and correctly for the question being asked there: what one more
+        would add to what is already on the disk.
+      </p>
+    </section>
+  </div>
+
+  <!-- ================= screenshots ================= -->
+  <div class="wrap">
+    <section id="shots">
+      <div class="sec-head-row reveal">
+        <div class="sec-head" style="margin-bottom:0">
+          <span class="kicker">NOT A MOCKUP</span>
+          <h2>Every picture below is the product</h2>
+        </div>
+        <p class="aside">
+          Each one was drawn by the same painter the window uses, with the command printed
+          underneath it. Run the command, get the image.
+        </p>
+      </div>
+
+      <div class="shots">
+        <figure class="shot wide reveal" style="margin:0">
+          <div class="shot-img">
+            <picture>
+              <source type="image/avif" srcset="/.netlify/images?url=/shots/results.png&amp;w=410&amp;fm=avif 410w, /.netlify/images?url=/shots/results.png&amp;w=820&amp;fm=avif 820w" sizes="(max-width: 860px) 100vw, 820px">
+              <source type="image/webp" srcset="/.netlify/images?url=/shots/results.png&amp;w=410&amp;fm=webp 410w, /.netlify/images?url=/shots/results.png&amp;w=820&amp;fm=webp 820w" sizes="(max-width: 860px) 100vw, 820px">
+              <img src="/shots/results.png" loading="lazy" decoding="async" alt="The Findra results card with nine results for the query sunset: a photo matched on what it shows and previewed beside the list, documents matched on their text, and a recording matched on what was said" width="820" height="626">
+            </picture>
+          </div>
+          <figcaption class="shot-cap">
+            <h3>The card</h3>
+            <p>Nine results for "sunset": files by name, documents by their contents, and a photograph matched on what is actually in the frame.</p>
+            <code>findra --searchshot results.png results Mond</code>
+          </figcaption>
+        </figure>
+
+        <figure class="shot reveal" style="margin:0">
+          <div class="shot-img">
+            <picture>
+              <source type="image/avif" srcset="/.netlify/images?url=/shots/capsule.png&amp;w=310&amp;fm=avif 310w, /.netlify/images?url=/shots/capsule.png&amp;w=620&amp;fm=avif 620w" sizes="(max-width: 860px) 100vw, 620px">
+              <source type="image/webp" srcset="/.netlify/images?url=/shots/capsule.png&amp;w=310&amp;fm=webp 310w, /.netlify/images?url=/shots/capsule.png&amp;w=620&amp;fm=webp 620w" sizes="(max-width: 860px) 100vw, 620px">
+              <img src="/shots/capsule.png" loading="lazy" decoding="async" alt="The Findra capsule sitting on the desktop, waiting" width="620" height="140">
+            </picture>
+          </div>
+          <figcaption class="shot-cap">
+            <h3>The capsule</h3>
+            <p>It sits on the desktop doing nothing until you click it, or press the hotkey from wherever you happen to be.</p>
+            <code>findra --searchshot capsule.png capsule Mond</code>
+          </figcaption>
+        </figure>
+
+        <figure class="shot reveal" style="margin:0">
+          <div class="shot-img">
+            <picture>
+              <source type="image/avif" srcset="/.netlify/images?url=/shots/light.png&amp;w=410&amp;fm=avif 410w, /.netlify/images?url=/shots/light.png&amp;w=820&amp;fm=avif 820w" sizes="(max-width: 860px) 100vw, 820px">
+              <source type="image/webp" srcset="/.netlify/images?url=/shots/light.png&amp;w=410&amp;fm=webp 410w, /.netlify/images?url=/shots/light.png&amp;w=820&amp;fm=webp 820w" sizes="(max-width: 860px) 100vw, 820px">
+              <img src="/shots/light.png" loading="lazy" decoding="async" alt="The same results card rendered in the light Blueprint palette" width="820" height="626">
+            </picture>
+          </div>
+          <figcaption class="shot-cap">
+            <h3>Six palettes, three dark and three light</h3>
+            <p>Pick one of each and Findra follows the Windows setting, or pin it to either. Your own go in palettes.json.</p>
+            <code>findra --searchshot light.png results Blueprint</code>
+          </figcaption>
+        </figure>
+
+        <figure class="shot reveal" style="margin:0">
+          <div class="shot-img">
+            <picture>
+              <source type="image/avif" srcset="/.netlify/images?url=/shots/advanced.png&amp;w=410&amp;fm=avif 410w, /.netlify/images?url=/shots/advanced.png&amp;w=820&amp;fm=avif 820w" sizes="(max-width: 860px) 100vw, 820px">
+              <source type="image/webp" srcset="/.netlify/images?url=/shots/advanced.png&amp;w=410&amp;fm=webp 410w, /.netlify/images?url=/shots/advanced.png&amp;w=820&amp;fm=webp 820w" sizes="(max-width: 860px) 100vw, 820px">
+              <img src="/shots/advanced.png" loading="lazy" decoding="async" alt="The advanced search form with a query built up from its fields" width="820" height="640">
+            </picture>
+          </div>
+          <figcaption class="shot-cap">
+            <h3>The grammar, with a form</h3>
+            <p>Typing has a syntax. There is a form for the parts of it nobody remembers, and it writes the query for you.</p>
+            <code>findra --searchshot advanced.png adv Mond</code>
+          </figcaption>
+        </figure>
+
+        <figure class="shot reveal" style="margin:0">
+          <div class="shot-img">
+            <picture>
+              <source type="image/avif" srcset="/.netlify/images?url=/shots/firstrun.png&amp;w=410&amp;fm=avif 410w, /.netlify/images?url=/shots/firstrun.png&amp;w=820&amp;fm=avif 820w" sizes="(max-width: 860px) 100vw, 820px">
+              <source type="image/webp" srcset="/.netlify/images?url=/shots/firstrun.png&amp;w=410&amp;fm=webp 410w, /.netlify/images?url=/shots/firstrun.png&amp;w=820&amp;fm=webp 820w" sizes="(max-width: 860px) 100vw, 820px">
+              <img src="/shots/firstrun.png" loading="lazy" decoding="async" alt="The first-run screen with the Recommended preset chosen" width="820" height="928">
+            </picture>
+          </div>
+          <figcaption class="shot-cap">
+            <h3>One question, then out of the way</h3>
+            <p>Take a preset, take one capability, or take nothing at all. Nothing on this screen is permanent.</p>
+            <code>findra --searchshot firstrun.png firstrun Paper</code>
+          </figcaption>
+        </figure>
+
+        <figure class="shot wide reveal" style="margin:0">
+          <div class="shot-img">
+            <picture>
+              <source type="image/avif" srcset="/.netlify/images?url=/shots/settings.png&amp;w=410&amp;fm=avif 410w, /.netlify/images?url=/shots/settings.png&amp;w=820&amp;fm=avif 820w" sizes="(max-width: 860px) 100vw, 820px">
+              <source type="image/webp" srcset="/.netlify/images?url=/shots/settings.png&amp;w=410&amp;fm=webp 410w, /.netlify/images?url=/shots/settings.png&amp;w=820&amp;fm=webp 820w" sizes="(max-width: 860px) 100vw, 820px">
+              <img src="/shots/settings.png" loading="lazy" decoding="async" alt="The Content section of Findra's settings window, showing the switch for reading inside files" width="820" height="560">
+            </picture>
+          </div>
+          <figcaption class="shot-cap">
+            <h3>Reading inside your files is a switch, and it starts off</h3>
+            <p>One number, in minutes, decides how long a recording is worth transcribing. Turning content indexing off later throws away nothing already read, and turning a capability on re-reads only the files that capability covers.</p>
+            <code>findra --searchshot settings.png settingscontent Paper</code>
+          </figcaption>
+        </figure>
+      </div>
+    </section>
+  </div>
+
+</main>
+
+<footer class="wrap">
+  <div class="foot">
+    <div class="col">
+      <span class="brand" style="margin-bottom:6px">
+        <span class="brand-mark" aria-hidden="true"></span>
+        <span class="brand-name">Findra</span>
+      </span>
+      <span>Desktop search for Windows.</span>
+      <span>Built with .NET 10, Avalonia, SkiaSharp and SQLite.</span>
+    </div>
+    <div class="col">
+      <strong>FINDRA</strong>
+      <a href="/features/">What it finds</a>
+      <a href="/why/">Why Findra</a>
+      <a href="/numbers/">The numbers</a>
+      <a href="/faq/">Questions</a>
+      <a href="/install/">Install</a>
+    </div>
+    <div class="col">
+      <strong>PROJECT</strong>
+      <a href="https://github.com/blakazulu/findra" rel="noopener">Source</a>
+      <a href="/changelog/">Changelog</a>
+      <a href="https://github.com/blakazulu/findra/issues" rel="noopener">Issues</a>
+    </div>
+    <div class="col">
+      <strong>GUIDES</strong>
+      <a href="/windows-search-not-finding-files/">Windows Search not finding files</a>
+      <a href="/search-inside-pdfs/">Search inside PDFs</a>
+      <a href="/find-photos-by-description/">Find photos by description</a>
+      <a href="/search-recordings-by-speech/">Search recordings by speech</a>
+    </div>
+    <div class="col">
+      <strong>THE SMALL PRINT</strong>
+      <a href="/about/">About</a>
+      <a href="/contact/">Contact</a>
+      <a href="/privacy/">Privacy</a>
+      <a href="/code-signing/">Code signing policy</a>
+      <a href="https://github.com/blakazulu/findra/blob/main/SECURITY.md" rel="noopener">Security</a>
+      <a href="https://github.com/blakazulu/findra/blob/main/LICENSE" rel="noopener">Apache-2.0</a>
+      <a href="https://github.com/blakazulu/findra/blob/main/NOTICE" rel="noopener">Notice</a>
+      <a href="/llms.txt">For language models</a>
+    </div>
+    <div class="col">
+      <strong>ATTRIBUTION</strong>
+      <span>Findra by blakazulu.</span>
+      <span><a href="/fonts/Quicksand-OFL.txt">Quicksand</a> and <a href="/fonts/JetBrainsMono-OFL.txt">JetBrains Mono</a> under the SIL Open Font License 1.1.</span>
+      <span>&copy; <span id="year">2026</span></span>
+    </div>
+  </div>
+</footer>
+
+<script src="/app.js" defer></script>
+</body>
+</html>

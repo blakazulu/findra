@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Findra - Fast, private desktop search for Windows</title>
-<meta name="description" content="Private desktop search for Windows. Filenames from RAM in 0.33 to 2.05 ms median; documents, photos and speech when you ask. Free and open source.">
+<meta name="description" content="Private desktop search for Windows. Filenames from RAM in 0.60 to 3.78 ms median; documents, photos and speech when you ask. Free and open source.">
 <link rel="canonical" href="https://findra-search.netlify.app/">
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="Findra">
@@ -15,7 +15,7 @@
      shared link gets, and "Windows Search" there names somebody else's product. There is no
      twitter:title: the Twitter card falls back to og:title, so it follows this one. -->
 <meta property="og:title" content="Findra - Fast, private desktop search for Windows">
-<meta property="og:description" content="Names from RAM in 0.33 to 2.05 ms median across five measured queries. Documents, photos and speech when you ask for them. No account, no cloud, no telemetry.">
+<meta property="og:description" content="Names from RAM in 0.60 to 3.78 ms median across five measured queries. Documents, photos and speech when you ask for them. No account, no cloud, no telemetry.">
 <!-- share/card.png is drawn by build/Make-Icon.mjs from the same geometry as the application
      icon, at the 1.91:1 that X and Facebook crop to. It replaced a product screenshot at
      820x626, which is 1.31:1 and so had a slice taken out of its middle. The width and height
@@ -25,7 +25,7 @@
 <meta property="og:image:type" content="image/png">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
-<meta property="og:image:alt" content="Findra. Windows Search, but it works. Filenames in 0.33 to 2.05 ms median, straight from RAM. Nothing leaves your machine.">
+<meta property="og:image:alt" content="Findra. Windows Search, but it works. Filenames in 0.60 to 3.78 ms median, straight from RAM. Nothing leaves your machine.">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="theme-color" content="#08090c">
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
@@ -58,7 +58,7 @@
       "@id": "https://findra-search.netlify.app/#findra",
       "name": "Findra",
       "url": "https://findra-search.netlify.app/",
-      "description": "Desktop search for Windows. Filenames come back from an index held in RAM in 0.33 to 2.05 ms median across five measured queries, measured on one named desktop. It also finds files by what is written inside them, by what a photo shows and by what was said out loud, each an optional download. Free, open source, and nothing leaves your machine.",
+      "description": "Desktop search for Windows. Filenames come back from an index held in RAM in 0.60 to 3.78 ms median across five measured queries, measured on one named desktop. It also finds files by what is written inside them, by what a photo shows and by what was said out loud, each an optional download. Free, open source, and nothing leaves your machine.",
       "applicationCategory": "UtilitiesApplication",
       "applicationSubCategory": "Desktop search",
       "disambiguatingDescription": "Findra is an independent third-party application by blakazulu. It is not made by, affiliated with or endorsed by Microsoft, and it is not a version, component, fork or replacement of the Windows Search service built into Windows. It runs on Windows only and is not related to any other application that shares its name.",
@@ -66,7 +66,7 @@
       "keywords": "desktop search, file search, Windows, NTFS, USN journal, local search, offline search, semantic search, photo search by description, speech search, transcript search, open source",
       "operatingSystem": "Windows 10, Windows 11",
       "processorRequirements": "x64 or arm64",
-      "softwareVersion": "0.3.0",
+      "softwareVersion": "0.3.1",
       "license": "https://www.apache.org/licenses/LICENSE-2.0",
       "isAccessibleForFree": true,
       "offers": {
@@ -76,7 +76,7 @@
         "availability": "https://schema.org/InStock"
       },
       "featureList": [
-        "Filename search answered from an in-RAM index in 0.33 to 2.05 ms median across five measured queries",
+        "Filename search answered from an in-RAM index in 0.60 to 3.78 ms median across five measured queries",
         "Full-text search inside documents, off until you turn it on",
         "Photo and video search by what the image shows",
         "Speech search by what was said in a recording, including Hebrew",
@@ -102,7 +102,7 @@
       ],
       "softwareRequirements": "Windows 10 or Windows 11. No runtime to install: the build is self-contained. Filename search uses one helper process, which asks for administrator rights once in order to open the NTFS volume.",
       "storageRequirements": "The application itself is a self-contained build. Capabilities that use a model are separate, optional downloads: 629 MB for photos and video, 1.04 GB for meaning in documents, 547 MB for speech on top of the document models, and 1.51 GB for the Hebrew second pass. Taking every one of them is 3.7 GB. Taking none of them still searches every filename on the machine.",
-      "memoryRequirements": "About 73.7 MB of RAM for a resident name index of 1,580,825 files, measured on one desktop.",
+      "memoryRequirements": "About 200.3 MB of RAM for the name index of 1,780,595 files, measured on one desktop. That is the index itself; the helper process that holds it needs some memory of its own beside it.",
       "permissions": "Administrator rights are requested once, by a helper process, to open the NTFS volume and read the file table. Nothing else in Findra requires them, and the process that opens and decodes files deliberately runs without them.",
       "identifier": {
         "@type": "PropertyValue",
@@ -119,10 +119,16 @@
       "downloadUrl": "https://github.com/blakazulu/findra/releases/latest",
       "datePublished": "2026-09-04",
       "dateModified": "2026-09-21",
-      "releaseNotes": "https://github.com/blakazulu/findra/releases/tag/v0.3.0",
-      "author": { "@id": "https://findra-search.netlify.app/#blakazulu" },
-      "publisher": { "@id": "https://findra-search.netlify.app/#blakazulu" },
-      "maintainer": { "@id": "https://findra-search.netlify.app/#blakazulu" }
+      "releaseNotes": "https://github.com/blakazulu/findra/releases/tag/v0.3.1",
+      "author": {
+        "@id": "https://findra-search.netlify.app/#blakazulu"
+      },
+      "publisher": {
+        "@id": "https://findra-search.netlify.app/#blakazulu"
+      },
+      "maintainer": {
+        "@id": "https://findra-search.netlify.app/#blakazulu"
+      }
     },
     {
       "@type": "SoftwareSourceCode",
@@ -132,8 +138,12 @@
       "programmingLanguage": "C#",
       "runtimePlatform": ".NET 10",
       "license": "https://www.apache.org/licenses/LICENSE-2.0",
-      "targetProduct": { "@id": "https://findra-search.netlify.app/#findra" },
-      "author": { "@id": "https://findra-search.netlify.app/#blakazulu" }
+      "targetProduct": {
+        "@id": "https://findra-search.netlify.app/#findra"
+      },
+      "author": {
+        "@id": "https://findra-search.netlify.app/#blakazulu"
+      }
     },
     {
       "@type": "Person",
@@ -142,106 +152,20 @@
       "alternateName": "blakazulu",
       "url": "https://github.com/blakazulu",
       "email": "blakazulu@gmail.com",
-      "sameAs": ["https://github.com/blakazulu", "https://github.com/blakazulu/findra"],
+      "sameAs": [
+        "https://github.com/blakazulu",
+        "https://github.com/blakazulu/findra"
+      ],
       "contactPoint": {
         "@type": "ContactPoint",
         "contactType": "technical support",
         "email": "blakazulu@gmail.com",
         "url": "https://findra-search.netlify.app/contact/",
-        "availableLanguage": ["English", "Hebrew"]
+        "availableLanguage": [
+          "English",
+          "Hebrew"
+        ]
       }
-    },
-    {
-      "@type": "FAQPage",
-      "@id": "https://findra-search.netlify.app/#faq",
-      "isPartOf": {
-        "@id": "https://findra-search.netlify.app/#site"
-      },
-      "about": {
-        "@id": "https://findra-search.netlify.app/#findra"
-      },
-      "mainEntity": [
-        {
-          "@type": "Question",
-          "name": "What is Findra?",
-          "acceptedAnswer": {
-            "@type": "Answer",
-            "text": "Findra is a free, open-source desktop search program for Windows 10 and 11. A capsule sits on the desktop and a global hotkey opens it from anywhere. It finds files by name from an index held in RAM, and, if you turn it on, by the words inside documents, by what a photograph shows, and by what was said in a recording. Findra is an independent application written by one person. It is not made by, affiliated with or endorsed by Microsoft, and it is not a version, component, fork or replacement of the Windows Search service that ships inside Windows."
-          }
-        },
-        {
-          "@type": "Question",
-          "name": "Does Findra search inside files, or only filenames?",
-          "acceptedAnswer": {
-            "@type": "Answer",
-            "text": "Both, but not at the same time. Filenames are searchable the second Findra starts, because a name index costs seconds to build. Reading inside files is off until you turn it on, because it walks every drive and can run for hours. findra --content on starts it and findra --content off stops it without discarding anything already read."
-          }
-        },
-        {
-          "@type": "Question",
-          "name": "How fast is Findra?",
-          "acceptedAnswer": {
-            "@type": "Answer",
-            "text": "0.33 to 2.05 ms median round trip for a filename across five measured queries - 0.33 ms for \"config\" and 2.05 ms for \"sunset\" - including the hop between processes; the worst single sample across the five measured name queries was 2.48 ms. 1,580,825 names were enumerated in 2.6 seconds at sign-in and held in 73.7 MB of RAM. Measured with findra --searchbench on an AMD Ryzen 9 9900X3D, 47.1 GB of RAM, an NVMe SSD, Windows 11 Pro 10.0.26200.9168. Yours will differ."
-          }
-        },
-        {
-          "@type": "Question",
-          "name": "Does anything leave my machine?",
-          "acceptedAnswer": {
-            "@type": "Answer",
-            "text": "One request, and it is not about you. Once every 24 hours on startup, Findra makes an anonymous HTTPS GET to the GitHub releases API to ask whether a newer version exists: no query parameters, no machine identifier, no install identifier, nothing about your files or your searches. It can be switched off, and off means the request is not made. Model downloads happen only when you choose a capability and ask for it."
-          }
-        },
-        {
-          "@type": "Question",
-          "name": "How do I install Findra?",
-          "acceptedAnswer": {
-            "@type": "Answer",
-            "text": "winget install blakazulu.Findra, which picks the x64 or arm64 build for your machine. The same installer is on the GitHub releases page, https://github.com/blakazulu/findra/releases/latest, and that page carries each new release first: the Windows Package Manager catalogue can take a few days to pick one up. Building from source needs the .NET 10 SDK and nothing else. Neither the installer nor the executables are signed yet, so Windows warns about an unknown publisher until that changes."
-          }
-        },
-        {
-          "@type": "Question",
-          "name": "Can I find a photo by describing what is in it?",
-          "acceptedAnswer": {
-            "@type": "Answer",
-            "text": "Yes, if you install the picture capability, which is a 629 MB download of model files that run on your own machine. Findra compares what you typed against what the model saw in each image, so a photograph of a receipt on a shop counter turns up for \"paper receipt\" with none of those words anywhere in its filename. No image is ever uploaded to be understood."
-          }
-        },
-        {
-          "@type": "Question",
-          "name": "Can I search recordings by what was said in them?",
-          "acceptedAnswer": {
-            "@type": "Answer",
-            "text": "Yes, if you install the speech capability. Findra transcribes audio and video on your own machine and searches the transcript exactly as it searches a document, which is why speech brings the document models with it: 547 MB on top of them. One number, in minutes, sets how long a recording is worth transcribing - five by default - and raising it later goes back for exactly the files it passed over."
-          }
-        },
-        {
-          "@type": "Question",
-          "name": "Does Findra need a graphics card?",
-          "acceptedAnswer": {
-            "@type": "Answer",
-            "text": "No. Findra tries DirectML for the picture and meaning models and Vulkan for speech, and falls back to the processor when neither answers. The processor is a supported configuration rather than a failure state: only the first pass through your files is slower. When another program is working the graphics card hard, or something is running fullscreen, Findra stops reading, lets go of the models it had loaded, and carries on once the card has been free for a minute. Findra's published measurements come from one machine, and it has an NVIDIA card; AMD and Intel graphics have not been tested on real hardware, and neither has an arm64 machine."
-          }
-        },
-        {
-          "@type": "Question",
-          "name": "Does Findra need administrator rights?",
-          "acceptedAnswer": {
-            "@type": "Answer",
-            "text": "Once, for one call. A helper process opens the NTFS volume to read the file table, which is the only thing in Findra that needs them. Everything else runs at normal integrity, including the part that opens and decodes your files, so a malformed document never meets an elevated process. Uninstalling always removes that elevated logon task."
-          }
-        },
-        {
-          "@type": "Question",
-          "name": "How much disk space does Findra need?",
-          "acceptedAnswer": {
-            "@type": "Answer",
-            "text": "Nothing extra, if you only want filenames. The capabilities that use a model are separate downloads you can decline: 629 MB for photos and video, 1.04 GB for meaning in documents, 547 MB for speech on top of the document models, and 1.51 GB for the Hebrew second pass. Taking every one of them is 3.7 GB. A missing model is a normal state, not an error - that capability is skipped and nothing else changes."
-          }
-        }
-      ]
     },
     {
       "@type": "WebPage",
@@ -281,8 +205,12 @@
       "name": "Findra",
       "url": "https://findra-search.netlify.app/",
       "inLanguage": "en",
-      "about": { "@id": "https://findra-search.netlify.app/#findra" },
-      "publisher": { "@id": "https://findra-search.netlify.app/#blakazulu" }
+      "about": {
+        "@id": "https://findra-search.netlify.app/#findra"
+      },
+      "publisher": {
+        "@id": "https://findra-search.netlify.app/#blakazulu"
+      }
     }
   ]
 }
@@ -305,12 +233,11 @@
     <span class="brand-name">Findra</span>
   </a>
   <nav class="nav-links">
-    <a href="#finds">What it finds</a>
-    <a href="#different">How it differs</a>
-    <a href="#numbers">The numbers</a>
-    <a href="#privacy">Privacy</a>
-    <a href="#questions">Questions</a>
-    <a href="#install">Install</a>
+    <a href="/features/">What it finds</a>
+    <a href="/why/">Why Findra</a>
+    <a href="/numbers/">The numbers</a>
+    <a href="/faq/">Questions</a>
+    <a href="/privacy/">Privacy</a>
   </nav>
   <div class="nav-right">
     <span class="pill-thinking" aria-hidden="true">
@@ -341,7 +268,7 @@
 
       <p class="hero-sub">
         Findra is a free, open-source desktop search program for Windows 10 and 11. It finds files
-        by name from an index held in RAM, in 0.33 to 2.05 ms median across five measured queries, and - if
+        by name from an index held in RAM, in 0.60 to 3.78 ms median across five measured queries, and - if
         you turn it on - by the words inside documents, by what a photograph shows, and by what was said in a
         recording. Everything runs on your own machine.
       </p>
@@ -351,12 +278,12 @@
           <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v11"/><polyline points="7 9.5 12 14.5 17 9.5"/><path d="M4 20h16"/></svg>
           Get Findra
         </a>
-        <a class="btn btn-ghost" href="#finds">See what it finds</a>
+        <a class="btn btn-ghost" href="/features/">See what it finds</a>
       </div>
 
       <div class="hero-meta">
         <!-- Stamped by build/Make-Pages.mjs from Directory.Build.props and CHANGELOG.md. -->
-        <a class="hero-version" href="/changelog/" data-stamp="version">v0.3.0 - 22 Sep 2026</a>
+        <a class="hero-version" href="/changelog/" data-stamp="version">v0.3.1 - 22 Sep 2026</a>
         <span class="row-break" aria-hidden="true"></span>
         <span>Windows 10 and 11</span>
         <span class="sep">/</span>
@@ -392,8 +319,8 @@
         </p>
         <p class="hero-sub bright">
           Findra holds the file table in RAM and answers before your finger comes off Enter.
-          A third of a millisecond for "config", measured, on a disk with 1.5 million files
-          on it. The slowest of the five medians was 2.05 ms.
+          A median of 0.60 ms for "config", measured, on a disk with 1.78 million files
+          on it. The slowest of the five medians was 3.78 ms.
         </p>
 
         <div class="hero-actions">
@@ -401,7 +328,7 @@
             <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v11"/><polyline points="7 9.5 12 14.5 17 9.5"/><path d="M4 20h16"/></svg>
             Get Findra
           </a>
-          <a class="btn btn-ghost" href="#finds">See what it finds</a>
+          <a class="btn btn-ghost" href="/features/">See what it finds</a>
         </div>
 
         <div class="hero-meta">
@@ -452,7 +379,7 @@
               <span class="name">receipt_final.pdf</span>
               <span class="path">C:\Users\you\Downloads\ (yes, there)</span>
             </span>
-            <span class="ms">0.33 ms</span>
+            <span class="ms">0.60 ms</span>
           </div>
           <div class="cap-row">
             <span class="info">
@@ -474,334 +401,48 @@
     </section>
   </div>
 
-  <!-- ================= ticker ================= -->
-  <div class="ticker" aria-hidden="true">
-    <div class="ticker-track" id="ticker"></div>
-  </div>
-
-  <!-- ================= event log ================= -->
-  <div class="wrap">
-    <section id="sins">
-      <div class="sec-head-row reveal">
-        <div class="sec-head" style="margin-bottom:0">
-          <span class="kicker">THE PAPER TRAIL</span>
-          <h2>Thirty years, five log entries</h2>
-        </div>
-        <p class="aside">Windows kept meticulous records of everything except where your file was.</p>
-      </div>
-
-      <div class="log reveal">
-        <div class="log-head">
-          <span class="left">
-            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#fa7e00" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
-            <span class="title">Event Viewer</span>
-            <span class="path">Applications and Services / Windows Search</span>
-          </span>
-          <span class="count">5 events, one of them useful</span>
-        </div>
-
-        <div class="log-row head">
-          <span>LEVEL</span><span>EVENT</span><span>SOURCE</span><span>DESCRIPTION</span>
-        </div>
-
-        <div class="log-row">
-          <span class="log-lvl err">Error</span>
-          <span class="log-id">3036</span>
-          <span class="log-src">SearchIndexer</span>
-          <span class="log-desc">Indexed 1,842,910 files overnight. Excluded the desktop for reasons known only to itself.</span>
-        </div>
-        <div class="log-row">
-          <span class="log-lvl err">Error</span>
-          <span class="log-id">1000</span>
-          <span class="log-src">explorer.exe</span>
-          <span class="log-desc">Faulting application. Took the taskbar with it so you would not feel alone.</span>
-        </div>
-        <div class="log-row">
-          <span class="log-lvl warn">Warning</span>
-          <span class="log-id">7043</span>
-          <span class="log-src">SearchProtocolHost</span>
-          <span class="log-desc">Drive at 100% for six minutes. Twenty-three cores idle and watching.</span>
-        </div>
-        <div class="log-row">
-          <span class="log-lvl warn">Warning</span>
-          <span class="log-id">0042</span>
-          <span class="log-src">SearchUI</span>
-          <span class="log-desc">Could not find a local file. Offered eleven web results and a shopping tab.</span>
-        </div>
-        <div class="log-row good">
-          <span class="log-lvl">Resolved</span>
-          <span class="log-id">0001</span>
-          <span class="log-src">findra.exe</span>
-          <span class="log-desc">Found it in a third of a millisecond. Also found it quoted inside three PDFs and a voice note. Went back to using 73.7 MB.</span>
-        </div>
-      </div>
-    </section>
-  </div>
-
-  <!-- ================= excuses ================= -->
-  <div class="wrap">
-    <section>
-      <div class="sec-head reveal">
-        <span class="kicker">THE OFFICIAL EXCUSES</span>
-        <h2>Why it did not find your file</h2>
-      </div>
-
-      <div class="grid-4">
-        <article class="excuse reveal">
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#fa7e00" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/></svg>
-          <h3>The index had not got to it</h3>
-          <p>You saved the file. The indexer runs at 3 AM. Until then, as far as Windows is concerned, you did not.</p>
-          <span class="fix">Findra: names are live, always</span>
-        </article>
-
-        <article class="excuse reveal">
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#fa7e00" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="7" y1="9" x2="17" y2="9"/></svg>
-          <h3>That folder was not included</h3>
-          <p>There is a settings page listing which of your own drives Windows is willing to look at. Nobody has ever found it twice.</p>
-          <span class="fix">Findra: every NTFS volume</span>
-        </article>
-
-        <article class="excuse reveal">
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#fa7e00" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.2" y2="16.2"/></svg>
-          <h3>You only remembered the sentence</h3>
-          <p>Not what you called the file. Windows would like the filename, please, and would prefer you had it memorised.</p>
-          <span class="fix">Findra: inside documents too</span>
-        </article>
-
-        <article class="excuse reveal">
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#fa7e00" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.5-6.5 10-6.5S22 12 22 12s-3.5 6.5-10 6.5S2 12 2 12z"/><circle cx="12" cy="12" r="2.6"/></svg>
-          <h3>It sent the question upstream</h3>
-          <p>You typed a private filename into a box on your own computer and something went over the wire about it.</p>
-          <span class="fix">Findra: nothing leaves</span>
-        </article>
-      </div>
-    </section>
-  </div>
-
-  <!-- ================= what it finds ================= -->
-  <div class="wrap">
-    <section id="finds">
-      <div class="sec-head reveal">
-        <span class="kicker">WHAT IT FINDS</span>
-        <h2>What can Findra actually find?</h2>
-        <p>
-          <b>Names first. Then, if you ask, everything else.</b> Names cost seconds to index and about 73 MB of memory, so they are on from the moment
-          Findra starts. Reading inside files walks every drive and can run for hours, so it never
-          begins on its own. You turn it on, one capability at a time, and each one is a separate
-          download you can decline.
-        </p>
-      </div>
-
-      <div class="table-wrap reveal">
-        <table>
-          <thead>
-            <tr>
-              <th scope="col">What you can search for</th>
-              <th scope="col">Needs a model</th>
-              <th scope="col">On by default</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr><td>Names of files and folders, across every NTFS volume</td><td class="no">no</td><td class="yes">yes, the moment Findra starts</td></tr>
-            <tr><td>Words in documents, and the text inside pictures</td><td class="no">no</td><td class="no">no, until you turn content indexing on</td></tr>
-            <tr><td>Photos and video, by what is in the frame</td><td class="yes">yes</td><td class="no">no</td></tr>
-            <tr><td>Documents by what they mean, not only the words they use</td><td class="yes">yes</td><td class="no">no</td></tr>
-            <tr><td>Speech in recordings, with a second pass for Hebrew</td><td class="yes">yes</td><td class="no">no</td></tr>
-          </tbody>
-        </table>
-      </div>
-
-      <p class="hero-sub reveal" style="margin-top:22px;max-width:900px">
-        Everything Findra can install adds up to 3.7 GB, and that is the figure only if you take
-        all of it. Take none and it still searches every name on the machine. On the first screen
-        each row is priced at its own files, so the number never moves when you tick it and the
-        four rows add up to that 3.7 GB; the line along the bottom is what your selection actually
-        costs, and it is smaller whenever two capabilities share a file. Settings prices the same
-        capabilities differently, and correctly for the question being asked there: what one more
-        would add to what is already on the disk.
-      </p>
-    </section>
-  </div>
-
-  <!-- ================= how it differs ================= -->
-  <!-- Compared against categories and against Windows Search, which this site names on purpose.
-       No head-to-head number against any named product appears here or anywhere else: Findra
-       cannot benchmark somebody else's tool fairly and has not tried. -->
-  <div class="wrap">
-    <section id="different">
-      <div class="sec-head reveal">
-        <span class="kicker">HOW IT DIFFERS</span>
-        <h2>How is Findra different from the search Windows already has?</h2>
-        <p>
-          Four differences, and every one of them is something you can check on your own machine
-          rather than a claim about somebody else's product.
-        </p>
-      </div>
-
-      <div class="grid-2">
-        <article class="excuse reveal">
-          <h3>The names live in RAM, not in a database</h3>
-          <p>Findra reads the NTFS file table at sign-in and holds every name in memory: 1,580,825 names in 2.6 seconds, 73.7 MB resident, and 0.33 ms median to answer the fastest of five measured queries. There is no overnight pass and no index to rebuild, so a file saved a minute ago is findable now.</p>
-          <span class="fix">findra --searchbench, on an AMD Ryzen 9 9900X3D with an NVMe SSD. Yours will differ.</span>
-        </article>
-
-        <article class="excuse reveal">
-          <h3>Reading inside a PDF needs nothing installed</h3>
-          <p>Findra decodes documents itself, in a process of its own that never runs elevated. There is no filter to install, no file type to register and no index to rebuild afterwards. Turning a capability on later goes back for exactly the files that capability covers. While another program is working the graphics card, or a game is fullscreen, it waits and lets go of its models rather than competing for the card.</p>
-          <span class="fix">findra --content on</span>
-        </article>
-
-        <article class="excuse reveal">
-          <h3>Filename-only search cannot find what you remember</h3>
-          <p>A file-table index is fast because names are all it holds. Findra holds the table too, and then, only if you ask, the words in a document, what a photograph shows, and what was said in a recording - each one a download you can decline.</p>
-          <span class="fix">Each one an optional download</span>
-        </article>
-
-        <article class="excuse reveal">
-          <h3>Nothing is sent anywhere to make it work</h3>
-          <p>The models run on your own processor or graphics card. A photograph is never uploaded to be understood, a query is never sent anywhere to be answered, and no web results are mixed in among your own files.</p>
-          <span class="fix">One request a day, for the version number</span>
-        </article>
-      </div>
-    </section>
-  </div>
-
-  <!-- ================= screenshots ================= -->
-  <div class="wrap">
-    <section id="shots">
-      <div class="sec-head-row reveal">
-        <div class="sec-head" style="margin-bottom:0">
-          <span class="kicker">NOT A MOCKUP</span>
-          <h2>Every picture below is the product</h2>
-        </div>
-        <p class="aside">
-          Each one was drawn by the same painter the window uses, with the command printed
-          underneath it. Run the command, get the image.
-        </p>
-      </div>
-
-      <div class="shots">
-        <figure class="shot wide reveal" style="margin:0">
-          <div class="shot-img">
-            <picture>
-              <source type="image/avif" srcset="/.netlify/images?url=/shots/results.png&amp;w=410&amp;fm=avif 410w, /.netlify/images?url=/shots/results.png&amp;w=820&amp;fm=avif 820w" sizes="(max-width: 860px) 100vw, 820px">
-              <source type="image/webp" srcset="/.netlify/images?url=/shots/results.png&amp;w=410&amp;fm=webp 410w, /.netlify/images?url=/shots/results.png&amp;w=820&amp;fm=webp 820w" sizes="(max-width: 860px) 100vw, 820px">
-              <img src="shots/results.png" loading="lazy" decoding="async" alt="The Findra results card with nine results for the query sunset: a photo matched on what it shows and previewed beside the list, documents matched on their text, and a recording matched on what was said" width="820" height="626">
-            </picture>
-          </div>
-          <figcaption class="shot-cap">
-            <h3>The card</h3>
-            <p>Nine results for "sunset": files by name, documents by their contents, and a photograph matched on what is actually in the frame.</p>
-            <code>findra --searchshot results.png results Mond</code>
-          </figcaption>
-        </figure>
-
-        <figure class="shot reveal" style="margin:0">
-          <div class="shot-img">
-            <picture>
-              <source type="image/avif" srcset="/.netlify/images?url=/shots/capsule.png&amp;w=310&amp;fm=avif 310w, /.netlify/images?url=/shots/capsule.png&amp;w=620&amp;fm=avif 620w" sizes="(max-width: 860px) 100vw, 620px">
-              <source type="image/webp" srcset="/.netlify/images?url=/shots/capsule.png&amp;w=310&amp;fm=webp 310w, /.netlify/images?url=/shots/capsule.png&amp;w=620&amp;fm=webp 620w" sizes="(max-width: 860px) 100vw, 620px">
-              <img src="shots/capsule.png" loading="lazy" decoding="async" alt="The Findra capsule sitting on the desktop, waiting" width="620" height="140">
-            </picture>
-          </div>
-          <figcaption class="shot-cap">
-            <h3>The capsule</h3>
-            <p>It sits on the desktop doing nothing until you click it, or press the hotkey from wherever you happen to be.</p>
-            <code>findra --searchshot capsule.png capsule Mond</code>
-          </figcaption>
-        </figure>
-
-        <figure class="shot reveal" style="margin:0">
-          <div class="shot-img">
-            <picture>
-              <source type="image/avif" srcset="/.netlify/images?url=/shots/light.png&amp;w=410&amp;fm=avif 410w, /.netlify/images?url=/shots/light.png&amp;w=820&amp;fm=avif 820w" sizes="(max-width: 860px) 100vw, 820px">
-              <source type="image/webp" srcset="/.netlify/images?url=/shots/light.png&amp;w=410&amp;fm=webp 410w, /.netlify/images?url=/shots/light.png&amp;w=820&amp;fm=webp 820w" sizes="(max-width: 860px) 100vw, 820px">
-              <img src="shots/light.png" loading="lazy" decoding="async" alt="The same results card rendered in the light Blueprint palette" width="820" height="626">
-            </picture>
-          </div>
-          <figcaption class="shot-cap">
-            <h3>Six palettes, three dark and three light</h3>
-            <p>Pick one of each and Findra follows the Windows setting, or pin it to either. Your own go in palettes.json.</p>
-            <code>findra --searchshot light.png results Blueprint</code>
-          </figcaption>
-        </figure>
-
-        <figure class="shot reveal" style="margin:0">
-          <div class="shot-img">
-            <picture>
-              <source type="image/avif" srcset="/.netlify/images?url=/shots/advanced.png&amp;w=410&amp;fm=avif 410w, /.netlify/images?url=/shots/advanced.png&amp;w=820&amp;fm=avif 820w" sizes="(max-width: 860px) 100vw, 820px">
-              <source type="image/webp" srcset="/.netlify/images?url=/shots/advanced.png&amp;w=410&amp;fm=webp 410w, /.netlify/images?url=/shots/advanced.png&amp;w=820&amp;fm=webp 820w" sizes="(max-width: 860px) 100vw, 820px">
-              <img src="shots/advanced.png" loading="lazy" decoding="async" alt="The advanced search form with a query built up from its fields" width="820" height="640">
-            </picture>
-          </div>
-          <figcaption class="shot-cap">
-            <h3>The grammar, with a form</h3>
-            <p>Typing has a syntax. There is a form for the parts of it nobody remembers, and it writes the query for you.</p>
-            <code>findra --searchshot advanced.png adv Mond</code>
-          </figcaption>
-        </figure>
-
-        <figure class="shot reveal" style="margin:0">
-          <div class="shot-img">
-            <picture>
-              <source type="image/avif" srcset="/.netlify/images?url=/shots/firstrun.png&amp;w=410&amp;fm=avif 410w, /.netlify/images?url=/shots/firstrun.png&amp;w=820&amp;fm=avif 820w" sizes="(max-width: 860px) 100vw, 820px">
-              <source type="image/webp" srcset="/.netlify/images?url=/shots/firstrun.png&amp;w=410&amp;fm=webp 410w, /.netlify/images?url=/shots/firstrun.png&amp;w=820&amp;fm=webp 820w" sizes="(max-width: 860px) 100vw, 820px">
-              <img src="shots/firstrun.png" loading="lazy" decoding="async" alt="The first-run screen with the Recommended preset chosen" width="820" height="928">
-            </picture>
-          </div>
-          <figcaption class="shot-cap">
-            <h3>One question, then out of the way</h3>
-            <p>Take a preset, take one capability, or take nothing at all. Nothing on this screen is permanent.</p>
-            <code>findra --searchshot firstrun.png firstrun Paper</code>
-          </figcaption>
-        </figure>
-
-        <figure class="shot wide reveal" style="margin:0">
-          <div class="shot-img">
-            <picture>
-              <source type="image/avif" srcset="/.netlify/images?url=/shots/settings.png&amp;w=410&amp;fm=avif 410w, /.netlify/images?url=/shots/settings.png&amp;w=820&amp;fm=avif 820w" sizes="(max-width: 860px) 100vw, 820px">
-              <source type="image/webp" srcset="/.netlify/images?url=/shots/settings.png&amp;w=410&amp;fm=webp 410w, /.netlify/images?url=/shots/settings.png&amp;w=820&amp;fm=webp 820w" sizes="(max-width: 860px) 100vw, 820px">
-              <img src="shots/settings.png" loading="lazy" decoding="async" alt="The Content section of Findra's settings window, showing the switch for reading inside files" width="820" height="560">
-            </picture>
-          </div>
-          <figcaption class="shot-cap">
-            <h3>Reading inside your files is a switch, and it starts off</h3>
-            <p>One number, in minutes, decides how long a recording is worth transcribing. Turning content indexing off later throws away nothing already read, and turning a capability on re-reads only the files that capability covers.</p>
-            <code>findra --searchshot settings.png settingscontent Paper</code>
-          </figcaption>
-        </figure>
-      </div>
-    </section>
-  </div>
-
   <!-- ================= numbers ================= -->
+  <!-- The front page's one number. The figure is derived, never typed: the slowest median in the
+       README's --searchbench run, rounded up to the next whole millisecond, so it holds for every
+       query measured. Every table behind it is on /numbers/. -->
   <div class="wrap">
     <section id="numbers">
       <div class="sec-head reveal">
         <span class="kicker">THE NUMBERS</span>
         <h2>How fast is Findra?</h2>
         <p>
-          Everything below came out of <code style="font-family:var(--mono);font-size:14px;color:var(--ink-dim)">findra --searchbench</code>
-          and was pasted without editing. No number appears in this section that you cannot reproduce
-          on your own computer with one command.
+          Measured with <code style="font-family:var(--mono);font-size:14px;color:var(--ink-dim)">findra --searchbench</code>,
+          which you can run on your own machine to get your own.
         </p>
       </div>
 
-      <div class="stat-row">
-        <div class="stat reveal">
-          <span class="v">0.33 ms</span>
-          <span class="k">A name, end to end</span>
-          <span class="n">Median round trip for "config", pipe hop included. The worst single sample across the five measured name queries was 2.48 ms.</span>
+      <div class="hero-stat reveal">
+        <div>
+          <div class="big" aria-hidden="true">&lt;4<small>ms</small></div>
+          <p class="sr-only">Under 4 ms.</p>
+          <div class="say">Type part of a filename. The matches are back.</div>
+          <div class="fine">0.60 to 3.78 ms median round trip for every query measured, across 1,780,595 names, from the moment the query leaves the window to the moment the results arrive.</div>
         </div>
+        <div class="bars">
+          <div class="bar"><span>config</span><span class="track"><span class="fill" style="width:15%"></span></span><span class="ms">0.60 ms</span></div>
+          <div class="bar"><span>report</span><span class="track"><span class="fill" style="width:17.5%"></span></span><span class="ms">0.70 ms</span></div>
+          <div class="bar"><span>readme</span><span class="track"><span class="fill" style="width:25.75%"></span></span><span class="ms">1.03 ms</span></div>
+          <div class="bar"><span>invoice</span><span class="track"><span class="fill" style="width:81%"></span></span><span class="ms">3.24 ms</span></div>
+          <div class="bar"><span>sunset</span><span class="track"><span class="fill" style="width:94.5%"></span></span><span class="ms">3.78 ms</span></div>
+          <div class="axis" aria-hidden="true"><span></span><span><span>0</span><span>1</span><span>2</span><span>3</span><span>4 ms</span></span><span></span></div>
+        </div>
+      </div>
+
+      <div class="stat-row three">
         <div class="stat reveal">
-          <span class="v">2.6 s</span>
+          <span class="v">5.4 s</span>
           <span class="k">From cold to ready</span>
-          <span class="n">1,580,825 names enumerated off the volume at sign-in. No overnight pass, no 3 AM.</span>
+          <span class="n">1,780,595 names read off the disk when the helper starts. Longer right after a restart.</span>
         </div>
         <div class="stat reveal">
-          <span class="v">73.7 MB</span>
+          <span class="v">200.3 MB</span>
           <span class="k">What it costs to hold</span>
-          <span class="n">The whole resident name index for that million and a half files.</span>
+          <span class="n">The name index for 1,780,595 names, measured by the helper that holds it.</span>
         </div>
         <div class="stat reveal">
           <span class="v">0</span>
@@ -810,173 +451,10 @@
         </div>
       </div>
 
-      <div class="table-wrap reveal">
-        <table>
-          <thead>
-            <tr>
-              <th scope="col">Name query</th>
-              <th scope="col">Round trip p50</th>
-              <th scope="col">Round trip p95</th>
-              <th scope="col">Index scan p50</th>
-              <th scope="col">Worst</th>
-              <th scope="col">Hits</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr><td>config</td><td class="num">0.33 ms</td><td class="num">0.37 ms</td><td class="num">0.03 ms</td><td class="num">0.44 ms</td><td>50</td></tr>
-            <tr><td>report</td><td class="num">0.41 ms</td><td class="num">0.49 ms</td><td class="num">0.08 ms</td><td class="num">0.59 ms</td><td>50</td></tr>
-            <tr><td>readme</td><td class="num">0.52 ms</td><td class="num">0.67 ms</td><td class="num">0.21 ms</td><td class="num">0.93 ms</td><td>50</td></tr>
-            <tr><td>invoice</td><td class="num">1.72 ms</td><td class="num">2.16 ms</td><td class="num">1.31 ms</td><td class="num">2.37 ms</td><td>46</td></tr>
-            <tr><td>sunset</td><td class="num">2.05 ms</td><td class="num">2.42 ms</td><td class="num">1.70 ms</td><td class="num">2.48 ms</td><td>35</td></tr>
-          </tbody>
-        </table>
-      </div>
-
-      <div class="machine reveal">
-        <span><b>Machine</b> AMD Ryzen 9 9900X3D</span>
-        <span><b>RAM</b> 47.1 GB</span>
-        <span><b>Disk</b> NVMe SSD</span>
-        <span><b>OS</b> Windows 11 Pro 10.0.26200.9168</span>
-        <span><b>Accelerator</b> ONNX via DirectML</span>
-        <span><b>Build</b> Findra 0.1.0</span>
-        <span><b>Samples</b> n=50 per query</span>
-      </div>
-
-      <p class="hero-sub reveal" style="margin-top:22px;max-width:900px">
-        A number without its machine is marketing rather than measurement, so the machine is named.
-        Yours will differ. Findra tries DirectML for the vision and meaning models and Vulkan for
-        speech, and falls back to the processor when neither answers, which is a supported
-        configuration rather than a failure: only the first pass through your files is slower, and
-        <code style="font-family:var(--mono);font-size:13.5px;color:var(--ink-dim)">findra --searchmodels</code>
-        prints which provider it chose and every one it turned down, with reasons.
-      </p>
-
-      <p class="hero-sub reveal" style="margin-top:14px;max-width:900px">
-        <b>These numbers are from one machine, and it has an NVIDIA card.</b> Findra is built for
-        AMD and Intel processors, for AMD, Intel and NVIDIA graphics, for integrated graphics, and
-        for machines with no usable accelerator at all - but only this configuration and the
-        processor-only path have been measured. <b>AMD and Intel graphics have not been tested on
-        real hardware, and neither has an arm64 machine</b> - the arm64 build ships because keeping
-        it reachable costs nothing, not because it has been run. The paths Findra uses are
-        vendor-neutral by design so that they should work there; that is a decision rather than a
-        measurement, and it is said here as one.
-      </p>
-    </section>
-  </div>
-
-  <!-- ================= privacy ================= -->
-  <div class="wrap">
-    <section id="privacy">
-      <div class="sec-head reveal">
-        <span class="kicker">WHAT LEAVES YOUR MACHINE</span>
-        <h2>Does anything leave your machine?</h2>
-        <p>One request. Written down, not buried.</p>
-      </div>
-
-      <div class="privacy">
-        <div class="panel reveal">
-          <h3>Never leaves</h3>
-          <ul class="never" style="list-style:none;margin:0;padding:0">
-            <li><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fa7e00" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg> Your files, and their contents</li>
-            <li><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fa7e00" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg> Their names, and where they live</li>
-            <li><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fa7e00" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg> What you searched for, and when</li>
-            <li><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fa7e00" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg> Anything at all about who you are</li>
-          </ul>
-          <p>
-            There is no account, no cloud service, no analytics, no crash reporting and no
-            telemetry. The models run on your own processor or graphics card; a photograph is
-            never uploaded to be understood.
-          </p>
-        </div>
-
-        <div class="panel accent reveal">
-          <h3>The one exception</h3>
-          <p>
-            Once every 24 hours, on startup, in the background, Findra makes an anonymous HTTPS GET
-            to the GitHub releases API to learn whether a newer version exists. No query
-            parameters, no machine identifier, no install identifier, nothing about your files or
-            your searches.
-          </p>
-          <p>
-            It never blocks anything, a failure is a line in the log rather than a dialog, it is
-            disclosed on the first-run screen, and you can switch it off. Off means the request is
-            not made at all.
-          </p>
-          <p style="color:var(--ink-dim)">
-            Findra never installs an update by itself. Replacing a running executable and
-            re-registering an elevated task are the two operations most likely to leave a machine
-            broken, and it declines to do either behind your back.
-          </p>
-          <p style="font-size:14px">
-            The full <a href="/privacy/">privacy policy</a> lists what Findra stores, where it
-            stores it, and how to delete it.
-          </p>
-        </div>
-      </div>
-    </section>
-  </div>
-
-  <!-- ================= questions ================= -->
-  <!-- Every answer is self-contained on purpose: an answer engine lifts one paragraph and gets
-       none of the page around it. Each is checkable against a number or a sentence further up. -->
-  <div class="wrap">
-    <section id="questions">
-      <div class="sec-head reveal">
-        <span class="kicker">STRAIGHT ANSWERS</span>
-        <h2>Questions people ask before they install it</h2>
-      </div>
-
-      <div class="grid-2">
-        <article class="excuse reveal">
-          <h3>What is Findra?</h3>
-          <p>Findra is a free, open-source desktop search program for Windows 10 and 11. A capsule sits on the desktop and a global hotkey opens it from anywhere. It finds files by name from an index held in RAM, and, if you turn it on, by the words inside documents, by what a photograph shows, and by what was said in a recording.</p>
-          <p>Findra is an independent application written by one person. It is not made by, affiliated with or endorsed by Microsoft, and it is not a version, component, fork or replacement of the Windows Search service that ships inside Windows.</p>
-        </article>
-
-        <article class="excuse reveal">
-          <h3>Does Findra search inside files, or only filenames?</h3>
-          <p>Both, but not at the same time. Filenames are searchable the second Findra starts, because a name index costs seconds to build. Reading inside files is off until you turn it on, because it walks every drive and can run for hours. <code>findra --content on</code> starts it and <code>findra --content off</code> stops it without discarding anything already read.</p>
-        </article>
-
-        <article class="excuse reveal">
-          <h3>How fast is Findra?</h3>
-          <p>0.33 to 2.05 ms median round trip for a filename across five measured queries - 0.33 ms for "config" and 2.05 ms for "sunset" - including the hop between processes; the worst single sample across the five measured name queries was 2.48 ms. 1,580,825 names were enumerated in 2.6 seconds at sign-in and held in 73.7 MB of RAM. Measured with <code>findra --searchbench</code> on an AMD Ryzen 9 9900X3D, 47.1 GB of RAM, an NVMe SSD, Windows 11 Pro 10.0.26200.9168. Yours will differ.</p>
-        </article>
-
-        <article class="excuse reveal">
-          <h3>Does anything leave my machine?</h3>
-          <p>One request, and it is not about you. Once every 24 hours on startup, Findra makes an anonymous HTTPS GET to the GitHub releases API to ask whether a newer version exists: no query parameters, no machine identifier, no install identifier, nothing about your files or your searches. It can be switched off, and off means the request is not made. Model downloads happen only when you choose a capability and ask for it.</p>
-        </article>
-
-        <article class="excuse reveal">
-          <h3>How do I install Findra?</h3>
-          <p><code>winget install blakazulu.Findra</code>, which picks the x64 or arm64 build for your machine. The same installer is on the GitHub releases page, <a href="https://github.com/blakazulu/findra/releases/latest" rel="noopener">https://github.com/blakazulu/findra/releases/latest</a>, and that page carries each new release first: the Windows Package Manager catalogue can take a few days to pick one up. Building from source needs the .NET 10 SDK and nothing else. Neither the installer nor the executables are signed yet, so Windows warns about an unknown publisher until that changes.</p>
-        </article>
-
-        <article class="excuse reveal">
-          <h3>Can I find a photo by describing what is in it?</h3>
-          <p>Yes, if you install the picture capability, which is a 629 MB download of model files that run on your own machine. Findra compares what you typed against what the model saw in each image, so a photograph of a receipt on a shop counter turns up for "paper receipt" with none of those words anywhere in its filename. No image is ever uploaded to be understood.</p>
-        </article>
-
-        <article class="excuse reveal">
-          <h3>Can I search recordings by what was said in them?</h3>
-          <p>Yes, if you install the speech capability. Findra transcribes audio and video on your own machine and searches the transcript exactly as it searches a document, which is why speech brings the document models with it: 547 MB on top of them. One number, in minutes, sets how long a recording is worth transcribing - five by default - and raising it later goes back for exactly the files it passed over.</p>
-        </article>
-
-        <article class="excuse reveal">
-          <h3>Does Findra need a graphics card?</h3>
-          <p>No. Findra tries DirectML for the picture and meaning models and Vulkan for speech, and falls back to the processor when neither answers. The processor is a supported configuration rather than a failure state: only the first pass through your files is slower. When another program is working the graphics card hard, or something is running fullscreen, Findra stops reading, lets go of the models it had loaded, and carries on once the card has been free for a minute. Findra's published measurements come from one machine, and it has an NVIDIA card; AMD and Intel graphics have not been tested on real hardware, and neither has an arm64 machine.</p>
-        </article>
-
-        <article class="excuse reveal">
-          <h3>Does Findra need administrator rights?</h3>
-          <p>Once, for one call. A helper process opens the NTFS volume to read the file table, which is the only thing in Findra that needs them. Everything else runs at normal integrity, including the part that opens and decodes your files, so a malformed document never meets an elevated process. Uninstalling always removes that elevated logon task.</p>
-        </article>
-
-        <article class="excuse reveal">
-          <h3>How much disk space does Findra need?</h3>
-          <p>Nothing extra, if you only want filenames. The capabilities that use a model are separate downloads you can decline: 629 MB for photos and video, 1.04 GB for meaning in documents, 547 MB for speech on top of the document models, and 1.51 GB for the Hebrew second pass. Taking every one of them is 3.7 GB. A missing model is a normal state, not an error - that capability is skipped and nothing else changes.</p>
-        </article>
+      <div class="more-row reveal">
+        <span class="machine-inline">AMD Ryzen 9 9900X3D &middot; 47.1 GB &middot; NVMe SSD &middot; Findra 0.3.1 &middot; n=50 per query.
+          One machine, with an NVIDIA card: AMD and Intel graphics have not been tested on real hardware, and neither has an arm64 machine.</span>
+        <a class="btn btn-ghost" href="/numbers/">Every table, and the machine</a>
       </div>
     </section>
   </div>
@@ -991,7 +469,7 @@
           <b>Download the installer from the
           <a href="https://github.com/blakazulu/findra/releases/latest" rel="noopener">releases page</a></b>, which
           carries one for x64 and one for arm64. That is the whole install of
-          <span data-stamp="release">Findra 0.3.0, released on 22 September 2026</span>.
+          <span data-stamp="release">Findra 0.3.1, released on 22 September 2026</span>.
           Or run
           <code style="font-family:var(--mono);font-size:15px;color:var(--ink-dim)">winget install blakazulu.Findra</code>,
           which installs the same program from the Windows Package Manager catalogue; the catalogue
@@ -1031,61 +509,13 @@
             <a href="/code-signing/">Code signing policy</a> says who writes Findra, who approves a
             release and who signs it, and it will say what the signature is when there is one.
           </p>
-          <h3 style="font-size:17px;margin-top:6px">How do I uninstall Findra?</h3>
-          <p style="font-size:14px">
-            Uninstalling always removes the elevated logon task, because a scheduled task pointing
-            at a binary that is no longer there is a defect and not an inconvenience. It keeps your
-            models, your index and your settings unless you say otherwise, and tells you the
-            measured size it would free before it deletes anything.
-          </p>
-          <div class="cmd-block"><span class="p">$</span> findra --uninstall --dry-run</div>
         </div>
 
         <div class="panel reveal">
-          <span class="badge soon">FOR HACKING ON IT</span>
-          <h3>Build it from source</h3>
-          <p>Four commands, and you have a self-contained build. The tests run on your machine too.</p>
-          <div class="cmd-block"><span class="p">$</span> git clone https://github.com/blakazulu/findra
-<span class="p">$</span> cd findra
-<span class="p">$</span> dotnet build
-<span class="p">$</span> dotnet publish src/Findra -c Release --self-contained</div>
-          <p style="font-size:14px">
-            Name search needs the helper, which asks for administrator rights exactly once, to open
-            the volume. Nothing else in Findra ever needs them, and the part that reads your files
-            deliberately runs without them.
-          </p>
-          <div class="cmd-block"><span class="p">$</span> dotnet run --project src/Findra -- --names</div>
-          <a class="btn btn-ghost" href="https://github.com/blakazulu/findra" rel="noopener">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 .5C5.73.5.9 5.34.9 11.6c0 4.9 3.17 9.06 7.57 10.53.55.1.76-.24.76-.53v-2.07c-3.08.67-3.73-1.3-3.73-1.3-.5-1.29-1.23-1.63-1.23-1.63-1-.69.08-.67.08-.67 1.11.08 1.7 1.15 1.7 1.15.99 1.7 2.6 1.21 3.23.93.1-.72.39-1.21.7-1.49-2.46-.28-5.05-1.24-5.05-5.5 0-1.22.43-2.21 1.14-2.99-.11-.28-.5-1.41.11-2.94 0 0 .93-.3 3.05 1.14a10.5 10.5 0 0 1 5.56 0c2.12-1.44 3.05-1.14 3.05-1.14.61 1.53.22 2.66.11 2.94.71.78 1.14 1.77 1.14 2.99 0 4.27-2.6 5.21-5.07 5.49.4.35.76 1.03.76 2.08v3.08c0 .3.2.64.77.53 4.4-1.47 7.56-5.63 7.56-10.53C23.1 5.34 18.27.5 12 .5z"/></svg>
-            Source on GitHub
-          </a>
-        </div>
-      </div>
-    </section>
-  </div>
-
-  <!-- ================= final ================= -->
-  <div class="wrap">
-    <section style="padding-top:0">
-      <div class="final reveal">
-        <div class="copy">
-          <h2>Close the ticket.</h2>
-          <p>
-            Names in 0.33 to 2.05 ms median from the moment you sign in. Documents, photos and speech
-            when you ask for them, and not a second sooner. No account, no telemetry, no 3 AM index
-            rebuild, and a licence that lets you take the whole thing apart.
-          </p>
-        </div>
-        <div class="actions">
-          <a class="btn btn-primary" href="#install">
-            <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v11"/><polyline points="7 9.5 12 14.5 17 9.5"/><path d="M4 20h16"/></svg>
-            Get Findra
-          </a>
-          <button type="button" class="cmd" aria-label="Copy the command: git clone https://github.com/blakazulu/findra" data-copy="git clone https://github.com/blakazulu/findra">
-            <span class="p">$</span><span class="t">git clone https://github.com/blakazulu/findra</span><span class="c" aria-hidden="true">COPY</span>
-          </button>
-          <span class="said" role="status"></span>
-          <span class="fine">Windows 10 and 11 &middot; x64 and arm64 &middot; Apache-2.0</span>
+          <span class="badge soon">MORE</span>
+          <h3>Uninstalling, and building it yourself</h3>
+          <p>How to remove Findra and what it keeps, and the four commands that build it from source with the .NET 10 SDK.</p>
+          <a class="btn btn-ghost" href="/install/">Install, uninstall and build</a>
         </div>
       </div>
     </section>
@@ -1102,6 +532,14 @@
       </span>
       <span>Desktop search for Windows.</span>
       <span>Built with .NET 10, Avalonia, SkiaSharp and SQLite.</span>
+    </div>
+    <div class="col">
+      <strong>FINDRA</strong>
+      <a href="/features/">What it finds</a>
+      <a href="/why/">Why Findra</a>
+      <a href="/numbers/">The numbers</a>
+      <a href="/faq/">Questions</a>
+      <a href="/install/">Install</a>
     </div>
     <div class="col">
       <strong>PROJECT</strong>

@@ -56,7 +56,8 @@ What helps, roughly in order of how much:
 
 ## What Findra does about the network
 
-Nothing leaves your machine except one anonymous HTTPS GET to the GitHub releases API, at most
+Nothing leaves your machine except one anonymous HTTPS GET to the GitHub releases API (or, for a
+winget install, to the winget catalogue's listing on GitHub), at most
 once every 24 hours, to learn whether a newer version exists, and it can be switched off. Model
 files are downloaded only when you choose a capability and ask for it. Your files, their names,
 their contents and your searches are never sent anywhere. The full statement is in

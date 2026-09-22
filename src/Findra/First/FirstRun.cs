@@ -420,7 +420,7 @@ public static class FirstRun
 
     /// <summary>Spec §9b's disclosure, in the one place the specification names for it.</summary>
     public const string Disclosure =
-        "Findra asks GitHub for the newest release at most once every 24 hours. It is one " +
+        "Findra asks GitHub for the newest version at most once every 24 hours. It is one " +
         "anonymous request with no query parameters, no machine or install identifier, and " +
         "nothing about your files or your searches. It never installs anything by itself, and " +
         "turning this off means the request is not made at all.";

@@ -32,7 +32,9 @@ public class SiteShotTests
     private const string Site = "website/public/shots";
 
     private static readonly string Readme = Repo.Read("README.md");
-    private static readonly string Page = Repo.Read("website/public/index.html");
+    // Every page that shows a screenshot: the front page's lede, and the gallery on /features/.
+    private static readonly string Page =
+        Repo.Read("website/public/index.html") + Repo.Read("website/public/features/index.html");
 
     /// <summary>Every <c>--searchshot &lt;prefix&gt;&lt;name&gt;.png &lt;state&gt; [palette]</c>
     /// a document prints, keyed by the image's file name. The README writes the path it stores
@@ -91,7 +93,7 @@ public class SiteShotTests
     public void EveryPictureTheSiteShowsIsInTheRepositoryAndNamesASurfaceFindraCanDraw()
     {
         var shown = 0;
-        foreach (Match m in Regex.Matches(Page, @"<img\s[^>]*?src=""(?<src>shots/[^""]+)"""))
+        foreach (Match m in Regex.Matches(Page, @"<img\s[^>]*?src=""/?(?<src>shots/[^""]+)"""))
         {
             Assert.True(Repo.Exists("website/public/" + m.Groups["src"].Value),
                 $"the site shows {m.Groups["src"].Value}, which is not in the repository - that is " +

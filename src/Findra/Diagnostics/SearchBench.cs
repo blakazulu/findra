@@ -49,7 +49,8 @@ public sealed record BenchResult(MachineInfo Machine, string Version,
                                  IReadOnlyList<LatencySet>? Names, string? NamesUnavailable,
                                  IReadOnlyList<LatencySet> Fts,
                                  IReadOnlyList<ThroughputRow> Extraction, string CorpusNote,
-                                 IReadOnlyList<StoreRow> Stores, long IndexedItems, long Segments);
+                                 IReadOnlyList<StoreRow> Stores, long IndexedItems, long Segments,
+                                 long HelperWorkingSet = 0);
 
 /// <summary>
 /// The published half of <c>--searchbench</c>: a percentile that does not lie, and the Markdown
@@ -119,46 +120,13 @@ public static class Bench
         Line("named here, by this build, and re-running that command reproduces the whole page.");
         Line();
 
-        // ---- 1. the machine ----------------------------------------------------------------
-        Line("### Machine");
-        Line();
-        Line("| Part | Value |");
-        Line("|---|---|");
-        Line($"| CPU | {Cell(r.Machine.Cpu)} |");
-        Line($"| Architecture | {Cell(r.Machine.Architecture)} |");
-        // 0 bytes is not a small machine, it is a failed lookup, and the two must not print alike.
-        Line($"| RAM | {(r.Machine.RamBytes > 0 ? Bytes(r.Machine.RamBytes) : Machine.Unknown)} |");
-        Line($"| Disk | {Cell(r.Machine.Disk)} |");
-        Line($"| Windows | {Cell(r.Machine.Windows)} |");
-        Line($"| Accelerator | {Cell(r.Machine.Accelerator)} |");
-        Line($"| Findra | {Cell(r.Version)} |");
-        Line();
-
-        // Both of the next two sections are fed by the SAME StatusReply, so one reason covers
+        // Name latency and the volumes are fed by the SAME StatusReply, so one reason covers
         // both: if the helper could not be asked, neither block has a data source and neither may
         // print a number. Whatever Volumes happens to hold when NamesUnavailable is set was not
         // measured on this run, and publishing it would date-stamp stale numbers as fresh ones.
         bool helper = r.NamesUnavailable is null;
 
-        // ---- 2. the volumes ----------------------------------------------------------------
-        Line("### Volumes");
-        Line();
-        if (!helper || r.Volumes is null || r.Volumes.Count == 0)
-        {
-            Line(NotMeasured(r.NamesUnavailable));
-        }
-        else
-        {
-            Line("| Volume | Names | Name index resident | Cold-start enumeration | Journal position |");
-            Line("|---|---|---|---|---|");
-            foreach (VolumeRow v in r.Volumes)
-                Line($"| {v.Letter}: | {N(v.Names)} | {Bytes(v.ResidentBytes)} | " +
-                     $"{(v.EnumerateMs > 0 ? N((long)Math.Round(v.EnumerateMs)) + " ms" : "not measured")} | " +
-                     $"{(v.NextUsn > 0 ? N(v.NextUsn) : "not measured")} |");
-        }
-        Line();
-
-        // ---- 3. name latency ---------------------------------------------------------------
+        // ---- 1. name latency, first: it is the number people come for ---------------------
         Line("### Name query latency");
         Line();
         if (!helper || r.Names is null || r.Names.Count == 0)
@@ -176,6 +144,46 @@ public static class Bench
                 Line($"| {Cell(s.Name)} | {Ms(rt50)} | {Ms(Percentile(s.RoundTripMs, 0.95))} | " +
                      $"{Ms(scan50)} | {Ms(rt50 - scan50)} | {Ms(Percentile(s.RoundTripMs, 1.0))} | " +
                      $"{N(s.Hits)} | n={N(s.RoundTripMs.Count)} |");
+            }
+        }
+        Line();
+
+        // ---- 2. the machine ----------------------------------------------------------------
+        Line("### Machine");
+        Line();
+        Line("| Part | Value |");
+        Line("|---|---|");
+        Line($"| CPU | {Cell(r.Machine.Cpu)} |");
+        Line($"| Architecture | {Cell(r.Machine.Architecture)} |");
+        // 0 bytes is not a small machine, it is a failed lookup, and the two must not print alike.
+        Line($"| RAM | {(r.Machine.RamBytes > 0 ? Bytes(r.Machine.RamBytes) : Machine.Unknown)} |");
+        Line($"| Disk | {Cell(r.Machine.Disk)} |");
+        Line($"| Windows | {Cell(r.Machine.Windows)} |");
+        Line($"| Accelerator | {Cell(r.Machine.Accelerator)} |");
+        Line($"| Findra | {Cell(r.Version)} |");
+        Line();
+
+        // ---- 3. the volumes ----------------------------------------------------------------
+        Line("### Volumes");
+        Line();
+        if (!helper || r.Volumes is null || r.Volumes.Count == 0)
+        {
+            Line(NotMeasured(r.NamesUnavailable));
+        }
+        else
+        {
+            Line("| Volume | Names | Name index resident | Cold-start enumeration | Journal position |");
+            Line("|---|---|---|---|---|");
+            foreach (VolumeRow v in r.Volumes)
+                Line($"| {v.Letter}: | {N(v.Names)} | {Bytes(v.ResidentBytes)} | " +
+                     $"{(v.EnumerateMs > 0 ? N((long)Math.Round(v.EnumerateMs)) + " ms" : "not measured")} | " +
+                     $"{(v.NextUsn > 0 ? N(v.NextUsn) : "not measured")} |");
+            // The index is part of what the helper holds; the process is what somebody pays, and
+            // what Task Manager shows beside findra.exe. Zero is a helper too old to say.
+            if (r.HelperWorkingSet > 0)
+            {
+                Line();
+                Line($"Name helper working set: {Bytes(r.HelperWorkingSet)} - the whole process, every index included.");
             }
         }
         Line();
@@ -363,6 +371,7 @@ public static class SearchBench
         IReadOnlyList<VolumeRow>? volumes = null;
         IReadOnlyList<LatencySet>? names = null;
         string? unavailable = null;
+        long helperMemory = 0;
 
         NameClient? client = null;
         try { client = await NameClient.ConnectAsync(TimeSpan.FromSeconds(5), default).ConfigureAwait(false); }
@@ -380,7 +389,9 @@ public static class SearchBench
             {
                 StatusReply status = await client.StatusAsync(default).ConfigureAwait(false);
                 volumes = [.. status.Volumes.Select(v =>
-                    new VolumeRow(v.Letter, v.Count, v.BufferBytes, v.EnumerateMs, v.NextUsn))];
+                    new VolumeRow(v.Letter, v.Count, v.ResidentBytes, v.EnumerateMs, v.NextUsn))];
+                // Before the queries below, so it is the helper at rest rather than mid-benchmark.
+                helperMemory = status.WorkingSetBytes;
 
                 var sets = new List<LatencySet>(NameQueries.Length);
                 foreach (string q in NameQueries)
@@ -393,6 +404,7 @@ public static class SearchBench
                 // halves are dropped together - they come from the same connection.
                 volumes = null;
                 names = null;
+                helperMemory = 0;
                 unavailable = "the name helper stopped answering partway through (" + Reason(ex) + ")";
             }
             finally { await client.DisposeAsync().ConfigureAwait(false); }
@@ -422,7 +434,7 @@ public static class SearchBench
             Machine: machine, Version: Log.Version,
             Volumes: volumes, Names: names, NamesUnavailable: unavailable,
             Fts: fts, Extraction: [row], CorpusNote: corpusNote,
-            Stores: stores, IndexedItems: items, Segments: segments);
+            Stores: stores, IndexedItems: items, Segments: segments, HelperWorkingSet: helperMemory);
 
         string md = Bench.Fragment(result);
         Console.WriteLine(md);

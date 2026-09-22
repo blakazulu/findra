@@ -56,6 +56,15 @@ public sealed class NameIndex
     public int Capacity => _count;
     public long BufferBytes => (long)_used * 2;
 
+    /// <summary>Everything the index holds, as allocated: both name buffers, the per-record arrays,
+    /// the segment table and the FRN map, slack included. This is the index's memory; BufferBytes is
+    /// only its names, about a third of it.</summary>
+    public long ResidentBytes =>
+        (long)_orig.Length + _fold.Length
+        + (long)_frn.Length * (sizeof(ulong) * 2 + sizeof(uint) + sizeof(int) + sizeof(ushort) * 2)
+        + (long)_segStart.Length * (sizeof(int) * 2)
+        + _byFrn.Bytes;
+
     // ---- building --------------------------------------------------------------------------------
 
     /// <summary>Add or update a record. Returns true when the name or parent changed (a rename or a
@@ -497,6 +506,8 @@ public sealed class LongIntMap
     private const ulong Empty = 0, Tomb = ulong.MaxValue;
 
     public int Count => _count;
+
+    public long Bytes => (long)_keys.Length * (sizeof(ulong) + sizeof(int));
 
     public bool TryGet(ulong key, out int value)
     {

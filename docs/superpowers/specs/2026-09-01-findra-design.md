@@ -553,7 +553,9 @@ The line above says nothing leaves the machine. **An update check is a network r
 that is a real exception to a promise this product makes loudly.** Pretending otherwise would
 be worse than not checking at all, so it is written down here rather than buried:
 
-- **What is sent:** an anonymous HTTPS GET to the GitHub Releases API for this repository. No
+- **What is sent:** an anonymous HTTPS GET to the GitHub Releases API for this repository, or,
+  for a winget install, to the winget catalogue's listing for Findra on GitHub (what
+  `winget upgrade` can actually install). No
   query parameters, no machine identifier, no install id, no counters, nothing about your
   files or searches. GitHub sees an IP address and a user agent, which is unavoidable for
   any request at all; Findra adds nothing to it.

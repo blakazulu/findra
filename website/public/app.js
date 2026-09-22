@@ -22,23 +22,6 @@
     }, 1000);
   }
 
-  /* ---- ticker ---------------------------------------------------------- */
-
-  var ticker = document.getElementById('ticker');
-  if (ticker) {
-    var lines = [
-      'SEARCH INDEX REBUILD SCHEDULED FOR 3 AM, AGAIN',
-      'ONE FILE FOUND, IT WAS THE SHORTCUT',
-      'THE FILE WAS IN DOWNLOADS THE ENTIRE TIME',
-      'NVMe AT 100% ACTIVE TIME FOR SIX MINUTES',
-      'FINDRA: 0.33-2.05 MS MEDIAN, NO INDEX REBUILD, NO 3 AM'
-    ];
-    var html = lines.map(function (line) {
-      return '<span>' + line + '</span><span class="d">&#9670;</span>';
-    }).join('');
-    ticker.innerHTML = html + html;
-  }
-
   /* ---- click a command, get it on the clipboard ------------------------ */
 
   document.querySelectorAll('.cmd[data-copy]').forEach(function (el) {

@@ -1,7 +1,7 @@
 # Findra
 
 Desktop search for Windows. A capsule sits on your desktop; click it, or press a global
-hotkey, and it unfolds into a results card. It finds files by name the second it starts - 0.33 to 2.05 ms median across five
+hotkey, and it unfolds into a results card. It finds files by name the second it starts - 0.60 to 3.78 ms median across five
 measured queries, on the machine named under The numbers - and
 it can be taught to find them by what is written inside them, by what a photo shows, and by
 what was said in a recording.
@@ -112,9 +112,10 @@ passed over.
 Nothing on that screen is permanent. Everything on it is in Settings afterwards, and a
 capability taken later re-reads only the files it covers rather than starting again. Findra
 starts that reading within seconds of the files landing, whether you took the capability from
-Settings or from `findra --models install`, and without being restarted. Searching by the new
-capability is the half that waits: the card loads its own side of one when Findra starts, so
-restart it once before you look for a photo by what is in it.
+Settings or from `findra --models install`, and without being restarted. Searching by it needs
+no restart either: the search side of a capability loads in the background once the first file
+it covers has been read, a few seconds in which a search still answers by names and words. Until
+then it stays unloaded, so a model that has nothing to search costs no memory.
 
 ![The Content section of Settings](docs/shots/settings.png)
 
@@ -169,9 +170,15 @@ does. `dotnet run --project src/Findra -- --searchtest` waits, if you would rath
 
 ## The numbers
 
+**How fast is a filename search? Under 4 ms.** Type part of a filename and the matches are back
+in 0.60 to 3.78 ms median, for every query measured, across 1,780,595 names - from the moment the
+query leaves the window to the moment the results arrive, the hop to the name helper included.
+That is the first table below.
+
 What follows was produced by `findra --searchbench readme-bench.md 10000` and pasted without
 editing. Ten thousand rather than the default 2,500, because a run of a second or two
-disagrees with itself by more than a published rate deserves.
+disagrees with itself by more than a published rate deserves. The run was taken on the build that
+became 0.3.1, before its version number was raised, which is why its machine table says 0.3.0.
 
 **One machine, and it has an NVIDIA card.** These numbers come from a single desktop with a
 discrete NVIDIA GPU, so they say what Findra does there and nothing about anywhere else.
@@ -185,7 +192,7 @@ are chosen precisely so that they should work there; that is a design decision, 
 measurement, and it is written here as one.
 
 Two things to read honestly. The full-text table was measured against this machine's own
-content index - 6,258 files and 73,602 text segments, read from a real disk - so its slowest
+content index - 6,861 files and 64,623 text segments, read from a real disk - so its slowest
 query is in there beside its fastest. And the extraction row is measured over files the
 benchmark generates and then deletes, which is what makes it reproducible on your machine
 rather than a fact about this one.
@@ -203,51 +210,52 @@ named here, by this build, and re-running that command reproduces the whole page
 | Architecture | X64 |
 | RAM | 47.1 GB |
 | Disk | NVMe SSD |
-| Windows | Windows 11 Pro 10.0.26200.9168 |
-| Accelerator | ONNX: DirectML · Whisper: Vulkan |
-| Findra | 0.1.0 |
+| Windows | Windows 11 Pro 10.0.26200.9445 |
+| Accelerator | ONNX: DirectML (NVIDIA GeForce RTX 5070 Ti) · Whisper: Vulkan |
+| Findra | 0.3.0 |
 
 ### Volumes
 
 | Volume | Names | Name index resident | Cold-start enumeration | Journal position |
 |---|---|---|---|---|
-| C: | 1,580,825 | 73.7 MB | 2,571 ms | 30,473,563,096 |
+| C: | 1,780,595 | 200.3 MB | 5,365 ms | 34,428,276,528 |
+| D: | 68,970 | 14.0 MB | 111 ms | 72,177,992 |
 
 ### Name query latency
 
 | Query | Round trip p50 | Round trip p95 | Index scan p50 | Pipe share p50 | Worst | Hits | Samples |
 |---|---|---|---|---|---|---|---|
-| report | 0.41 ms | 0.49 ms | 0.08 ms | 0.33 ms | 0.59 ms | 50 | n=50 |
-| invoice | 1.72 ms | 2.16 ms | 1.31 ms | 0.40 ms | 2.37 ms | 46 | n=50 |
-| sunset | 2.05 ms | 2.42 ms | 1.70 ms | 0.35 ms | 2.48 ms | 35 | n=50 |
-| readme | 0.52 ms | 0.67 ms | 0.21 ms | 0.31 ms | 0.93 ms | 50 | n=50 |
-| config | 0.33 ms | 0.37 ms | 0.03 ms | 0.30 ms | 0.44 ms | 50 | n=50 |
+| report | 0.70 ms | 0.89 ms | 0.26 ms | 0.44 ms | 0.96 ms | 50 | n=50 |
+| invoice | 3.24 ms | 4.57 ms | 2.81 ms | 0.44 ms | 4.88 ms | 43 | n=50 |
+| sunset | 3.78 ms | 4.62 ms | 3.41 ms | 0.37 ms | 5.36 ms | 21 | n=50 |
+| readme | 1.03 ms | 1.25 ms | 0.58 ms | 0.45 ms | 1.55 ms | 50 | n=50 |
+| config | 0.60 ms | 0.78 ms | 0.15 ms | 0.45 ms | 1.13 ms | 50 | n=50 |
 
 ### Full-text query latency
 
 | Query | p50 | p95 | Worst | Hits | Samples |
 |---|---|---|---|---|---|
-| lease | 1.52 ms | 1.84 ms | 2.62 ms | 50 | n=50 |
-| agreement | 2.42 ms | 2.54 ms | 2.73 ms | 50 | n=50 |
-| invoice | 0.72 ms | 0.80 ms | 1.54 ms | 30 | n=50 |
-| total | 9.32 ms | 10.34 ms | 10.90 ms | 50 | n=50 |
-| report | 17.36 ms | 18.29 ms | 20.01 ms | 50 | n=50 |
+| lease | 1.90 ms | 2.59 ms | 4.07 ms | 50 | n=50 |
+| agreement | 3.68 ms | 4.43 ms | 4.70 ms | 50 | n=50 |
+| invoice | 0.79 ms | 1.08 ms | 1.80 ms | 32 | n=50 |
+| total | 9.41 ms | 10.89 ms | 13.53 ms | 50 | n=50 |
+| report | 15.36 ms | 16.67 ms | 16.87 ms | 50 | n=50 |
 
 ### Document extraction
 
 | Kind | Files | Seconds | files/min | MB/s |
 |---|---|---|---|---|
-| Doc | 11,000 | 10.23 | 64,529 | 7.74 |
+| Doc | 11,000 | 13.73 | 48,056 | 5.77 |
 
 ### Stores
 
 | Store | Path | Size |
 |---|---|---|
-| search.db | %LOCALAPPDATA%\Findra\index\search.db | 124.0 MB |
-| search.db-wal | %LOCALAPPDATA%\Findra\index\search.db-wal | 10.5 MB |
+| search.db | %LOCALAPPDATA%\Findra\index\search.db | 120.8 MB |
+| search.db-wal | %LOCALAPPDATA%\Findra\index\search.db-wal | 11.8 MB |
 | search.db-shm | %LOCALAPPDATA%\Findra\index\search.db-shm | 32.0 KB |
 
-Indexed items: 6,258. Text segments: 73,602.
+Indexed items: 6,861. Text segments: 64,623.
 
 Corpus for the extraction row: 10,000 generated .txt of 8 KB and 1,000 generated .docx of 1 KB, indexed into a throwaway database with no model loaded, and deleted.
 
@@ -258,7 +266,9 @@ no account, no cloud service, no analytics, no crash reporting and no telemetry.
 
 Findra makes exactly one request on its own, and it is written down here rather than
 buried (the other time it uses the network is a model download you asked for): an
-anonymous HTTPS GET to the GitHub releases API, at most once every 24 hours, on startup, in
+anonymous HTTPS GET to the GitHub releases API (for a winget install, to the winget
+catalogue's listing on GitHub, since that is what `winget upgrade` can install), at most once
+every 24 hours, on startup, in
 the background, to learn whether a newer version exists. It carries no query parameters, no
 machine identifier, no install identifier, and nothing about your files or your searches. It
 never blocks anything, and a failure is a line in the log rather than a dialog. It is

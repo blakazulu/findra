@@ -525,6 +525,41 @@ td.no { color: var(--ink-dim); }
 }
 .machine b { color: var(--ink-dim); font-weight: 500; }
 
+/* The front page's one number: how fast a filename comes back. A big figure that holds for every
+   query measured, and a bar per query on a shared scale, so the figure reads as a ceiling rather
+   than as the best case. */
+.hero-stat {
+  border: 1px solid var(--line); border-radius: var(--r-md); background: var(--card);
+  padding: clamp(24px, 3vw, 40px); margin-bottom: 18px; display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr); gap: clamp(24px, 4vw, 56px); align-items: center;
+}
+.hero-stat .big {
+  font-family: var(--mono); font-weight: 700; color: var(--accent);
+  font-size: clamp(48px, 7vw, 92px); line-height: .95; letter-spacing: -.04em;
+}
+.hero-stat .big small { font-size: .42em; letter-spacing: 0; margin-left: .15em; }
+.hero-stat .say { font-size: clamp(18px, 1.7vw, 22px); color: var(--ink-bright); font-weight: 600; margin-top: 14px; }
+.hero-stat .fine { font-size: 14px; color: var(--ink-dim); margin-top: 8px; line-height: 1.5; }
+.bars { display: flex; flex-direction: column; gap: 12px; }
+.bar {
+  display: grid; grid-template-columns: 70px minmax(0, 1fr) 72px; gap: 14px; align-items: center;
+  font-family: var(--mono); font-size: 13px; color: var(--ink-dim);
+}
+.bar .track { display: block; height: 12px; border-radius: 99px; background: rgba(235,219,192,0.06); overflow: hidden; }
+.bar .fill { display: block; height: 100%; border-radius: 99px; background: var(--accent); }
+.bar .ms { color: var(--ink-bright); text-align: right; }
+.axis {
+  display: grid; grid-template-columns: 70px minmax(0, 1fr) 72px; gap: 14px;
+  font-family: var(--mono); font-size: 11px; color: var(--ink-faint);
+}
+.axis span:nth-child(2) { display: flex; justify-content: space-between; }
+.stat-row.three { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.more-row { display: flex; justify-content: space-between; align-items: center; gap: 18px; flex-wrap: wrap; margin-top: 8px; }
+.machine-inline { font-family: var(--mono); font-size: 12px; color: var(--ink-dim); }
+
+/* A page's first section carries its one h1 in the section head's place. */
+.sec-head h1 { font-size: clamp(32px, 4.2vw, 54px); line-height: 1.08; }
+
 /* ---------- privacy ----------------------------------------------------- */
 
 .privacy { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); gap: 24px; align-items: start; }
@@ -660,6 +695,8 @@ button.cmd { border-width: 1px; border-style: solid; text-align: left; width: 10
   .log-head .path { display: none; }
   .shots { grid-template-columns: minmax(0, 1fr); }
   .shot.wide { grid-column: span 1; }
+  .hero-stat { grid-template-columns: minmax(0, 1fr); }
+  .stat-row.three { grid-template-columns: minmax(0, 1fr); }
 }
 
 @media (max-width: 620px) {

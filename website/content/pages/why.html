@@ -1,0 +1,141 @@
+  <!-- ================= how it differs ================= -->
+  <!-- Compared against categories and against Windows Search, which this site names on purpose.
+       No head-to-head number against any named product appears here or anywhere else: Findra
+       cannot benchmark somebody else's tool fairly and has not tried. -->
+  <div class="wrap">
+    <section id="different">
+      <div class="sec-head reveal">
+        <span class="kicker">HOW IT DIFFERS</span>
+        <h1>How is Findra different from the search Windows already has?</h1>
+        <p>
+          Four differences, and every one of them is something you can check on your own machine
+          rather than a claim about somebody else's product.
+        </p>
+      </div>
+
+      <div class="grid-2">
+        <article class="excuse reveal">
+          <h3>The names live in RAM, not in a database</h3>
+          <p>Findra reads the NTFS file table when it starts and holds every name in memory, and answers a filename search in under 4 ms median for every query measured. There is no overnight pass and no index to rebuild, so a file saved a minute ago is findable now. The measurements are on <a href="/numbers/">the numbers page</a>.</p>
+          <span class="fix">findra --searchbench, on an AMD Ryzen 9 9900X3D with an NVMe SSD. Yours will differ.</span>
+        </article>
+
+        <article class="excuse reveal">
+          <h3>Reading inside a PDF needs nothing installed</h3>
+          <p>Findra decodes documents itself, in a process of its own that never runs elevated. There is no filter to install, no file type to register and no index to rebuild afterwards. Turning a capability on later goes back for exactly the files that capability covers. While another program is working the graphics card, or a game is fullscreen, it waits and lets go of its models rather than competing for the card.</p>
+          <span class="fix">findra --content on</span>
+        </article>
+
+        <article class="excuse reveal">
+          <h3>Filename-only search cannot find what you remember</h3>
+          <p>A file-table index is fast because names are all it holds. Findra holds the table too, and then, only if you ask, the words in a document, what a photograph shows, and what was said in a recording - each one a download you can decline.</p>
+          <span class="fix">Each one an optional download</span>
+        </article>
+
+        <article class="excuse reveal">
+          <h3>Nothing is sent anywhere to make it work</h3>
+          <p>The models run on your own processor or graphics card. A photograph is never uploaded to be understood, a query is never sent anywhere to be answered, and no web results are mixed in among your own files.</p>
+          <span class="fix">One request a day, for the version number</span>
+        </article>
+      </div>
+    </section>
+  </div>
+
+  <!-- ================= excuses ================= -->
+  <div class="wrap">
+    <section>
+      <div class="sec-head reveal">
+        <span class="kicker">THE OFFICIAL EXCUSES</span>
+        <h2>Why it did not find your file</h2>
+      </div>
+
+      <div class="grid-4">
+        <article class="excuse reveal">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#fa7e00" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/></svg>
+          <h3>The index had not got to it</h3>
+          <p>You saved the file. The indexer runs at 3 AM. Until then, as far as Windows is concerned, you did not.</p>
+          <span class="fix">Findra: names are live, always</span>
+        </article>
+
+        <article class="excuse reveal">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#fa7e00" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="7" y1="9" x2="17" y2="9"/></svg>
+          <h3>That folder was not included</h3>
+          <p>There is a settings page listing which of your own drives Windows is willing to look at. Nobody has ever found it twice.</p>
+          <span class="fix">Findra: every NTFS volume</span>
+        </article>
+
+        <article class="excuse reveal">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#fa7e00" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.2" y2="16.2"/></svg>
+          <h3>You only remembered the sentence</h3>
+          <p>Not what you called the file. Windows would like the filename, please, and would prefer you had it memorised.</p>
+          <span class="fix">Findra: inside documents too</span>
+        </article>
+
+        <article class="excuse reveal">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#fa7e00" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.5-6.5 10-6.5S22 12 22 12s-3.5 6.5-10 6.5S2 12 2 12z"/><circle cx="12" cy="12" r="2.6"/></svg>
+          <h3>It sent the question upstream</h3>
+          <p>You typed a private filename into a box on your own computer and something went over the wire about it.</p>
+          <span class="fix">Findra: nothing leaves</span>
+        </article>
+      </div>
+    </section>
+  </div>
+
+  <!-- ================= event log ================= -->
+  <div class="wrap">
+    <section id="sins">
+      <div class="sec-head-row reveal">
+        <div class="sec-head" style="margin-bottom:0">
+          <span class="kicker">THE PAPER TRAIL</span>
+          <h2>Thirty years, five log entries</h2>
+        </div>
+        <p class="aside">Windows kept meticulous records of everything except where your file was.</p>
+      </div>
+
+      <div class="log reveal">
+        <div class="log-head">
+          <span class="left">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#fa7e00" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+            <span class="title">Event Viewer</span>
+            <span class="path">Applications and Services / Windows Search</span>
+          </span>
+          <span class="count">5 events, one of them useful</span>
+        </div>
+
+        <div class="log-row head">
+          <span>LEVEL</span><span>EVENT</span><span>SOURCE</span><span>DESCRIPTION</span>
+        </div>
+
+        <div class="log-row">
+          <span class="log-lvl err">Error</span>
+          <span class="log-id">3036</span>
+          <span class="log-src">SearchIndexer</span>
+          <span class="log-desc">Indexed 1,842,910 files overnight. Excluded the desktop for reasons known only to itself.</span>
+        </div>
+        <div class="log-row">
+          <span class="log-lvl err">Error</span>
+          <span class="log-id">1000</span>
+          <span class="log-src">explorer.exe</span>
+          <span class="log-desc">Faulting application. Took the taskbar with it so you would not feel alone.</span>
+        </div>
+        <div class="log-row">
+          <span class="log-lvl warn">Warning</span>
+          <span class="log-id">7043</span>
+          <span class="log-src">SearchProtocolHost</span>
+          <span class="log-desc">Drive at 100% for six minutes. Twenty-three cores idle and watching.</span>
+        </div>
+        <div class="log-row">
+          <span class="log-lvl warn">Warning</span>
+          <span class="log-id">0042</span>
+          <span class="log-src">SearchUI</span>
+          <span class="log-desc">Could not find a local file. Offered eleven web results and a shopping tab.</span>
+        </div>
+        <div class="log-row good">
+          <span class="log-lvl">Resolved</span>
+          <span class="log-id">0001</span>
+          <span class="log-src">findra.exe</span>
+          <span class="log-desc">Found it in under a millisecond. Also found it quoted inside three PDFs and a voice note. Went back to waiting.</span>
+        </div>
+      </div>
+    </section>
+  </div>

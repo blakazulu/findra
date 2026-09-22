@@ -1,0 +1,337 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>How fast is Findra? Measured filename and full-text search times</title>
+<meta name="description" content="Filename search round trips, full-text search times and memory, measured with findra --searchbench on one named machine. Run the same command to measure yours.">
+<link rel="canonical" href="https://findra-search.netlify.app/numbers/">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Findra">
+<meta property="og:locale" content="en_US">
+<meta property="og:url" content="https://findra-search.netlify.app/numbers/">
+<meta property="og:title" content="How fast is Findra? Measured filename and full-text search times">
+<meta property="og:description" content="Filename search round trips, full-text search times and memory, measured with findra --searchbench on one named machine. Run the same command to measure yours.">
+<meta property="og:image" content="https://findra-search.netlify.app/share/card.png">
+<meta property="og:image:type" content="image/png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Findra. Windows Search, but it works. Filenames in 0.60 to 3.78 ms median, straight from RAM. Nothing leaves your machine.">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="theme-color" content="#08090c">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="icon" href="/favicon.ico" sizes="32x32">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<link rel="alternate" type="text/markdown" href="/numbers.md" title="How fast is Findra? Measured filename and full-text search times as Markdown">
+<link rel="alternate" type="text/markdown" href="/llms.txt" title="Findra for language models">
+<!-- The two faces are served from this site, so the page makes no request to anybody else - which
+     is the promise it exists to make. Quicksand is preloaded because it sets the headline, and a
+     font the browser only discovers inside styles.css is a font it starts fetching late. -->
+<link rel="preload" href="/fonts/Quicksand-wght.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="/styles.css">
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "WebPage",
+      "@id": "https://findra-search.netlify.app/numbers/#page",
+      "url": "https://findra-search.netlify.app/numbers/",
+      "name": "How fast is Findra? Measured filename and full-text search times",
+      "description": "Filename search round trips, full-text search times and memory, measured with findra --searchbench on one named machine. Run the same command to measure yours.",
+      "inLanguage": "en",
+      "dateModified": "2026-09-22",
+      "isPartOf": {
+        "@id": "https://findra-search.netlify.app/#site"
+      },
+      "about": {
+        "@id": "https://findra-search.netlify.app/#findra"
+      },
+      "author": {
+        "@id": "https://findra-search.netlify.app/#blakazulu"
+      },
+      "publisher": {
+        "@id": "https://findra-search.netlify.app/#blakazulu"
+      },
+      "breadcrumb": {
+        "@id": "https://findra-search.netlify.app/numbers/#crumbs"
+      }
+    },
+    {
+      "@id": "https://findra-search.netlify.app/#findra",
+      "@type": "SoftwareApplication",
+      "name": "Findra",
+      "url": "https://findra-search.netlify.app/"
+    },
+    {
+      "@id": "https://findra-search.netlify.app/#blakazulu",
+      "@type": "Person",
+      "name": "Liraz Amir",
+      "alternateName": "blakazulu"
+    },
+    {
+      "@id": "https://findra-search.netlify.app/#site",
+      "@type": "WebSite",
+      "name": "Findra",
+      "url": "https://findra-search.netlify.app/"
+    },
+    {
+      "@type": "BreadcrumbList",
+      "@id": "https://findra-search.netlify.app/numbers/#crumbs",
+      "itemListElement": [
+        {
+          "@type": "ListItem",
+          "position": 1,
+          "name": "Findra",
+          "item": "https://findra-search.netlify.app/"
+        },
+        {
+          "@type": "ListItem",
+          "position": 2,
+          "name": "The numbers",
+          "item": "https://findra-search.netlify.app/numbers/"
+        }
+      ]
+    }
+  ]
+}
+</script>
+</head>
+<body>
+<a class="skip" href="#top">Skip to content</a>
+
+<div class="bg" aria-hidden="true">
+  <div class="bg-blob a"></div>
+  <div class="bg-grid"></div>
+  <div class="bg-grain"></div>
+</div>
+
+<header class="nav">
+  <a class="brand" href="/">
+    <span class="brand-mark" aria-hidden="true"></span>
+    <span class="brand-name">Findra</span>
+  </a>
+  <nav class="nav-links">
+    <a href="/features/">What it finds</a>
+    <a href="/why/">Why Findra</a>
+    <a href="/numbers/">The numbers</a>
+    <a href="/faq/">Questions</a>
+    <a href="/privacy/">Privacy</a>
+  </nav>
+  <div class="nav-right">
+    <a class="btn btn-primary btn-sm" href="/#install">Get Findra</a>
+  </div>
+</header>
+
+<main id="top" tabindex="-1">
+  <!-- ================= the numbers ================= -->
+  <!-- Every figure on this page is a row of the README's own --searchbench run, and WebsiteTests
+       reads both to hold them to each other. The headline is derived, never typed: the slowest
+       median, rounded up to the next whole millisecond, so it is true of every query measured. -->
+  <div class="wrap">
+    <section id="numbers">
+      <div class="sec-head reveal">
+        <span class="kicker">THE NUMBERS</span>
+        <h1>How fast is Findra?</h1>
+        <p>
+          Everything below came out of <code style="font-family:var(--mono);font-size:14px;color:var(--ink-dim)">findra --searchbench</code>
+          and was pasted without editing. No number appears on this page that you cannot reproduce
+          on your own computer with that one command.
+        </p>
+      </div>
+
+      <div class="hero-stat reveal">
+        <div>
+          <div class="big" aria-hidden="true">&lt;4<small>ms</small></div>
+          <p class="sr-only">Under 4 ms.</p>
+          <div class="say">Type part of a filename. The matches are back.</div>
+          <div class="fine">Median round trip for every query measured, across 1,780,595 names, from the moment the query leaves the window to the moment the results arrive.</div>
+        </div>
+        <div class="bars">
+          <div class="bar"><span>config</span><span class="track"><span class="fill" style="width:15%"></span></span><span class="ms">0.60 ms</span></div>
+          <div class="bar"><span>report</span><span class="track"><span class="fill" style="width:17.5%"></span></span><span class="ms">0.70 ms</span></div>
+          <div class="bar"><span>readme</span><span class="track"><span class="fill" style="width:25.75%"></span></span><span class="ms">1.03 ms</span></div>
+          <div class="bar"><span>invoice</span><span class="track"><span class="fill" style="width:81%"></span></span><span class="ms">3.24 ms</span></div>
+          <div class="bar"><span>sunset</span><span class="track"><span class="fill" style="width:94.5%"></span></span><span class="ms">3.78 ms</span></div>
+          <div class="axis" aria-hidden="true"><span></span><span><span>0</span><span>1</span><span>2</span><span>3</span><span>4 ms</span></span><span></span></div>
+        </div>
+      </div>
+
+      <div class="stat-row three">
+        <div class="stat reveal">
+          <span class="v">5.4 s</span>
+          <span class="k">From cold to ready</span>
+          <span class="n">1,780,595 names read off the disk when the helper starts. Longer right after a restart, when nothing is cached.</span>
+        </div>
+        <div class="stat reveal">
+          <span class="v">200.3 MB</span>
+          <span class="k">What it costs to hold</span>
+          <span class="n">The name index for 1,780,595 names, measured by the helper that holds it.</span>
+        </div>
+        <div class="stat reveal">
+          <span class="v">0</span>
+          <span class="k">Bytes about your files</span>
+          <span class="n">No account, no cloud, no analytics, no crash reporting, no telemetry.</span>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <!-- ================= the tables ================= -->
+  <div class="wrap">
+    <section id="tables" style="padding-top:0">
+      <div class="sec-head reveal">
+        <span class="kicker">FILENAMES</span>
+        <h2>Name search, query by query</h2>
+        <p>
+          The round trip is the whole journey: from the window, through the pipe to the helper that
+          holds the names, and back. The index scan is the helper's own share of it.
+        </p>
+      </div>
+
+      <div class="table-wrap reveal">
+        <table>
+          <thead>
+            <tr>
+              <th scope="col">Name query</th>
+              <th scope="col">Round trip p50</th>
+              <th scope="col">Round trip p95</th>
+              <th scope="col">Index scan p50</th>
+              <th scope="col">Worst</th>
+              <th scope="col">Hits</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><td>config</td><td class="num">0.60 ms</td><td class="num">0.78 ms</td><td class="num">0.15 ms</td><td class="num">1.13 ms</td><td>50</td></tr>
+            <tr><td>report</td><td class="num">0.70 ms</td><td class="num">0.89 ms</td><td class="num">0.26 ms</td><td class="num">0.96 ms</td><td>50</td></tr>
+            <tr><td>readme</td><td class="num">1.03 ms</td><td class="num">1.25 ms</td><td class="num">0.58 ms</td><td class="num">1.55 ms</td><td>50</td></tr>
+            <tr><td>invoice</td><td class="num">3.24 ms</td><td class="num">4.57 ms</td><td class="num">2.81 ms</td><td class="num">4.88 ms</td><td>43</td></tr>
+            <tr><td>sunset</td><td class="num">3.78 ms</td><td class="num">4.62 ms</td><td class="num">3.41 ms</td><td class="num">5.36 ms</td><td>21</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="sec-head reveal" style="margin-top:48px">
+        <span class="kicker">INSIDE FILES</span>
+        <h2>Full-text search</h2>
+        <p>
+          Against this machine's own content index, read from a real disk, so the slowest word is in
+          there beside the fastest.
+        </p>
+      </div>
+
+      <div class="table-wrap reveal">
+        <table>
+          <thead>
+            <tr>
+              <th scope="col">Word</th>
+              <th scope="col">p50</th>
+              <th scope="col">p95</th>
+              <th scope="col">Worst</th>
+              <th scope="col">Hits</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><td>lease</td><td class="num">1.90 ms</td><td class="num">2.59 ms</td><td class="num">4.07 ms</td><td>50</td></tr>
+            <tr><td>agreement</td><td class="num">3.68 ms</td><td class="num">4.43 ms</td><td class="num">4.70 ms</td><td>50</td></tr>
+            <tr><td>invoice</td><td class="num">0.79 ms</td><td class="num">1.08 ms</td><td class="num">1.80 ms</td><td>32</td></tr>
+            <tr><td>total</td><td class="num">9.41 ms</td><td class="num">10.89 ms</td><td class="num">13.53 ms</td><td>50</td></tr>
+            <tr><td>report</td><td class="num">15.36 ms</td><td class="num">16.67 ms</td><td class="num">16.87 ms</td><td>50</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="machine reveal">
+        <span><b>Machine</b> AMD Ryzen 9 9900X3D</span>
+        <span><b>RAM</b> 47.1 GB</span>
+        <span><b>Disk</b> NVMe SSD</span>
+        <span><b>OS</b> Windows 11 Pro 10.0.26200.9445</span>
+        <span><b>Accelerator</b> ONNX via DirectML</span>
+        <span><b>Build</b> Findra 0.3.1</span>
+        <span><b>Samples</b> n=50 per query</span>
+      </div>
+
+      <p class="hero-sub reveal" style="margin-top:22px;max-width:900px">
+        A number without its machine is marketing rather than measurement, so the machine is named.
+        Yours will differ. The whole run, every table and the stores it measured, is in the
+        <a href="https://github.com/blakazulu/findra#the-numbers" rel="noopener">README</a>, pasted
+        as the command printed it.
+      </p>
+
+      <p class="hero-sub reveal" style="margin-top:14px;max-width:900px">
+        Findra tries DirectML for the vision and meaning models and Vulkan for speech, and falls
+        back to the processor when neither answers, which is a supported configuration rather than
+        a failure: only the first pass through your files is slower, and
+        <code style="font-family:var(--mono);font-size:13.5px;color:var(--ink-dim)">findra --searchmodels</code>
+        prints which provider it chose and every one it turned down, with reasons.
+      </p>
+
+      <p class="hero-sub reveal" style="margin-top:14px;max-width:900px">
+        <b>These numbers are from one machine, and it has an NVIDIA card.</b> Findra is built for
+        AMD and Intel processors, for AMD, Intel and NVIDIA graphics, for integrated graphics, and
+        for machines with no usable accelerator at all - but only this configuration and the
+        processor-only path have been measured. <b>AMD and Intel graphics have not been tested on
+        real hardware, and neither has an arm64 machine</b> - the arm64 build ships because keeping
+        it reachable costs nothing, not because it has been run. The paths Findra uses are
+        vendor-neutral by design so that they should work there; that is a decision rather than a
+        measurement, and it is said here as one.
+      </p>
+    </section>
+  </div>
+
+</main>
+
+<footer class="wrap">
+  <div class="foot">
+    <div class="col">
+      <span class="brand" style="margin-bottom:6px">
+        <span class="brand-mark" aria-hidden="true"></span>
+        <span class="brand-name">Findra</span>
+      </span>
+      <span>Desktop search for Windows.</span>
+      <span>Built with .NET 10, Avalonia, SkiaSharp and SQLite.</span>
+    </div>
+    <div class="col">
+      <strong>FINDRA</strong>
+      <a href="/features/">What it finds</a>
+      <a href="/why/">Why Findra</a>
+      <a href="/numbers/">The numbers</a>
+      <a href="/faq/">Questions</a>
+      <a href="/install/">Install</a>
+    </div>
+    <div class="col">
+      <strong>PROJECT</strong>
+      <a href="https://github.com/blakazulu/findra" rel="noopener">Source</a>
+      <a href="/changelog/">Changelog</a>
+      <a href="https://github.com/blakazulu/findra/issues" rel="noopener">Issues</a>
+    </div>
+    <div class="col">
+      <strong>GUIDES</strong>
+      <a href="/windows-search-not-finding-files/">Windows Search not finding files</a>
+      <a href="/search-inside-pdfs/">Search inside PDFs</a>
+      <a href="/find-photos-by-description/">Find photos by description</a>
+      <a href="/search-recordings-by-speech/">Search recordings by speech</a>
+    </div>
+    <div class="col">
+      <strong>THE SMALL PRINT</strong>
+      <a href="/about/">About</a>
+      <a href="/contact/">Contact</a>
+      <a href="/privacy/">Privacy</a>
+      <a href="/code-signing/">Code signing policy</a>
+      <a href="https://github.com/blakazulu/findra/blob/main/SECURITY.md" rel="noopener">Security</a>
+      <a href="https://github.com/blakazulu/findra/blob/main/LICENSE" rel="noopener">Apache-2.0</a>
+      <a href="https://github.com/blakazulu/findra/blob/main/NOTICE" rel="noopener">Notice</a>
+      <a href="/llms.txt">For language models</a>
+    </div>
+    <div class="col">
+      <strong>ATTRIBUTION</strong>
+      <span>Findra by blakazulu.</span>
+      <span><a href="/fonts/Quicksand-OFL.txt">Quicksand</a> and <a href="/fonts/JetBrainsMono-OFL.txt">JetBrains Mono</a> under the SIL Open Font License 1.1.</span>
+      <span>&copy; <span id="year">2026</span></span>
+    </div>
+  </div>
+</footer>
+
+<script src="/app.js" defer></script>
+</body>
+</html>

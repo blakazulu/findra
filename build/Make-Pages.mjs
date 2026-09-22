@@ -18,6 +18,12 @@
 //
 // The second is the shell. The navigation and the footer are the same on every page, and four
 // hand-maintained copies of a footer is four chances to link the wrong privacy policy.
+//
+// The pages that used to be sections of the front page - what Findra finds, why it exists, the
+// numbers, the questions and the install - need its components (the log, the screenshots, the
+// tables), which Markdown does not have. They are written by hand in HTML, like the front page,
+// under website/content/pages/, each beside the Markdown twin written with it (the front page's
+// own pattern, with home.md), and this wraps each in the same shell as every other page.
 
 import { writeFileSync, mkdirSync, readFileSync, copyFileSync, statSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
@@ -35,6 +41,78 @@ const SITE = 'https://findra-search.netlify.app';
 // of a page somebody landed on wondering whether to trust the product. The generator drops the
 // Markdown's own H1 and uses this.
 const PAGES = [
+  // Hand-written HTML bodies, from website/content/pages/. `html` marks them: the body is used as it
+  // is, inside <main>, and carries its own h1; `twin` is the Markdown written beside it.
+  {
+    slug: 'features',
+    html: true,
+    source: 'website/content/pages/features.html',
+    twin: 'website/content/pages/features.md',
+    kicker: 'What it finds',
+    title: 'What Findra finds - filenames, words, photos and speech',
+    description:
+      'Findra finds files by name the moment it starts, and - if you turn them on - by the words ' +
+      'inside documents, by what a photo shows and by what was said in a recording.',
+    reviewed: '2026-09-22',
+    ogType: 'website',
+    markdown: 'features.md',
+  },
+  {
+    slug: 'why',
+    html: true,
+    source: 'website/content/pages/why.html',
+    twin: 'website/content/pages/why.md',
+    kicker: 'Why Findra',
+    title: 'How Findra differs from the search built into Windows',
+    description:
+      'Names held in RAM rather than in a database, documents read with nothing to install, and ' +
+      'nothing sent anywhere. Four differences you can check on your own machine.',
+    reviewed: '2026-09-22',
+    ogType: 'website',
+    markdown: 'why.md',
+  },
+  {
+    slug: 'numbers',
+    html: true,
+    source: 'website/content/pages/numbers.html',
+    twin: 'website/content/pages/numbers.md',
+    kicker: 'The numbers',
+    title: 'How fast is Findra? Measured filename and full-text search times',
+    description:
+      'Filename search round trips, full-text search times and memory, measured with findra ' +
+      '--searchbench on one named machine. Run the same command to measure yours.',
+    reviewed: '2026-09-22',
+    ogType: 'website',
+    markdown: 'numbers.md',
+  },
+  {
+    slug: 'faq',
+    html: true,
+    source: 'website/content/pages/faq.html',
+    twin: 'website/content/pages/faq.md',
+    kicker: 'Questions',
+    title: 'Findra questions - speed, privacy, install and hardware',
+    description:
+      'Straight answers about Findra: what it is, how fast it is, what leaves your machine, what ' +
+      'it needs and how much disk it takes.',
+    reviewed: '2026-09-22',
+    ogType: 'website',
+    markdown: 'faq.md',
+  },
+  {
+    slug: 'install',
+    html: true,
+    source: 'website/content/pages/install.html',
+    twin: 'website/content/pages/install.md',
+    kicker: 'Install',
+    title: 'Install Findra - winget, the installer, or from source',
+    description:
+      'Install Findra with winget or the installer from the releases page, build it from source ' +
+      'with the .NET 10 SDK, and uninstall it cleanly.',
+    reviewed: '2026-09-22',
+    ogType: 'website',
+    markdown: 'install.md',
+  },
   {
     slug: 'privacy',
     source: 'PRIVACY.md',
@@ -294,9 +372,11 @@ function body(markdown) {
 // /privacy/ is a request for /privacy/styles.css, which is a page with no stylesheet at all.
 
 const NAV_LINKS = [
-  ['/#finds', 'What it finds'],
-  ['/#numbers', 'The numbers'],
-  ['/#install', 'Install'],
+  ['/features/', 'What it finds'],
+  ['/why/', 'Why Findra'],
+  ['/numbers/', 'The numbers'],
+  ['/faq/', 'Questions'],
+  ['/privacy/', 'Privacy'],
 ];
 
 const FOOTER = `
@@ -309,6 +389,14 @@ const FOOTER = `
       </span>
       <span>Desktop search for Windows.</span>
       <span>Built with .NET 10, Avalonia, SkiaSharp and SQLite.</span>
+    </div>
+    <div class="col">
+      <strong>FINDRA</strong>
+      <a href="/features/">What it finds</a>
+      <a href="/why/">Why Findra</a>
+      <a href="/numbers/">The numbers</a>
+      <a href="/faq/">Questions</a>
+      <a href="/install/">Install</a>
     </div>
     <div class="col">
       <strong>PROJECT</strong>
@@ -409,7 +497,7 @@ function shell(page, content) {
 <meta property="og:image:type" content="image/png">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
-<meta property="og:image:alt" content="Findra. Windows Search, but it works. Filenames in 0.33 to 2.05 ms median, straight from RAM. Nothing leaves your machine.">
+<meta property="og:image:alt" content="Findra. Windows Search, but it works. Filenames in 0.60 to 3.78 ms median, straight from RAM. Nothing leaves your machine.">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="theme-color" content="#08090c">
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
@@ -441,12 +529,12 @@ ${structuredData(page, url)}</head>
 ${NAV_LINKS.map(([href, label]) => `    <a href="${href}">${label}</a>`).join('\n')}
   </nav>
   <div class="nav-right">
-    <a class="btn btn-ghost btn-sm" href="/">Back to the front</a>
+    <a class="btn btn-primary btn-sm" href="/#install">Get Findra</a>
   </div>
 </header>
 
 <main id="top" tabindex="-1">
-  <div class="wrap">
+${page.html ? content : `  <div class="wrap">
     <section class="doc-head">
       <span class="kicker">${escape(page.kicker.toUpperCase())}</span>
       <h1>${escape(page.headline)}</h1>
@@ -460,7 +548,7 @@ ${NAV_LINKS.map(([href, label]) => `    <a href="${href}">${label}</a>`).join('\
     <article class="doc">
 ${content.split('\n').map((l) => (l ? '      ' + l : l)).join('\n')}
     </article>
-  </div>
+  </div>`}
 </main>
 
 ${FOOTER}
@@ -545,6 +633,19 @@ const RELEASED = (() => {
 
 for (const page of PAGES) if (page.reviewed === null) page.reviewed = RELEASED;
 
+// A hand-written page is written by hand, but the version it names is not. Every element carrying a
+// data-stamp attribute has its text replaced from Directory.Build.props and the matching CHANGELOG
+// heading - a number typed into a page by hand is the number nobody bumps at the next release.
+const STAMPS = {
+  version: `v${VERSION} - ${shortDate(RELEASED)}`,
+  release: `Findra ${VERSION}, released on ${longDate(RELEASED)}`,
+};
+const stampRe = (name) => new RegExp(`(<[a-z]+[^>]*\\sdata-stamp="${name}"[^>]*>)[^<]*(</[a-z]+>)`, 'g');
+function stamp(html) {
+  for (const [name, text] of Object.entries(STAMPS)) html = html.replace(stampRe(name), `$1${text}$2`);
+  return html;
+}
+
 const wrote = [];
 for (const page of PAGES) {
   const source = join(ROOT, ...page.source.split('/'));
@@ -554,8 +655,14 @@ for (const page of PAGES) {
 
   const dir = join(ROOT, 'website', 'public', page.slug);
   mkdirSync(dir, { recursive: true });
-  writeFileSync(join(dir, 'index.html'), shell(page, body(markdown)));
+  writeFileSync(join(dir, 'index.html'), shell(page, page.html ? stamp(markdown) : body(markdown)));
   wrote.push(`  website/public/${page.slug}/index.html`);
+
+  if (page.html) {
+    copyFileSync(join(ROOT, ...page.twin.split('/')), join(ROOT, 'website', 'public', page.markdown));
+    wrote.push(`  website/public/${page.markdown} - copied from ${page.twin}`);
+    continue;
+  }
 
   // Verbatim, not re-rendered. The point of publishing the Markdown is that it is the same file -
   // or, for a page with a transform, the same text the page was generated from.
@@ -568,23 +675,15 @@ for (const page of PAGES) {
   }
 }
 
-// The front page is written by hand, but the version it names is not. Every element carrying a
-// data-stamp attribute has its text replaced here, from Directory.Build.props and the matching
-// CHANGELOG heading, and so do the structured data's version and release notes link - a number
-// typed into the page by hand is the number nobody bumps at the next release.
+// The front page is stamped in place, and so are the structured data's version and release notes
+// link. Both stamps must be on it: it is the page that names the version first.
 {
   const front = join(ROOT, 'website', 'public', 'index.html');
-  const stamps = {
-    version: `v${VERSION} - ${shortDate(RELEASED)}`,
-    release: `Findra ${VERSION}, released on ${longDate(RELEASED)}`,
-  };
   let index = readFileSync(front, 'utf8');
-  for (const [name, text] of Object.entries(stamps)) {
-    const re = new RegExp(`(<[a-z]+[^>]*\\sdata-stamp="${name}"[^>]*>)[^<]*(</[a-z]+>)`, 'g');
-    if (!re.test(index)) throw new Error(`index.html has no data-stamp="${name}"`);
-    index = index.replace(re, `$1${text}$2`);
+  for (const name of Object.keys(STAMPS)) {
+    if (!stampRe(name).test(index)) throw new Error(`index.html has no data-stamp="${name}"`);
   }
-  index = index
+  index = stamp(index)
     .replace(/("softwareVersion":\s*")[^"]*(")/, `$1${VERSION}$2`)
     .replace(/("releaseNotes":\s*"https:\/\/github\.com\/blakazulu\/findra\/releases\/tag\/v)[^"]*(")/, `$1${VERSION}$2`);
   writeFileSync(front, index);

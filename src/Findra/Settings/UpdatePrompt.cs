@@ -82,7 +82,11 @@ public static class UpdatePrompt
         => state switch
         {
             UpdatePromptState.Asking => "Asking GitHub whether there is a newer release.",
-            UpdatePromptState.UpToDate => $"Findra {version} is the newest release.",
+            // A winget copy asked the catalogue, which can trail the releases page; it says what
+            // it checked rather than a claim about releases it never looked at.
+            UpdatePromptState.UpToDate => Source(installSource) == "winget"
+                ? $"Findra {version} is the newest version winget has."
+                : $"Findra {version} is the newest release.",
             UpdatePromptState.Unreachable =>
                 "The request did not get through. Nothing is wrong with this copy, and Findra will " +
                 "try again tomorrow.",

@@ -745,6 +745,99 @@ internal sealed class Shell : ISettingsHost
     }
 
     /// <summary>
+    /// Make room for the query encoders after models have arrived.
+    ///
+    /// <para>The encoders are prepared once, in <c>StartTheRest</c> - which the first-run path runs
+    /// BEFORE the download it just agreed to, against an empty models folder, and gets no
+    /// <c>Semantic</c> at all. Without one here, the first content search that person ever ran
+    /// came back empty while the indexer filled the index with answers nothing could ask for.</para>
+    ///
+    /// <para>Nothing is loaded here. An empty <c>Semantic</c> is created if there is none, and the
+    /// pump opens each encoder once the index holds something it can match
+    /// (<see cref="OpenTheQueryEncodersTheIndexNowNeeds"/>). A slot is filled, never replaced, so a
+    /// card part-way through a query keeps the session it is using.</para>
+    /// </summary>
+    private void MakeRoomForTheQueryEncoders(CapabilitySet installed)
+    {
+        Interlocked.Exchange(ref _kindsSeen, -1);   // a new capability may want vectors already there
+        if (_semantic is not null) return;
+
+        Semantic? made;
+        try { made = Semantic.For(installed); }
+        catch (Exception ex)
+        {
+            Log.Error("models", "the query side could not be prepared after the download", ex);
+            return;
+        }
+        if (made is null) return;
+
+        // The field is read from the interface thread when a card is built, so it is written from
+        // there too.
+        Dispatcher.UIThread.Post(() =>
+        {
+            if (_semantic is not null) { made.Dispose(); return; }
+            _semantic = made;
+        });
+    }
+
+    /// <summary>The kinds file's length when the pump last looked, or -1 to look again.</summary>
+    private long _kindsSeen = -1;
+    private int _encodersOpening;
+
+    /// <summary>
+    /// Open an installed query encoder the moment the index first holds something it can match.
+    ///
+    /// <para>On the pump, every second, and nearly free: it stops at once when both encoders are
+    /// open, and otherwise stats the kinds file and does nothing more unless it has grown. Growth
+    /// is the only moment a new encoder can become worth opening, and what is installed is read
+    /// from disk then, because <c>findra --models install</c> is another process and this one's
+    /// <c>_installed</c> never hears about it. The load itself - seconds, about a gigabyte for
+    /// meaning - runs off the loop, so the capsule never stalls. A search during it answers by
+    /// names and words and gains meaning and pictures when it finishes; nobody waits.</para>
+    /// </summary>
+    private void OpenTheQueryEncodersTheIndexNowNeeds()
+    {
+        if (_semantic is { Text: not null, Image: not null }) return;
+
+        long length;
+        try { var f = new FileInfo(VectorStore.DefaultPath + ".kinds"); length = f.Exists ? f.Length : 0; }
+        catch { return; }
+        if (length == Interlocked.Read(ref _kindsSeen)) return;
+        if (Interlocked.Exchange(ref _encodersOpening, 1) == 1) return;
+        Interlocked.Exchange(ref _kindsSeen, length);
+
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                (bool Words, bool Pictures) held = ContentBranch.Holds(VectorStore.KindsOnDisk());
+                if (!held.Words && !held.Pictures) return;
+                CapabilitySet installed = CapabilitySet.Installed();
+
+                Semantic? semantic = _semantic;
+                if (semantic is null)
+                {
+                    // Nothing was installed when this session started. The field is written on the
+                    // interface thread, where cards read it, and which one it holds is settled
+                    // there BEFORE anything loads: the one that loses is still empty, so disposing
+                    // it cannot close an encoder somebody is opening.
+                    Semantic? made = Semantic.For(installed);
+                    if (made is null) return;
+                    semantic = await Dispatcher.UIThread.InvokeAsync(() => _semantic ??= made);
+                    if (!ReferenceEquals(semantic, made)) made.Dispose();
+                }
+
+                (bool words, bool pictures) = semantic.OpenWhatIsNeeded(installed, held);
+                if (words || pictures)
+                    Log.Info("models", "query encoder opened now the index holds something for it: " +
+                                       (words ? "meaning " : "") + (pictures ? "pictures" : ""));
+            }
+            catch (Exception ex) { Log.Error("models", "a query encoder could not be opened", ex); }
+            finally { Interlocked.Exchange(ref _encodersOpening, 0); }
+        });
+    }
+
+    /// <summary>
     /// Re-queue what a newly-arrived capability can now read, ON THE FLOW THAT OWNS THE WRITER.
     ///
     /// <para>This is why <c>FirstRunDownloads.RunAsync</c> takes a callback and no
@@ -755,53 +848,11 @@ internal sealed class Shell : ISettingsHost
     /// throwing inside a handler nobody is watching. <see cref="OnContentLoopAsync"/> hands the
     /// work to the loop that holds the connection and waits for its answer.</para>
     /// </summary>
-    /// <summary>
-    /// Open the query-side encoders when this session has none, after models have arrived.
-    ///
-    /// <para>The encoders are opened once, in <c>StartTheRest</c> - which the first-run path runs
-    /// BEFORE the download it just agreed to. So on every first run that fetched anything they
-    /// were opened against an empty models folder, answered null, and nothing reopened them: the
-    /// first content search that person ever ran came back empty, with no offer and no note, on a
-    /// machine whose welcome screen had just said everything they chose had arrived. The indexer
-    /// meanwhile read those same files perfectly well, so the index filled up with answers nothing
-    /// could ask for.</para>
-    ///
-    /// <para><b>Only when there is none.</b> Replacing a live <c>Semantic</c> means disposing ONNX
-    /// sessions a card may be part-way through a query on, and there is no safe moment to do that
-    /// from here. That case keeps the rule Findra already documents and states on every surface
-    /// that installs a capability: indexing picks it up without a restart, searching by it does
-    /// not. A null one is held by nobody, which is what makes this case different rather than an
-    /// exception to it.</para>
-    /// </summary>
-    private void OpenTheQueryEncodersIfThereAreNone(CapabilitySet installed)
-    {
-        if (_semantic is not null) return;
-
-        Semantic? opened;
-        try { opened = Semantic.Open(installed); }
-        catch (Exception ex)
-        {
-            Log.Error("models", "the query encoders would not open after the download", ex);
-            return;
-        }
-        if (opened is null) return;
-
-        // The field is read from the interface thread when a card is built, so it is written from
-        // there too. Open() itself is the expensive half and has already happened off it.
-        Dispatcher.UIThread.Post(() =>
-        {
-            if (_semantic is not null) { opened.Dispose(); return; }
-            _semantic = opened;
-            Log.Info("models", "query encoders ready after the download: " +
-                               (opened.Text is null ? "" : "meaning ") + (opened.Image is null ? "" : "pictures"));
-        });
-    }
-
     private async Task RequeueWhatArrivedAsync()
     {
         CapabilitySet installed = CapabilitySet.Installed(ModelStore.Dir);
         _installed = installed;
-        OpenTheQueryEncodersIfThereAreNone(installed);
+        MakeRoomForTheQueryEncoders(installed);
 
         int requeued = await OnContentLoopAsync(db =>
             CapabilityGate.Apply(db, CapabilityGate.Plan(installed, CapabilityGate.StampsIn(db))))
@@ -904,17 +955,21 @@ internal sealed class Shell : ISettingsHost
             }
         }
 
-        // The model-backed half of a content query. Read once, opened once, and both are cheap on
-        // a machine that took nothing: Installed() stats seven paths and finds none, and Open()
-        // returns null before it constructs a session. Only somebody who actually downloaded a
-        // capability pays for the load, and they pay for it once for the whole session rather
-        // than on the first query - which is where a lazy load would put it, in front of a person
-        // who has already typed.
+        // The model-backed half of a content query. Each encoder opens here only when the index
+        // already holds something it can match, and then before the first query rather than in
+        // front of somebody who has already typed. The rest open from the pump when their first
+        // vector lands (OpenTheQueryEncodersTheIndexNowNeeds). A machine that took nothing gets no
+        // Semantic, and one whose models sit unused - "Just names" after a reinstall that kept
+        // them - loads nothing: e5 at full precision is about a gigabyte on the processor.
         _installed = CapabilitySet.Installed();
-        _semantic = Semantic.Open(_installed);
+        _semantic = Semantic.For(_installed);
+        (bool heldWords, bool heldPictures) = ContentBranch.Holds(VectorStore.KindsOnDisk());
+        _semantic?.OpenWhatIsNeeded(_installed, (heldWords, heldPictures));
         Log.Info("models", _semantic is null
             ? "no query encoder this session - content search answers with the words in your files"
-            : "query encoders ready: " + (_semantic.Text is null ? "" : "meaning ") + (_semantic.Image is null ? "" : "pictures"));
+            : _semantic.Text is null && _semantic.Image is null
+                ? "no query encoder opened yet - the index holds nothing they could match; they open when it does"
+                : "query encoders ready: " + (_semantic.Text is null ? "" : "meaning ") + (_semantic.Image is null ? "" : "pictures"));
 
         // Before the content loop, and this is not a stylistic choice. QueueFeeder holds the
         // writer across a whole ContentDb.Scope, and ContentDb.Claim is a thread-id detector
@@ -1220,6 +1275,7 @@ internal sealed class Shell : ISettingsHost
         // process with no indexer child yet still has a writer connection they can only reach
         // through here.
         DrainContentWork(db);
+        OpenTheQueryEncodersTheIndexNowNeeds();
 
         IndexerHost? host = _indexer;
         if (host is null) return;
@@ -2142,7 +2198,7 @@ internal sealed class Shell : ISettingsHost
         {
             UpdateResult result = await UpdateCheck.CheckAsync(
                 _config,
-                ct => UpdateCheck.FetchLatestTagAsync(Http, Log.Version, ct),
+                ct => UpdateCheck.FetchLatestAsync(Http, Log.Version, _config.InstallSource, ct),
                 DateTime.UtcNow, _shutdown.Token, force).ConfigureAwait(false);
 
             await Dispatcher.UIThread.InvokeAsync(() =>

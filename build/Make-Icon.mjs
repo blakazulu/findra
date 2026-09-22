@@ -626,7 +626,7 @@ const INK_FAINT = hex('#7e786d');
 const ACCENT_RGB = hex(ACCENT);
 
 const HEADLINE = ['WINDOWS SEARCH.', 'BUT IT WORKS.'];
-const SUBLINE = ['Filenames in 0.33 to 2.05 ms median, straight from RAM.', 'Nothing leaves your machine.'];
+const SUBLINE = ['Filenames in 0.60 to 3.78 ms median, straight from RAM.', 'Nothing leaves your machine.'];
 const FINE = 'WINDOWS 10 AND 11   /   APACHE-2.0   /   FREE';
 
 /// The 1200 by 630 card: the headline on the left, the lockup on the right.

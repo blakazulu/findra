@@ -25,6 +25,11 @@ import type { Config, Context } from '@netlify/edge-functions';
 /// copies the source verbatim into place and this hands back that copy.
 const TWIN: Record<string, string> = {
   '/': '/index.md',
+  '/features/': '/features.md',
+  '/why/': '/why.md',
+  '/numbers/': '/numbers.md',
+  '/faq/': '/faq.md',
+  '/install/': '/install.md',
   '/about/': '/about.md',
   '/contact/': '/contact.md',
   '/privacy/': '/privacy.md',
@@ -112,6 +117,7 @@ export default async function handler(request: Request, context: Context): Promi
 }
 
 export const config: Config = {
-  path: ['/', '/about/', '/contact/', '/privacy/', '/code-signing/', '/changelog/',
+  path: ['/', '/features/', '/why/', '/numbers/', '/faq/', '/install/',
+         '/about/', '/contact/', '/privacy/', '/code-signing/', '/changelog/',
          '/windows-search-not-finding-files/', '/search-inside-pdfs/', '/find-photos-by-description/', '/search-recordings-by-speech/'],
 };

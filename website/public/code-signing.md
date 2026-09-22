@@ -29,7 +29,8 @@ This program will not transfer any information to other networked systems unless
 requested.
 
 One exception exists and it is switchable off: Findra checks whether a newer version has been
-released. It is an anonymous HTTPS request to the GitHub releases API, made at most once every
+released. It is an anonymous HTTPS request to the GitHub releases API - or, for a copy installed
+with winget, to the winget catalogue's listing on GitHub - made at most once every
 24 hours, in the background, on startup. It carries no query parameters, no machine or install
 identifier, and nothing about your files or your searches. It never blocks anything, and a
 failure is a line in the log rather than a dialog. Turning the check off means the request is

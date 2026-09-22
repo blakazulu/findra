@@ -6,52 +6,112 @@ using System.Linq;
 
 namespace Findra;
 
+/// <summary>Which of the two query encoders: the one for words (documents and transcripts) or
+/// the one for pictures (photos and video frames).</summary>
+public enum QueryEncoder { Words, Pictures }
+
 /// <summary>
 /// The query side of the model-backed capabilities: a vector store, and the two ways of turning
 /// what somebody typed into a vector. Either encoder may be null, and null means "that capability
-/// is not installed" - which contributes no candidates and is not an error (spec §6).
+/// is not installed" - or not opened yet - which contributes no candidates and is not an error
+/// (spec §6).
 ///
 /// <para>Delegates rather than encoder objects, so the branch's rules can be tested against a
 /// vector store filled by hand with no model on disk. Absence being a null the branch already
 /// handles is what makes "an absent capability is silent" a property of the code rather than a
 /// thing to remember.</para>
+///
+/// <para>An empty slot can be filled later and a filled one is never replaced. The encoders cost
+/// about 1.4 GB on the processor, so they open only once the index holds something they could
+/// match (<see cref="Wanted"/>), which can happen while a card is up and holding this object. A
+/// card reads the slot at query time, so the encoder reaches it; replacing one instead would
+/// dispose a session a query may be running on.</para>
 /// </summary>
-public sealed class Semantic(VectorStore vectors, Func<string, float[]>? text, Func<string, float[]>? image,
-                            params IDisposable[] owned) : IDisposable
+public sealed class Semantic : IDisposable
 {
-    public VectorStore Vectors { get; } = vectors;
-    public Func<string, float[]>? Text { get; } = text;
-    public Func<string, float[]>? Image { get; } = image;
+    private readonly object _gate = new();
+    private readonly List<IDisposable> _owned;
+    private volatile Func<string, float[]>? _text, _image;
+    private bool _triedWords, _triedPictures;
+
+    public Semantic(VectorStore vectors, Func<string, float[]>? text, Func<string, float[]>? image,
+                    params IDisposable[] owned)
+    {
+        Vectors = vectors;
+        _text = text;
+        _image = image;
+        _owned = [.. owned];
+    }
+
+    public VectorStore Vectors { get; }
+    public Func<string, float[]>? Text => _text;
+    public Func<string, float[]>? Image => _image;
 
     /// <summary>Disposes only what it was HANDED to own. A store the caller opened and a store
     /// <see cref="Open"/> opened are two different lifetimes, and a type that guesses gets one of
     /// them wrong - which is how a test's store gets closed under it, or how two encoders holding
     /// a GPU device are leaked for the life of the process.</summary>
-    public void Dispose() { foreach (IDisposable d in owned) d.Dispose(); }
+    public void Dispose()
+    {
+        lock (_gate) foreach (IDisposable d in _owned) d.Dispose();
+    }
 
-    /// <summary>What this machine can ask, given what is installed. Null when nothing is - the
-    /// card then calls the branch with no semantic half at all, which is the ordinary state of a
-    /// machine that took the "Just names" preset.</summary>
-    public static Semantic? Open(CapabilitySet installed, string? modelDir = null)
+    /// <summary>Fill an empty slot. False when it is already filled, and then
+    /// <paramref name="owner"/> is still the caller's to dispose.</summary>
+    public bool Supply(QueryEncoder which, Func<string, float[]> encode, IDisposable owner)
+    {
+        lock (_gate)
+        {
+            if ((which == QueryEncoder.Words ? _text : _image) is not null) return false;
+            _owned.Add(owner);
+            if (which == QueryEncoder.Words) _text = encode; else _image = encode;
+            return true;
+        }
+    }
+
+    /// <summary>Which encoders are worth their memory: the capability is installed AND the index
+    /// holds vectors of its kind. A model with nothing to match is a gigabyte spent on a search
+    /// that cannot return anything by it.</summary>
+    public static (bool Words, bool Pictures) Wanted(CapabilitySet installed, (bool Words, bool Pictures) held)
+        => (installed.Has(Capability.Meaning) && held.Words, installed.Has(Capability.Photos) && held.Pictures);
+
+    /// <summary>A Semantic with no encoder yet, for a machine that installed something; null for
+    /// one that installed nothing, which the card answers with no semantic half at all - the
+    /// ordinary state of the "Just names" preset.</summary>
+    public static Semantic? For(CapabilitySet installed, string? vectorsPath = null)
     {
         if (!installed.Has(Capability.Photos) && !installed.Has(Capability.Meaning)) return null;
-        var store = new VectorStore();
-        var own = new List<IDisposable> { store };
-        Func<string, float[]>? asText = null, asImage = null;
+        var store = new VectorStore(vectorsPath);
+        return new Semantic(store, null, null, store);
+    }
 
-        // One try EACH, and that is the whole point of the shape. A model that is on disk and will
-        // not load is the one case where an absent capability is worth a log line - it is not the
-        // normal state, it is a broken file - and "whatever loaded stays" is only true if a throw
-        // from the first encoder cannot skip the second. Under one try it held in one order only:
-        // a corrupt e5 file took the picture encoder down with it, and searching photos stopped
-        // working because something entirely unrelated to photos was broken.
-        if (installed.Has(Capability.Meaning))
+    /// <summary>Open every encoder <see cref="Wanted"/> names that is not open and has not been
+    /// tried this session. Each is tried once: a model that is on disk and will not load is a
+    /// broken file, and trying it again every second would log that every second. Returns what
+    /// it opened, for the log line.</summary>
+    public (bool Words, bool Pictures) OpenWhatIsNeeded(CapabilitySet installed, (bool Words, bool Pictures) held,
+                                                        string? modelDir = null)
+    {
+        (bool words, bool pictures) = Wanted(installed, held);
+        lock (_gate)
+        {
+            words = words && _text is null && !_triedWords;
+            pictures = pictures && _image is null && !_triedPictures;
+            _triedWords |= words;
+            _triedPictures |= pictures;
+        }
+
+        // One try EACH, and that is the whole point of the shape. "Whatever loaded stays" is only
+        // true if a throw from the first encoder cannot skip the second. Under one try it held in
+        // one order only: a corrupt e5 file took the picture encoder down with it, and searching
+        // photos stopped working because something entirely unrelated to photos was broken.
+        bool openedWords = false, openedPictures = false;
+        if (words)
         {
             try
             {
                 var e5 = new E5Encoder(wantAccelerator: false, modelDir);
-                own.Add(e5);
-                asText = e5.EncodeQuery;
+                if (Supply(QueryEncoder.Words, e5.EncodeQuery, e5)) openedWords = true; else e5.Dispose();
             }
             catch (Exception ex)
             {
@@ -59,13 +119,12 @@ public sealed class Semantic(VectorStore vectors, Func<string, float[]>? text, F
                                     "searching by meaning is off for this session", ex);
             }
         }
-        if (installed.Has(Capability.Photos))
+        if (pictures)
         {
             try
             {
                 var clip = new ClipTextEncoder(wantAccelerator: false, modelDir);
-                own.Add(clip);
-                asImage = clip.Encode;
+                if (Supply(QueryEncoder.Pictures, clip.Encode, clip)) openedPictures = true; else clip.Dispose();
             }
             catch (Exception ex)
             {
@@ -73,12 +132,18 @@ public sealed class Semantic(VectorStore vectors, Func<string, float[]>? text, F
                                     "searching photos is off for this session", ex);
             }
         }
-        if (asText is null && asImage is null)
-        {
-            foreach (IDisposable d in own) d.Dispose();
-            return null;
-        }
-        return new Semantic(store, asText, asImage, [.. own]);
+        return (openedWords, openedPictures);
+    }
+
+    /// <summary>Every installed encoder, whatever the index holds: what a diagnostic asks with.
+    /// Null when nothing installed would load.</summary>
+    public static Semantic? Open(CapabilitySet installed, string? modelDir = null)
+    {
+        Semantic? semantic = For(installed);
+        if (semantic is null) return null;
+        semantic.OpenWhatIsNeeded(installed, (Words: true, Pictures: true), modelDir);
+        if (semantic.Text is null && semantic.Image is null) { semantic.Dispose(); return null; }
+        return semantic;
     }
 }
 
@@ -195,6 +260,11 @@ public static class ContentBranch
     /// Crossing them scores an image row against a sentence vector, which is noise.</summary>
     private static readonly byte[] PictureKinds = [(byte)ContentDb.SegImage, (byte)ContentDb.SegFrame];
     private static readonly byte[] WordKinds = [(byte)ContentDb.SegText, (byte)ContentDb.SegSpeech];
+
+    /// <summary>Whether a vector store's kind bytes hold anything each encoder could match. A
+    /// discarded row's byte is 255 and counts for neither.</summary>
+    public static (bool Words, bool Pictures) Holds(ReadOnlySpan<byte> kinds)
+        => (kinds.IndexOfAny(WordKinds) >= 0, kinds.IndexOfAny(PictureKinds) >= 0);
 
     /// <summary>What the card says when a Content query carries filters but no words at all.</summary>
     public const string NoWords =

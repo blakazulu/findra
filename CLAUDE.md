@@ -310,6 +310,10 @@ what to enqueue):
 - **Every query carries a generation counter, stamped on the reply, checked by the UI**, so a late
   answer cannot overwrite a newer result. Needs an explicit adversarial test.
 
+**The helper's memory is `NameIndex.ResidentBytes`, never `BufferBytes`** (the names alone, about a
+third). Building doubles every array and `Trim` copies each once more, so `RunAsync` runs one
+compacting collection after enumeration: 1.78M names, 502 MB working set down to 253 MB.
+
 **One interface per index.** `src/Findra/Startup/OnlyOne.cs` holds an exclusive handle on `.running`
 in the index folder, taken in `RunUi` before Avalonia starts (two interfaces mean two `--index`
 children fighting over the vector store). **A file handle, not a named mutex** (mutexes are
@@ -380,11 +384,16 @@ speech              ─  whisper-turbo + [e5 pair]              550 MB (+1.04 GB
 - **No stamp while its backlog remains.** `CapabilityGate.StampsIn` withholds a stamp while its kinds
   are skipped for `Decoders.NoModel` and unqueued; `Apply` re-queues exactly those
   (`onlyBecause: [NoModel]`).
-- **Indexing picks a capability up without a restart; searching does not, except when the session
-  has NO query encoders**: `OpenTheQueryEncodersIfThereAreNone` opens them then (covers first run).
-  Replacing a live encoder needs a restart. Any surface that installs a capability must say both
-  halves: `--models install` and the README do; the settings row and first-run screen do not yet (a
-  gap, not a decision).
+- **Query encoders open when the index first holds something they can match, never before**
+  (e5 at full precision is ~1 GB on the processor; a reinstall keeps models, so "Just names" used to
+  pay 1.7 GB for nothing). `Semantic.Wanted` decides (installed AND vectors of its kind in
+  `vectors.bin.kinds`); startup opens what is wanted, and the pump
+  (`OpenTheQueryEncodersTheIndexNowNeeds`) opens the rest off the loop when the kinds file grows,
+  reading what is installed from disk then (`--models install` is another process). **A slot is
+  filled, never replaced** (`Semantic.Supply`): a card reads it at query time, so an open card gains
+  it, and nothing is disposed under a query. Each encoder is tried once a session. So both indexing
+  and searching pick a capability up without a restart; replacing a live model file still needs
+  one.
 - **The Hebrew fine-tune opens in a try of ITS OWN**, and `Semantic.Open` uses one try per encoder,
   so one corrupt file cannot take the others down.
 
@@ -537,7 +546,20 @@ The front page (`index.html`) is hand-written; every other page comes from `buil
 run by hand. **CI runs it and `git diff --exit-code` over `website/public`**, sitemap excepted (its
 date needs git history a shallow clone lacks).
 
-**Shots and numbers** (the page says "Every picture below is the product"):
+**The front page is short, on purpose**: the lede, "We fixed Windows Search", the numbers (one
+derived figure, a bar per query, three tiles) and the install. Everything else has a page:
+`/features/`, `/why/`, `/numbers/`, `/faq/`, `/install/`. Those five are **hand-written HTML bodies
+with hand-written Markdown twins** in `website/content/pages/` (the front page's own pattern, with
+`home.md`); `Make-Pages.mjs` wraps each body in the shared shell (`html: true` in `PAGES`) and stamps
+`data-stamp` elements in it. A new such page is a `PAGES` entry plus `WebsiteTests.Pages`, the 404
+list, `llms.txt` and the edge function's routes. The FAQ's structured data lives on `/faq/`.
+
+**The headline figure is derived, never typed**: the slowest median in the README's pasted run,
+rounded up to the next whole millisecond ("under 4 ms"), with each bar drawn to that scale.
+`TheSiteQuotesTheReadmesOwnBenchmarkNumbers` recomputes it, the bars, the range, the worst sample
+and the tiles from the README, so a new run is: paste it, then change every figure the test names.
+
+**Shots and numbers** (`/features/` says "Every picture below is the product"):
 
 - **`docs/shots` and `website/public/shots` are two copies of the same renders**;
   **`build/Make-Shots.ps1` regenerates them**. `SiteShotTests` fails on differing bytes or differing
@@ -685,7 +707,10 @@ folder.
 winget does it correctly.
 
 The update check is the **one exception** to "nothing leaves the machine" (spec §9b): an anonymous
-HTTPS GET to the GitHub Releases API, at most once per 24 hours, on startup, in the background. No
+HTTPS GET to the GitHub Releases API - for a winget install, to `UpdateCheck.CatalogueUrl`, the
+winget catalogue's folder in `microsoft/winget-pkgs` (`winget upgrade` can only install what the
+catalogue has, and it trails the releases page by a manual submission) - at most once per 24
+hours, on startup, in the background. No
 query parameters, machine or install identifier, nothing about files or searches. Never blocks; a
 failure is a log line. On by default, disclosed on the first-run screen; off means no request.
 

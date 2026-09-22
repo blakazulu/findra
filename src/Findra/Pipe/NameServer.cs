@@ -2,6 +2,7 @@ using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Globalization;
 using System.IO.Pipes;
+using System.Runtime;
 using System.Security.AccessControl;
 using System.Security.Principal;
 using System.Threading.Channels;
@@ -668,12 +669,12 @@ public static class NameServer
             int count;
             long bytes;
 
-            // Count and BufferBytes are two reads of an index the tail mutates; taken without the
+            // Count and ResidentBytes are two reads of an index the tail mutates; taken without the
             // lock they can straddle a rehash and disagree with each other.
             using (gate?.Read(letter))
             {
                 count = view.Index.Count;
-                bytes = view.Index.BufferBytes;
+                bytes = view.Index.ResidentBytes;
             }
 
             long lost = 0;
@@ -683,7 +684,7 @@ public static class NameServer
             vols.Add(new VolumeStatus(letter, count, bytes, Live: true,
                                       view.EnumerateMs, view.NextUsn, lost));
         }
-        return new StatusReply(Environment.ProcessId, vols);
+        return new StatusReply(Environment.ProcessId, vols, Environment.WorkingSet);
     }
 
     /// <summary>
@@ -755,7 +756,7 @@ public static class NameServer
                     volumes.Add(vol);
                     tailed.Add((vol, view));
                     Log.Info("names", $"{letter}: {ix.Count:N0} names in " +
-                        $"{enumerateMs / 1000.0:F2}s, {ix.BufferBytes / 1048576} MB, " +
+                        $"{enumerateMs / 1000.0:F2}s, {ix.ResidentBytes / 1048576} MB, " +
                         $"journal cursor {vol.NextUsn}");
                     vol = null;   // handed over to `volumes`, which owns it now
 
@@ -784,6 +785,16 @@ public static class NameServer
             }
 
             if (views.Count == 0) { Log.Error("names", "no volume could be read - is this running elevated?"); return; }
+
+            // Building the indexes doubles every array several times and Trim copies each one
+            // once more, so the pass leaves about half again the live index behind as free heap
+            // the collector keeps committed: on 1.78 million names, 560 MB private for a 195 MB
+            // index. This process is idle for the rest of the session, so it gives that back once.
+            long before = Environment.WorkingSet;
+            GCSettings.LargeObjectHeapCompactionMode = GCLargeObjectHeapCompactionMode.CompactOnce;
+            GC.Collect(2, GCCollectionMode.Aggressive, blocking: true, compacting: true);
+            Log.Info("names", $"gave back the enumeration's growth: working set " +
+                $"{before / 1048576} MB -> {Environment.WorkingSet / 1048576} MB");
 
             // The tail starts BEFORE the first accept, so a client that connects immediately is
             // subscribing to a journal already being read rather than to a silent bus.

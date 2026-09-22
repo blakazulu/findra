@@ -88,8 +88,19 @@ public class UpdatePromptTests
 
         Assert.Equal(UpdatePrompt.UpToDateTitle, UpdatePrompt.Title(UpdatePromptState.UpToDate, null));
         Assert.Contains("0.1.0 is the newest release",
-                        UpdatePrompt.Body(UpdatePromptState.UpToDate, "0.1.0", null, "winget"),
+                        UpdatePrompt.Body(UpdatePromptState.UpToDate, "0.1.0", null, "installer"),
                         StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void AWingetCopyIsUpToDateWithTheCatalogueAndIsToldSo()
+    {
+        // A winget copy asked the catalogue, not the releases page, so "the newest release" would
+        // claim something it never checked: the releases page can be ahead of the catalogue.
+        string body = UpdatePrompt.Body(UpdatePromptState.UpToDate, "0.1.0", null, "winget");
+        Assert.Contains("0.1.0", body, StringComparison.Ordinal);
+        Assert.Contains("winget", body, StringComparison.Ordinal);
+        Assert.DoesNotContain("newest release", body, StringComparison.Ordinal);
     }
 
     [Fact]

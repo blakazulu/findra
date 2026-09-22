@@ -135,6 +135,23 @@ public sealed class VectorStore : IDisposable
 
     // ---- reading (Findra) ----
 
+    /// <summary>The kind byte of every row, read straight from the file beside the vectors, with
+    /// no mapping and no store to open. Empty when there is no file yet. Shared for writing, since
+    /// the indexer holds the file open for as long as it runs.</summary>
+    public static byte[] KindsOnDisk(string? path = null)
+    {
+        string kinds = (path ?? DefaultPath) + ".kinds";
+        try
+        {
+            using var f = new FileStream(kinds, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+            var bytes = new byte[f.Length];
+            f.ReadExactly(bytes);
+            return bytes;
+        }
+        catch (FileNotFoundException) { return []; }
+        catch (DirectoryNotFoundException) { return []; }
+    }
+
     /// <summary>Re-map if the indexer has appended since. Cheap when nothing changed.</summary>
     public bool Reload()
     {
