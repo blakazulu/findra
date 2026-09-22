@@ -134,13 +134,13 @@ Saved in Partner Center, submission id `1152921505701952194`:
 | Pricing and availability | **Complete.** Free (USD 0), all 240 markets incl. future markets, public audience, discoverable, publish as soon as it passes certification, no trial. |
 | Properties | **Complete.** Category Productivity (secondary: Utilities > tools). Privacy: "Yes, my product uses personal information" with `https://findra-search.netlify.app/privacy`. Website `https://findra-search.netlify.app/`, support contact the GitHub issues URL. |
 | Age ratings | **Complete.** IARC questionnaire, every content question answered No; generated ESRB Everyone / PEGI 3 (lowest band). IARC Terms of Use acknowledged. |
-| Store listing (en-US) | **Complete.** Description, short description, the six product features, copyright, license-terms URL and keywords exactly as in the text below; "What's new" left blank for the first submission. Four Desktop screenshots (1366x768 PNG from `packaging/store/listing/`) uploaded in the order firstrun, results, advanced, settings; no per-image captions (optional field). Store logos skipped: Partner Center only offers 9:16 (720x1080) and 1:1 (1080x1080) slots and the 300x300 asset fits neither, so the Store falls back to the MSIX package tiles. |
-| Submission options | Publishing hold left at the default (publish when certified). Notes for certification still to fill - the rich-text editor did not render in the automation browser session; paste the allowElevation text from below plus the helper-task note. |
+| Store listing (en-US) | **Complete.** Description, short description, the six product features, copyright, license-terms URL and keywords exactly as in the text below; "What's new" left blank for the first submission. Four Desktop screenshots (1366x768 PNG from `packaging/store/listing/`) uploaded in the order firstrun, results, advanced, settings, each with its one-line caption from this page. Store logos filled: 1:1 app tile icon 300x300 (`AppTileIcon300.png`), 1:1 box art 1080x1080 and 9:16 poster art 720x1080 (both drawn by Make-Icon.mjs from the same mark geometry). |
+| Submission options | Publishing hold left at the default (publish when certified). Notes for certification filled - for MSIX products the field lives on the product-level Additional Testing Information page, not in the submission's Submission options section. |
 | Packages | **Not started.** The 289 MB `.msixbundle` exceeds the 25 MB upload cap of the automation browser bridge used on the day; upload still pending (Partner Center in a normal browser session, or the Microsoft Store submission API with a Microsoft Entra app associated to the account). The restricted-capability justification field for `allowElevation` appears in this section once a package is uploaded. |
 
-What remains before release: upload the bundle, paste the allowElevation justification and
-certification notes, review, then the owner clicks Submit. Submit was deliberately not
-clicked during the fill.
+What remains before release: upload the bundle, paste the allowElevation justification
+into the restricted-capability field that appears with the package, review, then the owner
+clicks Submit. Submit was deliberately not clicked during the fill.
 
 ### 6. Certification
 
