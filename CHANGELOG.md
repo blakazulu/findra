@@ -7,6 +7,12 @@ and Findra follows [Semantic Versioning](https://semver.org/spec/v2.0.0/).
 
 ## [Unreleased]
 
+### Fixed
+
+- **The website no longer carries Netlify's advertisement.** Netlify writes a comment and two tags
+  into every page it serves, one of them a tracking link to its own sign-up page. They are taken
+  back out before the page reaches you, on every page including "not found".
+
 ## [0.3.1] - 2026-09-22
 
 ### Added

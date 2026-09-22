@@ -645,10 +645,13 @@ and the tiles from the README, so a new run is: paste it, then change every figu
   `ci.yml` and `site.yml`.
 - **`llms.txt` says what Findra is NOT**: no API, accounts, server or MCP server.
 - **The 404 page is ours and lists every real URL.**
-- **Netlify injects a `hosting-provider` meta tag, a `netlify.new` comment and a HUD script**; no file
-  here can stop it. The switch is `built_with_badge_enabled`, set false on 21 September 2026 via
-  `netlify api updateSite` (`hud_enabled` already false); check the live page after deploys.
-  `WebsiteTests` asserts only that OUR sources are clean.
+- **Netlify injects a `netlify.new` comment and `hosting-provider` and `netlify-deploy` meta tags into
+  every HTML response**, 404 included, and `built_with_badge_enabled` false (set 21 September 2026
+  via `netlify api updateSite`; `hud_enabled` already false) does NOT stop it. **The edge function
+  takes it back out** (`withoutNetlifyPromotion`, `path: '/*'` less static files, `onError:
+  'bypass'`); `tests/edge/markdown.test.mjs` runs it on the markup Netlify actually served. It was
+  deleted once by a commit titled as documentation and every page carried the link again the same
+  day: never remove it without checking a live page. Check the live page after deploys.
 
 Most of the site is untested beyond `IconTests` (favicon vs `assets/icon/findra.svg`, header data
 URI) and `SiteShotTests`; the rest holds because somebody reads it.

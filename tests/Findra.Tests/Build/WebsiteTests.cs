@@ -536,16 +536,30 @@ public class WebsiteTests
     {
         string edge = Repo.Read("netlify/edge-functions/markdown.ts");
 
+        // Every path is routed through the function - it also takes Netlify's advertisement out of
+        // the 404 page, which answers any URL - so no page can be left out of `config.path`. What
+        // can still happen is a page falling under an exclusion, and then it is never invoked.
+        string config = edge.Split("export const config")[1];
+        Assert.Contains("path: '/*'", config, StringComparison.Ordinal);
+        string[] excluded = Regex.Matches(Between(config, "excludedPath:", "]"), "'([^']+)'")
+            .Select(m => m.Groups[1].Value).ToArray();
+        Assert.NotEmpty(excluded);
+
         foreach ((string path, string twin) in new[]
                  { ("/", "/index.md"), ("/about/", "/about.md"),
                    ("/contact/", "/contact.md"), ("/privacy/", "/privacy.md"),
                    ("/code-signing/", "/code-signing.md"), ("/changelog/", "/changelog.md") }
-                 .Concat(Guides.Select(g => ($"/{g}/", $"/{g}.md"))))
+                 .Concat(Guides.Select(g => ($"/{g}/", $"/{g}.md")))
+                 .Concat(Pages.Select(p => ($"/{p}/", $"/{p}.md"))))
         {
             Assert.Contains($"'{path}': '{twin}'", edge, StringComparison.Ordinal);
             Assert.True(Repo.Exists($"website/public{twin}"), $"{twin} is declared but not published");
-            // Declared in `config.path` too, or the function is never invoked for that URL at all.
-            Assert.Contains($"'{path}'", edge.Split("export const config")[1], StringComparison.Ordinal);
+
+            foreach (string glob in excluded)
+            {
+                string pattern = "^" + Regex.Escape(glob).Replace(@"\*", ".*") + "$";
+                Assert.False(Regex.IsMatch(path, pattern), $"{path} falls under the exclusion {glob}");
+            }
         }
 
         Assert.Contains("Vary = \"Accept, Accept-Encoding\"", Netlify, StringComparison.Ordinal);

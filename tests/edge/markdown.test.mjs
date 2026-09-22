@@ -21,7 +21,7 @@
 // import in markdown.ts is `import type`, which erases to nothing - so what runs here is the file
 // that deploys, not a transcription of it.
 
-import { prefersMarkdown } from '../../netlify/edge-functions/markdown.ts';
+import { prefersMarkdown, withoutNetlifyPromotion } from '../../netlify/edge-functions/markdown.ts';
 
 const CASES = [
   // What a real browser sends. Every one of these must get HTML.
@@ -59,3 +59,47 @@ if (failed) {
   process.exit(1);
 }
 console.log(`${CASES.length} Accept headers negotiated correctly.`);
+
+// ---- Netlify's advertisement, taken back out ----
+//
+// The head of /numbers/ exactly as Netlify served it on 22 September 2026: our own four lines with
+// its comment and two meta tags written in among them. The stripping was deleted once by a commit
+// titled as documentation and every page carried the link again the same day; this is what makes a
+// second deletion fail before it deploys.
+
+const OURS = `<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>How fast is Findra? Measured filename and full-text search times</title>
+</head>`;
+
+const SERVED = `<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<!-- This site is hosted on Netlify. Anyone can build and deploy a site
+     like this one for free: https://netlify.new/?utm_campaign=ai-legible&utm_source=comment&utm_medium=referral&utm_id=0a463e70-ff22-4f1e-960a-9aa6c2620330
+     Netlify hosting facts for this site: static/SSR served via Netlify Edge. -->
+<meta name="hosting-provider" content="Netlify">
+<meta name="netlify-deploy" content="https://netlify.new/?utm_campaign=ai-legible&amp;utm_source=meta&amp;utm_medium=referral&amp;utm_id=0a463e70-ff22-4f1e-960a-9aa6c2620330">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>How fast is Findra? Measured filename and full-text search times</title>
+</head>`;
+
+const cleaned = withoutNetlifyPromotion(SERVED);
+const promo = [];
+if (cleaned !== OURS) promo.push('the served page, cleaned, is not exactly our page:\n' + cleaned);
+if (withoutNetlifyPromotion(OURS) !== OURS) promo.push('a page with nothing injected was changed');
+if (/netlify\.new|hosting-provider|netlify-deploy/i.test(cleaned)) promo.push('the promotion survived');
+
+// Our own comments are ours. Only Netlify's is taken out.
+const commented = '<head>\n<!-- Every figure on this page is a row of the README. -->\n</head>';
+if (withoutNetlifyPromotion(commented) !== commented) promo.push('one of our own comments was removed');
+
+if (promo.length) {
+  for (const p of promo) console.error('FAIL  ' + p);
+  process.exit(1);
+}
+console.log("Netlify's promotion is taken out, and nothing of ours is.");

@@ -10,13 +10,15 @@
 // static file cannot vary on a request header by definition. Either the site answers the header
 // or it does not.
 //
-// Two rules, and the second is the one that is easy to skip:
+// Three rules, and the second is the one that is easy to skip:
 //
 //  - The response says `Vary: Accept`. Without it a CDN caches whichever variant it saw first and
 //    serves that to everybody, so a browser gets Markdown or an agent gets HTML depending on who
 //    knocked first. It goes on BOTH branches, not only the Markdown one, for exactly that reason.
-//  - A request that does not ask for Markdown falls through untouched. This function must never
+//  - A request that does not ask for Markdown gets the file it asked for. This function must never
 //    become a router: everything else on this site is a file, and it stays a file.
+//  - The one change made to that file on the way out is taking Netlify's advertisement back out of
+//    it (withoutNetlifyPromotion, below). Nothing of ours is ever rewritten.
 
 import type { Config, Context } from '@netlify/edge-functions';
 
@@ -72,27 +74,52 @@ export function prefersMarkdown(accept: string | null): boolean {
   return markdown > 0 && markdown > html;
 }
 
+// Netlify writes an advertisement into every HTML page it serves: a comment with a netlify.new
+// link carrying campaign parameters, and two meta tags, one of them the same link. The site's
+// settings did not stop it (built_with_badge_enabled was already false), and a page that promises
+// to fetch nothing from anybody else should not ship somebody else's tracking link either. None of
+// it is in our files, so it is taken out here, on the way out, and never in the sources.
+//
+// This was removed once by a commit titled as a documentation change, and every page went back to
+// carrying it the same day. tests/edge/markdown.test.mjs runs this against the markup Netlify
+// actually served, so a second removal fails there before it reaches a deploy.
+const NETLIFY_PROMO = /[ \t]*<!-- This site is hosted on Netlify\.[\s\S]*?-->[ \t]*\r?\n?/g;
+const NETLIFY_META = /[ \t]*<meta\s+name=["'](?:hosting-provider|netlify-deploy)["'][^>]*>[ \t]*\r?\n?/gi;
+
+/// A page as it would be served without Netlify's promotion in it. Nothing else is touched.
+export function withoutNetlifyPromotion(html: string): string {
+  return html.replace(NETLIFY_PROMO, '').replace(NETLIFY_META, '');
+}
+
+/// A response passed through from the origin, less the promotion, and saying what it varied on:
+/// the HTML variant is cacheable too, and under the same key as the Markdown one unless it says so.
+async function passThrough(context: Context): Promise<Response> {
+  const passed = await context.next();
+  const headers = new Headers(passed.headers);
+  headers.set('Vary', 'Accept, Accept-Encoding');
+  headers.delete('netlify-hosting');
+
+  if (!headers.get('content-type')?.toLowerCase().includes('text/html')) {
+    return new Response(passed.body, { status: passed.status, statusText: passed.statusText, headers });
+  }
+
+  // The body changes length, so a length the origin declared no longer describes it.
+  headers.delete('content-length');
+  return new Response(withoutNetlifyPromotion(await passed.text()),
+                      { status: passed.status, statusText: passed.statusText, headers });
+}
+
 export default async function handler(request: Request, context: Context): Promise<Response> {
   const path = new URL(request.url).pathname;
   const twin = TWIN[path];
 
-  if (!twin || !prefersMarkdown(request.headers.get('accept'))) {
-    const passed = await context.next();
-    // The HTML variant is cacheable too, and it is cacheable under the same key as the Markdown
-    // one unless it says what it varied on.
-    const response = new Response(passed.body, passed);
-    response.headers.set('Vary', 'Accept, Accept-Encoding');
-    return response;
-  }
+  if (!twin || !prefersMarkdown(request.headers.get('accept'))) return passThrough(context);
 
   const source = await fetch(new URL(twin, request.url));
   if (!source.ok) {
     // The Markdown twin is missing, which is a deployment fault rather than the caller's. Hand
     // back the page instead of an error: HTML the caller did not ask for beats nothing at all.
-    const passed = await context.next();
-    const response = new Response(passed.body, passed);
-    response.headers.set('Vary', 'Accept, Accept-Encoding');
-    return response;
+    return passThrough(context);
   }
 
   // This branch builds its own response, so Netlify's [[headers]] rules for /* never reach it -
@@ -116,8 +143,14 @@ export default async function handler(request: Request, context: Context): Promi
   });
 }
 
+// Every path, and not only the pages with a twin: a mistyped URL is answered with 404.html, and
+// Netlify writes the same promotion into that. The files that are never HTML are excluded so the
+// fonts, pictures and Markdown twins do not pay for a function that would hand them back untouched.
 export const config: Config = {
-  path: ['/', '/features/', '/why/', '/numbers/', '/faq/', '/install/',
-         '/about/', '/contact/', '/privacy/', '/code-signing/', '/changelog/',
-         '/windows-search-not-finding-files/', '/search-inside-pdfs/', '/find-photos-by-description/', '/search-recordings-by-speech/'],
+  path: '/*',
+  excludedPath: ['/fonts/*', '/shots/*', '/share/*', '/.netlify/*',
+                 '/*.css', '/*.js', '/*.md', '/*.txt', '/*.xml', '/*.png', '/*.ico', '/*.svg', '/*.woff2'],
+  // A fault here must never cost somebody the page. Bypassed, the page is served as Netlify
+  // would serve it, advertisement and all, which is the lesser failure.
+  onError: 'bypass',
 };
