@@ -8,7 +8,8 @@
 //     node build/Make-Icon.mjs
 //
 // It writes assets/icon/findra.ico, assets/icon/findra.svg, assets/icon/findra-flat.svg,
-// assets/icon/findra-wizard.png and website/public/favicon.svg, then prints what it wrote.
+// assets/icon/findra-wizard.png, website/public/favicon.svg and the Microsoft Store tiles in
+// packaging/store/Assets, then prints what it wrote.
 //
 // The geometry below is the ONLY definition of the mark. Everything else in the tree - the
 // application icon compiled into findra.exe, the installer's icon, the tray glyph, the site's
@@ -749,6 +750,60 @@ mkdirSync(join(ROOT, 'website', 'public', 'share'), { recursive: true });
 put('website/public/share/card.png', pngOf(shareCard()));
 put('website/public/share/card.txt', Buffer.from(SUBLINE.join(' ') + '\n', 'utf8'));
 put('website/public/share/square.png', pngOf(shareSquare()));
+
+// ---------------------------------------------------------------- Store tiles
+
+// The Microsoft Store's named images, from the same numbers as everything else. Square tiles
+// are the plated mark at the named size - Windows fills their transparent corners with the
+// manifest's BackgroundColor, which is the plate, so the plate and the tile agree by
+// construction. The wide tile and the splash screen are full-bleed rectangles rather than the
+// plate with breathing room: the plate covers the canvas and the glyph alone sits centred at
+// 62% of its height. makeappx reads these from packaging/store/Assets, and StorePackagingTests
+// decodes them the way IconTests decodes the .ico.
+function tile(w, h) {
+  // The glyph's bounding box in design units is x 46..212, y 44..212: centre (129, 128),
+  // height 168. Scale so that height fills 62% of the canvas - the share square's proportion,
+  // which reads as centred rather than cramped at every ratio the Store asks for.
+  const k = (0.62 * h) / 168;                      // pixels per design unit
+  const g = geometry(256);
+  const [pr, pg, pb] = hex(PLATE);
+  const [ar, ag, ab] = hex(ACCENT);
+  const px = Buffer.alloc(w * h * 4);
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      const dx = 129 + (x + 0.5 - w / 2) / k;
+      const dy = 128 + (y + 0.5 - h / 2) / k;
+      const lens = g.slot === null
+        ? sdCircle(dx, dy, g.disc)
+        : Math.max(sdCircle(dx, dy, g.disc),
+                   -sdRoundBox(dx, dy, g.disc.cx, g.disc.cy,
+                               g.slot.w / 2, g.slot.h / 2, g.slot.h / 2));
+      const glyph = Math.min(lens, sdSegment(dx, dy, g.hand));
+      const a = Math.max(0, Math.min(1, 0.5 - glyph * k));
+      const i = (y * w + x) * 4;
+      px[i]     = Math.round(pr + (ar - pr) * a);
+      px[i + 1] = Math.round(pg + (ag - pg) * a);
+      px[i + 2] = Math.round(pb + (ab - pb) * a);
+      px[i + 3] = 255;
+    }
+  }
+  return { w, h, px };
+}
+
+mkdirSync(join(ROOT, 'packaging', 'store', 'Assets'), { recursive: true });
+for (const [name, size] of [['Square44x44Logo.png', 44], ['Square71x71Logo.png', 71],
+                            ['Square150x150Logo.png', 150], ['Square310x310Logo.png', 310],
+                            ['StoreLogo.png', 50]]) {
+  put(`packaging/store/Assets/${name}`, png(size, raster(size)));
+}
+put('packaging/store/Assets/Wide310x150Logo.png', pngOf(tile(310, 150)));
+put('packaging/store/Assets/SplashScreen.png', pngOf(tile(620, 300)));
+
+// Not a package asset but a LISTING one: the Store's product page asks for a 1:1 app tile icon
+// at exactly 300x300, uploaded beside the screenshots. It is the same mark one more time, so it
+// is drawn here rather than scaled by hand from a neighbour.
+mkdirSync(join(ROOT, 'packaging', 'store', 'listing'), { recursive: true });
+put('packaging/store/listing/AppTileIcon300.png', png(300, raster(300)));
 
 console.log(`findra.ico carries ${SIZES.join(', ')}`);
 for (const line of wrote) console.log(line);

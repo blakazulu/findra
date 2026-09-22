@@ -1,0 +1,78 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  The Microsoft Store package definition. Everything in it is final except three values that
+  only exist after a developer account has reserved the app name: Partner Center mints them
+  (Product management > App identity) and they are pasted here, once, in place of the
+  __PLACEHOLDER__ strings. build/Make-Msix.ps1 refuses to pack while any placeholder survives -
+  the same rule the winget manifest's zero hashes keep, because a package built with a made-up
+  identity uploads to nothing.
+
+  Version and ProcessorArchitecture are also placeholders ("0.0.0.0" / "__ARCH__"), but those
+  the build script fills itself: the version from Directory.Build.props with the Store's
+  required fourth part appended, the architecture from the -Rid it was called with. StorePackagingTests
+  pins both placeholder forms so a hand-edit here cannot drift from the one version file.
+-->
+<Package xmlns="http://schemas.microsoft.com/appx/manifest/foundation/windows10"
+         xmlns:uap="http://schemas.microsoft.com/appx/manifest/uap/windows10"
+         xmlns:uap10="http://schemas.microsoft.com/appx/manifest/uap/windows10/10"
+         xmlns:rescap="http://schemas.microsoft.com/appx/manifest/foundation/windows10/restrictedcapabilities"
+         xmlns:desktop="http://schemas.microsoft.com/appx/manifest/desktop/windows10"
+         IgnorableNamespaces="uap uap10 rescap desktop">
+
+  <Identity Name="__PACKAGE_IDENTITY_NAME__"
+            Publisher="__PACKAGE_PUBLISHER__"
+            Version="0.0.0.0"
+            ProcessorArchitecture="__ARCH__" />
+
+  <Properties>
+    <DisplayName>Findra</DisplayName>
+    <PublisherDisplayName>__PUBLISHER_DISPLAY_NAME__</PublisherDisplayName>
+    <Logo>Assets\StoreLogo.png</Logo>
+    <Description>Fast, private desktop search for Windows.</Description>
+  </Properties>
+
+  <Dependencies>
+    <!-- net10.0-windows10.0.19041.0 is the floor the code targets; the package cannot go below it. -->
+    <TargetDeviceFamily Name="Windows.Desktop" MinVersion="10.0.19041.0" MaxVersionTested="10.0.26100.0" />
+  </Dependencies>
+
+  <Resources>
+    <Resource Language="en-us" />
+  </Resources>
+
+  <Applications>
+    <!-- mediumIL + packagedClassicApp is the desktop bridge: the same findra.exe the installer
+         ships, running as the user with package identity. The exe itself stays asInvoker; the
+         one elevated thing Findra needs is still the scheduled task it registers itself. -->
+    <Application Id="Findra" Executable="findra.exe" EntryPoint="Windows.FullTrustApplication"
+                 uap10:TrustLevel="mediumIL" uap10:RuntimeBehavior="packagedClassicApp">
+      <uap:VisualElements DisplayName="Findra"
+                          Description="Fast, private desktop search for Windows"
+                          BackgroundColor="#14141A"
+                          Square150x150Logo="Assets\Square150x150Logo.png"
+                          Square44x44Logo="Assets\Square44x44Logo.png">
+        <uap:DefaultTile Wide310x150Logo="Assets\Wide310x150Logo.png"
+                         Square310x310Logo="Assets\Square310x310Logo.png"
+                         Square71x71Logo="Assets\Square71x71Logo.png" />
+        <uap:SplashScreen Image="Assets\SplashScreen.png" />
+      </uap:VisualElements>
+      <Extensions>
+        <!-- The Run-key entry Autostart.cs writes is virtualised inside a package and reaches
+             nobody. windows.startupTask is the packaged form of the same switch: off until the
+             user turns it on, visible in Settings > Apps > Startup. -->
+        <desktop:Extension Category="windows.startupTask">
+          <desktop:StartupTask TaskId="FindraStartup" Enabled="false" DisplayName="Findra" />
+        </desktop:Extension>
+      </Extensions>
+    </Application>
+  </Applications>
+
+  <Capabilities>
+    <rescap:Capability Name="runFullTrust" />
+    <!-- allowElevation is what lets the packaged process raise the one UAC prompt that
+         registers the names-helper task. It is a RESTRICTED capability: Partner Center asks for
+         a written justification at submission and review can refuse it. The justification and
+         the fallback if it is refused live in docs/store.md. -->
+    <rescap:Capability Name="allowElevation" />
+  </Capabilities>
+</Package>

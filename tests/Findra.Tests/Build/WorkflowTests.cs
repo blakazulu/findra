@@ -652,4 +652,33 @@ public class WorkflowTests
         Assert.True(mentions.Count == 1 && mentions[0] == "winget.yml",
             $"the workflows that reach the catalogue are: [{string.Join(", ", mentions)}]");
     }
+    // ---- the Store -------------------------------------------------------------------------
+
+    [Fact]
+    public void TheStorePackageIsOnlyEverBuiltByAPersonStartingItByHand()
+    {
+        // The catalogue rule, on the Store build, for the same reason: a package that reaches a
+        // Store submission cannot be unpublished into nonexistence, so no push, tag or schedule
+        // may start the workflow that feeds one.
+        string on = TriggerBlock(WithoutComments(Repo.Read(".github/workflows/store.yml")));
+
+        Assert.Contains("workflow_dispatch", on, StringComparison.Ordinal);
+        foreach (string trigger in new[] { "push:", "pull_request:", "release:", "schedule:", "repository_dispatch:" })
+            Assert.DoesNotContain(trigger, on, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void TheStorePackRefusesAnInventedIdentity()
+    {
+        // The three identity values exist only after Partner Center reserves the app name, and
+        // a package built without them uploads to nothing. The refusal lives in the script; the
+        // workflow calling the script is what makes it audible. Asserted on the uncommented
+        // workflow, because the file's own header names the placeholders while explaining them.
+        string script = Repo.Read("build/Make-Msix.ps1");
+        Assert.Contains("__PACKAGE_IDENTITY_NAME__", script, StringComparison.Ordinal);
+        Assert.Contains("__PACKAGE_PUBLISHER__", script, StringComparison.Ordinal);
+
+        string store = WithoutComments(Repo.Read(".github/workflows/store.yml"));
+        Assert.Contains("Make-Msix.ps1", store, StringComparison.Ordinal);
+    }
 }
