@@ -1,0 +1,49 @@
+name: store
+
+# The Microsoft Store package, built only when a person starts it - the same rule the winget
+# catalogue keeps, for the same reason: a package that reaches a Store submission cannot be
+# unpublished into nonexistence, and the identity it claims is the one thing nobody may invent.
+# A tag is not the trigger either: the Store build is not part of a GitHub release, because the
+# two artefacts answer to different identities and different signing stories.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: build
+        run: dotnet build --configuration Release -warnaserror
+
+      - name: test
+        run: dotnet test --configuration Release --no-build
+
+      # The pack REFUSES to run while Package.appxmanifest carries its identity placeholders:
+      # the three values exist only after a Partner Center account reserves the app name, and
+      # Make-Msix.ps1 failing here is the alarm that says they were never filled in.
+      - name: pack msix, one per architecture
+        shell: pwsh
+        run: |
+          pwsh -File build/Make-Msix.ps1 -Rid win-x64
+          pwsh -File build/Make-Msix.ps1 -Rid win-arm64
+
+      # Partner Center takes the bundle: one upload that carries both architectures. Signing is
+      # absent on purpose - Microsoft re-signs after certification, so there is nothing to sign
+      # with here, and an unsigned bundle can never be mistaken for a sideloadable one.
+      - name: bundle the two packages
+        shell: pwsh
+        run: pwsh -File build/Make-Msix.ps1 -Bundle
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: store-msixbundle
+          path: store/bundle/*.msixbundle
