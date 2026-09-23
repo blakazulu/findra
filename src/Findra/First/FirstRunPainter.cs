@@ -286,6 +286,9 @@ public static class FirstRunLayout
     public static FirstRunHit HitTest(float x, float y, FirstRunState s)
     {
         ArgumentNullException.ThrowIfNull(s);
+        // The work card is the only thing up while it is: a second press on the button behind it
+        // would run the whole hand-off twice.
+        if (s.Work is not null) return new FirstRunHit(FirstRunTarget.None, -1);
         return s.Stage == FirstRunStage.Choosing
             ? HitTest(x, y, FirstRun.Rows(s).Count, BandRow(s))
             : WelcomeLayout.HitTest(x, y, s);
@@ -393,6 +396,14 @@ public static class FirstRunPainter
         ArgumentNullException.ThrowIfNull(s);
         ArgumentNullException.ThrowIfNull(d);
 
+        Page(canvas, s, d, face);
+        // Over everything, last: what Findra is doing behind the button that was pressed.
+        if (s.Work is { } work)
+            FirstRunWorkPainter.Paint(canvas, work, FirstRunLayout.SurfaceHeight(s), s.Spin, d, face);
+    }
+
+    private static void Page(SKCanvas canvas, FirstRunState s, Derived d, SKTypeface face)
+    {
         canvas.Clear(SKColors.Transparent);
 
         // The height the window ACTUALLY has, not the choosing act's constant. The window is

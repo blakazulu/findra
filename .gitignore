@@ -21,3 +21,4 @@ installer/redist/
 
 # Browser-automation scratch output (console logs and page snapshots), never source.
 .playwright-mcp/
+docs/user_logs/

@@ -26,6 +26,7 @@ public class SettingsActionTests
         public void StartIndexing() => Calls.Add("start");
         public void OpenLogs() => Calls.Add("logs");
         public void OpenCodecStore(string productId) => Calls.Add("codec:" + productId);
+        public void RemoveAddOn(Capability c, bool forget) => Calls.Add($"remove:{c}:{(forget ? "forget" : "keep")}");
     }
 
     [Fact]
@@ -53,6 +54,7 @@ public class SettingsActionTests
             [SettingsAction.StartIndexing] = "start",
             [SettingsAction.OpenLogs] = "logs",
             [SettingsAction.OpenCodecStore] = "codec:9NMZLZ57R3T7",
+            [SettingsAction.RemoveAddOn] = "remove:Speech:forget",
         };
 
         foreach (SettingsAction action in Enum.GetValues<SettingsAction>())
@@ -63,6 +65,7 @@ public class SettingsActionTests
             string argument = action == SettingsAction.InstallCapability ? nameof(Capability.Photos)
                             : action == SettingsAction.OpenPalettesFile ? @"C:\x\palettes.json"
                             : action == SettingsAction.OpenCodecStore ? "9NMZLZ57R3T7"
+                            : action == SettingsAction.RemoveAddOn ? "Speech|forget"
                             : "";
 
             SettingsActions.Dispatch(action, argument, host);
@@ -117,5 +120,20 @@ public class SettingsActionTests
         var host = new Recorder();
         SettingsActions.Dispatch(SettingsAction.InstallCapability, "Telepathy", host);
         Assert.Empty(host.Calls);
+    }
+
+    [Fact]
+    public void ARemoveThatDoesNotParseRemovesNothing()
+    {
+        // A fallback to the first enum value would delete an add-on nobody asked about.
+        foreach (string bad in new[] { "", "Photos", "Photos|", "Photos|maybe", "Nonsense|keep", "7|keep", "Photos|keep|x" })
+        {
+            var host = new Recorder();
+            SettingsActions.Dispatch(SettingsAction.RemoveAddOn, bad, host);
+            Assert.Empty(host.Calls);
+        }
+        var ok = new Recorder();
+        SettingsActions.Dispatch(SettingsAction.RemoveAddOn, "Photos|keep", ok);
+        Assert.Equal(["remove:Photos:keep"], ok.Calls);
     }
 }

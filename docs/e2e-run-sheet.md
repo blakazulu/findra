@@ -218,9 +218,13 @@ mistyped one prints the list of real modes and exits 1.
 
 Then run each again with output redirected to a file:
 
-    .\findra.exe --searchmodels > out.txt
+    .\findra.exe --searchmodels | Out-File out.txt
 
 **Pass:** the file holds the text and the terminal holds none of it.
+
+A PIPE, not `>`. PowerShell never hands its `>` file to a windows-subsystem program, so
+`.\findra.exe --searchmodels > out.txt` leaves an empty file whatever Findra does (measured in
+5.1 and 7). `cmd /c` with `>` works. Anything we ask a user to run says `| Out-File`.
 
 **Expect the prompt to come back before the text does.** A shell does not wait for a
 windows-subsystem process. That is the one visible cost of step 1.4 and confirming it is only
@@ -823,8 +827,16 @@ into Avalonia, the registry, `schtasks` or the network:
 - press "Register it" on the name helper - **already done in step 2.2**; the row should read
   "registered" now;
 - press "Add a folder", pick one, and confirm it appears in the list and can be removed;
-- press a capability's size button and confirm a download starts and the row turns to "installed" -
-  **already done in step 4.8**;
+- on Models toggle, press a model's "Add" button and confirm a download starts and the row turns to
+  "Turn off / Remove" - **already done in step 4.8**;
+- on Models toggle, press "Turn off" on Photos and video, drop a new photo in a folder Findra reads, and
+  confirm it is left out; press "Turn on" and confirm that photo is read (the catch-up);
+- press "Remove" on an add-on, answer Cancel, then Remove with the tick on: confirm the model files
+  leave `%LOCALAPPDATA%\Findra\models\`, the row offers "Add" again, and a search still finds that
+  add-on's earlier results only if it is added back; remove Speech with Hebrew installed and
+  confirm Hebrew goes too;
+- on a machine with a small graphics card (4 GB or less), confirm Content says "Reading more
+  slowly, because the graphics card is nearly full" rather than waiting, and the photo count moves;
 - press "Check now" and confirm the About line changes;
 - drag the capsule to a far corner, press "Bring the capsule back", and confirm it moves **in this
   session** rather than at the next launch.

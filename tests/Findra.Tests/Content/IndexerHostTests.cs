@@ -114,4 +114,57 @@ public class IndexerHostTests
         host.EnsureRunning();
         Assert.Equal(2, started.Count);
     }
+
+    [Fact]
+    public void WhileItWaitsToRestartTheHostSaysHowLong()
+    {
+        DateTime now = new(2026, 9, 16, 12, 0, 0, DateTimeKind.Utc);
+        var started = new List<FakeChild>();
+        using var host = new IndexerHost(() => { var c = new FakeChild(); started.Add(c); return c; }, () => now);
+
+        host.EnsureRunning();
+        Assert.Equal(0, host.RestartIn);                 // running: nothing to wait for
+
+        // Three crashes in a row: 5 s, then 10, then 20.
+        for (int i = 0; i < 3; i++)
+        {
+            started[^1].Kill();
+            now = now.AddSeconds(1);
+            host.EnsureRunning();
+            if (started[^1].Alive && i < 2) continue;
+            now = now.AddSeconds(30);
+            host.EnsureRunning();
+        }
+        started[^1].Kill();
+        now = now.AddSeconds(1);
+        host.EnsureRunning();
+
+        Assert.False(host.Running);
+        Assert.InRange(host.RestartIn, 1, 300);
+    }
+
+    [Fact]
+    public void AChildThatRanWellForAWhileRestartsQuicklyAfterACrash()
+    {
+        // The backoff is for a file that takes the process down every time. A reader that worked
+        // for an hour and then met one bad file is not a storm, and making it wait five minutes
+        // because of crashes last week read as "nothing is happening" on every surface.
+        DateTime now = new(2026, 9, 16, 12, 0, 0, DateTimeKind.Utc);
+        var started = new List<FakeChild>();
+        using var host = new IndexerHost(() => { var c = new FakeChild(); started.Add(c); return c; }, () => now);
+
+        host.EnsureRunning();
+        for (int i = 0; i < 6; i++)                      // a bad patch: the backoff climbs
+        {
+            started[^1].Kill();
+            now = now.AddSeconds(301);
+            host.EnsureRunning();
+        }
+
+        now = now.AddMinutes(IndexerHost.HealthyMinutes + 1);   // then a long, healthy run
+        started[^1].Kill();
+        now = now.AddSeconds(1);
+        host.EnsureRunning();
+        Assert.InRange(host.RestartIn, 1, 5);
+    }
 }

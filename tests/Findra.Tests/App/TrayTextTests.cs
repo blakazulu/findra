@@ -112,7 +112,7 @@ public class UpdateMemoryTests
         // ABOVE the update line. Windows truncates a tray tooltip, and the update state is the
         // same all day while this one moves every second - so a truncation should lose the still
         // thing rather than the moving one.
-        Assert.Equal("Indexing 1,333 · 640 done", lines[2]);
+        Assert.Equal("Reading your files · 640 done · 1,333 to go", lines[2]);
         Assert.Equal("Up to date", lines[3]);
     }
 
@@ -142,7 +142,8 @@ public class TrayTooltipLengthTests
         // update line, and three separators. Measured from IndexStatus itself rather than from a
         // sentence written out here, so the day that line grows this fails rather than the tray.
         string worst = IndexStatus.Line(contentEnabled: true, state: "", pending: 12_345_678,
-                                        indexed: 87_654_321, alive: false, rebuilt: false);
+                                        indexed: 87_654_321, alive: true, rebuilt: false,
+                                        new IndexExtra(Around: nameof(ResultKind.Photo)));
 
         string tip = TrayText.Tooltip("1.10.0-something", null, UpdateState.Available, "v1.10.0", worst);
 

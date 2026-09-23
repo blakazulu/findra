@@ -66,6 +66,8 @@ public sealed class Indexer
     private double _rateWindowStart;
     private long _rateWindowDone;
     private string _rate = "";
+    private string _processorWhy = "";
+    private string _aroundKind = "";
 
     private Indexer(ContentDb db, int parentPid, IDecoders decoders)
     {
@@ -109,7 +111,8 @@ public sealed class Indexer
             // move while this process runs - the transcription limit, and which models are on
             // disk - are read through delegates rather than captured, so each of them reaches the
             // next file rather than the next launch.
-            using IDecoders decoders = Decoders.ForThisMachine(() => TranscribeMinutes(db), beat: beat);
+            using IDecoders decoders = Decoders.ForThisMachine(() => TranscribeMinutes(db), beat: beat,
+                                                               off: () => AddOns.Parse(db.Get(AddOns.OffKey)));
             using var gate = new MachineGate(() => decoders.Installed, parent);
             Loop(db, parent, () => true, decoders, (isDelete, kind) => gate.Ask(isDelete, kind));
             Log.Info("index", "indexer down (clean)");
@@ -209,6 +212,12 @@ public sealed class Indexer
             _db.Set("indexer:done", _done.ToString(CultureInfo.InvariantCulture));
             _db.Set("indexer:failed", _failed.ToString(CultureInfo.InvariantCulture));
             _db.Set("indexer:rate", _rate);
+            // Why pictures and meaning are being read on the processor, or empty when they are not.
+            // Not a state of its own: the indexer is working either way, only slower.
+            _db.Set("indexer:processor", _processorWhy);
+            // The kind waiting for the card while other files are read, or empty. What the surfaces
+            // say "photos wait" or "recordings wait" from.
+            _db.Set("indexer:around", _aroundKind);
             _db.Set("indexer:pending", _db.PendingCount().ToString(CultureInfo.InvariantCulture));
             _db.Set("indexer:beat", DateTimeOffset.UtcNow.ToUnixTimeSeconds().ToString(CultureInfo.InvariantCulture));
             _db.Set("indexer:pid", Environment.ProcessId.ToString(CultureInfo.InvariantCulture));
@@ -239,6 +248,7 @@ public sealed class Indexer
         long stuck = -1;
         var lastStatus = Stopwatch.StartNew();
         var idleFor = new Stopwatch();
+        bool workingAround = false;
         while (running())
         {
             if (ParentGone()) { Status("stopped"); return; }
@@ -277,6 +287,26 @@ public sealed class Indexer
                 // Only for the card. Fullscreen holds these too: a game may be loading from the
                 // same disk, and a batch of stats is still disk work.
                 if (verdict.State == IndexGate.GpuBusy && SettledWhileTheCardIsBusy(item)) continue;
+                ContentDb.Pending? instead = verdict.State == IndexGate.GpuBusy ? NotHeldBack(item.Kind, gate) : null;
+                if (instead is { } other)
+                {
+                    _aroundKind = item.Kind.ToString();
+                    if (!workingAround)
+                    {
+                        Log.Info("index", $"the card is busy ({verdict.Reason}) - {item.Kind} files wait, " +
+                                          "reading the ones that do not need it meanwhile");
+                        workingAround = true;
+                    }
+                    // What the held file would have loaded is still on the card otherwise.
+                    LetModelsGo(verdict.State);
+                    item = other;
+                    // Asked again for the file actually taken: it may run, but on the processor.
+                    verdict = gate(false, other.Kind);
+                }
+            }
+            else { workingAround = false; _aroundKind = ""; }
+            if (!verdict.Run)
+            {
                 if (lastState != verdict.State)
                 {
                     Log.Info("index", $"indexer waits: {verdict.State}" + (verdict.Reason.Length > 0 ? $" ({verdict.Reason})" : ""));
@@ -305,6 +335,15 @@ public sealed class Indexer
                 continue;
             }
             if (lastState != "indexing") { Log.Info("index", "indexer working"); lastState = "indexing"; }
+
+            // Where this file's models open. Only a file that loads one says anything: a document
+            // with no meaning model has no opinion, and a delete loads nothing.
+            if (item.Reason != ContentDb.ReasonDelete && IndexGate.UsesModels(item.Kind, _decoders.Installed))
+            {
+                bool processor = verdict.State == IndexGate.OnProcessor;
+                _decoders.OnProcessor(processor, verdict.Reason);
+                _processorWhy = processor ? verdict.Reason : "";
+            }
 
             // Counted and committed BEFORE the file is opened, which is what makes it work at all.
             // A decoder that throws is already handled - the row is recorded Failed and dequeued -
@@ -449,6 +488,25 @@ public sealed class Indexer
         {
             Log.Once("index|settle", "WARN", "index", "a queued file could not be checked while waiting :: " + ex.Message);
             return false;
+        }
+    }
+
+    /// <summary>The oldest queued file the card is NOT holding back, when the one at the front is
+    /// held. The queue is taken in order, so one photo at the front used to stop every document
+    /// behind it for as long as another program sat on the card, and reading words never touches
+    /// the card. Each other kind is put to the same gate, so what counts as needing the card stays
+    /// the gate's decision. Only for the card: fullscreen holds everything alike.</summary>
+    private ContentDb.Pending? NotHeldBack(ResultKind held, Func<bool, ResultKind, GateVerdict> gate)
+    {
+        var free = new List<ResultKind>();
+        foreach (ResultKind k in Enum.GetValues<ResultKind>())
+            if (k != held && FileKinds.HasContent(k) && gate(false, k).Run) free.Add(k);
+        if (free.Count == 0) return null;
+        try { return _db.TakeNextOf(free); }
+        catch (Exception ex)
+        {
+            Log.Once("index|nextfree", "WARN", "index", "could not look past a file waiting for the card :: " + ex.Message);
+            return null;
         }
     }
 

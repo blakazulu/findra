@@ -30,6 +30,10 @@ public interface ISettingsHost
     /// itself - the same rule updates follow - so this opens a page and gets out of the way.
     /// </summary>
     void OpenCodecStore(string productId);
+
+    /// <summary>Remove an add-on's files (keeping any another add-on still needs) and, when
+    /// <paramref name="forget"/>, re-read what it found so its findings are dropped.</summary>
+    void RemoveAddOn(Capability addOn, bool forget);
 }
 
 public static class SettingsActions
@@ -65,6 +69,18 @@ public static class SettingsActions
                 if (Enum.TryParse(argument, ignoreCase: false, out Capability c)) host.InstallCapability(c);
                 else Log.Warn("settings", $"'{argument}' names no capability; nothing was installed");
                 return;
+
+            case SettingsAction.RemoveAddOn:
+            {
+                // "Photos|keep". Anything that does not parse removes nothing: a fallback to the
+                // first enum value would delete an add-on nobody asked about.
+                string[] parts = argument.Split('|');
+                if (parts.Length == 2 && Enum.TryParse(parts[0], ignoreCase: false, out Capability gone)
+                    && Enum.IsDefined(gone) && parts[1] is "keep" or "forget")
+                    host.RemoveAddOn(gone, forget: parts[1] == "forget");
+                else Log.Warn("settings", $"'{argument}' names no add-on to remove; nothing was removed");
+                return;
+            }
 
             default:
                 throw new ArgumentOutOfRangeException(nameof(action), action, "no settings action arm for this value");

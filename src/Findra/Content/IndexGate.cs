@@ -14,6 +14,11 @@ public readonly record struct GateVerdict(bool Run, string State, string Reason)
     public static readonly GateVerdict Go = new(true, "", "");
 }
 
+/// <summary>What is wrong with the card, if anything: nothing, too little of its memory left for
+/// Findra's models, or another program working one of its engines. Worst last, because a held
+/// reading keeps the worst it has seen.</summary>
+public enum GpuPressure { None, Memory, Engine }
+
 /// <summary>
 /// Whether the indexer may open the next file now, or has to step aside for somebody else.
 ///
@@ -49,15 +54,66 @@ public static class IndexGate
     /// words; nothing else should compare against them by hand.</summary>
     public const string Fullscreen = "fullscreen", GpuBusy = "gpu busy";
 
+    /// <summary>Not a wait: go ahead, on the processor. What a card too full for the models answers
+    /// for everything that can be moved there.</summary>
+    public const string OnProcessor = "processor";
+
+    /// <summary>
+    /// Whether what Windows says about the person at the screen holds reading back, and the words
+    /// for it. The number is <c>SHQueryUserNotificationState</c>'s answer.
+    ///
+    /// <para><b>Quiet time (6) does not hold.</b> It is not Focus Assist: Windows documents it as
+    /// the first hour after a person's first sign-in following a clean install or an upgrade - the
+    /// very hour a new machine's owner installs Findra, which then read nothing for an hour while
+    /// saying something was fullscreen. Neither is not-present (1), a locked screen, which is the
+    /// best time there is to read files.</para>
+    /// </summary>
+    public static (bool Hold, string Reason) Holds(int notificationState) => notificationState switch
+    {
+        3 => (true, "a fullscreen game"),
+        2 => (true, "a fullscreen app"),
+        4 => (true, "presentation mode"),
+        _ => (false, ""),
+    };
+
     /// <summary>The whole rule, as a pure function, so the order can be tested without a card.</summary>
     public static GateVerdict Decide(bool isDelete, bool usesModels, bool fullscreen, string fullscreenReason,
                                      bool gpuBusy, string gpuReason)
+        => Decide(isDelete, usesModels, usesSpeech: false, fullscreen, fullscreenReason,
+                  gpuBusy ? GpuPressure.Engine : GpuPressure.None, gpuReason);
+
+    /// <summary>
+    /// The same, knowing WHY the card is busy.
+    ///
+    /// <para><b>A card too full is not a reason to wait.</b> On a small card the ordinary desktop
+    /// alone holds most of it - a 3 GB card with 2 GB in use by nothing in particular - and waiting
+    /// for room there meant photos were not read for hours. Pictures and meaning run through the
+    /// same models on the processor, slower, and the processor never touches the card. A card
+    /// somebody is WORKING still makes everything that needs it wait: that is a game or a model,
+    /// and the gate exists for it.</para>
+    ///
+    /// <para>Speech is the exception. Its runtime is chosen once per process, so a recording
+    /// cannot move to the processor in the middle of a session; it waits as before.</para>
+    /// </summary>
+    public static GateVerdict Decide(bool isDelete, bool usesModels, bool usesSpeech, bool fullscreen,
+                                     string fullscreenReason, GpuPressure pressure, string gpuReason)
     {
         if (isDelete) return GateVerdict.Go;
         if (fullscreen) return new(false, Fullscreen, fullscreenReason);
-        if (usesModels && gpuBusy) return new(false, GpuBusy, gpuReason);
-        return GateVerdict.Go;
+        if (!usesModels) return GateVerdict.Go;
+        return pressure switch
+        {
+            GpuPressure.Engine => new(false, GpuBusy, gpuReason),
+            GpuPressure.Memory when usesSpeech => new(false, GpuBusy, gpuReason),
+            GpuPressure.Memory => new(true, OnProcessor, gpuReason),
+            _ => GateVerdict.Go,
+        };
     }
+
+    /// <summary>Would reading a file of this kind load the speech model? Recordings, and videos
+    /// once Speech is installed (their sound is transcribed).</summary>
+    public static bool UsesSpeech(ResultKind kind, CapabilitySet installed)
+        => installed.Has(Capability.Speech) && kind is ResultKind.Audio or ResultKind.Video;
 
     /// <summary>Does reading a file of this kind load a model onto the accelerator, given what is
     /// installed? Documents only through the meaning model; every other kind the indexer reads
@@ -102,15 +158,39 @@ public sealed class GpuHold
     private bool _busy;
     private string _reason = "";
     private double _freeSince = -1;
+    private double _lowerSince = -1;
 
-    public (bool Busy, string Reason, bool Changed) Update(bool busyNow, string why, double nowSeconds)
+    /// <summary>What the held reading is about. The worst seen since the card was last free, so a
+    /// game started over a full card is waited for rather than read around.</summary>
+    public GpuPressure Pressure { get; private set; }
+
+    public (bool Busy, string Reason, bool Changed) Update(bool busyNow, string why, double nowSeconds,
+                                                           GpuPressure kind = GpuPressure.Engine)
     {
         if (busyNow)
         {
             _freeSince = -1;
-            bool changed = !_busy;
+            bool changed = !_busy || kind > Pressure;
             _busy = true;
-            _reason = why;
+            if (kind >= Pressure)
+            {
+                Pressure = kind;
+                _reason = why;
+                _lowerSince = -1;
+            }
+            else
+            {
+                // Still busy, but for a lesser reason - the game closed and the card is merely
+                // full. The same minute as clearing, so a pause between rounds is not a step down.
+                if (_lowerSince < 0) _lowerSince = nowSeconds;
+                if (nowSeconds - _lowerSince >= IndexGate.ClearSeconds)
+                {
+                    Pressure = kind;
+                    _reason = why;
+                    _lowerSince = -1;
+                    changed = true;
+                }
+            }
             return (true, _reason, changed);
         }
         if (!_busy) return (false, "", false);
@@ -119,6 +199,8 @@ public sealed class GpuHold
         _busy = false;
         _reason = "";
         _freeSince = -1;
+        _lowerSince = -1;
+        Pressure = GpuPressure.None;
         return (false, "", true);
     }
 }
@@ -145,7 +227,7 @@ public sealed class MachineGate : IDisposable
     private IntPtr _query, _engine, _procMem, _adapterMem;
     private bool _countersBroken;
     private double _sampledAt = double.NegativeInfinity;
-    private bool _gpuBusy;
+    private GpuPressure _gpuPressure;
     private string _gpuReason = "";
     private double _quietAt = double.NegativeInfinity;
     private bool _quiet;
@@ -177,9 +259,11 @@ public sealed class MachineGate : IDisposable
     {
         if (isDelete) return GateVerdict.Go;
         (bool quiet, string quietWhy) = Quiet();
-        bool usesModels = IndexGate.UsesModels(kind, _installed());
-        (bool busy, string busyWhy) = usesModels && !quiet ? Gpu() : (false, "");
-        return IndexGate.Decide(isDelete, usesModels, quiet, quietWhy, busy, busyWhy);
+        CapabilitySet installed = _installed();
+        bool usesModels = IndexGate.UsesModels(kind, installed);
+        (GpuPressure pressure, string busyWhy) = usesModels && !quiet ? Gpu() : (GpuPressure.None, "");
+        return IndexGate.Decide(isDelete, usesModels, IndexGate.UsesSpeech(kind, installed), quiet, quietWhy,
+                                pressure, busyWhy);
     }
 
     /// <summary>What the gate would say about the heaviest file there is, for <c>--searchprobe</c>.
@@ -213,14 +297,7 @@ public sealed class MachineGate : IDisposable
             // NotPresent - a locked screen, a screen saver, another user switched in - is the best
             // time there is to read files, not a reason to stop.
             (_quiet, _quietReason) = SHQueryUserNotificationState(out Quns st) == 0
-                ? st switch
-                {
-                    Quns.RunningD3dFullScreen => (true, "a fullscreen game"),
-                    Quns.Busy => (true, "a fullscreen app"),
-                    Quns.PresentationMode => (true, "presentation mode"),
-                    Quns.QuietTime => (true, "Focus Assist"),
-                    _ => (false, ""),
-                }
+                ? IndexGate.Holds((int)st)
                 : (false, "");
         }
         catch (Exception ex)
@@ -233,42 +310,35 @@ public sealed class MachineGate : IDisposable
 
     // ---- the card ----
 
-    private (bool, string) Gpu()
+    private (GpuPressure, string) Gpu()
     {
         double now = _clock.Elapsed.TotalSeconds;
         if (now - _sampledAt >= SampleSeconds)
         {
             _sampledAt = now;
-            (bool busyNow, string why) = Sample();
-            (bool busy, string reason, bool changed) = _hold.Update(busyNow, why, now);
+            (GpuPressure seen, string why) = Sample();
+            (bool busy, string reason, bool changed) = _hold.Update(seen != GpuPressure.None, why, now, seen);
             if (changed)
-                Log.Info("index", busy
-                    ? $"gpu gate: busy ({reason}) - the indexer waits and lets its models go"
-                    : $"gpu gate: the card has been free for {IndexGate.ClearSeconds.ToString("0", CultureInfo.InvariantCulture)} s");
-            _gpuBusy = busy;
+                Log.Info("index", !busy
+                    ? $"gpu gate: the card has been free for {IndexGate.ClearSeconds.ToString("0", CultureInfo.InvariantCulture)} s"
+                    : _hold.Pressure == GpuPressure.Memory
+                        ? $"gpu gate: too full ({reason}) - pictures and meaning are read on the processor, speech waits"
+                        : $"gpu gate: busy ({reason}) - the indexer waits and lets its models go");
+            _gpuPressure = busy ? _hold.Pressure : GpuPressure.None;
             _gpuReason = reason;
         }
-        return (_gpuBusy, _gpuReason);
+        return (_gpuPressure, _gpuReason);
     }
 
-    private (bool, string) Sample()
+    // Engines FIRST: a card somebody is working is a wait, a card that is only full is a move to
+    // the processor, and a game on a full card has to read as the first of those.
+    private (GpuPressure, string) Sample()
     {
-        if (_countersBroken) return (false, "");
+        if (_countersBroken) return (GpuPressure.None, "");
         try
         {
-            if (_query == IntPtr.Zero && !Open()) return (false, "");
-            if (PdhCollectQueryData(_query) != 0) return (false, "");
-
-            // Memory: the card's dedicated use, less Findra's own share of it.
-            double adapter = 0, ours = 0;
-            foreach ((string name, double v) in Read(_adapterMem))
-                if (name.StartsWith(_luid, StringComparison.OrdinalIgnoreCase)) adapter += v;
-            foreach ((string name, double v) in Read(_procMem))
-                if (Mine(name) && name.Contains(_luid, StringComparison.OrdinalIgnoreCase)) ours += v;
-            long others = (long)Math.Max(0, adapter - ours);
-            long need = Capabilities.TotalBytes(_installed().Have ?? new HashSet<Capability>()) + IndexGate.Margin;
-            if (IndexGate.MemoryBusy(_cardBytes, others, need))
-                return (true, $"other programs hold {Sizes.Human(others)} of the card's {Sizes.Human(_cardBytes)}");
+            if (_query == IntPtr.Zero && !Open()) return (GpuPressure.None, "");
+            if (PdhCollectQueryData(_query) != 0) return (GpuPressure.None, "");
 
             // Engines: another program working the card hard.
             var perPid = new Dictionary<int, double>();
@@ -286,15 +356,26 @@ public sealed class MachineGate : IDisposable
                 string proc = NameOf(pid);
                 // Composing the desktop is not a workload somebody is waiting on.
                 if (proc.Equals("dwm", StringComparison.OrdinalIgnoreCase)) continue;
-                return (true, $"{proc} is using {util.ToString("0", CultureInfo.InvariantCulture)}% of the card");
+                return (GpuPressure.Engine, $"{proc} is using {util.ToString("0", CultureInfo.InvariantCulture)}% of the card");
             }
-            return (false, "");
+
+            // Memory: the card's dedicated use, less Findra's own share of it.
+            double adapter = 0, ours = 0;
+            foreach ((string name, double v) in Read(_adapterMem))
+                if (name.StartsWith(_luid, StringComparison.OrdinalIgnoreCase)) adapter += v;
+            foreach ((string name, double v) in Read(_procMem))
+                if (Mine(name) && name.Contains(_luid, StringComparison.OrdinalIgnoreCase)) ours += v;
+            long others = (long)Math.Max(0, adapter - ours);
+            long need = Capabilities.TotalBytes(_installed().Have ?? new HashSet<Capability>()) + IndexGate.Margin;
+            if (IndexGate.MemoryBusy(_cardBytes, others, need))
+                return (GpuPressure.Memory, $"other programs hold {Sizes.Human(others)} of the card's {Sizes.Human(_cardBytes)}");
+            return (GpuPressure.None, "");
         }
         catch (Exception ex)
         {
             _countersBroken = true;
             Log.Once("index|gpugate", "WARN", "index", $"gpu gate: the GPU counters could not be read, the gate is off :: {ex.GetType().Name}: {ex.Message}");
-            return (false, "");
+            return (GpuPressure.None, "");
         }
     }
 

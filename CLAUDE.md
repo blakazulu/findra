@@ -57,7 +57,7 @@ findra.exe --searchprobe [query]      # end to end: which process answered, the 
 findra.exe --searchmodels             # models present, loading, agreeing; provider per runtime
 findra.exe --searchindex [file|folder|q:query|why:path]...   # indexed/queued; paths queue and
                                       # drain, q: queries, why:<path> explains ONE file, read-only
-findra.exe --searchshot out.png <state> [palette]   # twenty-seven states, listed below
+findra.exe --searchshot out.png <state> [palette]   # thirty states, listed below
 findra.exe --searchtest               # engine self-check
 findra.exe --searchbench [out.md] [corpus]   # measured numbers, pasteable Markdown; `corpus` is
                                       # how many files it generates
@@ -65,15 +65,15 @@ findra.exe --version                  # print the version and log location, then
 ```
 
 The `--searchshot` states are `SearchShot.States`, and that list is the only definition of them.
-Twelve draw the card, eight the settings window and seven the first-run screen:
+Twelve draw the card, ten the settings window and eight the first-run screen:
 
 ```
 capsule  empty  indexing  contentmode  contentwaiting  typing  results  noresults  many  adv
 opening  openingempty
-settings  settingsopening  settingssearches  settingscontent  settingsabout
+settings  settingsopening  settingssearches  settingscontent  settingsaddons  settingsremove  settingsabout
 settingsuptodate  settingsupdate  settingsasking
 firstrun  firstruninstalled  firstrunspeech  firstrundownloading
-firstrunfinished  firstrunready  firstrunnames
+firstrunfinished  firstrunready  firstrunnames  firstrunworking
 ```
 
 - `contentwaiting` is the Content pill NOT offering (reading on, nothing read yet), hovered on
@@ -97,6 +97,8 @@ replaced by them** (they drive the capability path in CI, headless, and in bug r
 findra.exe --models                   # what is installed, and what each capability would add
 findra.exe --models install <preset|cap[,cap]>   # justnames | recommended | everything, or
                                       # photos, meaning, speech, hebrew
+findra.exe --models remove <cap> [--forget] [--dry-run]   # one add-on, the Settings rules
+                                      # (Speech takes Hebrew; Meaning under Speech turns off)
 findra.exe --content [on|off]         # is Findra reading inside files at all
 findra.exe --content limit <length>   # off | 5 | 30 | 2 hours | no limit | any number of minutes
 ```
@@ -161,6 +163,12 @@ and its default arm throws.
 - **The reading hold has THREE endings, two of them events.** A screen that never ASKED has nobody
   to clear it; `WhenTheWelcomeScreenIsGone` reads `FirstRunWindow.AskedAboutReading` to tell that
   from "Later".
+- **A button's work is shown, never hidden behind a frozen window.** `FirstRunState.Work` (a
+  `FirstRunWork`) is a step card over the page; the hit test refuses everything while it is up.
+  "Get these" shows it and POSTS `Answered`, so the card is drawn first; the shell ticks each step
+  (`StepDone`), awaits `FirstRunWindow.Frame()` after each tick, and calls `EndWork()` in a
+  finally - which is when the next page (and the resize) happens. Steps may finish out of order
+  (name search waits for the UAC answer); the spinner stays on the first unfinished one.
 - **The hit test takes the STATE, never the five bounds.** `FirstRunLayout.HitTest(x, y, state)`
   derives everything from the state the painter reads. `FirstRun.LimitRow` is not
   `FirstRunLayout.BandRow` (which `SurfaceHeight` and the painter read); mixing them made the last
@@ -205,6 +213,42 @@ surface's own hit-test answer.
 - `PointerCursor.Of` builds cursors ON DEMAND and keeps them, never in a static initialiser (same
   reasoning as `Parts.Face`).
 
+## Models toggle in Settings
+
+Settings has six sections; **Models toggle** (`Section.AddOns`, "add-on" in code) holds the four capability rows (Content keeps the switch,
+"Reading now", power and the transcription limit). Not installed: "Add · <marginal size>".
+Installed: a Choice of "Turn off"/"Turn on" and "Remove". `SettingsModel.AddOnRows`.
+
+- **Off is `Config.AddOnsOff`**, written to `AddOns.OffKey` by the pump and read by the child per
+  file (`Decoders.ForThisMachine(off:)` -> `CapabilitySet.Without`). Off stops NEW reading only;
+  search keeps working (the query side reads what is on disk). Speech off takes Hebrew; Meaning
+  off does not take Speech.
+- **Every re-queue plans against what READS** (`installed.Without(off)`), or an off add-on's
+  NoModel skips are re-queued on every launch for a child that skips them again.
+- **Coming back catches up exactly**: `AddOns.NoteAway` records when it stopped (the earlier of two
+  wins), `AddOns.CatchUp` re-queues its kinds read since then (`RequeueKinds(readSince:)`, on
+  `indexed_at`). Called at startup, after an install, and on Turn on.
+- **Remove asks first** (`RemovePrompt`, over the pane like the update panel; Escape cancels).
+  `AddOns.FilesToDelete` keeps any file an add-on that stays still needs; Meaning under Speech
+  deletes nothing, so its button says "Turn off" and that is what happens. Speech takes Hebrew.
+  The reader is told first (off row), then files are deleted with retries; a file still held goes
+  on `AddOns.LeftoverKey`, swept at the next start before any model opens.
+- **"Keep what was found" is ticked by default.** Unticked, `AddOns.Forget` re-queues the kinds
+  (videos with `Reframe`, so the transcript stays); the child drops findings it can no longer
+  read. For Photos and Meaning, kept findings are NOT searchable without the model - the words
+  say "so adding it back later is quick".
+
+## Plain words
+
+Status text is for somebody who has never heard of an index, a GPU or a codec, and says whether
+they need to do anything. `IndexStatus` composes all of it from `IndexExtra` (the kind waiting for
+the card `indexer:around`, processor reason `indexer:processor`, `IndexStatus.RestartInKey`,
+files left out and failed, the first-run hold); `IndexStatus.Sentence` is the Settings line under
+"Reading now". **Counts are files DONE** (read + left out + failed), so a pass through skipped
+files moves. `default(IndexExtra)` carries null strings - read them with `IsNullOrEmpty`.
+`IndexerHost.RestartIn` replaces "Findra is closed" during a crash backoff; a child that ran
+`HealthyMinutes` resets the backoff.
+
 ## The progress pill
 
 Under the card and under the capsule's bar: dial, what is being read, count, percentage. **The pill
@@ -243,12 +287,23 @@ The power setting shapes how hard Findra works; **`IndexGate` decides whether ot
 
 - **Asked before every file, in `Indexer.Loop`**, after the pause switch and before the attempt is
   counted. Fullscreen first (`SHQueryUserNotificationState`; `NotPresent`, a locked screen, does not
-  count), then the card.
-- **The card is busy when another process works one of its engines over 30%**, or other programs'
-  memory leaves less than the installed models plus a margin (only once they exceed an ordinary
-  desktop). Busy at once, free after a minute of free readings (`GpuHold`). PDH English counter
-  paths, keyed by the adapter LUID from `GpuAdapter`.
+  count), then the card. `IndexGate.Holds` decides which states hold: fullscreen app, game,
+  presentation. **Quiet time (6) is NOT Focus Assist** - it is the first hour after a first
+  sign-in on a clean install or upgrade, when a new machine's owner installs Findra; never hold it.
+- **Two kinds of busy card (`GpuPressure`), engines checked first.** `Engine`: another process
+  works one of its engines over 30% - everything that needs the card WAITS. `Memory`: other
+  programs leave less than the installed models plus a margin (only once they exceed an ordinary
+  desktop) - pictures and meaning run ON THE PROCESSOR instead (`IndexGate.OnProcessor`, a verdict
+  that runs; `IDecoders.OnProcessor` drops loaded models on a change; `indexer:processor` carries
+  the reason). Speech still waits: its runtime is chosen once per process (`IndexGate.UsesSpeech`).
+  Found on a 3 GB GTX 1060 whose desktop alone held 2 GB: photos waited all afternoon. Busy at
+  once, free after a minute of free readings, and a step DOWN from engine to memory takes the same
+  minute (`GpuHold.Pressure`). PDH English counter paths, keyed by the adapter LUID from
+  `GpuAdapter`.
 - **Only a file that would load a model waits for the card**; fullscreen holds everything but deletes.
+  **The queue does not stop behind a held file**: `Indexer.NotHeldBack` takes the oldest row of a
+  kind the gate lets through (`ContentDb.TakeNextOf`, on `pending_kind`), so documents keep going
+  while photos wait. A held file that is gone or unchanged is settled without waiting.
 - **Anything that cannot be measured is not busy.**
 - **Waiting means holding no models**: `IDecoders.Unload` on every wait and a minute after the queue
   empties.

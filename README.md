@@ -122,9 +122,11 @@ then it stays unloaded, so a model that has nothing to search costs no memory.
 `findra --searchshot docs/shots/settings.png settingscontent Paper`
 
 Settings is on the card itself, under Advanced, as well as on the tray icon and a right-click
-on the capsule. "Start now" begins reading inside files in that session and the sentence above
-it says so; "Indexing power" is how much of the machine that reading may take, which the
-indexer has always honoured and until now could only be changed by hand.
+on the capsule. "Start now" begins reading inside files in that session, and the line under it
+says in plain words what reading is doing - including when it is waiting, and for what;
+"Indexing power" is how much of the machine that reading may take. Each model (photos and video,
+meaning, speech, Hebrew) has its own row on the Models toggle page, where it can be added, turned off
+or removed; removing asks first, and keeps what was already found unless you say otherwise.
 
 A global hotkey opens the card from anywhere, over whatever you were doing. If the
 combination you asked for is already taken, Findra walks a fallback chain, takes the first
@@ -155,10 +157,11 @@ these, and every image above was drawn by the same painter the window uses.
     findra --searchshot out.png results Mond   render any surface to a PNG
     findra --searchbench out.md 10000 measured numbers, as Markdown fit to paste
     findra --models install recommended        take a capability from the command line
+    findra --models remove speech --dry-run    what removing one would delete and free
     findra --content on               start reading inside files
     findra --uninstall --dry-run      what removing Findra would do, without doing it
 
-`findra --searchshot` draws twenty-seven surfaces in any of the six palettes, which is how the
+`findra --searchshot` draws thirty surfaces in any of the six palettes, which is how the
 images on this page are made and how they are regenerated. The command under each image is
 the whole recipe.
 

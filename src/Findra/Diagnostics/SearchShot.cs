@@ -23,10 +23,11 @@ public static class SearchShot
     [
         "capsule", "empty", "indexing", "contentmode", "contentwaiting", "typing", "results",
         "noresults", "many", "adv", "opening", "openingempty",
-        "settings", "settingsopening", "settingssearches", "settingscontent", "settingsabout",
+        "settings", "settingsopening", "settingssearches", "settingscontent", "settingsaddons",
+        "settingsremove", "settingsabout",
         "settingsuptodate", "settingsupdate", "settingsasking",
         "firstrun", "firstruninstalled", "firstrunspeech", "firstrundownloading", "firstrunfinished",
-        "firstrunready", "firstrunnames",
+        "firstrunready", "firstrunnames", "firstrunworking",
     ];
 
     public static int Render(string outPath, string state, string? paletteName = null)
@@ -137,6 +138,9 @@ public static class SearchShot
             "settingsopening" => Section.Opening,
             "settingssearches" => Section.Searches,
             "settingscontent" => Section.Content,
+            // The Remove question is only ever raised from the Models toggle page, so that is what it
+            // sits over.
+            "settingsaddons" or "settingsremove" => Section.AddOns,
             // The three prompt states are About with a panel over it: the panel is only ever
             // raised by the button that lives there, so any other section behind it would be a
             // picture of something that cannot happen.
@@ -160,7 +164,11 @@ public static class SearchShot
             DarkPalette = "Brass", LightPalette = "Blueprint", Hotkey = "Alt+Space",
             IndexContent = true, TranscribeMinutes = 30, InstallSource = "winget",
             IndexDrives = ["C"], SearchExclusions = [.. FileKinds.DefaultExclusions],
+            // One add-on turned off, so the page shows all three shapes a row takes: on, off,
+            // and not installed yet.
+            AddOnsOff = section == Section.AddOns ? [nameof(Capability.Speech)] : [],
         };
+        bool addOns = section == Section.AddOns;
 
         var s = new SettingsState(config)
         {
@@ -177,7 +185,19 @@ public static class SearchShot
             // Scrolled, because the exclusions list is the only scroller in the product and an
             // unscrolled list never shows what a partial page looks like.
             ExclusionScroll = section == Section.Searches ? 6 : 0,
-            Installed = new CapabilitySet(new HashSet<Capability> { Capability.Meaning, Capability.Photos }),
+            Installed = addOns
+                ? new CapabilitySet(new HashSet<Capability> { Capability.Meaning, Capability.Photos, Capability.Speech })
+                : new CapabilitySet(new HashSet<Capability> { Capability.Meaning, Capability.Photos }),
+            // A pass in hand, reading on the processor: the longest of the sentences under
+            // "Reading now", and the one a small graphics card sees all afternoon.
+            Pending = 273_845, Indexed = 1_204, Done = 5_426,
+            ReadingSentence = IndexStatus.Sentence(true, "indexing", 273_845, 1_204, alive: true,
+                                                   new IndexExtra(Processor: "other programs hold 2.04 GB", LeftOut: 4_210, Failed: 12)),
+            ReadingTone = StatusTone.Reading,
+            // The question over the page, with something removed alongside it and the button
+            // somebody would press hovered, as the update panel's states do.
+            Removing = state == "settingsremove" ? Capability.Speech : null,
+            RemoveHover = state == "settingsremove" ? RemoveTarget.Remove : RemoveTarget.None,
             // One codec on this machine, so the row's number and the total are the same 212. The
             // button reports the codec's own count, and a shot that set only the total would draw
             // "0 need HEVC".
@@ -305,6 +325,12 @@ public static class SearchShot
             // 3 is the Hebrew row on the choosing screen and the "2 hr" pill on the speech one -
             // in both cases something other than what is already chosen.
             HoverIndex = ready ? 1 : busy ? -1 : 3,
+            // The card behind "Get these": saving done, name search waiting on the Windows prompt,
+            // the hotkey already made (steps finish out of order), the download still to come.
+            Work = state == "firstrunworking"
+                ? FirstRunWork.SettingUp(downloading: true).Done(FirstRunWork.SavingStep).Done(FirstRunWork.HotkeyStep)
+                : null,
+            Spin = 0.3f,
         };
 
         // The answered page has its own height, and the shot has to be the size the window really

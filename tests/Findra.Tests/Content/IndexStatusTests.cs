@@ -14,7 +14,7 @@ public class IndexStatusTests
         string s = IndexStatus.Line(contentEnabled: true, state: "off", pending: 42, indexed: 1000, alive: false, rebuilt: false);
 
         Assert.Contains("42", s);
-        Assert.Contains("indexing is paused while Findra is closed", s, StringComparison.Ordinal);
+        Assert.Contains("paused while Findra is closed", s, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -33,7 +33,7 @@ public class IndexStatusTests
         string s = IndexStatus.Line(contentEnabled: true, state: "idle", pending: 0, indexed: 1000, alive: true, rebuilt: false);
 
         Assert.Contains("1,000", s);
-        Assert.Contains("up to date", s, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("all done", s, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]

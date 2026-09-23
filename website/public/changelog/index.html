@@ -40,7 +40,7 @@
       "name": "Findra changelog - every release and what it changed",
       "description": "What each Findra release added, changed and fixed, newest first. The release notes on GitHub are these same sections.",
       "inLanguage": "en",
-      "dateModified": "2026-09-22",
+      "dateModified": "2026-09-23",
       "isPartOf": {
         "@id": "https://findra-search.netlify.app/#site"
       },
@@ -129,7 +129,7 @@
       <span class="kicker">CHANGELOG</span>
       <h1>Every release, and what it changed for you.</h1>
       <div class="doc-meta">
-        <span class="d">Findra 0.3.1 &middot; last reviewed 2026-09-22</span>
+        <span class="d">Findra 0.4.0 &middot; last reviewed 2026-09-23</span>
         <a class="doc-chip on" href="/changelog.md">Read as Markdown</a>
         <a class="doc-chip" href="https://github.com/blakazulu/findra/blob/main/CHANGELOG.md" rel="noopener">History on GitHub</a>
       </div>
@@ -139,6 +139,33 @@
       <p>All notable changes to Findra are documented here.</p>
 
       <p>The format follows <a href="https://keepachangelog.com/en/1.1.0/">Keep a Changelog 1.1.0</a>, and Findra follows <a href="https://semver.org/spec/v2.0.0/">Semantic Versioning</a>.</p>
+
+      <h2><a href="https://github.com/blakazulu/findra/releases/tag/v0.4.0">0.4.0 - 23 September 2026</a></h2>
+
+      <h3>Added</h3>
+
+      <ul>
+        <li><strong>A Models toggle page in Settings.</strong> Photos and video, meaning, speech and Hebrew each have a row saying what they do for you. An installed one can be <strong>turned off</strong> (it stops reading new files, and everything it already found stays searchable) or <strong>removed</strong> (its files are deleted and the space comes back). Removing asks first, says how much it frees and what goes with it (removing Speech removes Hebrew too), and keeps what was already found unless you untick that, so adding it back later is quick. Turning one back on, or adding it again, reads exactly the files it missed while it was away.</li>
+        <li><strong>The welcome screen shows what it is doing after you press a button.</strong> &quot;Get these&quot; or &quot;Not now&quot; used to leave the screen frozen for a moment and then jump to the next page. A card now lists the steps (saving your choices, starting name search, getting the hotkey and capsule ready, starting the download) and ticks each one as it finishes, and says when Windows may ask for permission. The second screen does the same before it closes.</li>
+        <li><strong><code>findra --models remove &lt;add-on&gt;</code></strong> removes one model from the command line, on the same rules as Settings. <code>--dry-run</code> prints what would be deleted and freed, and <code>--forget</code> also drops what it found. <code>findra --models install</code> now also reads the files a model missed while it was removed.</li>
+        <li><strong>Settings says what reading is doing, in plain words</strong>, under &quot;Reading now&quot;: how many files are read and left out, or that it is paused while another app is busy, paused for a full-screen app, reading more slowly because the graphics card is nearly full, waiting for you to finish setting up, restarting after a problem, or all done. A dot beside it shows the same at a glance: filled while reading, a ring while waiting, red for a problem.</li>
+      </ul>
+
+      <h3>Fixed</h3>
+
+      <ul>
+        <li><strong>Files that have not changed no longer wait for the graphics card.</strong> Moving a folder of photos or recordings queues each file again. While another program was using the card, Findra held every one of them back, and the count said they were waiting, even though checking that the file had not changed needs no card at all. Findra now clears those at once and waits only for files it really has to read. A fullscreen game still holds everything back.</li>
+        <li><strong>A busy graphics card no longer stops Findra reading your documents.</strong> Files are read in the order they were found, so one photo waiting for the card used to hold back every document behind it, even though reading words never uses the card. Photos, video and recordings now wait while documents carry on.</li>
+        <li><strong>On a new or freshly upgraded PC, Findra no longer waits an hour before reading.</strong> Windows marks the first hour after your first sign-in as quiet time, and Findra took it for something running fullscreen. It now waits only for real fullscreen apps, games and presentations.</li>
+        <li><strong>On a graphics card with little memory, photos are read instead of waiting.</strong> On a small card, such as one with 3 GB, Windows and your open apps alone use most of it, and Findra waited for room that never came, sometimes all afternoon. It now reads photos and documents on the processor instead: slower, but it keeps going. It still waits while a game or another heavy program is really using the card, and recordings still wait for room on the card.</li>
+        <li><strong>The progress count moves for every file Findra deals with</strong>, including the ones it leaves out (such as recordings without the Speech add-on) and the ones it cannot read. It used to count only files read, so a pass through files it was leaving out looked frozen at &quot;1 of 278,067&quot;.</li>
+        <li><strong>The words under the search card and in the tray are plainer</strong>: &quot;reading photos&quot;, &quot;paused while another app is busy&quot;, &quot;all done · 1,204 files ready to search&quot;.</li>
+        <li><strong>When the reader stops unexpectedly, Findra says it is trying again and when</strong>, instead of saying it was closed. A reader that had been working for a while restarts within seconds rather than waiting up to five minutes because of earlier problems.</li>
+        <li><strong>A problem Findra cannot get past, such as a full disk, is now said on every screen</strong> instead of the progress bar simply stopping.</li>
+        <li><strong>Reading a large disk for the first time is faster.</strong> Picking the next file used to sort the whole queue each time; it is now a direct lookup.</li>
+        <li><strong>The website no longer carries Netlify's advertisement.</strong> Netlify writes a comment and two tags into every page it serves, one of them a tracking link to its own sign-up page. They are taken back out before the page reaches you, on every page including &quot;not found&quot;.</li>
+        <li><strong>A link to the website shared on WhatsApp, Facebook and the like now says what Findra does</strong> (search by name, documents, photos and speech; free, private, open source) instead of quoting benchmark figures.</li>
+      </ul>
 
       <h2><a href="https://github.com/blakazulu/findra/releases/tag/v0.3.1">0.3.1 - 22 September 2026</a></h2>
 

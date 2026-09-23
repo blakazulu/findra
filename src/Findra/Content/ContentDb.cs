@@ -229,11 +229,14 @@ CREATE TABLE IF NOT EXISTS items(
     state INTEGER NOT NULL DEFAULT 0, error TEXT, indexed_at INTEGER NOT NULL DEFAULT 0,
     UNIQUE(vol, frn));
 CREATE INDEX IF NOT EXISTS items_path ON items(path);
+CREATE INDEX IF NOT EXISTS items_state ON items(state);
 CREATE TABLE IF NOT EXISTS pending(
     id INTEGER PRIMARY KEY, vol TEXT NOT NULL, frn INTEGER NOT NULL, path TEXT NOT NULL,
     kind INTEGER NOT NULL, reason TEXT NOT NULL, queued_at INTEGER NOT NULL,
     attempts INTEGER NOT NULL DEFAULT 0,
     UNIQUE(vol, frn));
+CREATE INDEX IF NOT EXISTS pending_kind ON pending(kind, id);
+CREATE INDEX IF NOT EXISTS pending_reason ON pending(reason, id);
 CREATE TABLE IF NOT EXISTS segments(
     id INTEGER PRIMARY KEY, item INTEGER NOT NULL, kind INTEGER NOT NULL,
     t0 REAL NOT NULL DEFAULT -1, t1 REAL NOT NULL DEFAULT -1,
@@ -1065,11 +1068,48 @@ CREATE TABLE IF NOT EXISTS opened(path TEXT PRIMARY KEY, count INTEGER NOT NULL,
     public Pending? TakeNext()
     {
         using var claim = Enter();
-        using var cmd = _c.CreateCommand();
         // Deletes first, then oldest first. A delete takes rows OUT, so running it ahead of the
         // re-index of the same path keeps the index from briefly holding both.
-        cmd.CommandText = "SELECT id, vol, frn, path, kind, reason, attempts FROM pending ORDER BY (reason=$d) DESC, id LIMIT 1";
-        cmd.Parameters.AddWithValue("$d", ReasonDelete);
+        //
+        // Two lookups rather than one ORDER BY on an expression: no index can serve
+        // "(reason=delete) DESC, id", so that form sorted the whole queue for every file, and a
+        // first pass is a queue of a few hundred thousand rows asked once per file.
+        return First("WHERE reason=$d ORDER BY id LIMIT 1") ?? First("ORDER BY id LIMIT 1");
+
+        Pending? First(string tail)
+        {
+            using var cmd = _c.CreateCommand();
+            cmd.CommandText = "SELECT id, vol, frn, path, kind, reason, attempts FROM pending " + tail;
+            cmd.Parameters.AddWithValue("$d", ReasonDelete);
+            using var r = cmd.ExecuteReader();
+            if (!r.Read()) return null;
+            return new Pending(r.GetInt64(0), r.GetString(1), unchecked((ulong)r.GetInt64(2)), r.GetString(3),
+                               (ResultKind)r.GetInt32(4), r.GetString(5), r.GetInt32(6));
+        }
+    }
+
+    /// <summary>The oldest queued row of any of these kinds, or null. What the indexer reads while
+    /// the row at the front is held back for a reason that does not hold these kinds back - a photo
+    /// waiting for the card with documents behind it. One lookup per kind on
+    /// <c>pending_kind</c>, so a queue of a few hundred thousand rows costs the same as an empty
+    /// one.</summary>
+    public Pending? TakeNextOf(IReadOnlyCollection<ResultKind> kinds)
+    {
+        ArgumentNullException.ThrowIfNull(kinds);
+        using var claim = Enter();
+        long best = long.MaxValue;
+        foreach (ResultKind k in kinds)
+        {
+            using var min = _c.CreateCommand();
+            min.CommandText = "SELECT MIN(id) FROM pending WHERE kind=$k";
+            min.Parameters.AddWithValue("$k", (int)k);
+            if (min.ExecuteScalar() is long id && id < best) best = id;
+        }
+        if (best == long.MaxValue) return null;
+
+        using var cmd = _c.CreateCommand();
+        cmd.CommandText = "SELECT id, vol, frn, path, kind, reason, attempts FROM pending WHERE id=$i";
+        cmd.Parameters.AddWithValue("$i", best);
         using var r = cmd.ExecuteReader();
         if (!r.Read()) return null;
         return new Pending(r.GetInt64(0), r.GetString(1), unchecked((ulong)r.GetInt64(2)), r.GetString(3),
@@ -1587,7 +1627,8 @@ CREATE TABLE IF NOT EXISTS opened(path TEXT PRIMARY KEY, count INTEGER NOT NULL,
     public int RequeueKinds(int[] kinds, string reason,
                             IReadOnlyList<string>? notBecause = null,
                             IReadOnlyList<string>? onlyBecause = null,
-                            IReadOnlyList<string>? onlyBecauseStartingWith = null)
+                            IReadOnlyList<string>? onlyBecauseStartingWith = null,
+                            long? readSince = null)
     {
         ArgumentNullException.ThrowIfNull(kinds);
         if (kinds.Length == 0) return 0;
@@ -1644,6 +1685,13 @@ CREATE TABLE IF NOT EXISTS opened(path TEXT PRIMARY KEY, count INTEGER NOT NULL,
             // not read has not changed because a capability arrived, and retrying it on every
             // install is a loop with no exit. Skipped means "not attempted yet"; failed means
             // "attempted, and it did not work".
+            // Only what was read at or after a moment: the files an add-on missed while it was
+            // turned off or removed, and nothing it had already been through.
+            if (readSince is { } since)
+            {
+                filter += " AND indexed_at >= $since";
+                cmd.Parameters.AddWithValue("$since", since);
+            }
             cmd.CommandText = $"SELECT vol, frn, path, kind FROM items WHERE state IN (1, 3) " +
                               $"AND kind IN ({string.Join(",", kinds)}){filter}";
             using var r = cmd.ExecuteReader();
@@ -1654,6 +1702,19 @@ CREATE TABLE IF NOT EXISTS opened(path TEXT PRIMARY KEY, count INTEGER NOT NULL,
         }
         tx.Commit();
         return n;
+    }
+
+    /// <summary>Stamp when a file was last read. Only the catch-up tests need to put a file at a
+    /// moment of their choosing; everything else gets the clock from <see cref="Upsert"/>.</summary>
+    public void SetReadAt(string vol, ulong frn, long unixSeconds)
+    {
+        using var claim = Enter();
+        using var cmd = _c.CreateCommand();
+        cmd.CommandText = "UPDATE items SET indexed_at=$t WHERE vol=$v AND frn=$f";
+        cmd.Parameters.AddWithValue("$t", unixSeconds);
+        cmd.Parameters.AddWithValue("$v", vol);
+        cmd.Parameters.AddWithValue("$f", unchecked((long)frn));
+        cmd.ExecuteNonQuery();
     }
 
     public (long Items, long Segments, long Failed) Stats()

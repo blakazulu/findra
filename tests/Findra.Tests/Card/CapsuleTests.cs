@@ -85,16 +85,16 @@ public class CapsuleTests
     {
         // The kind arrives as the ResultKind's own ToString off the queue row, and printing that
         // would put an identifier on the desktop.
-        Assert.Equal("indexing photos", IndexStatus.Doing(ResultKind.Photo));
-        Assert.Equal("indexing recordings", IndexStatus.Doing(ResultKind.Audio));
-        Assert.Equal("indexing documents", IndexStatus.Doing(ResultKind.Document));
-        Assert.Equal("indexing video", IndexStatus.Doing(ResultKind.Video));
+        Assert.Equal("reading photos", IndexStatus.Doing(ResultKind.Photo));
+        Assert.Equal("reading recordings", IndexStatus.Doing(ResultKind.Audio));
+        Assert.Equal("reading documents", IndexStatus.Doing(ResultKind.Document));
+        Assert.Equal("reading video", IndexStatus.Doing(ResultKind.Video));
 
         // A row read mid-write, or one written by a build that had no kind row at all, falls back
         // to the bare verb rather than to a guess.
-        Assert.Equal("indexing", IndexStatus.Doing(""));
-        Assert.Equal("indexing", IndexStatus.Doing("nonsense"));
-        Assert.Equal("indexing", IndexStatus.Doing("99"));
+        Assert.Equal("reading", IndexStatus.Doing(""));
+        Assert.Equal("reading", IndexStatus.Doing("nonsense"));
+        Assert.Equal("reading", IndexStatus.Doing("99"));
     }
 
     [Fact]
@@ -123,8 +123,8 @@ public class CapsuleTests
         foreach (ResultKind k in Enum.GetValues<ResultKind>())
         {
             if (!FileKinds.HasContent(k)) continue;
-            Assert.NotEqual("indexing", IndexStatus.Doing(k));
-            Assert.StartsWith("indexing ", IndexStatus.Doing(k), StringComparison.Ordinal);
+            Assert.NotEqual("reading", IndexStatus.Doing(k));
+            Assert.StartsWith("reading ", IndexStatus.Doing(k), StringComparison.Ordinal);
         }
     }
 

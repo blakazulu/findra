@@ -74,6 +74,12 @@ public interface IDecoders : IDisposable
     /// by <see cref="IndexGate"/>, or with nothing queued - because a waiting indexer that keeps
     /// gigabytes on the card is holding them against exactly the program it is waiting for.</summary>
     void Unload() { }
+
+    /// <summary>Open picture and meaning models on the processor from now on (true), or on the
+    /// graphics card again (false). A change lets go of what is loaded, so the next file opens its
+    /// model where it was asked for. Speech is not moved: its runtime is chosen once per process.
+    /// </summary>
+    void OnProcessor(bool yes, string why) { }
 }
 
 /// <summary>
@@ -221,9 +227,14 @@ public sealed class Decoders : IDecoders
     /// the <c>--index</c> child calls this. A diagnostic that calls it takes a writer on a file
     /// the running child already holds, and appends rows to a store its throwaway database will
     /// never reference.</summary>
-    public static Decoders ForThisMachine(Func<int> transcribeMinutes, string? modelDir = null, Action? beat = null)
-        => new(() => CapabilitySet.Installed(modelDir), new VectorStore(writer: true), transcribeMinutes,
-               modelDir, ownsVectors: true, beat: beat);
+    ///
+    /// <para><paramref name="off"/> is the add-ons somebody turned off, read per file like the
+    /// transcription limit: an add-on turned off reads nothing new from the next file on, and its
+    /// model is let go the same way one that was deleted is.</para>
+    public static Decoders ForThisMachine(Func<int> transcribeMinutes, string? modelDir = null, Action? beat = null,
+                                          Func<IReadOnlyList<Capability>>? off = null)
+        => new(() => CapabilitySet.Installed(modelDir).Without(off?.Invoke() ?? []), new VectorStore(writer: true),
+               transcribeMinutes, modelDir, ownsVectors: true, beat: beat);
 
     private void Beat() => _beat();
 
@@ -331,6 +342,19 @@ public sealed class Decoders : IDecoders
 
     /// <summary>True when something was loaded and has now been let go, so the caller logs a
     /// release that happened rather than one per idle tick.</summary>
+    private bool _onProcessor;
+
+    public void OnProcessor(bool yes, string why)
+    {
+        if (yes == _onProcessor) return;
+        _vision?.Dispose(); _vision = null;
+        _e5?.Dispose(); _e5 = null;
+        _onProcessor = yes;
+        Log.Info("index", yes
+            ? $"pictures and meaning move to the processor: the graphics card is too full ({why})"
+            : "pictures and meaning are back on the graphics card");
+    }
+
     public bool Loaded => _vision is not null || _e5 is not null || _whisper is not null || _whisperHe is not null;
 
     public void Unload()
@@ -648,7 +672,7 @@ public sealed class Decoders : IDecoders
     {
         if (_vision is not null) return _vision;
         Beat();
-        _vision = new ClipImageEncoder(wantAccelerator: true, _dir);
+        _vision = new ClipImageEncoder(wantAccelerator: !_onProcessor, _dir);
         Beat();
         return _vision;
     }
@@ -671,7 +695,7 @@ public sealed class Decoders : IDecoders
     {
         if (_e5 is not null) return _e5;
         Beat();
-        _e5 = new E5Encoder(wantAccelerator: true, _dir);
+        _e5 = new E5Encoder(wantAccelerator: !_onProcessor, _dir);
         Beat();
         return _e5;
     }

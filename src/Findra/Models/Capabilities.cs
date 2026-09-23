@@ -62,6 +62,22 @@ public readonly record struct CapabilitySet(IReadOnlySet<Capability> Have, IRead
         }
     }
 
+    /// <summary>
+    /// What is READ with, given the add-ons somebody turned off. Turning one off stops it reading
+    /// new files and nothing else: its files stay on disk (<see cref="Files"/> is kept, so prices
+    /// do not move) and what it already found stays searchable. Speech off takes Hebrew with it,
+    /// because the Hebrew pass re-runs what Speech heard; Meaning off does NOT take Speech, because
+    /// finding documents by meaning is a choice about documents.
+    /// </summary>
+    public CapabilitySet Without(IEnumerable<Capability> off)
+    {
+        ArgumentNullException.ThrowIfNull(off);
+        var keep = new HashSet<Capability>(Have ?? new HashSet<Capability>());
+        foreach (Capability c in off) keep.Remove(c);
+        if (!keep.Contains(Capability.Speech)) keep.Remove(Capability.Hebrew);
+        return new CapabilitySet(keep, Files);
+    }
+
     /// <summary>Every capability whose whole closed model set is on disk. Closed, not own: a
     /// Whisper file with no e5 pair beside it cannot answer a search, because a transcript is
     /// searched as a document.</summary>

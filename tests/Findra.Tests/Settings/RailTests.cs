@@ -287,7 +287,8 @@ public class RailTests
     {
         foreach (Section s in RailLayout.Sections)
             Assert.False(string.IsNullOrWhiteSpace(RailLayout.Title(s)), $"{s} has no title");
-        Assert.Equal(5, RailLayout.Sections.Count);
+        Assert.Equal(6, RailLayout.Sections.Count);
+        Assert.Equal("Models toggle", RailLayout.Title(Section.AddOns));
         Assert.Equal("Where it searches", RailLayout.Title(Section.Searches));
     }
 }

@@ -96,6 +96,11 @@ public sealed class SettingsWindow : Window
     /// arrived stop being buttons and start reading "installed".</summary>
     public void UseInstalled(CapabilitySet installed) => _canvas.Refresh(s => s with { Installed = installed });
 
+    /// <summary>A removal finished, however it ended: the row stops saying "Removing..." and shows
+    /// what is on the disk now.</summary>
+    public void RemovingDone(CapabilitySet installed) =>
+        _canvas.Refresh(s => s with { Installed = installed, RemovingNow = null });
+
     /// <summary>What the last check found. <paramref name="raise"/> also puts the panel up, and
     /// is true only when somebody pressed for it: the daily background check must change the
     /// About row and nothing else, because a person who asked no question is not waiting for an
@@ -145,14 +150,17 @@ public sealed class SettingsWindow : Window
     /// the same reason: the Photos and video row's count of what Windows cannot decode is a fact
     /// about this same moment, not one fetched separately.</para>
     /// </summary>
-    public void UseIndexState(bool everIndexed, bool indexerAlive, long pending, long indexed,
+    public void UseIndexState(bool everIndexed, bool indexerAlive, long pending, long indexed, long done,
+                              string readingSentence, StatusTone readingTone,
                               long blockedVideos, string? blockedCodec, long blockedForCodec) =>
         _canvas.Refresh(s => s.EverIndexed == everIndexed && s.IndexerAlive == indexerAlive
-                             && s.Pending == pending && s.Indexed == indexed
+                             && s.Pending == pending && s.Indexed == indexed && s.Done == done
+                             && s.ReadingSentence == readingSentence && s.ReadingTone == readingTone
                              && s.BlockedVideos == blockedVideos && s.BlockedCodec == blockedCodec
                              && s.BlockedForCodec == blockedForCodec
             ? s
             : s with { EverIndexed = everIndexed, IndexerAlive = indexerAlive, Pending = pending, Indexed = indexed,
+                       Done = done, ReadingSentence = readingSentence, ReadingTone = readingTone,
                        BlockedVideos = blockedVideos, BlockedCodec = blockedCodec,
                        BlockedForCodec = blockedForCodec });
 
@@ -296,6 +304,14 @@ public sealed class SettingsWindow : Window
                                       UpdatePrompt.Buttons(_state.Prompt));
         }
 
+        private RemoveTarget RemoveAt(Point p)
+        {
+            if (_state.Removing is not { } c) return RemoveTarget.None;
+            (int body, int keep) = SettingsPainter.RemoveLines(_state, c, _face);
+            SKRect panel = RemovePrompt.Panel(RailLayout.Width, RailLayout.Height, body, keep);
+            return RemovePrompt.HitTest((float)p.X, (float)p.Y, panel, body, RemovePrompt.KeepLabel(c).Length > 0 ? keep : 0);
+        }
+
         private UpdatePromptTarget PromptAt(Point p) =>
             _state.Prompt == UpdatePromptState.None
                 ? UpdatePromptTarget.None
@@ -313,6 +329,17 @@ public sealed class SettingsWindow : Window
                 if (over == _state.PromptHover) return;
                 _state = _state with { PromptHover = over, HoverTarget = PanelTarget.None, HoverRow = -1 };
                 Cursor = PointerCursor.Of(Pointers.ForPrompt(over));
+                InvalidateVisual();
+                return;
+            }
+
+            // The Remove question, on the same terms: while it is up it is the only thing here.
+            if (_state.Removing is not null)
+            {
+                RemoveTarget over = RemoveAt(e.GetPosition(this));
+                if (over == _state.RemoveHover) return;
+                _state = _state with { RemoveHover = over, HoverTarget = PanelTarget.None, HoverRow = -1 };
+                Cursor = PointerCursor.Of(Pointers.ForRemove(over));
                 InvalidateVisual();
                 return;
             }
@@ -361,6 +388,18 @@ public sealed class SettingsWindow : Window
                     default:
                         return;   // the scrim and the panel's own body answer nothing
                 }
+            }
+
+            if (_state.Removing is not null)
+            {
+                SettingsState asked = _state;
+                SettingsOutcome answer = SettingsModel.AnswerRemove(_state, RemoveAt(p));
+                _state = answer.State;
+                Announce(asked);
+                SettingsActions.Dispatch(answer.Action, answer.Argument, _host);
+                if (_state.Removing is null) Cursor = PointerCursor.Of(PointerShape.Arrow);
+                InvalidateVisual();
+                return;
             }
 
             PanelHit hit = HitAt(p);
@@ -418,6 +457,13 @@ public sealed class SettingsWindow : Window
             if (!_state.Capturing)
             {
                 if (e.Key != Key.Escape) return false;
+                // Escape answers the question in front of it before it closes the window behind.
+                if (_state.Removing is not null)
+                {
+                    _state = SettingsModel.AnswerRemove(_state, RemoveTarget.Cancel).State;
+                    InvalidateVisual();
+                    return true;
+                }
                 _owner.Close();
                 return true;
             }

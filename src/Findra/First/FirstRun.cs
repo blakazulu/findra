@@ -65,6 +65,14 @@ public sealed record FirstRunState
     /// keeps it here: the painter is a pure function of this record.</summary>
     public FirstRunTarget HoverTarget { get; init; } = FirstRunTarget.None;
     public int HoverIndex { get; init; } = -1;
+
+    /// <summary>The work behind a button, shown over the page while it happens, or null. While it
+    /// is up nothing on the page answers a click.</summary>
+    public FirstRunWork? Work { get; init; }
+
+    /// <summary>Where the spinner on the step under way has got to, 0..1. Moved by a timer while
+    /// <see cref="Work"/> is up, so the painter stays a pure function of this record.</summary>
+    public float Spin { get; init; }
 }
 
 public static class FirstRun

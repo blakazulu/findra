@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Runtime.Versioning;
+using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
@@ -115,6 +116,17 @@ public sealed class FirstRunWindow : Window
     /// </summary>
     public void NoteFinished(string problem) => _canvas.NoteFinished(problem);
 
+    /// <summary>One step of the work behind "Get these" has really finished; the card ticks it.
+    /// The shell yields after calling this so the tick is drawn before the next step starts.</summary>
+    public void StepDone(int step) => _canvas.StepDone(step);
+
+    /// <summary>The work is over: the card goes and the next page is shown.</summary>
+    public void EndWork() => _canvas.EndWork();
+
+    /// <summary>Give the window a frame to draw in. Background runs after rendering, so awaiting
+    /// this is what makes a tick visible before the interface thread is busy again.</summary>
+    public static async Task Frame() => await Dispatcher.UIThread.InvokeAsync(static () => { }, DispatcherPriority.Background);
+
     // ---- the canvas ------------------------------------------------------------------------------
 
     // Fully qualified, for the reason SettingsWindow's canvas is: the settings model's row type is
@@ -132,6 +144,12 @@ public sealed class FirstRunWindow : Window
 
         private FirstRunState _state;
         private bool _answered;
+
+        /// <summary>The page the answer leads to, shown once the work behind it is over.</summary>
+        private FirstRunStage _next = FirstRunStage.Choosing;
+
+        /// <summary>Turns the spinner while the work card is up, and only then.</summary>
+        private DispatcherTimer? _spinner;
 
         public event Action<FirstRunState>? Answered;
         public event Action? StartReadingRequested;
@@ -208,8 +226,61 @@ public sealed class FirstRunWindow : Window
             InvalidateVisual();
         }
 
+        private void ShowWork(FirstRunWork work)
+        {
+            _state = _state with { Work = work, HoverTarget = FirstRunTarget.None, HoverIndex = -1 };
+            Cursor = PointerCursor.Of(PointerShape.Arrow);
+            _spinner ??= new DispatcherTimer(TimeSpan.FromMilliseconds(40), DispatcherPriority.Render, (_, _) =>
+            {
+                if (_state.Work is null) return;
+                _state = _state with { Spin = (Environment.TickCount64 % 900) / 900f };
+                InvalidateVisual();
+            });
+            _spinner.Start();
+            InvalidateVisual();
+        }
+
+        public void StepDone(int step)
+        {
+            if (_state.Work is not { } work) return;
+            _state = _state with { Work = work.Done(step) };
+            InvalidateVisual();
+        }
+
+        public void EndWork()
+        {
+            _spinner?.Stop();
+            // The answer's page, unless the shell has already moved it on - everything chosen was
+            // already on disk, so it went straight to finished while the card was still up.
+            FirstRunStage stage = _state.Stage == FirstRunStage.Choosing ? _next : _state.Stage;
+            _state = _state with { Work = null, Stage = stage };
+            _owner.Height = FirstRunLayout.SurfaceHeight(_state);
+            InvalidateVisual();
+        }
+
+        /// <summary>The answered page's closing buttons: the card, what they start, then the window
+        /// goes. Posted, so the card is drawn before anything runs.</summary>
+        private void CloseWithWork(bool startReading)
+        {
+            ShowWork(FirstRunWork.Closing(startReading));
+            Dispatcher.UIThread.Post(async () =>
+            {
+                StepDone(0);
+                await FirstRunWindow.Frame();
+                if (startReading)
+                {
+                    StartReadingRequested?.Invoke();
+                    StepDone(1);
+                    await FirstRunWindow.Frame();
+                }
+                _spinner?.Stop();
+                _owner.Close();
+            }, DispatcherPriority.Background);
+        }
+
         protected override void OnPointerMoved(PointerEventArgs e)
         {
+            if (_state.Work is not null) return;   // the card is the only thing up
             Point p = e.GetPosition(this);
             FirstRunHit hit = HitAt(p);
             if (hit.Target == _state.HoverTarget && hit.Index == _state.HoverIndex) return;
@@ -233,6 +304,8 @@ public sealed class FirstRunWindow : Window
         protected override void OnPointerPressed(PointerPressedEventArgs e)
         {
             Focus();
+            // Nothing answers while the work card is up - not the page, not the title strip.
+            if (_state.Work is not null) return;
             Point p = e.GetPosition(this);
             FirstRunHit hit = HitAt(p);
 
@@ -272,8 +345,7 @@ public sealed class FirstRunWindow : Window
                 // preference from the first act is saved either way and this is only about now.
                 if (_state.Stage != FirstRunStage.Choosing)
                 {
-                    if (Asking && hit.Target == FirstRunTarget.Go) StartReadingRequested?.Invoke();
-                    _owner.Close();
+                    CloseWithWork(startReading: Asking && hit.Target == FirstRunTarget.Go);
                     return;
                 }
 
@@ -290,22 +362,18 @@ public sealed class FirstRunWindow : Window
                     ? _state with { Chosen = new HashSet<Capability>(), ContentOn = false }
                     : _state;
 
-                _state = answer with
-                {
-                    Stage = answer.Chosen.Count > 0 ? FirstRunStage.Downloading : FirstRunStage.Finished,
-                };
-                // The one resize this window does. The choosing height is sized for its tallest
-                // configuration so that ticking Speech cannot move the window under the pointer
-                // that ticked it - but the second act draws no tiles, no switches, no limit row
-                // and no notes, and the fixed height left a large empty band under the summary.
-                // Here is the safe moment: a deliberate click on a button that then stops
-                // existing, with nothing left under the pointer to be hit.
-                _owner.Height = FirstRunLayout.SurfaceHeight(_state);
-                InvalidateVisual();
+                // The page stays where it is, under a card that says what is happening, until the
+                // shell has done the work behind the answer (EndWork). The next page and the one
+                // resize this window does happen then: the second act draws no tiles, switches or
+                // notes, and the choosing height would leave a large empty band under it.
+                _next = answer.Chosen.Count > 0 ? FirstRunStage.Downloading : FirstRunStage.Finished;
+                _state = answer;
+                ShowWork(FirstRunWork.SettingUp(downloading: answer.Chosen.Count > 0));
 
-                // No early close when nothing was chosen: the answered page is where somebody who
-                // took "Just names" learns where Findra went, which they need as much as anyone.
-                Answered?.Invoke(answer);
+                // Posted, so the card is drawn before the shell's first step takes the thread. No
+                // early close when nothing was chosen: the answered page is where somebody who took
+                // "Just names" learns where Findra went, which they need as much as anyone.
+                Dispatcher.UIThread.Post(() => Answered?.Invoke(answer), DispatcherPriority.Background);
                 return;
             }
 

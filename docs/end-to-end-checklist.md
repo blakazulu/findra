@@ -170,8 +170,12 @@ moment rather than an elevation prompt at every launch.
     - press "Register it" on the name helper, answer the one prompt, and confirm the row turns
       to "registered" **and that name search starts working in this session**;
     - press "Add a folder", pick one, and confirm it appears in the list and can be removed;
-    - press a capability's size button and confirm a download starts and the row turns to
-      "installed" when it lands;
+    - on Models toggle, press a model's "Add" button and confirm a download starts and the row turns
+      to "Turn off / Remove" when it lands; turn it off and on and confirm files read while it was
+      off are read again; remove it (Cancel first, then with the tick on and off) and confirm the
+      files leave the models folder and Speech takes Hebrew with it;
+    - on a graphics card of 4 GB or less, confirm photos are read on the processor ("Reading more
+      slowly, because the graphics card is nearly full") instead of waiting;
     - press "Check now" and confirm the About line changes;
     - drag the capsule to a far corner, press "Bring the capsule back", and confirm it moves
       **in this session** rather than at the next launch.

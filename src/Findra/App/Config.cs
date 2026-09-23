@@ -50,6 +50,10 @@ public sealed record Config
     /// almost everyone wants and what a fresh install does.</summary>
     public string[] IndexDrives { get; init; } = [];
 
+    /// <summary>Add-ons turned off: installed, not reading new files, still searchable. Names from
+    /// <see cref="Capability"/>; <see cref="AddOns.Off"/> reads them and drops anything else.</summary>
+    public string[] AddOnsOff { get; init; } = [];
+
     /// <summary>Whether Findra reads the CONTENTS of files at all. Off by default, and that is
     /// the whole point (spec §6): a name index costs seconds and no disk reading, while looking
     /// inside files walks every drive, opens every document, and on a large disk runs for hours.
@@ -101,7 +105,8 @@ public sealed record Config
         && FirstRunDone == other.FirstRunDone
         && TranscribeMinutes == other.TranscribeMinutes
         && SearchExclusions.AsSpan().SequenceEqual(other.SearchExclusions)
-        && IndexDrives.AsSpan().SequenceEqual(other.IndexDrives);
+        && IndexDrives.AsSpan().SequenceEqual(other.IndexDrives)
+        && AddOnsOff.AsSpan().SequenceEqual(other.AddOnsOff);
 
     public override int GetHashCode()
     {
@@ -112,6 +117,7 @@ public sealed record Config
         h.Add(IndexContent); h.Add(IndexPower); h.Add(TranscribeMinutes); h.Add(FirstRunDone);
         foreach (string s in SearchExclusions) h.Add(s);
         foreach (string s in IndexDrives) h.Add(s);
+        foreach (string s in AddOnsOff) h.Add(s);
         return h.ToHashCode();
     }
 
@@ -138,7 +144,12 @@ public sealed record Config
         try
         {
             Config c = JsonSerializer.Deserialize<Config>(json, Opts) ?? new Config();
-            return c with { IndexPower = Math.Clamp(c.IndexPower, IndexPowerLevels.Min, IndexPowerLevels.Max) };
+            return c with
+            {
+                IndexPower = Math.Clamp(c.IndexPower, IndexPowerLevels.Min, IndexPowerLevels.Max),
+                // A hand-written null is an empty list, not a crash on the next ".Length".
+                AddOnsOff = c.AddOnsOff ?? [],
+            };
         }
         catch (Exception ex)
         {

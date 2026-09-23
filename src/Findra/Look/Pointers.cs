@@ -61,6 +61,13 @@ public static class Pointers
         _ => throw new ArgumentOutOfRangeException(nameof(target), target, "no pointer shape for this prompt target"),
     };
 
+    public static PointerShape ForRemove(RemoveTarget target) => target switch
+    {
+        RemoveTarget.None => PointerShape.Arrow,
+        RemoveTarget.Keep or RemoveTarget.Cancel or RemoveTarget.Remove => PointerShape.Hand,
+        _ => throw new ArgumentOutOfRangeException(nameof(target), target, "no pointer shape for this remove target"),
+    };
+
     public static PointerShape ForFirstRun(FirstRunTarget target) => target switch
     {
         FirstRunTarget.None => PointerShape.Arrow,

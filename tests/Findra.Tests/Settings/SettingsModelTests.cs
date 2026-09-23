@@ -642,15 +642,15 @@ public class SettingsModelTests
         // Spec §6: sizes shown in the UI are MARGINAL. A fixed per-row table makes the total
         // visibly fail to add up, because Speech and Meaning share the e5 pair - so Speech's row
         // has to read differently depending on whether Meaning is there.
-        SettingsState bare = State(section: Section.Content) with { Installed = CapabilitySet.None };
-        SettingsState withDocs = State(section: Section.Content)
+        SettingsState bare = State(section: Section.AddOns) with { Installed = CapabilitySet.None };
+        SettingsState withDocs = State(section: Section.AddOns)
             with { Installed = new CapabilitySet(new HashSet<Capability> { Capability.Meaning }) };
 
         string a = Speech(bare).Value, b = Speech(withDocs).Value;
 
         Assert.NotEqual(a, b);
-        Assert.Equal(Sizes.Human(Capabilities.MarginalBytes(Capability.Speech, [])), a);
-        Assert.Equal(Sizes.Human(Capabilities.MarginalBytes(Capability.Speech, [Capability.Meaning])), b);
+        Assert.Equal("Add · " + Sizes.Human(Capabilities.MarginalBytes(Capability.Speech, [])), a);
+        Assert.Equal("Add · " + Sizes.Human(Capabilities.MarginalBytes(Capability.Speech, [Capability.Meaning])), b);
 
         static Control Speech(SettingsState s) =>
             SettingsModel.Controls(s).Single(c => c.Id == ControlId.Capability && c.Tag == (int)Capability.Speech);
@@ -662,7 +662,7 @@ public class SettingsModelTests
         // The fourth dead control. The rows were drawn as buttons carrying a price and no arm
         // installed anything, so after first run the only route to a capability was
         // `findra --models install` - which a person in the settings window will not find.
-        SettingsState s = State(section: Section.Content) with { HebrewOffered = true };
+        SettingsState s = State(section: Section.AddOns) with { HebrewOffered = true };
         int row = SettingsModel.Controls(s).ToList()
             .FindIndex(c => c.Id == ControlId.Capability && c.Tag == (int)Capability.Photos);
 
@@ -676,19 +676,20 @@ public class SettingsModelTests
     public void AnInstalledCapabilityIsNotOfferedAgain()
     {
         // Pairs with the test above so neither can be satisfied by a constant. An installed
-        // capability is a Text row, which the sweep skips and the painter draws flat.
-        SettingsState s = State(section: Section.Content)
+        // add-on offers to turn it off or remove it, never to download it again.
+        SettingsState s = State(section: Section.AddOns)
             with { Installed = new CapabilitySet(new HashSet<Capability> { Capability.Photos }) };
 
-        Control photos = SettingsModel.Controls(s).Single(c => c.Id == ControlId.Capability && c.Tag == (int)Capability.Photos);
-        Assert.Equal(ControlKind.Text, photos.Kind);
+        Assert.DoesNotContain(SettingsModel.Controls(s), c => c.Id == ControlId.Capability && c.Tag == (int)Capability.Photos);
+        Control photos = SettingsModel.Controls(s).Single(c => c.Id == ControlId.AddOn && c.Tag == (int)Capability.Photos);
+        Assert.Equal(ControlKind.Choice, photos.Kind);
     }
 
     [Fact]
     public void HebrewIsNotOnTheScreenWhereTheMachineHasNoHebrew()
     {
-        SettingsState without = State(section: Section.Content) with { HebrewOffered = false };
-        SettingsState with = State(section: Section.Content) with { HebrewOffered = true };
+        SettingsState without = State(section: Section.AddOns) with { HebrewOffered = false };
+        SettingsState with = State(section: Section.AddOns) with { HebrewOffered = true };
 
         Assert.DoesNotContain(SettingsModel.Controls(without),
             c => c.Id == ControlId.Capability && c.Tag == (int)Capability.Hebrew);
@@ -699,7 +700,7 @@ public class SettingsModelTests
     private static SettingsState Content(long blocked, string? codec, bool photos = true, long? forCodec = null) =>
         new(Config.Default with { IndexContent = true })
         {
-            Section = Section.Content,
+            Section = Section.AddOns,
             Installed = photos ? new CapabilitySet(new HashSet<Capability> { Capability.Photos }) : CapabilitySet.None,
             BlockedVideos = blocked,
             BlockedCodec = codec,
@@ -715,9 +716,10 @@ public class SettingsModelTests
         // non-capability rows that default to the same Tag as Capability.Photos (both are 0), so
         // the id is what tells this row apart, exactly as the older capability tests already do.
         Control row = SettingsModel.Controls(Content(0, null))
-            .Single(c => c.Id == ControlId.Capability && c.Tag == (int)Capability.Photos);
-        Assert.Equal(ControlKind.Text, row.Kind);
-        Assert.Equal("installed", row.Value);
+            .Single(c => c.Id == ControlId.AddOn && c.Tag == (int)Capability.Photos);
+        Assert.Equal(ControlKind.Choice, row.Kind);
+        Assert.Equal(["Turn off", "Remove"], row.Options);
+        Assert.DoesNotContain(SettingsModel.Controls(Content(0, null)), c => c.Id == ControlId.VideoCodec);
     }
 
     [Fact]
@@ -902,7 +904,7 @@ public class SettingsModelTests
     [InlineData(Section.About, ControlId.CheckNow)]
     [InlineData(Section.Opening, ControlId.Helper)]
     [InlineData(Section.Content, ControlId.StartIndexing)]
-    [InlineData(Section.Content, ControlId.Capability)]
+    [InlineData(Section.AddOns, ControlId.Capability)]
     public void ARowAlreadyWaitingOnItsOwnWorkAnswersNothing(Section section, ControlId id)
     {
         // Each of these four starts something slow and none of them used to say so: the update
@@ -929,7 +931,7 @@ public class SettingsModelTests
     [InlineData(Section.About, ControlId.CheckNow)]
     [InlineData(Section.Opening, ControlId.Helper)]
     [InlineData(Section.Content, ControlId.StartIndexing)]
-    [InlineData(Section.Content, ControlId.Capability)]
+    [InlineData(Section.AddOns, ControlId.Capability)]
     public void AWaitingRowSaysSoRatherThanLookingUntouched(Section section, ControlId id)
     {
         // Refusing the click is half of it. A control that refuses AND looks exactly as it did is
@@ -961,21 +963,20 @@ public class SettingsModelTests
     }
 
     [Fact]
-    public void TheContentSentenceChangesWhenTheIndexerStarts()
+    public void TheSentenceUnderReadingNowIsWhatTheWindowWasLastTold()
     {
-        // The window took EverIndexed and IndexerAlive when it opened and never asked again, so
-        // pressing "Start now" changed nothing anybody could see and the report was that nothing
-        // had happened. The indexer HAD started; this surface simply had no way to hear about it.
-        // The sentence has to be a function of the state, so that pushing a new state changes it.
+        // The window took the index's state when it opened and never asked again, so pressing
+        // "Start now" changed nothing anybody could see. What reading is doing is pushed in as a
+        // sentence and drawn under the button that counts, so a new push is a new sentence.
         SettingsState before = State(Config.Default with { IndexContent = true }, Section.Content)
-            with { EverIndexed = false, IndexerAlive = false };
-        SettingsState after = before with { IndexerAlive = true };
+            with { ReadingSentence = "Getting ready to read your files." };
+        SettingsState after = before with { IndexerAlive = true, Pending = 10, ReadingSentence = "1,204 files read." };
 
-        string was = Row(before, ControlId.IndexContent).Note;
-        string now = Row(after, ControlId.IndexContent).Note;
-
-        Assert.NotEqual(was, now);
-        Assert.NotEqual("", now);
+        Assert.Equal("Getting ready to read your files.", Row(before, ControlId.StartIndexing).Note);
+        Assert.Equal("1,204 files read.", Row(after, ControlId.StartIndexing).Note);
+        // And nothing while reading is off: the switch's own sentence says that.
+        SettingsState off = after with { Config = after.Config with { IndexContent = false } };
+        Assert.Equal("", Row(off, ControlId.StartIndexing).Note);
     }
 
     /// <summary>Reading is on, the indexer is alive, and 640 of 1,973 files have been read - the
@@ -1081,6 +1082,8 @@ public class SettingsModelTests
 
         Assert.DoesNotContain("640", note, StringComparison.Ordinal);
         Assert.DoesNotContain("1,973", note, StringComparison.Ordinal);
-        Assert.NotEqual(note, Row(Reading() with { IndexerAlive = false }, ControlId.IndexContent).Note);
+        // It does not claim reading is happening either - that used to stand over an afternoon of
+        // waiting for the graphics card. The line under "Reading now" says what is happening.
+        Assert.DoesNotContain("reading inside your files now", note, StringComparison.OrdinalIgnoreCase);
     }
 }

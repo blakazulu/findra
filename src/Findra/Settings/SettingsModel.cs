@@ -21,6 +21,8 @@ public enum ControlId
     Hotkey, ShowCapsule, ResetCapsule, Autostart, Helper,
     Drives, AddFolder,
     IndexContent, StartIndexing, IndexPower, Transcribe, Capability, VideoCodec,
+    /// <summary>An installed add-on: Turn off / Turn on, and Remove.</summary>
+    AddOn,
     Version, Updates, CheckUpdates, CheckNow, InstalledVia, Logs, Removing,
 }
 
@@ -77,6 +79,10 @@ public enum SettingsAction
     /// a toggle beside a sentence states a preference and never announces a start.</para>
     /// </summary>
     StartIndexing,
+
+    /// <summary>Remove an add-on, answered in the Remove panel. The argument is the add-on's name,
+    /// a bar, and "keep" or "forget" - what happens to what it already found.</summary>
+    RemoveAddOn,
 }
 
 /// <summary>What the painter draws. It switches on this and on nothing else.</summary>
@@ -102,6 +108,10 @@ public readonly record struct Control(
     public static Control Plain(ControlId id, ControlKind kind, string label,
                                 string value = "", bool on = false, string note = "", int tag = 0) =>
         new(id, kind, label, value, on, [], [], note, tag);
+
+    /// <summary>A dot before the note, for a note that reports a state rather than explaining a
+    /// setting. <see cref="StatusTone.None"/> everywhere but the line under "Reading now".</summary>
+    public StatusTone NoteTone { get; init; }
 }
 
 /// <summary>
@@ -126,6 +136,17 @@ public sealed record SettingsState(Config Config)
     /// was pressed three times by somebody who could see no evidence either way.</summary>
     public long Pending { get; init; }
     public long Indexed { get; init; }
+
+    /// <summary>Files dealt with: read, left out, or not readable. What the button counts, so a
+    /// pass through files that are left out still moves the number.</summary>
+    public long Done { get; init; }
+
+    /// <summary>What reading is doing, in one plain sentence (<see cref="IndexStatus.Sentence"/>),
+    /// shown under "Reading now". Empty while reading is off.</summary>
+    public string ReadingSentence { get; init; } = "";
+
+    /// <summary>The dot beside <see cref="ReadingSentence"/> (<see cref="IndexStatus.Tone"/>).</summary>
+    public StatusTone ReadingTone { get; init; }
     public IReadOnlyList<string> Drives { get; init; } = [];
 
     /// <summary>How many videos Windows has no decoder for, and the codec the row names for it -
@@ -210,6 +231,20 @@ public sealed record SettingsState(Config Config)
     /// <see cref="HoverTarget"/> because the panel is over the pane rather than in it, and a row
     /// underneath must not light up through it.</summary>
     public UpdatePromptTarget PromptHover { get; init; } = UpdatePromptTarget.None;
+
+    /// <summary>The add-on whose Remove question is up, or null. Transient, like
+    /// <see cref="Prompt"/>.</summary>
+    public Capability? Removing { get; init; }
+
+    /// <summary>The Remove question's tick: keep what the add-on already found. On by default,
+    /// because the cheap thing to undo is keeping.</summary>
+    public bool KeepFound { get; init; } = true;
+
+    public RemoveTarget RemoveHover { get; init; } = RemoveTarget.None;
+
+    /// <summary>The add-on being removed right now, so its row says so and refuses a second press.
+    /// </summary>
+    public Capability? RemovingNow { get; init; }
 }
 
 /// <summary>
@@ -272,6 +307,7 @@ public static class SettingsModel
             Section.Opening => Opening(s),
             Section.Searches => Searches(s),
             Section.Content => Content(s),
+            Section.AddOns => AddOnRows(s),
             Section.About => About(s),
             _ => [],
         };
@@ -284,7 +320,8 @@ public static class SettingsModel
     /// <see cref="Controls"/>. The layout pushes every row down by exactly this, so a row with no
     /// note has to report zero rather than one - see ARowWithNoNoteReservesNoRoomForOne.</summary>
     public static IReadOnlyList<int> NoteLines(SettingsState s, SKTypeface face) =>
-        [.. Controls(s).Select(c => Parts.Wrap(c.Note, face, Parts.NoteSize, RailLayout.ControlWidth).Count)];
+        [.. Controls(s).Select(c => Parts.Wrap(c.Note, face, Parts.NoteSize,
+                                               RailLayout.ControlWidth - (c.NoteTone == StatusTone.None ? 0 : Parts.DotIndent)).Count)];
 
     public static int ListRows(SettingsState s) =>
         s is null ? throw new ArgumentNullException(nameof(s))
@@ -440,10 +477,11 @@ public static class SettingsModel
                 : "Off. Searching by name works now; looking inside files walks every drive, so Findra waits to be asked.")
                 + IndexIsInTheClear;
 
-        return (indexerAlive
-            ? "On. Findra is reading inside your files now."
-            : "On, but nothing is being read - indexing only happens while Findra is open.")
-            + IndexIsInTheClear;
+        // Just "on": what reading is doing right now is the sentence under "Reading now", which
+        // is fed the indexer's own state and can say why nothing is moving. This one used to
+        // claim reading was happening while it waited all afternoon for the graphics card.
+        _ = indexerAlive;
+        return "On." + IndexIsInTheClear;
     }
 
     /// <summary>
@@ -500,7 +538,9 @@ public static class SettingsModel
                           Reading(s.IndexerAlive, s.Pending) ? "Reading now" : "Start reading now",
                           s.Waiting(ControlId.StartIndexing)
                               ? "Starting..."
-                              : StartReadingLabel(s.IndexerAlive, s.Pending, s.Indexed)),
+                              : StartReadingLabel(s.IndexerAlive, s.Pending, Math.Max(s.Done, s.Indexed)),
+                          note: s.Config.IndexContent ? s.ReadingSentence : "")
+                with { NoteTone = s.Config.IndexContent && s.ReadingSentence.Length > 0 ? s.ReadingTone : StatusTone.None },
             new(ControlId.IndexPower, ControlKind.Choice, "Indexing power",
                 IndexPowerLevels.ShortName(s.Config.IndexPower), false, powers,
                 [.. IndexPowerLevels.Presets.Select(p => p == s.Config.IndexPower)],
@@ -508,46 +548,131 @@ public static class SettingsModel
             new(ControlId.Transcribe, ControlKind.Choice, "Transcribe up to",
                 TranscribeLimit.Describe(s.Config.TranscribeMinutes), false, presets,
                 [.. TranscribeLimit.Presets.Select(m => m == s.Config.TranscribeMinutes)],
-                "One number for audio and video. Anything longer is skipped; raising it picks up those files.", 0),
+                "How long a recording or video Findra will listen to. Longer ones are left out.", 0),
         };
 
+        return rows;
+    }
+
+    // ---- Add-ons ------------------------------------------------------------------------------
+
+    /// <summary>What an add-on does for somebody, in one line.</summary>
+    public static string Describe(Capability c) => c switch
+    {
+        Capability.Photos => "Find photos and video by what is in them.",
+        Capability.Meaning => "Find documents by what they mean, not only their exact words.",
+        Capability.Speech => "Find recordings and videos by what is said in them.",
+        Capability.Hebrew => "Better transcripts for Hebrew recordings.",
+        _ => "",
+    };
+
+    /// <summary>What an add-on that is turned off is not doing, and what it still does.</summary>
+    public static string OffNote(Capability c, bool becauseSpeechIsOff) =>
+        becauseSpeechIsOff ? "Off, because Speech is off."
+        : c switch
+        {
+            Capability.Photos => "Off. New photos and videos are not read. What was already found can still be searched.",
+            Capability.Meaning => "Off. New documents are read for their words only. What was already found can still be searched.",
+            Capability.Speech => "Off. New recordings are not listened to. What was already heard can still be found.",
+            Capability.Hebrew => "Off. Hebrew recordings get the ordinary transcript.",
+            _ => "Off.",
+        };
+
+    /// <summary>Is this add-on turned off, by itself or because Speech is?</summary>
+    public static bool IsOff(Capability c, Config config)
+    {
+        IReadOnlyList<Capability> off = AddOns.Off(config);
+        return off.Contains(c) || (c == Capability.Hebrew && off.Contains(Capability.Speech));
+    }
+
+    private static IReadOnlyList<Control> AddOnRows(SettingsState s)
+    {
+        var rows = new List<Control>();
         foreach (Capability c in Capabilities.All)
         {
             if (c == Capability.Hebrew && !s.HebrewOffered) continue;
+            string title = Capabilities.Title(c);
+
             if (!s.Installed.Has(c))
             {
                 // MARGINAL, given what is already there (spec §6). Meaning and Speech share the
                 // e5 pair, so a fixed per-row number makes the total fail to add up in public.
-                rows.Add(Control.Plain(ControlId.Capability, ControlKind.Button, Capabilities.Title(c),
+                string needs = c == Capability.Hebrew && !s.Installed.Has(Capability.Speech) ? " Needs Speech, which it adds too." : "";
+                rows.Add(Control.Plain(ControlId.Capability, ControlKind.Button, title,
                                        s.Waiting(ControlId.Capability) ? "Downloading..." :
-                                       Sizes.Human(Capabilities.MarginalBytes(c, s.Installed)), tag: (int)c));
+                                       "Add · " + Sizes.Human(Capabilities.MarginalBytes(c, s.Installed)),
+                                       note: Describe(c) + needs, tag: (int)c));
                 continue;
             }
 
-            // The blocked count belongs on THIS row rather than one of its own: the pane is a
-            // fixed rectangle and is already full, and a video Findra cannot read is a fact about
-            // what this capability can do here.
+            if (s.RemovingNow == c)
+            {
+                rows.Add(Control.Plain(ControlId.AddOn, ControlKind.Text, title, "Removing...", tag: (int)c));
+                continue;
+            }
+
+            bool off = IsOff(c, s.Config);
+            bool becauseSpeech = c == Capability.Hebrew && off && !AddOns.Off(s.Config).Contains(Capability.Hebrew);
+            string[] options = [off ? "Turn on" : "Turn off", "Remove"];
+            rows.Add(new Control(ControlId.AddOn, ControlKind.Choice, title, "", false, options, [false, false],
+                                 off ? OffNote(c, becauseSpeech) : "On. " + Describe(c), (int)c));
+
+            // What Windows cannot decode, beside the add-on that would read it. The NAMED codec's
+            // own count on the button, and the total on the row that names nothing: "30 need
+            // HEVC" over 24 HEVC files and 6 in some other format promises that installing HEVC
+            // clears all 30, and it clears 24.
             if (c == Capability.Photos && s.BlockedVideos > 0)
             {
                 string? product = s.BlockedCodec is { } codec ? VideoCodecStore.ProductFor(codec) : null;
-                // The NAMED codec's own count on the button, and the total on the row that names
-                // nothing. They are different numbers whenever a library is blocked on more than
-                // one codec: "30 need HEVC" over 24 HEVC files and 6 in some other format promises
-                // that installing HEVC clears all 30, and it clears 24. The row with no codec in
-                // it is a sentence about every video Findra cannot read, so there the total is the
-                // true number.
                 rows.Add(product is not null
-                    ? Control.Plain(ControlId.VideoCodec, ControlKind.Button, Capabilities.Title(c),
-                                    $"{s.BlockedForCodec.ToString("N0", Fixed)} need {s.BlockedCodec}", tag: (int)c)
-                    : Control.Plain(ControlId.VideoCodec, ControlKind.Text, Capabilities.Title(c),
-                                    $"installed, {s.BlockedVideos.ToString("N0", Fixed)} unreadable", tag: (int)c));
-                continue;
+                    ? Control.Plain(ControlId.VideoCodec, ControlKind.Button, "Videos it can't open",
+                                    $"{s.BlockedForCodec.ToString("N0", Fixed)} need {s.BlockedCodec}",
+                                    note: "Windows needs an extension from the Microsoft Store to open these.", tag: (int)c)
+                    : Control.Plain(ControlId.VideoCodec, ControlKind.Text, "Videos it can't open",
+                                    $"{s.BlockedVideos.ToString("N0", Fixed)} left out", tag: (int)c));
             }
-
-            rows.Add(Control.Plain(ControlId.Capability, ControlKind.Text, Capabilities.Title(c), "installed", tag: (int)c));
         }
-
         return rows;
+    }
+
+    /// <summary>
+    /// Turn an add-on off or on. Turning Hebrew on while Speech is off turns Speech on too, because
+    /// Hebrew is a second pass over what Speech heard.
+    /// </summary>
+    public static Config ToggleAddOn(Config c, Capability addOn)
+    {
+        ArgumentNullException.ThrowIfNull(c);
+        var off = new List<Capability>(AddOns.Off(c));
+        if (IsOff(addOn, c))
+        {
+            off.Remove(addOn);
+            if (addOn == Capability.Hebrew) off.Remove(Capability.Speech);
+        }
+        else off.Add(addOn);
+        return c with { AddOnsOff = [.. off.Distinct().Order().Select(x => x.ToString())] };
+    }
+
+    /// <summary>
+    /// What an answer in the Remove panel does. Cancel puts it away; the tick flips; Remove asks the
+    /// shell to do it and puts the panel away, and the row says "Removing..." until the shell says
+    /// it is done.
+    /// </summary>
+    public static SettingsOutcome AnswerRemove(SettingsState s, RemoveTarget target)
+    {
+        ArgumentNullException.ThrowIfNull(s);
+        if (s.Removing is not { } c) return SettingsOutcome.Nothing(s);
+        return target switch
+        {
+            RemoveTarget.Keep when RemovePrompt.KeepLabel(c).Length > 0 =>
+                SettingsOutcome.Changed(s with { KeepFound = !s.KeepFound }),
+            RemoveTarget.Cancel =>
+                SettingsOutcome.Changed(s with { Removing = null, RemoveHover = RemoveTarget.None }),
+            RemoveTarget.Remove =>
+                SettingsOutcome.Ask(s with { Removing = null, RemoveHover = RemoveTarget.None, RemovingNow = c },
+                                    SettingsAction.RemoveAddOn,
+                                    c + "|" + (s.KeepFound || RemovePrompt.KeepLabel(c).Length == 0 ? "keep" : "forget")),
+            _ => SettingsOutcome.Nothing(s),
+        };
     }
 
     // ---- About -------------------------------------------------------------------------------
@@ -701,6 +826,10 @@ public static class SettingsModel
                 SettingsOutcome.Changed(s with { Config = c with { TranscribeMinutes = TranscribeLimit.Presets[hit.Option] } }),
             ControlId.Capability when row.Kind == ControlKind.Button =>
                 SettingsOutcome.Ask(s, SettingsAction.InstallCapability, ((Capability)row.Tag).ToString()),
+            ControlId.AddOn when hit.Target == PanelTarget.Option && hit.Option == 0 =>
+                SettingsOutcome.Changed(s with { Config = ToggleAddOn(c, (Capability)row.Tag) }),
+            ControlId.AddOn when hit.Target == PanelTarget.Option && hit.Option == 1 =>
+                SettingsOutcome.Changed(s with { Removing = (Capability)row.Tag, KeepFound = true, RemoveHover = RemoveTarget.None }),
             ControlId.VideoCodec when s.BlockedCodec is { } codec && VideoCodecStore.ProductFor(codec) is { } product =>
                 SettingsOutcome.Ask(s, SettingsAction.OpenCodecStore, product),
 

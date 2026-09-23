@@ -79,6 +79,35 @@ public sealed class IndexerHost : IDisposable
 
     public bool Running { get { lock (_gate) return _child is { Alive: true }; } }
 
+    /// <summary>How long a child has to have run for its crash to start the backoff again.</summary>
+    public const int HealthyMinutes = 10;
+
+    private DateTime _diedAt = DateTime.MinValue;
+
+    private static double Backoff(int restarts) => Math.Min(300, 5 * Math.Pow(2, Math.Max(0, restarts - 1)));
+
+    /// <summary>
+    /// Seconds until a crashed child is started again, or 0 when one is running or nothing is
+    /// waiting. What the surfaces say instead of "Findra is closed" while it waits: in the backoff
+    /// there is no child, and every surface used to read that as Findra not running at all.
+    /// </summary>
+    public int RestartIn
+    {
+        get
+        {
+            lock (_gate)
+            {
+                if (_stopped || _child is { Alive: true }) return 0;
+                // A child that has died and not been noticed yet will be on the next turn.
+                int restarts = _child is not null ? _restarts + 1 : _restarts;
+                DateTime diedAt = _child is not null ? _now() : _diedAt;
+                if (restarts == 0 || diedAt == DateTime.MinValue) return 0;
+                double left = Backoff(restarts) - (_now() - diedAt).TotalSeconds;
+                return left <= 0 ? 0 : (int)Math.Ceiling(left);
+            }
+        }
+    }
+
     /// <summary>
     /// How long the child now running has been running, or null when there is not one.
     ///
@@ -108,17 +137,21 @@ public sealed class IndexerHost : IDisposable
             if (_child is { Alive: true }) return;
             if (_child is not null)
             {
+                // A child that worked for a while before it died is not part of a storm: the count
+                // starts again, so one bad file an hour in waits five seconds rather than the five
+                // minutes a string of crashes last week had built up.
+                if (_lastStart != DateTime.MinValue && (_now() - _lastStart).TotalMinutes >= HealthyMinutes) _restarts = 0;
                 Log.Warn("index", $"indexer exited with code {_child.ExitCode.ToString(CultureInfo.InvariantCulture)} - restarting" +
                                    (_restarts > 0 ? $" (restart {(_restarts + 1).ToString(CultureInfo.InvariantCulture)})" : ""));
                 _child.Dispose(); _child = null;
                 _restarts++;
+                _diedAt = _now();
             }
             // backoff: 5 s, 10, 20 ... capped at 5 min, so a file that kills it every time does
             // not turn into a process storm. A WATCHDOG kill leaves _restarts at 0 and so restarts
             // at once, which is deliberate and is bounded by the grace period in
             // IndexerWatch.ShouldRestart rather than by a wait here.
-            double wait = Math.Min(300, 5 * Math.Pow(2, Math.Max(0, _restarts - 1)));
-            if (_restarts > 0 && (_now() - _lastStart).TotalSeconds < wait) return;
+            if (_restarts > 0 && (_now() - _diedAt).TotalSeconds < Backoff(_restarts)) return;
 
             IChild? started = _spawn();
             if (started is null) return;

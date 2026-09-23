@@ -2,8 +2,8 @@ using SkiaSharp;
 
 namespace Findra;
 
-/// <summary>The settings window's five sections, in rail order (spec §7).</summary>
-public enum Section { Look, Opening, Searches, Content, About }
+/// <summary>The settings window's six sections, in rail order (spec §7).</summary>
+public enum Section { Look, Opening, Searches, Content, AddOns, About }
 
 /// <summary>What a pointer landed on. Shared by the settings window and the first-run screen,
 /// which is why it is not called SettingsTarget.</summary>
@@ -112,7 +112,7 @@ public static class RailLayout
     public const float ListRemoveW = 26f;
 
     public static readonly IReadOnlyList<Section> Sections =
-        [Section.Look, Section.Opening, Section.Searches, Section.Content, Section.About];
+        [Section.Look, Section.Opening, Section.Searches, Section.Content, Section.AddOns, Section.About];
 
     public static string Title(Section s) => s switch
     {
@@ -120,6 +120,7 @@ public static class RailLayout
         Section.Opening => "Opening it",
         Section.Searches => "Where it searches",
         Section.Content => "Content",
+        Section.AddOns => "Models toggle",
         Section.About => "About",
         _ => "",
     };

@@ -340,7 +340,8 @@ public sealed class CardWindow : Window
         private string ContentStatusLine(ContentDb db)
         {
             string state, beat, pid;
-            long pending, indexed;
+            long pending, indexed, failed, leftOut;
+            IndexExtra extra;
             bool rebuilt, contentOn;
             lock (_dbGate)
             {
@@ -361,8 +362,8 @@ public sealed class CardWindow : Window
                 // reads the two together, so this card, the capsule, --searchprobe and
                 // --searchindex give one answer about one pair of rows rather than four.
                 pid = db.Get("indexer:pid") ?? "";
-                pending = db.PendingCount();
-                indexed = db.IndexedCount();
+                (pending, indexed, failed, leftOut) = db.Counts();
+                extra = IndexStatus.ExtraFrom(db.Get, leftOut, failed);
                 // WasRebuilt is a fact about the OPEN that rebuilt the file, and this card reads
                 // through its own read-only connection, which did no such thing. The session that
                 // owns the writer records the answer in the index itself for exactly that reason,
@@ -385,8 +386,8 @@ public sealed class CardWindow : Window
             // owes somebody who opened it is answered by the Content pill in its own header,
             // and a bar resting at 100% under it was a second answer to that question.
             Progress = IndexStatus.Pill(contentOn, db.Get("indexer:kind") ?? "", pending, indexed,
-                                        IndexStatus.Alive(beat, pid), state);
-            return IndexStatus.Line(contentOn, state, pending, indexed, IndexStatus.Alive(beat, pid), rebuilt);
+                                        IndexStatus.Alive(beat, pid), state, extra);
+            return IndexStatus.Line(contentOn, state, pending, indexed, IndexStatus.Alive(beat, pid), rebuilt, extra);
         }
 
         // ---- typing ----

@@ -46,6 +46,112 @@ public sealed class IndexGateTests : IDisposable
     }
 
     [Fact]
+    public void OnlyAFullscreenAppAGameOrAPresentationHoldsReadingBack()
+    {
+        Assert.Equal((true, "a fullscreen app"), IndexGate.Holds(2));
+        Assert.Equal((true, "a fullscreen game"), IndexGate.Holds(3));
+        Assert.Equal((true, "presentation mode"), IndexGate.Holds(4));
+        // Quiet time is the first hour after a first sign-in on a fresh install - exactly when a
+        // new machine's owner installs Findra - and a locked screen is the best time to read.
+        Assert.False(IndexGate.Holds(6).Hold);
+        Assert.False(IndexGate.Holds(1).Hold);
+        Assert.False(IndexGate.Holds(5).Hold);
+        Assert.False(IndexGate.Holds(7).Hold);
+    }
+
+    [Fact]
+    public void ACardTooFullForTheModelsSendsPicturesAndMeaningToTheProcessorRatherThanWaiting()
+    {
+        // A 3 GB card whose ordinary desktop holds 2 GB of it: waiting for room that never comes
+        // was the whole afternoon. Nothing Findra does on the processor touches the card.
+        GateVerdict photo = IndexGate.Decide(isDelete: false, usesModels: true, usesSpeech: false,
+                                             fullscreen: false, "", GpuPressure.Memory, "other programs hold 2.04 GB");
+        Assert.True(photo.Run);
+        Assert.Equal(IndexGate.OnProcessor, photo.State);
+        Assert.Equal("other programs hold 2.04 GB", photo.Reason);
+    }
+
+    [Fact]
+    public void SpeechStillWaitsForRoomOnTheCardBecauseItCannotMoveToTheProcessorMidSession()
+    {
+        GateVerdict v = IndexGate.Decide(isDelete: false, usesModels: true, usesSpeech: true,
+                                         fullscreen: false, "", GpuPressure.Memory, "other programs hold 2.04 GB");
+        Assert.False(v.Run);
+        Assert.Equal(IndexGate.GpuBusy, v.State);
+    }
+
+    [Fact]
+    public void ACardSomebodyIsWorkingStillMakesEverythingThatNeedsItWait()
+    {
+        GateVerdict v = IndexGate.Decide(isDelete: false, usesModels: true, usesSpeech: false,
+                                         fullscreen: false, "", GpuPressure.Engine, "game is using 90% of the card");
+        Assert.False(v.Run);
+        Assert.Equal(IndexGate.GpuBusy, v.State);
+        Assert.True(IndexGate.Decide(false, usesModels: false, usesSpeech: false, false, "", GpuPressure.Engine, "x").Run);
+        Assert.False(IndexGate.Decide(false, true, false, fullscreen: true, "a fullscreen game", GpuPressure.Memory, "x").Run);
+    }
+
+    [Fact]
+    public void OnlyTheSpeechModelMakesAFileASpeechFile()
+    {
+        var speech = new CapabilitySet(new HashSet<Capability> { Capability.Speech, Capability.Meaning, Capability.Photos });
+        var photos = new CapabilitySet(new HashSet<Capability> { Capability.Photos });
+        Assert.True(IndexGate.UsesSpeech(ResultKind.Audio, speech));
+        Assert.True(IndexGate.UsesSpeech(ResultKind.Video, speech));
+        Assert.False(IndexGate.UsesSpeech(ResultKind.Video, photos));
+        Assert.False(IndexGate.UsesSpeech(ResultKind.Photo, speech));
+        Assert.False(IndexGate.UsesSpeech(ResultKind.Document, speech));
+    }
+
+    [Fact]
+    public void TheHoldRemembersWhetherTheCardWasFullOrWorked()
+    {
+        var hold = new GpuHold();
+        hold.Update(true, "other programs hold 2 GB", 0, GpuPressure.Memory);
+        Assert.Equal(GpuPressure.Memory, hold.Pressure);
+        // Somebody starts a game: working the card outranks a full one.
+        hold.Update(true, "game is using 90% of the card", 5, GpuPressure.Engine);
+        Assert.Equal(GpuPressure.Engine, hold.Pressure);
+        // The game closes and the card is merely full again: a minute of that before the hold
+        // steps down, or a full card would keep everything waiting for good.
+        hold.Update(true, "other programs hold 2 GB", 10, GpuPressure.Memory);
+        Assert.Equal(GpuPressure.Engine, hold.Pressure);
+        var down = hold.Update(true, "other programs hold 2 GB", 10 + IndexGate.ClearSeconds, GpuPressure.Memory);
+        Assert.Equal(GpuPressure.Memory, hold.Pressure);
+        Assert.True(down.Changed);
+        Assert.Equal("other programs hold 2 GB", down.Reason);
+        // Free for less than the minute: still held, still for the same reason.
+        hold.Update(false, "", 100);
+        Assert.Equal(GpuPressure.Memory, hold.Pressure);
+        hold.Update(false, "", 100 + IndexGate.ClearSeconds);
+        Assert.Equal(GpuPressure.None, hold.Pressure);
+    }
+
+    [Fact]
+    public void TheIndexerReadsOnTheProcessorWhileTheGateSaysSoAndGoesBackWhenItDoesNot()
+    {
+        Directory.CreateDirectory(_dir);
+        string a = Path.Combine(_dir, "harbour.jpg"), b = Path.Combine(_dir, "quay.jpg");
+        File.WriteAllBytes(a, new byte[64]);
+        File.WriteAllBytes(b, new byte[64]);
+
+        using var db = new ContentDb(Path.Combine(_dir, "search.db"));
+        db.Enqueue("C", 1, a, ResultKind.Photo, "new");
+        db.Enqueue("C", 2, b, ResultKind.Photo, "new");
+        var d = new UnloadCounting(new CapabilitySet(new HashSet<Capability> { Capability.Photos }));
+
+        int passes = 0, asked = 0;
+        Indexer.Loop(db, parentPid: 0, running: () => passes++ < 2, decoders: d,
+                     gate: (_, _) => asked++ == 0
+                         ? new GateVerdict(true, IndexGate.OnProcessor, "other programs hold 2.04 GB")
+                         : GateVerdict.Go);
+
+        Assert.Equal(2, d.DecodeCalls);
+        Assert.Equal(new[] { true, false }, d.OnProcessorCalls);
+        Assert.Equal(0L, db.PendingCount());
+    }
+
+    [Fact]
     public void NothingInTheWayIsAGo()
         => Assert.True(IndexGate.Decide(false, true, false, "", false, "").Run);
 
@@ -222,6 +328,95 @@ public sealed class IndexGateTests : IDisposable
     }
 
     [Fact]
+    public void APhotoHeldBackForTheCardDoesNotHoldBackTheDocumentsBehindIt()
+    {
+        // The queue is taken in order, and one photo at the front used to stop every document
+        // behind it for as long as somebody else's model sat on the card - reading words out of a
+        // document never touches the card at all.
+        Directory.CreateDirectory(_dir);
+        string photo = Path.Combine(_dir, "harbour.jpg");
+        File.WriteAllBytes(photo, new byte[64]);
+        string doc = Path.Combine(_dir, "minutes.txt");
+        File.WriteAllText(doc, "the harbour board met on tuesday");
+
+        using var db = new ContentDb(Path.Combine(_dir, "search.db"));
+        db.Enqueue("C", 1, photo, ResultKind.Photo, "new");
+        db.Enqueue("C", 2, doc, ResultKind.Document, "new");
+        var d = new UnloadCounting(new CapabilitySet(new HashSet<Capability> { Capability.Photos }));
+
+        int passes = 0;
+        Indexer.Loop(db, parentPid: 0, running: () => passes++ < 1, decoders: d,
+                     gate: (_, kind) => kind == ResultKind.Photo ? CardBusy : GateVerdict.Go);
+
+        Assert.Equal(new[] { ResultKind.Document }, d.Decoded);
+        ContentDb.Pending? left = db.TakeNext();
+        Assert.NotNull(left);
+        Assert.Equal(ResultKind.Photo, left.Value.Kind);
+        Assert.Equal(1L, db.PendingCount());
+    }
+
+    [Fact]
+    public void WhenEveryKindQueuedIsHeldBackTheIndexerWaitsAndSaysSo()
+    {
+        Directory.CreateDirectory(_dir);
+        string photo = Path.Combine(_dir, "harbour.jpg");
+        File.WriteAllBytes(photo, new byte[64]);
+        string clip = Path.Combine(_dir, "quay.mp4");
+        File.WriteAllBytes(clip, new byte[64]);
+
+        using var db = new ContentDb(Path.Combine(_dir, "search.db"));
+        db.Enqueue("C", 1, photo, ResultKind.Photo, "new");
+        db.Enqueue("C", 2, clip, ResultKind.Video, "new");
+        var d = new UnloadCounting(new CapabilitySet(new HashSet<Capability> { Capability.Photos }));
+
+        int passes = 0;
+        Indexer.Loop(db, parentPid: 0, running: () => passes++ < 1, decoders: d,
+                     gate: (_, kind) => kind == ResultKind.Document ? GateVerdict.Go : CardBusy);
+
+        Assert.Equal(0, d.DecodeCalls);
+        Assert.Equal(2L, db.PendingCount());
+        Assert.Equal(IndexGate.GpuBusy, db.Get("indexer:state"));
+    }
+
+    [Fact]
+    public void FullscreenHoldsBackTheDocumentsBehindAPhotoToo()
+    {
+        Directory.CreateDirectory(_dir);
+        string photo = Path.Combine(_dir, "harbour.jpg");
+        File.WriteAllBytes(photo, new byte[64]);
+        string doc = Path.Combine(_dir, "minutes.txt");
+        File.WriteAllText(doc, "the harbour board met on tuesday");
+
+        using var db = new ContentDb(Path.Combine(_dir, "search.db"));
+        db.Enqueue("C", 1, photo, ResultKind.Photo, "new");
+        db.Enqueue("C", 2, doc, ResultKind.Document, "new");
+        var d = new UnloadCounting(new CapabilitySet(new HashSet<Capability> { Capability.Photos }));
+
+        int passes = 0;
+        Indexer.Loop(db, parentPid: 0, running: () => passes++ < 1, decoders: d,
+                     gate: (_, _) => new GateVerdict(false, IndexGate.Fullscreen, "a fullscreen game"));
+
+        Assert.Equal(0, d.DecodeCalls);
+        Assert.Equal(2L, db.PendingCount());
+    }
+
+    [Fact]
+    public void TheNextRowOfAKindSkipsEveryOtherKindAndKeepsQueueOrder()
+    {
+        Directory.CreateDirectory(_dir);
+        using var db = new ContentDb(Path.Combine(_dir, "search.db"));
+        db.Enqueue("C", 1, @"C:\a.jpg", ResultKind.Photo, "new");
+        db.Enqueue("C", 2, @"C:\b.txt", ResultKind.Document, "new");
+        db.Enqueue("C", 3, @"C:\c.mp4", ResultKind.Video, "new");
+        db.Enqueue("C", 4, @"C:\d.txt", ResultKind.Document, "new");
+
+        Assert.Equal(2UL, db.TakeNextOf([ResultKind.Document, ResultKind.Video])!.Value.Frn);
+        Assert.Equal(3UL, db.TakeNextOf([ResultKind.Video])!.Value.Frn);
+        Assert.Null(db.TakeNextOf([ResultKind.Audio]));
+        Assert.Null(db.TakeNextOf([]));
+    }
+
+    [Fact]
     public void APausedIndexerHoldsNoModels()
     {
         Directory.CreateDirectory(_dir);
@@ -240,15 +435,15 @@ public sealed class IndexGateTests : IDisposable
     {
         IndexProgress pill = IndexStatus.Pill(true, nameof(ResultKind.Audio), 40, 60, alive: true, IndexGate.GpuBusy);
         Assert.True(pill.Show);
-        Assert.Equal("waiting for the GPU", pill.Label);
-        Assert.Equal("waiting: fullscreen",
+        Assert.Equal("paused · another app is busy", pill.Label);
+        Assert.Equal("paused · full-screen app",
                      IndexStatus.Pill(true, nameof(ResultKind.Audio), 40, 60, alive: true, IndexGate.Fullscreen).Label);
-        Assert.Equal("indexing recordings",
+        Assert.Equal("reading recordings",
                      IndexStatus.Pill(true, nameof(ResultKind.Audio), 40, 60, alive: true, "indexing").Label);
 
-        Assert.Equal("40 waiting - another program is using the graphics card",
+        Assert.Equal("paused while another app is busy · 40 files to go",
                      IndexStatus.Line(true, IndexGate.GpuBusy, 40, 60, alive: true, rebuilt: false));
-        Assert.Equal("40 waiting - something is fullscreen",
+        Assert.Equal("paused while you're in a full-screen app · 40 files to go",
                      IndexStatus.Line(true, IndexGate.Fullscreen, 40, 60, alive: true, rebuilt: false));
     }
 
@@ -256,12 +451,21 @@ public sealed class IndexGateTests : IDisposable
     {
         public CapabilitySet Installed { get; } = installed;
         public int DecodeCalls, UnloadCalls;
+        public readonly List<ResultKind> Decoded = [];
         public bool CanRead(ResultKind kind) => Decoders.Covers(kind, Installed);
-        public KindResult Decode(ResultKind kind, string path, long bytes) { DecodeCalls++; return new KindResult([], null); }
+        public KindResult Decode(ResultKind kind, string path, long bytes) { DecodeCalls++; Decoded.Add(kind); return new KindResult([], null); }
         public KindResult DecodeFrames(string path) { DecodeCalls++; return new KindResult([], null); }
         public void Flush() { }
         public void Release(IReadOnlyList<long> rows) { }
         public void Unload() => UnloadCalls++;
+        public readonly List<bool> OnProcessorCalls = [];
+        private bool? _onProcessor;
+        public void OnProcessor(bool yes, string why)
+        {
+            if (_onProcessor == yes) return;
+            _onProcessor = yes;
+            OnProcessorCalls.Add(yes);
+        }
         public void Dispose() { }
     }
 }

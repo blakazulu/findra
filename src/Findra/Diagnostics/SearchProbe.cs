@@ -101,7 +101,9 @@ public static class SearchProbe
         {
             using var gate = new MachineGate(() => CapabilitySet.Installed(), parentPid: 0);
             GateVerdict v = gate.Probe();
-            return GateLabel + (v.Run
+            return GateLabel + (v.Run && v.State == IndexGate.OnProcessor
+                ? $"would run on the processor - the card is too full ({v.Reason}); speech would wait"
+                : v.Run
                 ? "would run - nothing fullscreen, and no other program on the graphics card"
                 : $"would wait - {v.State}" + (v.Reason.Length > 0 ? $" ({v.Reason})" : ""));
         }

@@ -190,6 +190,9 @@ internal sealed class Shell : ISettingsHost
     private volatile string _indexLine = "";
     private long _indexPending;
     private long _indexIndexed;
+    private long _indexDone;
+    private string _readingSentence = "";
+    private StatusTone _readingTone;
 
     /// <summary>How many videos Windows cannot decode, and the codec the row would name, last
     /// computed while a settings window was open. The grouped scan behind them runs only then
@@ -621,50 +624,77 @@ internal sealed class Shell : ISettingsHost
     /// tell an answer from a dismissal, and the two need opposite recoveries.</summary>
     private bool _firstRunWasAnswered;
 
-    private void OnFirstRunAnswered(FirstRunWindow window, FirstRunState answer)
+    /// <summary>
+    /// The work behind the first screen's answer, step by step, with the window's card ticking each
+    /// one as it really finishes (<see cref="FirstRunWork"/>). The window waits under the card and
+    /// shows the next page only when this ends, however it ends.
+    ///
+    /// <para>Every step yields a frame after its tick. The work runs on the interface thread, and
+    /// without the yield the card would sit on its first step and then vanish.</para>
+    /// </summary>
+    private async void OnFirstRunAnswered(FirstRunWindow window, FirstRunState answer)
     {
-        _firstRunWasAnswered = true;
-        _config = FirstRun.Outcome(answer, _config);
-        _config.Save();
-        Log.Info("startup", "the first-run screen was answered: " +
-                            (answer.Chosen.Count == 0
-                                ? "no capabilities"
-                                : string.Join(", ", answer.Chosen.Select(Capabilities.Title))) +
-                            ", looking inside files " + (_config.IndexContent ? "on" : "off") +
-                            ", update checks " + (_config.CheckForUpdates ? "on" : "off") +
-                            ", transcribing up to " + TranscribeLimit.Describe(_config.TranscribeMinutes));
-
-        string exe = Environment.ProcessPath ?? "";
-        if (answer.StartAtLogon) Autostart.Set(exe); else Autostart.Clear();
-
-        // The names helper first, and immediately: it is the one thing that does not wait for the
-        // download, because searching by name is what works with nobody's models and nobody should
-        // wait on a 1.5 GB file for their filenames.
-        RegisterAndStartHelper(exe);
-
-        // And now the rest of Findra - the hotkey, the capsule, the content index, the tray and
-        // the update check - which have been waiting for this answer rather than appearing behind
-        // the screen while it was being read.
-        StartTheRest();
-        // The page that follows the answer names the hotkey, and the chord that registered is not
-        // always the one configured: the chain takes the first Windows gives it.
-        window.NoteHotkey(_hotkey?.Landed);
-
-        IReadOnlyList<Model> wanted = FirstRun.Wanted(answer);
-        // Always, even when it is empty: the bars are drawn from what is NOT being fetched as
-        // much as from what is, so a selection already on disk shows full rather than "0 of 2".
-        window.NoteFetching(wanted);
-        if (wanted.Count == 0)
+        try
         {
-            // Everything chosen is already here - a reinstall, or somebody who took the same
-            // capabilities from `--models install` first. The startup gate has already planned
-            // whatever they owe the index, so there is nothing to fetch and nothing to queue.
-            Log.Info("models", "everything chosen is already on disk; nothing was fetched");
-            window.NoteFinished("");
-            return;
-        }
+            _firstRunWasAnswered = true;
+            _config = FirstRun.Outcome(answer, _config);
+            _config.Save();
+            Log.Info("startup", "the first-run screen was answered: " +
+                                (answer.Chosen.Count == 0
+                                    ? "no capabilities"
+                                    : string.Join(", ", answer.Chosen.Select(Capabilities.Title))) +
+                                ", looking inside files " + (_config.IndexContent ? "on" : "off") +
+                                ", update checks " + (_config.CheckForUpdates ? "on" : "off") +
+                                ", transcribing up to " + TranscribeLimit.Describe(_config.TranscribeMinutes));
 
-        _ = FetchFirstRunAsync(window, wanted);
+            string exe = Environment.ProcessPath ?? "";
+            if (answer.StartAtLogon) Autostart.Set(exe); else Autostart.Clear();
+            window.StepDone(FirstRunWork.SavingStep);
+            await FirstRunWindow.Frame();
+
+            // The names helper first, and immediately: it is the one thing that does not wait for
+            // the download, because searching by name works with nobody's models. Its Windows prompt
+            // comes up now, and waiting for the answer runs beside the next step.
+            Task helper = RegisterAndStartHelper(exe);
+
+            // And now the rest of Findra - the hotkey, the capsule, the content index, the tray and
+            // the update check - which have been waiting for this answer rather than appearing
+            // behind the screen while it was being read.
+            StartTheRest();
+            // The page that follows the answer names the hotkey, and the chord that registered is
+            // not always the one configured: the chain takes the first Windows gives it.
+            window.NoteHotkey(_hotkey?.Landed);
+            window.StepDone(FirstRunWork.HotkeyStep);
+            await FirstRunWindow.Frame();
+
+            await helper;
+            window.StepDone(FirstRunWork.NameSearchStep);
+            await FirstRunWindow.Frame();
+
+            IReadOnlyList<Model> wanted = FirstRun.Wanted(answer);
+            // Always, even when it is empty: the bars are drawn from what is NOT being fetched as
+            // much as from what is, so a selection already on disk shows full rather than "0 of 2".
+            window.NoteFetching(wanted);
+            if (wanted.Count == 0)
+            {
+                // Everything chosen is already here - a reinstall, or somebody who took the same
+                // capabilities from `--models install` first. The startup gate has already planned
+                // whatever they owe the index, so there is nothing to fetch and nothing to queue.
+                Log.Info("models", "everything chosen is already on disk; nothing was fetched");
+                window.NoteFinished("");
+            }
+            else _ = FetchFirstRunAsync(window, wanted);
+            window.StepDone(FirstRunWork.DownloadStep);
+            await FirstRunWindow.Frame();
+        }
+        catch (Exception ex)
+        {
+            Log.Error("startup", "setting Findra up after the welcome screen did not finish", ex);
+        }
+        finally
+        {
+            window.EndWork();
+        }
     }
 
     /// <summary>
@@ -681,7 +711,7 @@ internal sealed class Shell : ISettingsHost
     /// throws <c>Win32Exception 1223</c> into Register's own catch and returns false - a decision,
     /// not a fault, so it is logged and the recovery is left to Settings.</para>
     /// </summary>
-    private static void RegisterAndStartHelper(string exe) => _ = Task.Run(() =>
+    private static Task RegisterAndStartHelper(string exe) => Task.Run(() =>
     {
         bool registered = !FirstRun.NeedsHelperRegistration(HelperTask.Query().State)
                           || HelperTask.Register(exe);
@@ -854,8 +884,12 @@ internal sealed class Shell : ISettingsHost
         _installed = installed;
         MakeRoomForTheQueryEncoders(installed);
 
+        // What READS, not what is on disk: an add-on turned off owes no backlog, and planning one
+        // for it would queue its files on every launch for a child that skips them again.
+        CapabilitySet reading = installed.Without(AddOns.Off(_config));
         int requeued = await OnContentLoopAsync(db =>
-            CapabilityGate.Apply(db, CapabilityGate.Plan(installed, CapabilityGate.StampsIn(db))))
+            CapabilityGate.Apply(db, CapabilityGate.Plan(reading, CapabilityGate.StampsIn(db)))
+            + AddOns.CatchUp(db, reading))
             .ConfigureAwait(false);
 
         Log.Info("models", requeued > 0
@@ -961,6 +995,9 @@ internal sealed class Shell : ISettingsHost
         // vector lands (OpenTheQueryEncodersTheIndexNowNeeds). A machine that took nothing gets no
         // Semantic, and one whose models sit unused - "Just names" after a reinstall that kept
         // them - loads nothing: e5 at full precision is about a gigabyte on the processor.
+        // A removal an earlier session could not finish, before anything opens a model.
+        try { AddOns.SweepLeftovers(writer, ModelStore.Dir); }
+        catch (Exception ex) { Log.Warn("models", "could not finish removing model files from an earlier session :: " + ex.Message); }
         _installed = CapabilitySet.Installed();
         _semantic = Semantic.For(_installed);
         (bool heldWords, bool heldPictures) = ContentBranch.Holds(VectorStore.KindsOnDisk());
@@ -986,8 +1023,10 @@ internal sealed class Shell : ISettingsHost
         // instead.
         try
         {
+            CapabilitySet reading = _installed.Without(AddOns.Off(_config));
             int requeued = CapabilityGate.Apply(writer, CapabilityGate.Plan(
-                _installed, CapabilityGate.StampsIn(writer)));
+                reading, CapabilityGate.StampsIn(writer)));
+            requeued += AddOns.CatchUp(writer, reading);
             requeued += CapabilityGate.ApplyLimit(writer, _config.TranscribeMinutes);
             if (requeued > 0)
                 Log.Info("models", $"a change to what Findra can read queued {requeued.ToString("N0", CultureInfo.InvariantCulture)} file(s)");
@@ -1262,6 +1301,8 @@ internal sealed class Shell : ISettingsHost
     private string _indexerPaused = "";
     private string _indexerPower = "";
     private string _indexerMinutes = "";
+    private string? _indexerOff;
+    private string? _restartInRow;
 
     // Every five minutes rather than every pass: the pump comes round every 400 ms and enumerating
     // the platform's transforms is not free.
@@ -1295,6 +1336,9 @@ internal sealed class Shell : ISettingsHost
             // Read by the child per file rather than captured, so a change to the limit reaches
             // the next recording instead of waiting for a restart.
             if (minutes != _indexerMinutes) { db.Set(Indexer.TranscribeMinutesKey, minutes); _indexerMinutes = minutes; }
+            // The add-ons turned off, read by the child per file on the same terms.
+            string off = AddOns.Format(AddOns.Off(cfg));
+            if (off != _indexerOff) { db.Set(AddOns.OffKey, off); _indexerOff = off; }
 
             long pending = db.PendingCount();
 
@@ -1373,7 +1417,11 @@ internal sealed class Shell : ISettingsHost
     /// </summary>
     private void ShowOnCapsule(ContentDb db)
     {
-        long pending = db.PendingCount(), indexed = db.IndexedCount();
+        (long pending, long indexed, long failed, long leftOut) = db.Counts();
+        // How long until a crashed reader is started again, for every surface - the card reads it
+        // through its own connection, so it goes into the index rather than into a field here.
+        string restartIn = (_indexer?.RestartIn ?? 0).ToString(CultureInfo.InvariantCulture);
+        if (restartIn != _restartInRow) { db.Set(IndexStatus.RestartInKey, restartIn); _restartInRow = restartIn; }
         // The pid is read with the heartbeat because IndexStatus.Alive needs both: the same rows
         // are written by a one-shot drain in some other process, and by this one, and only the
         // recorded pid tells a live child from the last thing a finished drain left behind.
@@ -1386,8 +1434,14 @@ internal sealed class Shell : ISettingsHost
         // surfaces, two answers, from the one place that is supposed to have one.
         bool reading = db.Get("index:paused") == "0";
         string state = reading ? db.Get("indexer:state") ?? "" : "paused";
+        IndexExtra extra = IndexStatus.ExtraFrom(db.Get, leftOut, failed, held: _config.IndexContent && _holdReading);
         string line = IndexStatus.Line(reading, state, pending, indexed,
-                                       alive, db.WasRebuilt || db.Get("index:rebuilt") == "1");
+                                       alive, db.WasRebuilt || db.Get("index:rebuilt") == "1", extra);
+        // What Settings says under "Reading now". From the SWITCH, not the row: while the first
+        // screen holds reading, the switch is on and the sentence says what it is waiting for.
+        string sentence = IndexStatus.Sentence(_config.IndexContent, state, pending, indexed, alive, extra);
+        StatusTone tone = IndexStatus.Tone(_config.IndexContent, state, pending, indexed, alive, extra);
+        long done = indexed + leftOut + failed;
 
         // Kept before the early return below. The settings window's Content sentence and the
         // capsule menu's "(not running)" both read these, and neither is asked at the moment the
@@ -1397,6 +1451,9 @@ internal sealed class Shell : ISettingsHost
         _indexLine = line;
         Interlocked.Exchange(ref _indexPending, pending);
         Interlocked.Exchange(ref _indexIndexed, indexed);
+        Interlocked.Exchange(ref _indexDone, done);
+        _readingSentence = sentence;
+        _readingTone = tone;
 
         // And to the settings window if one is open. It reads both for its Content sentence and
         // took them when it opened, so without this the sentence describes the moment somebody
@@ -1424,14 +1481,14 @@ internal sealed class Shell : ISettingsHost
             Interlocked.Exchange(ref _blockedVideos, blocked);
             Interlocked.Exchange(ref _blockedForCodec, worst.Count);
             Interlocked.Exchange(ref _blockedCodec, worst.Codec);
-            Dispatcher.UIThread.Post(() => panel.UseIndexState(indexed > 0, alive, pending, indexed,
+            Dispatcher.UIThread.Post(() => panel.UseIndexState(indexed > 0, alive, pending, indexed, done, sentence, tone,
                                                               blocked, worst.Codec, worst.Count));
         }
         // The capsule's pill: the same facts as the line, laid out for a label / track / count
         // rather than a sentence. Nothing to show is `default`, which draws no pill at all - not a
         // bar at zero, which is what makes an idle widget feel busy.
         IndexProgress pill = IndexStatus.Pill(reading, db.Get("indexer:kind") ?? "",
-                                              pending, indexed, alive, state);
+                                              pending, indexed, alive, state, extra);
 
         if (line == _capsuleLine && pill == _capsulePill) return;
         _capsuleLine = line;
@@ -1775,6 +1832,9 @@ internal sealed class Shell : ISettingsHost
                 IndexerAlive = _indexerAlive,
                 Pending = _indexPending,
                 Indexed = _indexIndexed,
+                Done = _indexDone,
+                ReadingSentence = _readingSentence,
+                ReadingTone = _readingTone,
                 BlockedVideos = _blockedVideos,
                 BlockedCodec = _blockedCodec,
                 BlockedForCodec = _blockedForCodec,
@@ -1808,7 +1868,9 @@ internal sealed class Shell : ISettingsHost
     /// </summary>
     private void OnSettingsChanged(Config c)
     {
+        Config was = _config;
         _config = c;
+        NoteAddOnsTurnedOffOrOn(was, c);
         if (_showCapsuleItem is not null) _showCapsuleItem.IsChecked = c.ShowCapsule;
 
         Palette resolved = Theme.Resolve(c, Theme.WindowsIsLight(), PaletteStore.LoadFromDisk());
@@ -1824,6 +1886,33 @@ internal sealed class Shell : ISettingsHost
 
         if (c.ShowCapsule && _capsule is null) Stage("capsule", CreateCapsule);
         else if (!c.ShowCapsule && _capsule is not null) CloseCapsule();
+    }
+
+    /// <summary>An add-on turned off records when it went away; one turned back on re-reads what
+    /// was read while it was off. On the flow that owns the writer, like every re-queue.</summary>
+    private void NoteAddOnsTurnedOffOrOn(Config was, Config now)
+    {
+        IReadOnlyList<Capability> offBefore = AddOns.Off(was), offNow = AddOns.Off(now);
+        if (offBefore.Order().SequenceEqual(offNow.Order())) return;
+
+        CapabilitySet installed = _installed;
+        CapabilitySet readingBefore = installed.Without(offBefore), readingNow = installed.Without(offNow);
+        long at = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+        Task<int> done = OnContentLoopAsync(db =>
+        {
+            foreach (Capability c in Capabilities.All)
+                if (readingBefore.Has(c) && !readingNow.Has(c))
+                {
+                    AddOns.NoteAway(db, c, at);
+                    Log.Info("models", $"{Capabilities.Title(c)} was turned off: it reads nothing new, and what it found stays searchable");
+                }
+            return AddOns.CatchUp(db, readingNow);
+        });
+        _ = done.ContinueWith(t =>
+        {
+            if (t.Exception is { } failed)
+                Log.Error("models", "turning an add-on off or on did not reach the content index", failed.GetBaseException());
+        }, CancellationToken.None, TaskContinuationOptions.ExecuteSynchronously, TaskScheduler.Default);
     }
 
     /// <summary>Everything painted in the palette except the window that chose it, which today is
@@ -1943,6 +2032,94 @@ internal sealed class Shell : ISettingsHost
         Waiting(ControlId.Capability, true);
         _ = InstallAsync(c).ContinueWith(
             _ => Waiting(ControlId.Capability, false), TaskScheduler.Default);
+    }
+
+    void ISettingsHost.RemoveAddOn(Capability addOn, bool forget) => _ = RemoveAddOnAsync(addOn, forget);
+
+    /// <summary>
+    /// Remove an add-on: tell the reader first so it lets the model go, delete the files (keeping
+    /// any another add-on needs), drop it from the off list, and - when asked - re-read what it
+    /// found so its findings go too. Where removing deletes nothing (Meaning under Speech) it is
+    /// turned off instead, which is what the Remove question said it would do.
+    ///
+    /// <para>A file something still holds is retried for half a minute and then left on a list the
+    /// next start sweeps. Nothing here may fail loudly: the worst case is space freed later.</para>
+    /// </summary>
+    private async Task RemoveAddOnAsync(Capability addOn, bool forget)
+    {
+        try
+        {
+            string dir = ModelStore.Dir;
+            CapabilitySet installed = CapabilitySet.Installed(dir);
+            if (!installed.Has(addOn)) return;
+
+            if (AddOns.OnlyTurnsOff(addOn, installed))
+            {
+                await Dispatcher.UIThread.InvokeAsync(() =>
+                {
+                    if (!SettingsModel.IsOff(addOn, _config)) ApplyConfig(SettingsModel.ToggleAddOn(_config, addOn));
+                });
+                if (forget) await OnContentLoopAsync(db => AddOns.QueueForgetting(db, addOn)).ConfigureAwait(false);
+                Log.Info("models", $"{Capabilities.Title(addOn)} was turned off rather than removed: another add-on needs its files");
+                return;
+            }
+
+            IReadOnlySet<Capability> gone = AddOns.RemovedWith(addOn, installed);
+            IReadOnlyList<string> files = AddOns.FilesToDelete(addOn, installed);
+            long at = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+
+            // The reader first: it reads the off list before every file, lets a model go the moment
+            // its add-on leaves that list's complement, and a file it is holding cannot be deleted.
+            string offWithGone = AddOns.Format(AddOns.Off(_config).Concat(gone));
+            await OnContentLoopAsync(db =>
+            {
+                foreach (Capability g in gone) AddOns.NoteAway(db, g, at);
+                db.Set(AddOns.OffKey, offWithGone);
+                _indexerOff = offWithGone;
+                return 0;
+            }).ConfigureAwait(false);
+
+            var left = new List<string>(files);
+            for (int attempt = 0; attempt < 30 && left.Count > 0; attempt++)
+            {
+                left.RemoveAll(f => AddOns.TryDelete(dir, f));
+                if (left.Count > 0) await Task.Delay(1000).ConfigureAwait(false);
+            }
+            if (left.Count > 0)
+            {
+                string still = string.Join("|", left);
+                await OnContentLoopAsync(db => { db.Set(AddOns.LeftoverKey, still); return 0; }).ConfigureAwait(false);
+                Log.Warn("models", $"{left.Count.ToString(CultureInfo.InvariantCulture)} model file(s) are still in use; " +
+                                   "they will be deleted the next time Findra starts");
+            }
+
+            // Gone from the off list too: an add-on that is not installed is neither on nor off.
+            await Dispatcher.UIThread.InvokeAsync(() =>
+            {
+                Config next = _config with
+                {
+                    AddOnsOff = [.. AddOns.Off(_config).Where(x => !gone.Contains(x)).Select(x => x.ToString())],
+                };
+                if (next != _config) ApplyConfig(next);
+            });
+
+            if (forget)
+                await OnContentLoopAsync(db => gone.Sum(g => AddOns.QueueForgetting(db, g))).ConfigureAwait(false);
+
+            _installed = CapabilitySet.Installed(dir);
+            Log.Info("models", $"removed {string.Join(", ", gone.Select(Capabilities.Title))}: " +
+                               $"{(files.Count - left.Count).ToString(CultureInfo.InvariantCulture)} file(s) deleted" +
+                               (forget ? ", and what it found is being dropped" : ", and what it found is kept"));
+        }
+        catch (Exception ex)
+        {
+            Log.Error("models", $"removing {Capabilities.Title(addOn)} did not finish", ex);
+        }
+        finally
+        {
+            CapabilitySet now = CapabilitySet.Installed(ModelStore.Dir);
+            Dispatcher.UIThread.Post(() => SettingsWindow.Open?.RemovingDone(now));
+        }
     }
 
     void ISettingsHost.UpdateNow()

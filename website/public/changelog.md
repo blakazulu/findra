@@ -5,6 +5,70 @@ All notable changes to Findra are documented here.
 The format follows [Keep a Changelog 1.1.0](https://keepachangelog.com/en/1.1.0/),
 and Findra follows [Semantic Versioning](https://semver.org/spec/v2.0.0/).
 
+## [0.4.0 - 23 September 2026](https://github.com/blakazulu/findra/releases/tag/v0.4.0)
+
+### Added
+
+- **A Models toggle page in Settings.** Photos and video, meaning, speech and Hebrew each have a row
+  saying what they do for you. An installed one can be **turned off** (it stops reading new files,
+  and everything it already found stays searchable) or **removed** (its files are deleted and the
+  space comes back). Removing asks first, says how much it frees and what goes with it (removing
+  Speech removes Hebrew too), and keeps what was already found unless you untick that, so adding
+  it back later is quick. Turning one back on, or adding it again, reads exactly the files it
+  missed while it was away.
+- **The welcome screen shows what it is doing after you press a button.** "Get these" or "Not now"
+  used to leave the screen frozen for a moment and then jump to the next page. A card now lists the
+  steps (saving your choices, starting name search, getting the hotkey and capsule ready, starting
+  the download) and ticks each one as it finishes, and says when Windows may ask for permission.
+  The second screen does the same before it closes.
+- **`findra --models remove <add-on>`** removes one model from the command line, on the same
+  rules as Settings. `--dry-run` prints what would be deleted and freed, and `--forget` also drops
+  what it found. `findra --models install` now also reads the files a model missed while it was
+  removed.
+- **Settings says what reading is doing, in plain words**, under "Reading now": how many files are
+  read and left out, or that it is paused while another app is busy, paused for a full-screen app,
+  reading more slowly because the graphics card is nearly full, waiting for you to finish setting
+  up, restarting after a problem, or all done. A dot beside it shows the same at a glance: filled
+  while reading, a ring while waiting, red for a problem.
+
+### Fixed
+
+- **Files that have not changed no longer wait for the graphics card.** Moving a folder of photos
+  or recordings queues each file again. While another program was using the card, Findra held
+  every one of them back, and the count said they were waiting, even though checking that the
+  file had not changed needs no card at all. Findra now clears those at once and waits only for
+  files it really has to read. A fullscreen game still holds everything back.
+- **A busy graphics card no longer stops Findra reading your documents.** Files are read in the
+  order they were found, so one photo waiting for the card used to hold back every document
+  behind it, even though reading words never uses the card. Photos, video and recordings now wait
+  while documents carry on.
+- **On a new or freshly upgraded PC, Findra no longer waits an hour before reading.** Windows
+  marks the first hour after your first sign-in as quiet time, and Findra took it for something
+  running fullscreen. It now waits only for real fullscreen apps, games and presentations.
+- **On a graphics card with little memory, photos are read instead of waiting.** On a small card,
+  such as one with 3 GB, Windows and your open apps alone use most of it, and Findra waited for
+  room that never came, sometimes all afternoon. It now reads photos and documents on the
+  processor instead: slower, but it keeps going. It still waits while a game or another heavy
+  program is really using the card, and recordings still wait for room on the card.
+- **The progress count moves for every file Findra deals with**, including the ones it leaves
+  out (such as recordings without the Speech add-on) and the ones it cannot read. It used to count
+  only files read, so a pass through files it was leaving out looked frozen at "1 of 278,067".
+- **The words under the search card and in the tray are plainer**: "reading photos", "paused while
+  another app is busy", "all done · 1,204 files ready to search".
+- **When the reader stops unexpectedly, Findra says it is trying again and when**, instead of
+  saying it was closed. A reader that had been working for a while restarts within seconds
+  rather than waiting up to five minutes because of earlier problems.
+- **A problem Findra cannot get past, such as a full disk, is now said on every screen** instead
+  of the progress bar simply stopping.
+- **Reading a large disk for the first time is faster.** Picking the next file used to sort the
+  whole queue each time; it is now a direct lookup.
+- **The website no longer carries Netlify's advertisement.** Netlify writes a comment and two tags
+  into every page it serves, one of them a tracking link to its own sign-up page. They are taken
+  back out before the page reaches you, on every page including "not found".
+- **A link to the website shared on WhatsApp, Facebook and the like now says what Findra does**
+  (search by name, documents, photos and speech; free, private, open source) instead of quoting
+  benchmark figures.
+
 ## [0.3.1 - 22 September 2026](https://github.com/blakazulu/findra/releases/tag/v0.3.1)
 
 ### Added

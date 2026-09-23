@@ -13,9 +13,29 @@ public readonly record struct IndexProgress(string Label, string Count, float Fr
 }
 
 /// <summary>
-/// What the content index is doing, in the two shapes the product needs: one sentence for the
-/// card's footer and the tray's tooltip, and the same facts split for the capsule's progress pill.
-/// Both live here so no two surfaces can disagree about it.
+/// The facts beyond the counts that change what the status says: a kind waiting for the card
+/// while others are read, reading moved to the processor, a restart after a crash, and the files
+/// that were left out or could not be read. All optional, so a caller that knows none of them
+/// gets the plain answer. <c>default</c> carries nulls for the two strings, so they are read with
+/// <c>IsNullOrEmpty</c>, never <c>.Length</c>.
+/// </summary>
+public readonly record struct IndexExtra(
+    string Around = "", string Processor = "", int RestartIn = 0, long LeftOut = 0, long Failed = 0,
+    bool Held = false);
+
+/// <summary>What the dot beside the Settings sentence says at a glance: moving, waiting for
+/// something, stuck, or finished. Encoded in shape as well as colour (a ring waits, a filled dot
+/// moves), so it reads for somebody who cannot tell the colours apart.</summary>
+public enum StatusTone { None, Reading, Waiting, Problem, Done }
+
+/// <summary>
+/// What the content index is doing, in the shapes the product needs: one line for the card's
+/// footer and the tray's tooltip, the same facts split for the progress pill, and a sentence for
+/// Settings. All of them live here so no two surfaces can disagree about it.
+///
+/// <para><b>Written for somebody who has never heard of an index, a GPU or a codec.</b> Every
+/// wait says what it is waiting for in words a person recognises, and whether they have to do
+/// anything (almost never: "Findra will carry on by itself").</para>
 /// </summary>
 public static class IndexStatus
 {
@@ -24,63 +44,71 @@ public static class IndexStatus
     // users on machines set to any locale.
     private static readonly CultureInfo Fixed = CultureInfo.InvariantCulture;
 
+    private static string N(long v) => v.ToString("N0", Fixed);
+
+    /// <summary>The indexer's state token for a failure it cannot get past.</summary>
+    public const string Stuck = "stuck";
+
     /// <summary>
-    /// The capsule's progress pill, split into the three things it draws.
-    ///
-    /// <para><see cref="Line"/> is one sentence for a footer and a tooltip; this is the same facts
-    /// laid out as label, track and count, because the pill puts them at opposite ends of itself
-    /// and a sentence cannot be cut in half. Both come from this file so the capsule and the card
-    /// cannot disagree about what the index is doing.</para>
+    /// The progress pill, split into the three things it draws.
     ///
     /// <para><see cref="IndexProgress.Show"/> is false wherever the answer would be a bar with
     /// nothing behind it: reading off, no live indexer, or an empty queue. A permanently visible
     /// progress pill makes an idle widget feel busy, which is the thing spec §3 says the capsule
-    /// must not do.</para>
+    /// must not do. The one exception is a reader that crashed and is about to be started again:
+    /// that is work in hand, and a pill that vanished would say it was finished.</para>
     ///
-    /// <para><b>Both surfaces get the same answer</b>, and there is no argument to ask for a
-    /// different one. The card used to pass <c>evenWhenSettled</c> and draw four more shapes
-    /// nobody else drew - "up to date", "paused", "nothing read yet" and "not reading inside
-    /// files" - on the reasoning that a window somebody deliberately opened owes an answer whether
-    /// or not work is in hand. It does, and the Content pill in the card's own header is what
-    /// gives it: whether Findra is reading, and whether it has read anything, is answered up there
-    /// where the eye already is. What hung under the card was a second answer to a question
-    /// already answered, in the shape of a progress bar resting at 100% for the rest of the day.
-    /// The capsule has never done that and the card has no better claim to.</para>
-    ///
-    /// <para><paramref name="state"/> matters for one thing only: an indexer that has work in hand
-    /// and is WAITING for the machine (<see cref="IndexGate"/>) says so in place of the noun, so a
-    /// bar that is not moving is not read as one that is stuck.</para>
+    /// <para><b>The count is files DONE</b>, which includes the ones left out and the ones that
+    /// could not be read. Counting only files read made a pass through skipped files look frozen
+    /// at "1 of 278,067" while it was moving.</para>
     /// </summary>
     public static IndexProgress Pill(bool contentEnabled, string kind, long pending, long indexed,
-                                     bool alive, string state = "")
+                                     bool alive, string state = "", IndexExtra extra = default)
     {
-        long total = indexed + pending;
-        string N(long v) => v.ToString("N0", Fixed);
+        long done = indexed + extra.LeftOut + extra.Failed;
+        long total = done + pending;
+        string count = N(done) + " of " + N(total);
+        float fraction = total <= 0 ? 0f : (float)(done / (double)total);
+
+        if (contentEnabled && !alive && pending > 0 && extra.RestartIn > 0)
+            return new IndexProgress("a problem · trying again soon", count, fraction, Show: true);
 
         // Work in hand. The only state either surface draws, and the only one with a moving bar.
         if (contentEnabled && alive && pending > 0)
-            return new IndexProgress(Waiting(state) ?? Doing(kind), N(indexed) + " of " + N(total),
-                                     total <= 0 ? 0f : (float)(indexed / (double)total), Show: true);
+            return new IndexProgress(PillLabel(state, kind, extra), count, fraction, Show: true);
 
         // Everything else is a settled index: reading off, no indexer behind the queue, nothing
         // queued at all. There is no work to draw a picture of, so nothing is drawn - which is not
-        // a bar at zero and not a bar at 100%. --searchprobe names which of those it is, in this
-        // order, for anybody who goes looking for a pill that is correctly absent.
+        // a bar at zero and not a bar at 100%. --searchprobe names which of those it is.
         return default;
     }
 
-    /// <summary>The pill's words for an indexer that is holding back for the machine, or null for
-    /// any state that is not a wait. As short as "indexing recordings", which is what the pill is
+    private static string PillLabel(string state, string kind, IndexExtra extra)
+    {
+        if (Waiting(state) is { } waiting) return waiting;
+        if (!string.IsNullOrEmpty(extra.Around)) return Waits(extra.Around ?? "") + " waiting · " + Doing(kind);
+        if (!string.IsNullOrEmpty(extra.Processor)) return Doing(kind) + ", slowly";
+        return Doing(kind);
+    }
+
+    /// <summary>The pill's words for an indexer that is holding back or stuck, or null for any
+    /// state that is not one. As short as "reading recordings", which is what the pill is
     /// measured against.</summary>
     public static string? Waiting(string? state) => state switch
     {
-        IndexGate.GpuBusy => "waiting for the GPU",
-        IndexGate.Fullscreen => "waiting: fullscreen",
+        IndexGate.GpuBusy => "paused · another app is busy",
+        IndexGate.Fullscreen => "paused · full-screen app",
+        Stuck => "a problem · see Settings",
         _ => null,
     };
 
+    /// <summary>What waits while the card is busy, from the kind held back: photos and videos, or
+    /// recordings. Anything unrecognised is "photos", the commonest.</summary>
+    private static string Waits(string kind) =>
+        Enum.TryParse(kind, out ResultKind k) && k == ResultKind.Audio ? "recordings" : "photos";
+
     /// <summary>
-    /// "indexing photos" and not "indexing Photo". The kind comes off the queue row the indexer is
+    /// "reading photos" and not "indexing Photo". The kind comes off the queue row the indexer is
     /// working, and an enum name is a token rather than a word - it would be the only place in the
     /// product where an identifier reached the screen.
     ///
@@ -89,26 +117,17 @@ public static class IndexStatus
     /// otherwise name the wrong thing with complete confidence.</para>
     /// </summary>
     public static string Doing(string kind) =>
-        Enum.TryParse(kind, out ResultKind k) && Enum.IsDefined(k) ? Doing(k) : "indexing";
+        Enum.TryParse(kind, out ResultKind k) && Enum.IsDefined(k) ? Doing(k) : "reading";
 
     /// <summary>
     /// The same, on the enum, which is the only form that can be checked.
     ///
-    /// <para>This switch was written on STRINGS - "Photo", "Video", "Audio", "Doc" - and "Doc" is
-    /// not a member of <see cref="ResultKind"/>. It is the column heading <c>--searchindex</c>
-    /// prints, copied from one surface into a comparison on another, so every document on the
-    /// machine fell through to the default and the pill read "indexing" with no noun. Documents
-    /// are most of what a first pass finds, so the label was wrong nearly all of the time and
-    /// looked merely terse.</para>
-    ///
     /// <para>The <c>_</c> arm is only there because an enum can hold a value no member names and
     /// the compiler insists (CS8524). It is not the guard: a seventh KIND would fall into it
     /// silently, so <c>EveryKindWhoseContentsAreReadHasAWordForIt</c> holds this to
-    /// <see cref="FileKinds.HasContent"/> instead - every kind the indexer can queue must have a
-    /// noun, and a new one fails that test rather than shipping a verb with nothing after it.
-    /// </para>
+    /// <see cref="FileKinds.HasContent"/> instead.</para>
     /// </summary>
-    public static string Doing(ResultKind kind) => "indexing" + kind switch
+    public static string Doing(ResultKind kind) => "reading" + kind switch
     {
         ResultKind.Photo => " photos",
         ResultKind.Video => " video",
@@ -121,22 +140,56 @@ public static class IndexStatus
         _ => "",
     };
 
+    /// <summary>The meta row the interface writes how long until a crashed reader is started
+    /// again. Written by the one process that knows (the host is the interface's), read by every
+    /// surface that describes the index.</summary>
+    public const string RestartInKey = "index:restartin";
+
     /// <summary>
-    /// <paramref name="contentEnabled"/> is whether anybody has asked for the inside of files to
-    /// be read at all, <paramref name="state"/> is what the indexer last wrote about itself,
+    /// The extra facts, read from the rows the indexer and the interface write. One reader, so the
+    /// card and the capsule cannot take them differently. <paramref name="get"/> is a meta lookup.
+    /// </summary>
+    public static IndexExtra ExtraFrom(Func<string, string?> get, long leftOut, long failed, bool held = false)
+    {
+        ArgumentNullException.ThrowIfNull(get);
+        int restart = int.TryParse(get(RestartInKey), NumberStyles.Integer, Fixed, out int r) ? r : 0;
+        return new IndexExtra(get("indexer:around") ?? "", get("indexer:processor") ?? "", restart, leftOut, failed, held);
+    }
+
+    /// <summary>The dot for the same facts <see cref="Sentence"/> reads, arm for arm, so the two
+    /// cannot disagree.</summary>
+    public static StatusTone Tone(bool on, string state, long pending, long indexed, bool alive, IndexExtra extra = default)
+    {
+        if (!on) return StatusTone.None;
+        if (extra.Held) return StatusTone.Waiting;
+        long done = indexed + extra.LeftOut + extra.Failed;
+        if (pending == 0) return done > 0 ? StatusTone.Done : StatusTone.Waiting;
+        if (!alive) return extra.RestartIn > 0 ? StatusTone.Problem : StatusTone.Waiting;
+        if (state == Stuck) return StatusTone.Problem;
+        if (state is IndexGate.Fullscreen or IndexGate.GpuBusy) return StatusTone.Waiting;
+        if (!string.IsNullOrEmpty(extra.Around)) return StatusTone.Waiting;
+        return StatusTone.Reading;
+    }
+
+    /// <summary>"in 2 minutes", "in a minute", "in a moment" - never a number of seconds.</summary>
+    public static string InAWhile(int seconds) =>
+        seconds <= 45 ? "in a moment"
+        : seconds <= 90 ? "in a minute"
+        : $"in {((seconds + 59) / 60).ToString(Fixed)} minutes";
+
+    /// <summary>
+    /// <paramref name="contentEnabled"/> is whether reading inside files is on right now,
+    /// <paramref name="state"/> is what the indexer last wrote about itself,
     /// <paramref name="alive"/> whether it is running at all, and <paramref name="rebuilt"/>
     /// whether this index was thrown away and started again because it could not be read.
     ///
     /// <para>Off is the FIRST question, because an index nobody asked for is byte-for-byte what a
     /// finished one looks like - an empty queue and a still child - and the counts alone would
-    /// say "up to date · 0 files" about a machine that has never read anything (spec §6). It is
-    /// also a different sentence from the closed-app pause below it, because the two have
-    /// opposite answers: one is "turn it on", the other is "leave Findra open".</para>
+    /// say "all done · 0 files" about a machine that has never read anything (spec §6).</para>
     /// </summary>
-    public static string Line(bool contentEnabled, string state, long pending, long indexed, bool alive, bool rebuilt)
+    public static string Line(bool contentEnabled, string state, long pending, long indexed, bool alive, bool rebuilt,
+                              IndexExtra extra = default)
     {
-        string N(long v) => v.ToString("N0", Fixed);
-
         if (!contentEnabled)
             return indexed > 0
                 ? $"searching inside files is off · {N(indexed)} files already read"
@@ -150,40 +203,55 @@ public static class IndexStatus
 
         // Nothing read and nothing waiting, with reading TURNED ON, is not silence - it is the
         // second after somebody pressed "Start now", before the walk has put anything in the
-        // queue. Returning "" there is what the user saw: they asked for it, and no surface said
-        // a word. A live child gets said so; without one this is a switch that is on in a session
-        // where nothing is reading, which is the honest and more useful sentence.
+        // queue.
         if (pending == 0 && indexed == 0)
-            return alive
-                ? "reading inside your files - nothing found yet"
-                : "reading inside files is on, but nothing is reading yet";
-        // An honest imprecision: this calls an empty queue "up to date". The stricter definition
-        // is a queue that is empty at a journal position the volume still recognises, and that
-        // position is only checked when the journal is subscribed to. The gap is a window where
-        // the journal wrapped since the last subscribe and this line is optimistic for one
-        // session. Closing it properly means asking the helper on every status refresh, which is
-        // a pipe round trip per second for a string.
-        if (pending == 0) return $"index up to date · {N(indexed)} files";
+            return alive ? "looking for files to read" : "reading inside files is on, but nothing is reading yet";
+        if (pending == 0) return $"all done · {N(indexed)} files ready to search";
 
-        // Two different pauses reach this line and mean opposite things, and the ORDER of these
-        // two is the whole of it. A paused index has no child by design - nothing starts one while
-        // the queue is not moving - so asking "is a child alive" first answers "no" for both, and
-        // then blames the one cause that is not true: a person watching a paused index inside a
-        // running Findra was told indexing was paused because Findra was closed. It is the state
-        // the whole first-run download sits in, where reading is held until the last question is
-        // answered, so it was the first sentence many people ever read from this line.
-        //
-        // Paused first, therefore. It is a fact recorded in the index by whoever paused it. Only
-        // when nothing paused it does an absent child mean what the second line says: a backlog
-        // left by a previous session, which is expected and has to be explained rather than look
-        // stuck.
-        if (state == "paused") return $"{N(pending)} waiting - indexing paused";
-        if (!alive) return $"{N(pending)} waiting - indexing is paused while Findra is closed";
-        // A live child holding back for somebody else. Said, because a count that does not move
-        // for an evening of gaming otherwise reads as an indexer that has broken.
-        if (state == IndexGate.GpuBusy) return $"{N(pending)} waiting - another program is using the graphics card";
-        if (state == IndexGate.Fullscreen) return $"{N(pending)} waiting - something is fullscreen";
-        return $"indexing {N(pending)} · {N(indexed)} done";
+        string toGo = $"{N(pending)} files to go";
+        // Paused first: it is a fact recorded in the index by whoever paused it, and a paused
+        // index has no child by design, so asking "is a child alive" first blamed the wrong cause.
+        if (state == "paused") return $"paused · {toGo}";
+        if (!alive)
+            return extra.RestartIn > 0
+                ? $"something went wrong - Findra will try again {InAWhile(extra.RestartIn)}"
+                : $"paused while Findra is closed · {toGo}";
+        if (state == Stuck) return "Findra can't save what it reads - your disk may be full";
+        if (state == IndexGate.GpuBusy) return $"paused while another app is busy · {toGo}";
+        if (state == IndexGate.Fullscreen) return $"paused while you're in a full-screen app · {toGo}";
+        if (!string.IsNullOrEmpty(extra.Around)) return $"{Waits(extra.Around ?? "")} wait while another app is busy · reading documents · {toGo}";
+        if (!string.IsNullOrEmpty(extra.Processor)) return $"reading more slowly, the graphics card is nearly full · {toGo}";
+        return $"reading your files · {N(indexed + extra.LeftOut + extra.Failed)} done · {N(pending)} to go";
+    }
+
+    /// <summary>
+    /// The sentence under "Reading now" in Settings: what reading is doing, in plain words, and
+    /// whether anybody has to do anything. Empty while reading is off - the switch's own sentence
+    /// says that.
+    /// </summary>
+    public static string Sentence(bool on, string state, long pending, long indexed, bool alive, IndexExtra extra = default)
+    {
+        if (!on) return "";
+        if (extra.Held) return "Waiting until you finish setting up Findra.";
+        long done = indexed + extra.LeftOut + extra.Failed;
+        if (pending == 0) return done > 0 ? "All done. Your files are ready to search." : "Looking for files to read.";
+        if (!alive)
+            return extra.RestartIn > 0
+                ? $"Something went wrong. Findra will try again {InAWhile(extra.RestartIn)}."
+                : "Getting ready to read your files.";
+        if (state == Stuck) return "Findra can't save what it reads. Your disk may be full.";
+        if (state == IndexGate.Fullscreen) return "Paused while you're in a full-screen app.";
+        if (state == IndexGate.GpuBusy) return "Paused while another app is busy. Findra will carry on by itself.";
+        if (!string.IsNullOrEmpty(extra.Around))
+            return Waits(extra.Around ?? "") == "recordings"
+                ? "Recordings will wait while another app is busy. Documents are still being read."
+                : "Photos will wait while another app is busy. Documents are still being read.";
+        if (!string.IsNullOrEmpty(extra.Processor)) return "Reading more slowly, because the graphics card is nearly full.";
+
+        string read = $"{N(indexed)} files read";
+        if (extra.LeftOut > 0) read += $" · {N(extra.LeftOut)} left out";
+        if (extra.Failed > 0) read += $" · {N(extra.Failed)} could not be read";
+        return read + ".";
     }
 
     /// <summary>A heartbeat older than this is not an indexer, it is the last thing one wrote

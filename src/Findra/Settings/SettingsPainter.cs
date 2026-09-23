@@ -75,6 +75,57 @@ public static class SettingsPainter
         // Last, and over everything: a question the person asked, with the pane still visible
         // behind it so they do not lose their place. None means there is nothing to draw.
         if (s.Prompt != UpdatePromptState.None) Prompt(canvas, s, d, face);
+        else if (s.Removing is { } removing) Remove(canvas, s, removing, d, face);
+    }
+
+    /// <summary>The Remove question, over everything, on the update panel's terms: a scrim so the
+    /// pane is plainly not the thing being asked, and nothing behind it answers a click.</summary>
+    private static void Remove(SKCanvas canvas, SettingsState s, Capability c, Derived d, SKTypeface face)
+    {
+        string body = RemovePrompt.Body(c, s.Installed);
+        string keep = RemovePrompt.KeepLabel(c);
+        (int bodyLines, int keepLines) = RemoveLines(s, c, face);
+        SKRect panel = RemovePrompt.Panel(RailLayout.Width, RailLayout.Height, bodyLines, keepLines);
+
+        using (var scrim = new SKPaint { Color = d.Ground.WithAlpha(196), IsAntialias = true })
+            canvas.DrawRoundRect(new SKRoundRect(new SKRect(0, 0, RailLayout.Width, RailLayout.Height),
+                                                 RailLayout.Radius), scrim);
+        using (var fill = new SKPaint { Color = d.Tile, IsAntialias = true })
+            canvas.DrawRoundRect(new SKRoundRect(panel, UpdatePrompt.Radius), fill);
+        using (var edge = new SKPaint
+        { Color = d.Accent.WithAlpha(96), IsAntialias = true, Style = SKPaintStyle.Stroke, StrokeWidth = 1.4f })
+            canvas.DrawRoundRect(new SKRoundRect(panel, UpdatePrompt.Radius), edge);
+
+        float x = panel.Left + UpdatePrompt.Pad;
+        CardText.Draw(canvas, RemovePrompt.Title(c), x, panel.Top + UpdatePrompt.Pad + UpdatePrompt.TitleSize,
+                      UpdatePrompt.TitleSize, face, d.Ink);
+        float bodyTop = panel.Top + UpdatePrompt.Pad + UpdatePrompt.TitleSize + 14f;
+        Parts.Note(canvas, body, new SKRect(x, bodyTop, panel.Right - UpdatePrompt.Pad,
+                                            bodyTop + Parts.NoteHeight(bodyLines)), d, face);
+
+        if (keepLines > 0)
+        {
+            SKRect row = RemovePrompt.KeepRow(panel, bodyLines, keepLines);
+            SKRect box = RemovePrompt.Box(row);
+            Parts.Tick(canvas, box, s.KeepFound, s.RemoveHover == RemoveTarget.Keep, d);
+            Parts.Note(canvas, keep, new SKRect(box.Right + RemovePrompt.BoxGap, row.Top - Parts.NoteTop + 1,
+                                                row.Right, row.Bottom), d, face);
+        }
+
+        Parts.Pill(canvas, RemovePrompt.Button(panel, go: false), RemovePrompt.CancelLabel,
+                   chosen: false, hovered: s.RemoveHover == RemoveTarget.Cancel, d, face);
+        Parts.Pill(canvas, RemovePrompt.Button(panel, go: true), RemovePrompt.GoLabel(c, s.Installed),
+                   chosen: true, hovered: s.RemoveHover == RemoveTarget.Remove, d, face);
+    }
+
+    /// <summary>How many lines the Remove panel's body and tick label wrap to. The window's hit test
+    /// asks the same question, so the two cannot place the buttons differently.</summary>
+    public static (int Body, int Keep) RemoveLines(SettingsState s, Capability c, SKTypeface face)
+    {
+        ArgumentNullException.ThrowIfNull(s);
+        int body = Parts.Wrap(RemovePrompt.Body(c, s.Installed), face, Parts.NoteSize, RemovePrompt.TextWidth).Count;
+        int keep = Parts.Wrap(RemovePrompt.KeepLabel(c), face, Parts.NoteSize, RemovePrompt.KeepTextWidth).Count;
+        return (body, keep);
     }
 
     private static void Row(SKCanvas canvas, Control c, int i, IReadOnlyList<int> notes,
@@ -124,7 +175,7 @@ public static class SettingsPainter
                 break;
         }
 
-        if (c.Note.Length > 0) Parts.Note(canvas, c.Note, RailLayout.NoteRect(i, notes), d, face);
+        if (c.Note.Length > 0) Parts.StatusNote(canvas, c.Note, c.NoteTone, RailLayout.NoteRect(i, notes), d, face);
     }
 
     private static Palette? Find(IReadOnlyList<Palette> palettes, string name)

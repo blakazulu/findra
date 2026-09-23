@@ -127,4 +127,37 @@ public class ModelsCommandTests
         Assert.Null(ModelsCommand.ParseCapabilities("photos,speach"));
         Assert.Null(ModelsCommand.ParseCapabilities(""));
     }
+
+    private static CapabilitySet Have(params Capability[] c) => new(new HashSet<Capability>(c));
+
+    [Fact]
+    public void RemovingSaysWhatIsDeletedWhatItFreesAndWhatGoesWithIt()
+    {
+        string text = ModelsCommand.RenderRemoval(Capability.Speech,
+            Have(Capability.Meaning, Capability.Speech, Capability.Hebrew), forget: false);
+        Assert.Contains(ModelStore.WhisperTurbo.File, text, StringComparison.Ordinal);
+        Assert.Contains(ModelStore.WhisperHebrew.File, text, StringComparison.Ordinal);
+        Assert.DoesNotContain(ModelStore.E5Base.File, text, StringComparison.Ordinal);
+        Assert.Contains("This also removes Speech in Hebrew.", text, StringComparison.Ordinal);
+        Assert.Contains("kept", text, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void RemovingMeaningUnderSpeechSaysItOnlyTurnsItOff()
+    {
+        string text = ModelsCommand.RenderRemoval(Capability.Meaning, Have(Capability.Meaning, Capability.Speech), forget: true);
+        Assert.Contains("turned off", text, StringComparison.Ordinal);
+        Assert.Contains("dropped", text, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void RemoveReadsItsWordsAndRefusesAnythingElse()
+    {
+        Assert.Equal((Capability.Photos, false, false), ModelsCommand.ParseRemoval(["--models", "remove", "photos"]));
+        Assert.Equal((Capability.Speech, true, true), ModelsCommand.ParseRemoval(["--models", "remove", "speech", "--forget", "--dry-run"]));
+        Assert.Null(ModelsCommand.ParseRemoval(["--models", "remove"]));
+        Assert.Null(ModelsCommand.ParseRemoval(["--models", "remove", "photos,speech"]));
+        Assert.Null(ModelsCommand.ParseRemoval(["--models", "remove", "recommended"]));
+        Assert.Null(ModelsCommand.ParseRemoval(["--models", "remove", "photos", "--purge"]));
+    }
 }

@@ -155,6 +155,119 @@ public static class ModelsCommand
         return sb.ToString();
     }
 
+    /// <summary>
+    /// <c>--models remove &lt;add-on&gt; [--forget] [--dry-run]</c>, parsed, or null. ONE add-on,
+    /// never a list or a preset: removing deletes files, and a word that is not exactly an add-on's
+    /// name removes nothing rather than whatever it resembles.
+    /// </summary>
+    public static (Capability AddOn, bool Forget, bool DryRun)? ParseRemoval(string[] args)
+    {
+        ArgumentNullException.ThrowIfNull(args);
+        if (args.Length < 3 || OneCapability(args[2]) is not { } c) return null;
+        bool forget = false, dry = false;
+        foreach (string flag in args.Skip(3))
+        {
+            switch (flag.Trim().ToLowerInvariant())
+            {
+                case "--forget": forget = true; break;
+                case "--dry-run": dry = true; break;
+                default: return null;
+            }
+        }
+        return (c, forget, dry);
+    }
+
+    /// <summary>What removing would do, the same words Settings uses: the files deleted, what goes
+    /// with it, and what happens to what it found. Pure, so it is what the tests read.</summary>
+    public static string RenderRemoval(Capability c, CapabilitySet installed, bool forget)
+    {
+        var sb = new StringBuilder();
+        void Line(string text = "") => sb.Append(text).Append('\n');
+        Line($"findra --models remove {c.ToString().ToLowerInvariant()}");
+        Line();
+        if (AddOns.OnlyTurnsOff(c, installed))
+        {
+            Line($"  {Capabilities.Title(c)} will be turned off rather than removed: Speech uses the same files,");
+            Line("  so they stay on this PC and nothing is freed.");
+        }
+        else
+        {
+            var byFile = Capabilities.All.SelectMany(Capabilities.OwnModels)
+                                     .GroupBy(m => m.File, StringComparer.OrdinalIgnoreCase)
+                                     .ToDictionary(g => g.Key, g => g.First(), StringComparer.OrdinalIgnoreCase);
+            foreach (string file in AddOns.FilesToDelete(c, installed))
+                Line($"    to delete     {file,-24} {Sizes.Human(byFile[file].Bytes)}");
+            Line();
+            Line($"  This frees {Sizes.Human(AddOns.Frees(c, installed))}.");
+            foreach (Capability also in AddOns.RemovedWith(c, installed))
+                if (also != c) Line($"  This also removes {Capabilities.Title(also)}.");
+        }
+        Line(forget && RemovePrompt.KeepLabel(c).Length > 0
+            ? "  What it found is dropped: those files are read again without it."
+            : "  What it found is kept, so adding it back later is quick.");
+        return sb.ToString();
+    }
+
+    private static int Remove(string[] args)
+    {
+        if (ParseRemoval(args) is not var (c, forget, dry))
+            return Usage(args.Length > 2
+                ? $"findra: '{string.Join(' ', args.Skip(2))}' is not one model to remove"
+                : "findra: --models remove needs a model");
+
+        string dir = ModelStore.Dir;
+        CapabilitySet installed = CapabilitySet.Installed(dir);
+        if (!installed.Has(c))
+        {
+            Console.WriteLine($"{Capabilities.Title(c)} is not installed - there is nothing to remove.");
+            return 0;
+        }
+
+        Console.Write(RenderRemoval(c, installed, forget));
+        Console.WriteLine();
+        if (dry)
+        {
+            Console.WriteLine("  --dry-run: nothing was changed.");
+            return 0;
+        }
+
+        long at = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+        Config config = Config.LoadFromDisk();
+        using ContentDb db = ContentDb.OpenOrRebuild();
+
+        if (AddOns.OnlyTurnsOff(c, installed))
+        {
+            if (!SettingsModel.IsOff(c, config)) SettingsModel.ToggleAddOn(config, c).Save();
+            AddOns.NoteAway(db, c, at);
+            if (forget) AddOns.QueueForgetting(db, c);
+            Console.WriteLine($"  {Capabilities.Title(c)} is turned off.");
+            return 0;
+        }
+
+        IReadOnlySet<Capability> gone = AddOns.RemovedWith(c, installed);
+        foreach (Capability g in gone) AddOns.NoteAway(db, g, at);
+        // Off first, so a running reader lets the models go before their files do.
+        db.Set(AddOns.OffKey, AddOns.Format(AddOns.Off(config).Concat(gone)));
+
+        var left = AddOns.FilesToDelete(c, installed).Where(f => !AddOns.TryDelete(dir, f)).ToList();
+        if (left.Count > 0)
+        {
+            db.Set(AddOns.LeftoverKey, string.Join("|", left));
+            Console.WriteLine($"  {left.Count.ToString(CultureInfo.InvariantCulture)} file(s) are in use by a running Findra; " +
+                              "they are deleted the next time it starts.");
+        }
+
+        Config next = config with { AddOnsOff = [.. AddOns.Off(config).Where(x => !gone.Contains(x)).Select(x => x.ToString())] };
+        if (next != config) next.Save();
+        // Back to what the settings say, now that the files are gone: an add-on that is not
+        // installed is neither on nor off, and a stale row would outlive it.
+        db.Set(AddOns.OffKey, AddOns.Format(AddOns.Off(next)));
+        if (forget) foreach (Capability g in gone) AddOns.QueueForgetting(db, g);
+
+        Console.WriteLine($"  removed {string.Join(", ", gone.Select(Capabilities.Title))}.");
+        return 0;
+    }
+
     public static async Task<int> RunAsync(string[] args)
     {
         ArgumentNullException.ThrowIfNull(args);
@@ -167,6 +280,7 @@ public static class ModelsCommand
             return 0;
         }
 
+        if (verb is "remove") return Remove(args);
         if (verb is not "install") return Usage($"findra: --models does not know '{args[1]}'");
 
         string what = args.Length > 2 ? args[2] : "";
@@ -239,7 +353,14 @@ public static class ModelsCommand
         try
         {
             using ContentDb db = ContentDb.OpenOrRebuild();
-            int queued = CapabilityGate.Apply(db, CapabilityGate.Plan(CapabilitySet.Installed(dir), CapabilityGate.StampsIn(db)));
+            IReadOnlyList<Capability> off = AddOns.Off(Config.LoadFromDisk());
+            CapabilitySet reading = CapabilitySet.Installed(dir).Without(off);
+            // What a running reader is told is off, from the settings: an add-on just installed
+            // must not stay switched off by what a removal wrote.
+            db.Set(AddOns.OffKey, AddOns.Format(off));
+            int queued = CapabilityGate.Apply(db, CapabilityGate.Plan(reading, CapabilityGate.StampsIn(db)))
+                         // Added back after a removal: what was read while it was gone.
+                         + AddOns.CatchUp(db, reading);
             Console.WriteLine($"{queued.ToString("N0", CultureInfo.InvariantCulture)} file(s) queued to be read again.");
         }
         catch (Exception ex)
@@ -298,6 +419,8 @@ public static class ModelsCommand
         Console.Error.WriteLine("  findra --models list                         the same");
         Console.Error.WriteLine($"  findra --models install <preset>             {PresetWords}");
         Console.Error.WriteLine($"  findra --models install <cap>[,<cap>...]     {CapabilityWords}");
+        Console.Error.WriteLine($"  findra --models remove <cap> [--forget] [--dry-run]   one of {CapabilityWords};");
+        Console.Error.WriteLine("                                               --forget also drops what it found");
         return 1;
     }
 }

@@ -142,6 +142,49 @@ public static class Parts
 
     /// <summary>A note under a control, in secondary ink, into the rectangle the layout reserved
     /// for exactly this many lines.</summary>
+    /// <summary>How far a note with a status dot is pushed right to make room for it.</summary>
+    public const float DotIndent = 14f;
+
+    /// <summary>
+    /// A note with a status dot before its first line: filled while reading, a ring while waiting,
+    /// faded when finished, and red for a problem - the one colour not taken from the palette,
+    /// because "something is wrong" has to read the same on a light ground and a dark one.
+    /// </summary>
+    public static void StatusNote(SKCanvas canvas, string text, StatusTone tone, SKRect r, Derived d, SKTypeface face)
+    {
+        ArgumentNullException.ThrowIfNull(canvas);
+        ArgumentNullException.ThrowIfNull(d);
+        float cx = r.Left + 4f, cy = r.Top + NoteTop + NoteSize - 4f;
+        using var paint = new SKPaint { IsAntialias = true };
+        switch (tone)
+        {
+            case StatusTone.Reading:
+                paint.Color = d.Accent;
+                canvas.DrawCircle(cx, cy, 3.5f, paint);
+                break;
+            case StatusTone.Waiting:
+                paint.Color = d.Accent;
+                paint.Style = SKPaintStyle.Stroke;
+                paint.StrokeWidth = 1.5f;
+                canvas.DrawCircle(cx, cy, 3.2f, paint);
+                break;
+            case StatusTone.Problem:
+                paint.Color = Derived.Mix(new SKColor(0xE0, 0x4E, 0x3C), d.Ink, 0.12f);
+                canvas.DrawCircle(cx, cy, 3.5f, paint);
+                break;
+            case StatusTone.Done:
+                paint.Color = d.Fade(150);
+                canvas.DrawCircle(cx, cy, 3.5f, paint);
+                break;
+            case StatusTone.None:
+                break;
+            default:
+                throw new ArgumentOutOfRangeException(nameof(tone), tone, "no dot for this tone");
+        }
+        float indent = tone == StatusTone.None ? 0f : DotIndent;
+        Note(canvas, text, new SKRect(r.Left + indent, r.Top, r.Right, r.Bottom), d, face);
+    }
+
     public static void Note(SKCanvas canvas, string text, SKRect r, Derived d, SKTypeface face)
     {
         float y = r.Top + NoteTop + NoteSize;
@@ -175,6 +218,27 @@ public static class Parts
             CardText.Draw(canvas, line, r.Left, y, LeadSize, face, d.Ink, bold: true);
             y += LeadSize + LeadLeading;
         }
+    }
+
+    /// <summary>A tick box. The tick is drawn rather than typed: it is one of the glyphs a text
+    /// face is least likely to carry, and a fallback would switch typefaces for one mark.</summary>
+    public static void Tick(SKCanvas canvas, SKRect box, bool on, bool hovered, Derived d)
+    {
+        ArgumentNullException.ThrowIfNull(canvas);
+        ArgumentNullException.ThrowIfNull(d);
+        var rr = new SKRoundRect(box, 5f);
+        using (var fill = new SKPaint { Color = on ? d.Accent.WithAlpha(40) : hovered ? d.RowHover : d.Row, IsAntialias = true })
+            canvas.DrawRoundRect(rr, fill);
+        using (var edge = new SKPaint
+        { Color = on ? d.Accent : d.Edge, IsAntialias = true, Style = SKPaintStyle.Stroke, StrokeWidth = 1f })
+            canvas.DrawRoundRect(rr, edge);
+        if (!on) return;
+        using var stroke = new SKPaint
+        {
+            Color = d.Accent, IsAntialias = true, Style = SKPaintStyle.Stroke, StrokeWidth = 2f, StrokeCap = SKStrokeCap.Round,
+        };
+        canvas.DrawLine(box.Left + 4.5f, box.MidY, box.MidX - 1f, box.Bottom - 5f, stroke);
+        canvas.DrawLine(box.MidX - 1f, box.Bottom - 5f, box.Right - 4f, box.Top + 5f, stroke);
     }
 
     public static void Toggle(SKCanvas canvas, SKRect r, bool on, bool hovered, Derived d)

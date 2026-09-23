@@ -81,4 +81,36 @@ public class ProviderAgreementTests
                 $"two must produce the same vector for the same text.");
         }
     }
+
+    /// <summary>
+    /// The picture model on the processor and on the card, on one real picture.
+    ///
+    /// <para>A card too full for the models now sends pictures to the processor instead of
+    /// waiting, and the index then holds vectors from both. That is safe only if the two agree, as
+    /// it is for meaning - and nothing else compares them for pictures: --searchmodels needs an
+    /// image under Pictures to try, and many machines have none.</para>
+    /// </summary>
+    [Fact]
+    public void APictureMeansTheSameThingOnTheProcessorAndOnTheCard()
+    {
+        if (!Present(ModelStore.Siglip2Vision)) return;
+
+        // A real picture from the repository - the product's own screenshot - rather than a
+        // generated pattern: flat synthetic images are where two backends agree most easily.
+        string shot = Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "..", "docs", "shots", "results.png");
+        if (!File.Exists(shot)) return;
+        using SkiaSharp.SKBitmap bmp = SkiaSharp.SKBitmap.Decode(shot);
+        float[] pixels = ClipImageEncoder.Preprocess(bmp);
+
+        string onProcessor, onCard;
+        float[] a, b;
+        using (var e = new ClipImageEncoder(wantAccelerator: false)) { onProcessor = e.Provider; a = e.Encode([pixels])[0]; }
+        using (var e = new ClipImageEncoder(wantAccelerator: true)) { onCard = e.Provider; b = e.Encode([pixels])[0]; }
+        if (onCard == onProcessor) return;
+
+        double cos = Cosine(a, b);
+        Assert.True(cos >= Floor,
+            $"{onProcessor} and {onCard} disagree about the same picture: cosine {cos:F6}, below {Floor}. " +
+            "Pictures read on the processor while the card is full would not match pictures read on the card.");
+    }
 }
