@@ -5,6 +5,8 @@ publish/
 .vs/
 installer/Output/
 installer/redist/
+# Make-Msix.ps1's layouts, packages and bundle; rebuilt from the publish every time.
+/store/
 /2026-*.txt
 .superpowers/
 

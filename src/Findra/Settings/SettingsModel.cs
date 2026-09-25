@@ -516,6 +516,12 @@ public static class SettingsModel
     /// </summary>
     public static bool Reading(bool indexerAlive, long pending) => indexerAlive && pending > 0;
 
+    /// <summary>The same, for a settings window: reading also needs the switch on. Stopping
+    /// PAUSES the indexer rather than ending it and leaves the queue as it was, so alive with a
+    /// backlog is still true straight after "Stop" - and a button judged on that alone kept
+    /// offering to stop what had stopped.</summary>
+    private static bool Reading(SettingsState s) => s.Config.IndexContent && Reading(s.IndexerAlive, s.Pending);
+
     private static IReadOnlyList<Control> Content(SettingsState s)
     {
         // SHORT forms for the pills, and TranscribeLimit.Describe for the value beside the label.
@@ -535,10 +541,10 @@ public static class SettingsModel
             // A toggle states a preference. This says begin - and while there is nothing left to
             // begin, it reports instead of offering.
             Control.Plain(ControlId.StartIndexing, ControlKind.Button,
-                          Reading(s.IndexerAlive, s.Pending) ? "Reading now" : "Start reading now",
+                          Reading(s) ? "Reading now" : "Start reading now",
                           s.Waiting(ControlId.StartIndexing)
                               ? "Starting..."
-                              : StartReadingLabel(s.IndexerAlive, s.Pending, Math.Max(s.Done, s.Indexed)),
+                              : StartReadingLabel(s.Config.IndexContent && s.IndexerAlive, s.Pending, Math.Max(s.Done, s.Indexed)),
                           note: s.Config.IndexContent ? s.ReadingSentence : "")
                 with { NoteTone = s.Config.IndexContent && s.ReadingSentence.Length > 0 ? s.ReadingTone : StatusTone.None },
             new(ControlId.IndexPower, ControlKind.Choice, "Indexing power",
@@ -814,7 +820,7 @@ public static class SettingsModel
             // While it is reading, the same button stops it: the switch above turned off, what was
             // read kept. The switch was always the way to stop and nobody looked there - the
             // button that was counting was the one pressed, and it used to answer nothing.
-            ControlId.StartIndexing when Reading(s.IndexerAlive, s.Pending) =>
+            ControlId.StartIndexing when Reading(s) =>
                 SettingsOutcome.Changed(s with { Config = c with { IndexContent = false } }),
             ControlId.StartIndexing =>
                 SettingsOutcome.Ask(s with { Config = c with { IndexContent = true } }, SettingsAction.StartIndexing),

@@ -46,6 +46,19 @@ public sealed class IndexGateTests : IDisposable
     }
 
     [Fact]
+    public void FindrasOwnCardIsNotAFullscreenAppToWaitFor()
+    {
+        // The card dims the whole monitor behind it, and Windows answers "a fullscreen app" for
+        // as long as it is up. Measured on a real session: every opening of the card paused
+        // reading a second later and made the indexer let go of its models.
+        Assert.False(IndexGate.Holds(2, foregroundIsFindra: true).Hold);
+        Assert.False(IndexGate.Holds(3, foregroundIsFindra: true).Hold);
+        Assert.False(IndexGate.Holds(4, foregroundIsFindra: true).Hold);
+        // Somebody else's fullscreen window still holds.
+        Assert.Equal((true, "a fullscreen app"), IndexGate.Holds(2, foregroundIsFindra: false));
+    }
+
+    [Fact]
     public void OnlyAFullscreenAppAGameOrAPresentationHoldsReadingBack()
     {
         Assert.Equal((true, "a fullscreen app"), IndexGate.Holds(2));

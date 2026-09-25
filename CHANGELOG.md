@@ -7,6 +7,18 @@ and Findra follows [Semantic Versioning](https://semver.org/spec/v2.0.0/).
 
 ## [Unreleased]
 
+## [0.4.3] - 2026-09-25
+
+### Fixed
+
+- **"Stop" in Settings turns back into "Start now" once reading has stopped.** Pressing Stop did
+  stop reading, but the button kept saying "Stop" with the count beside it, and pressing it again
+  did nothing. It now offers to start again, and pressing it starts reading.
+- **Opening the search card no longer pauses reading.** Windows reported the card's dimmed
+  backdrop as a full-screen app, so every search made Findra stop reading and let go of its
+  models for as long as the card was open. Findra's own card no longer counts; a real full-screen
+  game, video or presentation still does.
+
 ## [0.4.2] - 2026-09-25
 
 ### Fixed
@@ -1742,7 +1754,8 @@ all of it gets verified without a screen.
 - The named pipe is restricted to the current user, and the interface verifies the
   owner before trusting a connection.
 
-[Unreleased]: https://github.com/blakazulu/findra/compare/v0.4.2...HEAD
+[Unreleased]: https://github.com/blakazulu/findra/compare/v0.4.3...HEAD
+[0.4.3]: https://github.com/blakazulu/findra/compare/v0.4.2...v0.4.3
 [0.4.2]: https://github.com/blakazulu/findra/compare/v0.4.1...v0.4.2
 [0.4.1]: https://github.com/blakazulu/findra/compare/v0.4.0...v0.4.1
 [0.4.0]: https://github.com/blakazulu/findra/compare/v0.3.1...v0.4.0

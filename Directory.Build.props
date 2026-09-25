@@ -6,7 +6,7 @@
 
          Bump this in the same commit as the CHANGELOG section for the same number: the release
          workflow refuses a tag that disagrees with either. -->
-    <Version>0.4.2</Version>
+    <Version>0.4.3</Version>
 
     <!-- .NET appends "+<commit sha>" to InformationalVersion by default. System.Version cannot
          parse that, UpdateCheck.Compare returns 0 for anything it cannot parse, and 0 is routed

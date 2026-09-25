@@ -76,6 +76,13 @@ public static class IndexGate
         _ => (false, ""),
     };
 
+    /// <summary>The same, knowing whose window is in front. Findra's card dims the whole monitor
+    /// behind it, and Windows reports that as a fullscreen app for as long as the card is up - so
+    /// without this every search paused reading and emptied the card of models. Findra in front is
+    /// nobody's game or presentation.</summary>
+    public static (bool Hold, string Reason) Holds(int notificationState, bool foregroundIsFindra) =>
+        foregroundIsFindra ? (false, "") : Holds(notificationState);
+
     /// <summary>The whole rule, as a pure function, so the order can be tested without a card.</summary>
     public static GateVerdict Decide(bool isDelete, bool usesModels, bool fullscreen, string fullscreenReason,
                                      bool gpuBusy, string gpuReason)
@@ -287,6 +294,22 @@ public sealed class MachineGate : IDisposable
     [DllImport("shell32.dll")]
     private static extern int SHQueryUserNotificationState(out Quns state);
 
+    [DllImport("user32.dll")]
+    private static extern IntPtr GetForegroundWindow();
+
+    [DllImport("user32.dll")]
+    private static extern uint GetWindowThreadProcessId(IntPtr hwnd, out uint processId);
+
+    /// <summary>Is the window in front one of Findra's own - the card and the dim behind it belong
+    /// to the interface, this process's parent. Anything that cannot be read is somebody else's.
+    /// </summary>
+    private bool ForegroundIsFindra()
+    {
+        IntPtr hwnd = GetForegroundWindow();
+        if (hwnd == IntPtr.Zero || GetWindowThreadProcessId(hwnd, out uint pid) == 0) return false;
+        return pid == (uint)_self || (_parent > 0 && pid == (uint)_parent);
+    }
+
     private (bool, string) Quiet()
     {
         double now = _clock.Elapsed.TotalSeconds;
@@ -297,7 +320,7 @@ public sealed class MachineGate : IDisposable
             // NotPresent - a locked screen, a screen saver, another user switched in - is the best
             // time there is to read files, not a reason to stop.
             (_quiet, _quietReason) = SHQueryUserNotificationState(out Quns st) == 0
-                ? IndexGate.Holds((int)st)
+                ? IndexGate.Holds((int)st, ForegroundIsFindra())
                 : (false, "");
         }
         catch (Exception ex)

@@ -5,6 +5,18 @@ All notable changes to Findra are documented here.
 The format follows [Keep a Changelog 1.1.0](https://keepachangelog.com/en/1.1.0/),
 and Findra follows [Semantic Versioning](https://semver.org/spec/v2.0.0/).
 
+## [0.4.3 - 25 September 2026](https://github.com/blakazulu/findra/releases/tag/v0.4.3)
+
+### Fixed
+
+- **"Stop" in Settings turns back into "Start now" once reading has stopped.** Pressing Stop did
+  stop reading, but the button kept saying "Stop" with the count beside it, and pressing it again
+  did nothing. It now offers to start again, and pressing it starts reading.
+- **Opening the search card no longer pauses reading.** Windows reported the card's dimmed
+  backdrop as a full-screen app, so every search made Findra stop reading and let go of its
+  models for as long as the card was open. Findra's own card no longer counts; a real full-screen
+  game, video or presentation still does.
+
 ## [0.4.2 - 25 September 2026](https://github.com/blakazulu/findra/releases/tag/v0.4.2)
 
 ### Fixed

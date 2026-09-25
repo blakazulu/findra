@@ -589,6 +589,11 @@ person makes by looking; two are destructive and belong last.
     `indexer down (recycled)`, and the interface's `indexer recycled itself to free video memory`;
     Task Manager's GPU memory column then shows no Findra process holding dedicated memory on the
     card. Only pictures and documents read: the release reports a few MB and nothing recycles.
+    **The child's half ran on 25 September 2026** (`findra --index` started directly, one 247 s
+    song, RTX 5070 Ti): peak 3,078 MB, `1.15 GB still on the card` after the idle release, then
+    `indexer recycling` and exit code 3. An installed 0.4.2 also logged `0 MB still on the card`
+    after photos and documents, with no recycle. Still unwatched: an installed interface
+    restarting the recycled child.
 
 ## What could not be verified in this project at all
 

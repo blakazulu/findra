@@ -1005,6 +1005,26 @@ public class SettingsModelTests
     }
 
     [Fact]
+    public void OnceStoppedTheButtonOffersToStartAgainAndPressingItStarts()
+    {
+        // Stopping leaves the indexer ALIVE - paused, not ended - and the queue full. Judged on
+        // those two facts alone, the button kept saying "Stop" after the stop, and pressing it
+        // turned off a switch that was already off: a button that answered nothing, again.
+        SettingsState busy = Reading();
+        SettingsState stopped = SettingsModel.Apply(
+            busy, new PanelHit(PanelTarget.Control, RowOf(busy, ControlId.StartIndexing), -1)).State;
+        Assert.True(stopped.IndexerAlive && stopped.Pending > 0);
+
+        Assert.Equal("Start now", Row(stopped, ControlId.StartIndexing).Value);
+        Assert.Equal("Start reading now", Row(stopped, ControlId.StartIndexing).Label);
+
+        SettingsOutcome again = SettingsModel.Apply(
+            stopped, new PanelHit(PanelTarget.Control, RowOf(stopped, ControlId.StartIndexing), -1));
+        Assert.Equal(SettingsAction.StartIndexing, again.Action);
+        Assert.True(again.State.Config.IndexContent);
+    }
+
+    [Fact]
     public void WhileReadingTheButtonStopsIt()
     {
         // The switch above it could always stop reading, but nobody looked there: the button that
