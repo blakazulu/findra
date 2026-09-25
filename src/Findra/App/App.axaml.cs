@@ -1577,11 +1577,11 @@ internal sealed class Shell : ISettingsHost
 
     // ---- the card --------------------------------------------------------------------------------
 
-    private CardWindow NewCard()
+    private CardWindow NewCard(double zoom)
     {
         // The card BORROWS the read-only store and never disposes it: the store outlives every
         // card, and null is a supported state the card already answers with a sentence.
-        var card = new CardWindow(_palette, Zoom, _cardStore, _semantic, _installed);
+        var card = new CardWindow(_palette, zoom, _cardStore, _semantic, _installed);
         card.SettingsRequested += OpenSettings;
         // The card cannot write a setting - it reads the index through a read-only connection -
         // so this is where "turn reading back on" from the Content pill actually lands. Through
@@ -1621,9 +1621,10 @@ internal sealed class Shell : ISettingsHost
         {
             Screens? screens = _capsule.Screens;
             Screen? s = screens?.ScreenFromWindow(_capsule) ?? screens?.Primary;
-            CardWindow card = NewCard();
+            double zoom = s is null ? Zoom : CardOverPlacement.FittedZoom(Zoom, s.WorkingArea, s.Scaling);
+            CardWindow card = NewCard(zoom);
             if (s is not null) card.ShowDim(s.Bounds, s.Scaling);
-            card.PlaceOver(_capsule.Position, Zoom, CapsuleWindow.BarRect, s?.Bounds ?? Fallback);
+            card.PlaceOver(_capsule.Position, zoom, CapsuleWindow.BarRect, s?.Bounds ?? Fallback);
             card.Show();
         }
         catch (Exception ex) { Log.Error("app", "the card could not open from the capsule", ex); _card = null; }
@@ -1679,11 +1680,12 @@ internal sealed class Shell : ISettingsHost
             double scaling = s?.Scaling ?? 1.0;
             PixelRect work = s?.WorkingArea ?? Fallback;
 
-            CardWindow card = NewCard();
+            double zoom = CardOverPlacement.FittedZoom(Zoom, work, scaling);
+            CardWindow card = NewCard(zoom);
             if (s is not null) card.ShowDim(s.Bounds, s.Scaling);
             // Against the card WITH results in it. It opens empty, but it grows in place the
             // moment the first results land and is never placed again.
-            card.Position = CardPlacement.CentredGrown(work, Zoom, scaling);
+            card.Position = CardPlacement.CentredGrown(work, zoom, scaling);
             card.Show();
         }
         catch (Exception ex) { Log.Error("app", "the card could not open", ex); _card = null; }

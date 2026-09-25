@@ -33,6 +33,16 @@ public static class CardOverPlacement
             (int)Math.Ceiling(SearchCardLayout.WindowHeight(SearchCardLayout.MaxRows, true, progress: true) * zoom * s));
     }
 
+    /// <summary>The zoom the card actually opens at on a screen: <paramref name="zoom"/>, shrunk
+    /// where the card fully grown - every row, the progress pill, the advanced form open - would
+    /// not fit the working area (<see cref="ScreenFit"/>). A 1080p screen at 175% has 590 units
+    /// of room and the grown card is taller than that.</summary>
+    public static double FittedZoom(double zoom, PixelRect workArea, double screenScaling)
+    {
+        double tallest = SearchCardLayout.WindowHeight(SearchCardLayout.MaxRows, true, advOpen: true, progress: true);
+        return zoom * ScreenFit.Factor(SearchCardLayout.Width * zoom, tallest * zoom, workArea, screenScaling);
+    }
+
     /// <param name="widgetPos">The widget window's top-left, in physical pixels.</param>
     /// <param name="zoom">The card's own zoom: what turns the layout's unscaled units into DIPs.</param>
     /// <param name="capsule">The widget's capsule bar, in the widget's unscaled layout units.</param>

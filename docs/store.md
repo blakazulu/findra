@@ -141,6 +141,23 @@ Saved in Partner Center, submission id `1152921505701952194`:
 What remains before release: the owner reviews the submission and clicks Submit.
 Submit was deliberately not clicked during the fill.
 
+### 5b. Certification 1: failed on scaling (25 September 2026)
+
+Submission 1 (0.3.1) came back with one finding, **10.1.2.10 Functionality**: "Products must be
+fully accessible on devices using common resolution scaling values", observed on a Lenovo Legion 5
+15ACH6 at 1920x1080, 125% and above, OS build 26100.4946. `allowElevation` was not raised.
+
+The cause: the first-run screen is 928 layout units, 1160 physical pixels at 125%, taller than the
+screen; it has no title bar, so its two buttons sat below the bottom edge and Findra could not be
+set up. The welcome page and the fully grown card overflowed from 150%. Fixed in **0.4.1**: every
+window shrinks as a whole to fit the screen it opens on (`ScreenFit`), held by `ScreenFitTests` at
+100-175% on 1080p.
+
+Resubmission: upload `findra_0.4.1.0.msixbundle` on the Packages page (replacing 0.3.1), set
+"What's new in this version" from the 0.4.1 and 0.4.0 CHANGELOG sections, and add to the notes for
+certification: "Fixed 10.1.2.10: every window now shrinks to fit the display at 125% scaling and
+above on 1920x1080, including the first-run screen whose buttons were below the screen edge."
+
 ### 6. Certification
 
 Certification reads the restricted-capability justification and can take longer for it. If

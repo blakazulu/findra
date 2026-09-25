@@ -233,7 +233,7 @@ public sealed class CardWindow : Window
             _db = db;
             _semantic = semantic;
             _installed = installed;
-            _scale = Math.Clamp(scale, 0.85, 1.7);
+            _scale = Math.Clamp(scale, ScreenFit.Floor, 1.7);
             // The shipped face, not the platform's - one resolver for every surface, so the card
             // and the shot of the card are the same picture. Parts.Face falls back to the system
             // default on its own if the resource is missing.

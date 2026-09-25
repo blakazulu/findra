@@ -72,8 +72,7 @@ public sealed class FirstRunWindow : Window
         Background = Brushes.Transparent;
         CanResize = false;
         SizeToContent = SizeToContent.Manual;
-        Width = FirstRunLayout.Width;
-        Height = FirstRunLayout.Height;
+        SizeTo(FirstRunLayout.SurfaceHeight(state));
         WindowStartupLocation = WindowStartupLocation.CenterScreen;
         // Pinned to ARRIVE, and only to arrive. Windows will not reliably let a process that is
         // still starting take the foreground, so a window that merely called Activate() can open
@@ -91,6 +90,8 @@ public sealed class FirstRunWindow : Window
 
         Opened += (_, _) =>
         {
+            // Sized against the primary screen before it had one of its own.
+            _canvas.Refit();
             Activate();
             _canvas.Focus();
             Topmost = false;
@@ -98,6 +99,22 @@ public sealed class FirstRunWindow : Window
         _canvas.Answered += s => Answered?.Invoke(s);
         _canvas.StartReadingRequested += () => StartReadingRequested?.Invoke();
         _canvas.SettingsRequested += () => SettingsRequested?.Invoke();
+    }
+
+    /// <summary>
+    /// Size the window to a page <paramref name="height"/> units tall, shrunk as a whole where
+    /// the screen has less room than that (<see cref="ScreenFit"/>). The choosing page is 928
+    /// units, taller than a 1080p screen at 125%, and this window has no title bar to drag it
+    /// back up by - so without this its two buttons sit below the bottom edge and the only screen
+    /// that lets anybody into Findra cannot be answered.
+    /// </summary>
+    private void SizeTo(float height)
+    {
+        double k = ScreenFit.For(this, FirstRunLayout.Width, height);
+        _canvas.Fit = k;
+        Width = FirstRunLayout.Width * k;
+        Height = height * k;
+        ScreenFit.KeepInside(this);
     }
 
     /// <summary>The chord the hotkey actually registered, once the answer has built it - or null
@@ -135,7 +152,11 @@ public sealed class FirstRunWindow : Window
     // are written the same way.
     private sealed class FirstRunCanvas : Avalonia.Controls.Control
     {
-        private readonly Window _owner;
+        private readonly FirstRunWindow _owner;
+
+        /// <summary>How much smaller than its layout the page is drawn, so it fits the screen:
+        /// the painter's canvas is scaled by it and every pointer position divided by it.</summary>
+        public double Fit { get; set; } = 1.0;
         private readonly SKTypeface _face;
         private readonly Derived _derived;
 
@@ -155,7 +176,7 @@ public sealed class FirstRunWindow : Window
         public event Action? StartReadingRequested;
         public event Action? SettingsRequested;
 
-        public FirstRunCanvas(FirstRunState state, Palette palette, Window owner)
+        public FirstRunCanvas(FirstRunState state, Palette palette, FirstRunWindow owner)
         {
             _state = state;
             _owner = owner;
@@ -179,6 +200,17 @@ public sealed class FirstRunWindow : Window
         /// window they were painted in - so "Start reading" could not be hovered, did not change
         /// the cursor and could not be pressed.</para>
         /// </summary>
+        /// <summary>The pointer in the layout's own units, undoing the fit the page is drawn at.
+        /// </summary>
+        private Point At(PointerEventArgs e)
+        {
+            Point p = e.GetPosition(this);
+            return new Point(p.X / Fit, p.Y / Fit);
+        }
+
+        /// <summary>Fit the page again, to the screen the window actually landed on.</summary>
+        public void Refit() => _owner.SizeTo(FirstRunLayout.SurfaceHeight(_state));
+
         private FirstRunHit HitAt(Point p) => FirstRunLayout.HitTest((float)p.X, (float)p.Y, _state);
 
         /// <summary>Is the last question on the screen? Two buttons instead of one, a taller
@@ -203,7 +235,7 @@ public sealed class FirstRunWindow : Window
             // The bars are rows on the answered page, so knowing how many there are is knowing
             // how tall it is. This arrives straight after the answer, while the pointer is still
             // on the button that has just stopped existing.
-            _owner.Height = FirstRunLayout.SurfaceHeight(_state);
+            _owner.SizeTo(FirstRunLayout.SurfaceHeight(_state));
             InvalidateVisual();
         }
 
@@ -222,7 +254,7 @@ public sealed class FirstRunWindow : Window
             _state = _state with { Problem = problem, Stage = FirstRunStage.Finished };
             // The last question needs room that the download screen did not, so the window grows
             // here - downwards, so everything above the question stays where it was.
-            _owner.Height = FirstRunLayout.SurfaceHeight(_state);
+            _owner.SizeTo(FirstRunLayout.SurfaceHeight(_state));
             InvalidateVisual();
         }
 
@@ -254,7 +286,7 @@ public sealed class FirstRunWindow : Window
             // already on disk, so it went straight to finished while the card was still up.
             FirstRunStage stage = _state.Stage == FirstRunStage.Choosing ? _next : _state.Stage;
             _state = _state with { Work = null, Stage = stage };
-            _owner.Height = FirstRunLayout.SurfaceHeight(_state);
+            _owner.SizeTo(FirstRunLayout.SurfaceHeight(_state));
             InvalidateVisual();
         }
 
@@ -281,7 +313,7 @@ public sealed class FirstRunWindow : Window
         protected override void OnPointerMoved(PointerEventArgs e)
         {
             if (_state.Work is not null) return;   // the card is the only thing up
-            Point p = e.GetPosition(this);
+            Point p = At(e);
             FirstRunHit hit = HitAt(p);
             if (hit.Target == _state.HoverTarget && hit.Index == _state.HoverIndex) return;
             _state = _state with { HoverTarget = hit.Target, HoverIndex = hit.Index };
@@ -306,7 +338,7 @@ public sealed class FirstRunWindow : Window
             Focus();
             // Nothing answers while the work card is up - not the page, not the title strip.
             if (_state.Work is not null) return;
-            Point p = e.GetPosition(this);
+            Point p = At(e);
             FirstRunHit hit = HitAt(p);
 
             // The title strip is the only place a borderless window can be picked up by.
@@ -411,6 +443,7 @@ public sealed class FirstRunWindow : Window
                 using ISkiaSharpApiLease lease = feature.Lease();
                 SKCanvas canvas = lease.SkCanvas;
                 canvas.Save();
+                canvas.Scale((float)_c.Fit);
                 FirstRunPainter.Paint(canvas, _c._state, _c._derived, _c._face);
                 canvas.Restore();
             }

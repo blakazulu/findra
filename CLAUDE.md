@@ -174,6 +174,17 @@ and its default arm throws.
   `FirstRunLayout.BandRow` (which `SurfaceHeight` and the painter read); mixing them made the last
   question unclickable wherever a Hebrew row sits below Speech.
 
+## Fitting the screen
+
+**Every window fits the screen it opens on, at every scaling.** Layouts are fixed units that Windows
+multiplies by the scaling: the first-run page (928) is 1160 physical px at 125% on 1080p, and with no
+title bar its buttons were unreachable (Store rejection, policy 10.1.2.10). `ScreenFit.Factor` shrinks
+a surface that does not fit (never grows one, floor 0.5); the window scales the Skia canvas by it and
+divides every pointer position by it, so layouts, hit tests and `--searchshot` stay in layout units.
+First-run and Settings resize through their own fit method (never set `Width`/`Height` directly), refit
+in `Opened`, and `KeepInside` the working area; the card folds it into its zoom
+(`CardOverPlacement.FittedZoom`). `ScreenFitTests` holds every surface to 1080p at 100-175%.
+
 ## The update panel
 
 **Check now** in Settings raises a panel over the pane.
@@ -744,9 +755,9 @@ URI) and `SiteShotTests`; the rest holds because somebody reads it.
 ## The Microsoft Store
 
 **`docs/store.md` is the record**: the decision, registration, submission pages, listing text and
-the per-release routine. **Status: name reserved, not submitted** - "Findra" is reserved on the
-existing developer account (the one that publishes Scalpel PDF), Store ID `9P78Z9KT48PR`; nothing has
-been sent for certification.
+the per-release routine. **Status: submitted once, failed certification on scaling** (10.1.2.10,
+fixed in 0.4.1, resubmission pending) - "Findra" is reserved on the existing developer account (the
+one that publishes Scalpel PDF), Store ID `9P78Z9KT48PR`.
 The Store is a fourth distribution route beside the releases page, the installer and winget, not a
 replacement.
 

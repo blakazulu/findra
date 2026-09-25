@@ -7,6 +7,16 @@ and Findra follows [Semantic Versioning](https://semver.org/spec/v2.0.0/).
 
 ## [Unreleased]
 
+## [0.4.1] - 2026-09-25
+
+### Fixed
+
+- **Findra now fits the screen at 125% scaling and above.** On a 1920x1080 laptop set to the
+  scaling Windows recommends, the welcome screen was taller than the display, and its two buttons
+  sat below the bottom edge where they could not be pressed, so Findra could not be set up at all.
+  The welcome screen, Settings and the search card now shrink just enough to fit whatever screen
+  they open on, and stay at their normal size wherever they already fit.
+
 ## [0.4.0] - 2026-09-23
 
 ### Added
@@ -1721,7 +1731,8 @@ all of it gets verified without a screen.
 - The named pipe is restricted to the current user, and the interface verifies the
   owner before trusting a connection.
 
-[Unreleased]: https://github.com/blakazulu/findra/compare/v0.4.0...HEAD
+[Unreleased]: https://github.com/blakazulu/findra/compare/v0.4.1...HEAD
+[0.4.1]: https://github.com/blakazulu/findra/compare/v0.4.0...v0.4.1
 [0.4.0]: https://github.com/blakazulu/findra/compare/v0.3.1...v0.4.0
 [0.3.1]: https://github.com/blakazulu/findra/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/blakazulu/findra/compare/v0.2.1...v0.3.0

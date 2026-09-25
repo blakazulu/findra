@@ -66,17 +66,29 @@ public sealed class SettingsWindow : Window
         Background = Brushes.Transparent;
         CanResize = false;
         SizeToContent = SizeToContent.Manual;
-        Width = RailLayout.Width;
-        Height = RailLayout.Height;
+        FitToScreen();
         // Topmost is deliberately NOT set, and there is no Deactivated handler: this window is
         // meant to survive a trip to Explorer and back.
         WindowStartupLocation = WindowStartupLocation.CenterScreen;
 
         KeyDown += (_, e) => { if (_canvas.OnKey(e)) e.Handled = true; };
-        Opened += (_, _) => { Open = this; Activate(); _canvas.Focus(); };
+        // Fitted again once it is on a screen of its own rather than the primary one.
+        Opened += (_, _) => { FitToScreen(); Open = this; Activate(); _canvas.Focus(); };
         Closed += (_, _) => { if (ReferenceEquals(Open, this)) Open = null; };
 
         _canvas.Changed += c => Changed?.Invoke(c);
+    }
+
+    /// <summary>The layout's size, shrunk as a whole where the screen has less room than that
+    /// (<see cref="ScreenFit"/>): at a high scaling on a small screen the window would otherwise
+    /// run off the bottom with no title bar to drag it back by.</summary>
+    private void FitToScreen()
+    {
+        double k = ScreenFit.For(this, RailLayout.Width, RailLayout.Height);
+        _canvas.Fit = k;
+        Width = RailLayout.Width * k;
+        Height = RailLayout.Height * k;
+        ScreenFit.KeepInside(this);
     }
 
     /// <summary>Paint in a different palette without recreating the window.</summary>
@@ -284,6 +296,17 @@ public sealed class SettingsWindow : Window
 
         // ---- pointer ----
 
+        /// <summary>How much smaller than its layout the window is drawn, so it fits the screen:
+        /// the painter's canvas is scaled by it and every pointer position divided by it.</summary>
+        public double Fit { get; set; } = 1.0;
+
+        /// <summary>The pointer in the layout's own units, undoing the fit.</summary>
+        private Point At(PointerEventArgs e)
+        {
+            Point p = e.GetPosition(this);
+            return new Point(p.X / Fit, p.Y / Fit);
+        }
+
         private PanelHit HitAt(Point p) => RailLayout.HitTest(
             (float)p.X, (float)p.Y,
             SettingsModel.OptionCounts(_state), SettingsModel.NoteLines(_state, _face),
@@ -325,7 +348,7 @@ public sealed class SettingsWindow : Window
             // somebody can see and cannot press.
             if (_state.Prompt != UpdatePromptState.None)
             {
-                UpdatePromptTarget over = PromptAt(e.GetPosition(this));
+                UpdatePromptTarget over = PromptAt(At(e));
                 if (over == _state.PromptHover) return;
                 _state = _state with { PromptHover = over, HoverTarget = PanelTarget.None, HoverRow = -1 };
                 Cursor = PointerCursor.Of(Pointers.ForPrompt(over));
@@ -336,7 +359,7 @@ public sealed class SettingsWindow : Window
             // The Remove question, on the same terms: while it is up it is the only thing here.
             if (_state.Removing is not null)
             {
-                RemoveTarget over = RemoveAt(e.GetPosition(this));
+                RemoveTarget over = RemoveAt(At(e));
                 if (over == _state.RemoveHover) return;
                 _state = _state with { RemoveHover = over, HoverTarget = PanelTarget.None, HoverRow = -1 };
                 Cursor = PointerCursor.Of(Pointers.ForRemove(over));
@@ -344,7 +367,7 @@ public sealed class SettingsWindow : Window
                 return;
             }
 
-            PanelHit hit = HitAt(e.GetPosition(this));
+            PanelHit hit = HitAt(At(e));
             if (hit.Target == _state.HoverTarget && hit.Row == _state.HoverRow && hit.Option == _state.HoverOption)
                 return;
             _state = _state with { HoverTarget = hit.Target, HoverRow = hit.Row, HoverOption = hit.Option };
@@ -367,7 +390,7 @@ public sealed class SettingsWindow : Window
         protected override void OnPointerPressed(PointerPressedEventArgs e)
         {
             Focus();
-            Point p = e.GetPosition(this);
+            Point p = At(e);
 
             // The panel first, and nothing else while it is up - including the window's own close
             // cross and the title strip. A question is answered before the window it is over.
@@ -521,6 +544,7 @@ public sealed class SettingsWindow : Window
                 // carries the monitor's scaling, so nothing is scaled here.
                 SKCanvas canvas = lease.SkCanvas;
                 canvas.Save();
+                canvas.Scale((float)_c.Fit);
                 SettingsPainter.Paint(canvas, _c._state, _c._derived, _c._face);
                 canvas.Restore();
             }

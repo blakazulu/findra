@@ -5,6 +5,16 @@ All notable changes to Findra are documented here.
 The format follows [Keep a Changelog 1.1.0](https://keepachangelog.com/en/1.1.0/),
 and Findra follows [Semantic Versioning](https://semver.org/spec/v2.0.0/).
 
+## [0.4.1 - 25 September 2026](https://github.com/blakazulu/findra/releases/tag/v0.4.1)
+
+### Fixed
+
+- **Findra now fits the screen at 125% scaling and above.** On a 1920x1080 laptop set to the
+  scaling Windows recommends, the welcome screen was taller than the display, and its two buttons
+  sat below the bottom edge where they could not be pressed, so Findra could not be set up at all.
+  The welcome screen, Settings and the search card now shrink just enough to fit whatever screen
+  they open on, and stay at their normal size wherever they already fit.
+
 ## [0.4.0 - 23 September 2026](https://github.com/blakazulu/findra/releases/tag/v0.4.0)
 
 ### Added
