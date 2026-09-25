@@ -7,6 +7,17 @@ and Findra follows [Semantic Versioning](https://semver.org/spec/v2.0.0/).
 
 ## [Unreleased]
 
+## [0.4.2] - 2026-09-25
+
+### Fixed
+
+- **Findra no longer keeps about 1.5 GB of graphics memory after transcribing.** Once speech had
+  been read, the part of Findra that reads inside files let go of its models but the graphics card
+  kept roughly 1.5 GB set aside for it until Findra was closed, even while it sat idle. It now
+  checks what it still holds on the card after letting its models go, and if memory is left over it
+  quietly restarts itself to give it back. Reading pictures and documents never needed this and
+  still does not.
+
 ## [0.4.1] - 2026-09-25
 
 ### Fixed
@@ -1731,7 +1742,8 @@ all of it gets verified without a screen.
 - The named pipe is restricted to the current user, and the interface verifies the
   owner before trusting a connection.
 
-[Unreleased]: https://github.com/blakazulu/findra/compare/v0.4.1...HEAD
+[Unreleased]: https://github.com/blakazulu/findra/compare/v0.4.2...HEAD
+[0.4.2]: https://github.com/blakazulu/findra/compare/v0.4.1...v0.4.2
 [0.4.1]: https://github.com/blakazulu/findra/compare/v0.4.0...v0.4.1
 [0.4.0]: https://github.com/blakazulu/findra/compare/v0.3.1...v0.4.0
 [0.3.1]: https://github.com/blakazulu/findra/compare/v0.3.0...v0.3.1

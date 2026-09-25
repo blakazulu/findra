@@ -318,6 +318,13 @@ The power setting shapes how hard Findra works; **`IndexGate` decides whether ot
 - **Anything that cannot be measured is not busy.**
 - **Waiting means holding no models**: `IDecoders.Unload` on every wait and a minute after the queue
   empties.
+- **...and no video memory, which Unload alone does not give.** The speech runtime (Vulkan) keeps a
+  ~1.5 GB pool for the life of the process once it has transcribed real audio; DirectML gives every
+  byte back. So after a release that let something go, `MachineGate.LeftOnCard` reads this
+  process's own dedicated memory on the card, and above `Indexer.RecycleAboveBytes` (256 MB) the
+  loop ends and the child exits with `IndexerHost.RecycleExitCode` (3). The host restarts that on
+  the next turn with no backoff and resets the crash count. Measured, never "restart after speech":
+  a child that read only pictures and documents never recycles.
 - **The wait is said**: `indexer:state`, "waiting for the GPU" via `IndexStatus`, and `--searchprobe`.
 - **No "wait until idle" rule** - the gate yields to other WORK, not to a person being present.
 - Measured on one machine only; never on an AMD or Intel card.

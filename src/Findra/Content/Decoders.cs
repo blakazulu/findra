@@ -75,6 +75,10 @@ public interface IDecoders : IDisposable
     /// gigabytes on the card is holding them against exactly the program it is waiting for.</summary>
     void Unload() { }
 
+    /// <summary>Whether any model is loaded now. What tells a release that let something go from
+    /// one that had nothing to let go of.</summary>
+    bool Loaded => false;
+
     /// <summary>Open picture and meaning models on the processor from now on (true), or on the
     /// graphics card again (false). A change lets go of what is loaded, so the next file opens its
     /// model where it was asked for. Speech is not moved: its runtime is chosen once per process.

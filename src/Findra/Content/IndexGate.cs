@@ -379,6 +379,39 @@ public sealed class MachineGate : IDisposable
         }
     }
 
+    /// <summary>
+    /// How much of the card THIS process still holds, read after its models have been let go; null
+    /// where the counters cannot say. Only this process, not the interface: the parent's share is
+    /// the capsule and card, which a fresh indexer would not give back.
+    ///
+    /// <para>Collected first, and the counter trails a release by about a second, so it waits for
+    /// it - and for the finalisers, since a disposed session can still be holding native memory
+    /// until its handles are collected. A second and a half per release, and a release happens at
+    /// most once a minute of idleness or once per wait.</para>
+    /// </summary>
+    public long? LeftOnCard()
+    {
+        if (_countersBroken) return null;
+        try
+        {
+            GC.Collect();
+            GC.WaitForPendingFinalizers();
+            if (_query == IntPtr.Zero && !Open()) return null;
+            System.Threading.Thread.Sleep(1500);
+            if (PdhCollectQueryData(_query) != 0) return null;
+            string self = $"pid_{_self.ToString(CultureInfo.InvariantCulture)}_";
+            double held = 0;
+            foreach ((string name, double v) in Read(_procMem))
+                if (name.StartsWith(self, StringComparison.Ordinal) && name.Contains(_luid, StringComparison.OrdinalIgnoreCase)) held += v;
+            return (long)held;
+        }
+        catch (Exception ex)
+        {
+            Log.Once("index|leftoncard", "WARN", "index", $"gpu gate: what the indexer still holds on the card could not be read :: {ex.GetType().Name}: {ex.Message}");
+            return null;
+        }
+    }
+
     private bool Mine(string instance)
         => instance.StartsWith($"pid_{_self.ToString(CultureInfo.InvariantCulture)}_", StringComparison.Ordinal)
            || (_parent > 0 && instance.StartsWith($"pid_{_parent.ToString(CultureInfo.InvariantCulture)}_", StringComparison.Ordinal));

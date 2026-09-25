@@ -129,7 +129,7 @@
       <span class="kicker">CHANGELOG</span>
       <h1>Every release, and what it changed for you.</h1>
       <div class="doc-meta">
-        <span class="d">Findra 0.4.1 &middot; last reviewed 2026-09-25</span>
+        <span class="d">Findra 0.4.2 &middot; last reviewed 2026-09-25</span>
         <a class="doc-chip on" href="/changelog.md">Read as Markdown</a>
         <a class="doc-chip" href="https://github.com/blakazulu/findra/blob/main/CHANGELOG.md" rel="noopener">History on GitHub</a>
       </div>
@@ -139,6 +139,14 @@
       <p>All notable changes to Findra are documented here.</p>
 
       <p>The format follows <a href="https://keepachangelog.com/en/1.1.0/">Keep a Changelog 1.1.0</a>, and Findra follows <a href="https://semver.org/spec/v2.0.0/">Semantic Versioning</a>.</p>
+
+      <h2><a href="https://github.com/blakazulu/findra/releases/tag/v0.4.2">0.4.2 - 25 September 2026</a></h2>
+
+      <h3>Fixed</h3>
+
+      <ul>
+        <li><strong>Findra no longer keeps about 1.5 GB of graphics memory after transcribing.</strong> Once speech had been read, the part of Findra that reads inside files let go of its models but the graphics card kept roughly 1.5 GB set aside for it until Findra was closed, even while it sat idle. It now checks what it still holds on the card after letting its models go, and if memory is left over it quietly restarts itself to give it back. Reading pictures and documents never needed this and still does not.</li>
+      </ul>
 
       <h2><a href="https://github.com/blakazulu/findra/releases/tag/v0.4.1">0.4.1 - 25 September 2026</a></h2>
 

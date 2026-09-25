@@ -69,11 +69,20 @@ public sealed class Indexer
     private string _processorWhy = "";
     private string _aroundKind = "";
 
-    private Indexer(ContentDb db, int parentPid, IDecoders decoders)
+    /// <summary>What this process still holds on the graphics card, read after a release; null
+    /// where it is not measured (a diagnostic, a test) or could not be.</summary>
+    private readonly Func<long?>? _leftOnCard;
+
+    /// <summary>Set by a release that left memory on the card; the loop ends and the process exits
+    /// with <see cref="IndexerHost.RecycleExitCode"/>.</summary>
+    private bool _recycle;
+
+    private Indexer(ContentDb db, int parentPid, IDecoders decoders, Func<long?>? leftOnCard = null)
     {
         _db = db;
         _parentPid = parentPid;
         _decoders = decoders;
+        _leftOnCard = leftOnCard;
     }
 
     public static int Run(string[] args)
@@ -114,7 +123,12 @@ public sealed class Indexer
             using IDecoders decoders = Decoders.ForThisMachine(() => TranscribeMinutes(db), beat: beat,
                                                                off: () => AddOns.Parse(db.Get(AddOns.OffKey)));
             using var gate = new MachineGate(() => decoders.Installed, parent);
-            Loop(db, parent, () => true, decoders, (isDelete, kind) => gate.Ask(isDelete, kind));
+            if (Loop(db, parent, () => true, decoders, (isDelete, kind) => gate.Ask(isDelete, kind), gate.LeftOnCard))
+            {
+                Log.Info("index", "indexer down (recycled)");
+                Log.Flush();
+                return IndexerHost.RecycleExitCode;
+            }
             Log.Info("index", "indexer down (clean)");
             Log.Flush();
             return 0;
@@ -232,26 +246,31 @@ public sealed class Indexer
     ///
     /// <para><paramref name="gate"/> is asked before every file and answers whether the machine
     /// can spare the work now - see <see cref="IndexGate"/>. Absent means always yes, which is what
-    /// a test and a diagnostic want: neither should wait on whatever the real card is doing.</para></summary>
-    public static void Loop(ContentDb db, int parentPid, Func<bool> running, IDecoders decoders,
-                            Func<bool, ResultKind, GateVerdict>? gate = null)
-        => new Indexer(db, parentPid, decoders).Loop(running, gate ?? ((_, _) => GateVerdict.Go));
+    /// a test and a diagnostic want: neither should wait on whatever the real card is doing.</para>
+    ///
+    /// <para><paramref name="leftOnCard"/> reads what this process still holds on the card after
+    /// its models are let go. True means it held too much and the loop ended so the process can be
+    /// replaced; absent means never.</para></summary>
+    public static bool Loop(ContentDb db, int parentPid, Func<bool> running, IDecoders decoders,
+                            Func<bool, ResultKind, GateVerdict>? gate = null, Func<long?>? leftOnCard = null)
+        => new Indexer(db, parentPid, decoders, leftOnCard).Loop(running, gate ?? ((_, _) => GateVerdict.Go));
 
     /// <summary>How long an empty queue keeps the models loaded. Long enough that a burst of new
     /// files arriving a few seconds apart does not load and unload them for every one; short
     /// enough that a finished queue is not gigabytes on the card for the rest of the day.</summary>
     public const int KeepModelsIdleSeconds = 60;
 
-    private void Loop(Func<bool> running, Func<bool, ResultKind, GateVerdict> gate)
+    private bool Loop(Func<bool> running, Func<bool, ResultKind, GateVerdict> gate)
     {
         string lastState = "";
         long stuck = -1;
         var lastStatus = Stopwatch.StartNew();
         var idleFor = new Stopwatch();
         bool workingAround = false;
-        while (running())
+        // A release that left memory on the card ends the loop before the next pass is asked for.
+        while (!_recycle && running())
         {
-            if (ParentGone()) { Status("stopped"); return; }
+            if (ParentGone()) { Status("stopped"); return false; }
 
             if (_db.Get("index:paused") == "1")
             {
@@ -381,15 +400,38 @@ public sealed class Indexer
             int rest = power >= 100 ? 30 : (int)Math.Min(8000, busy.ElapsedMilliseconds * (100.0 - power) / power) + 30;
             Thread.Sleep(rest);
         }
+        return _recycle;
     }
 
     private void LetModelsGo(string why)
     {
-        bool had = _decoders is Decoders d && d.Loaded;
+        bool had = _decoders.Loaded;
         try { _decoders.Unload(); }
         catch (Exception ex) { Log.Once("index|unload", "WARN", "index", "the models could not be let go :: " + ex.Message); return; }
-        if (had) Log.Info("index", $"indexer released its models ({why})");
+        if (!had) return;
+        if (_leftOnCard is null) { Log.Info("index", $"indexer released its models ({why})"); return; }
+
+        // Measured rather than assumed. The picture and meaning runtime gives every byte back, but
+        // the speech runtime keeps a pool of video memory for the life of the process once it has
+        // transcribed anything real - about 1.5 GB, after every model is disposed - and nothing
+        // Findra can call releases it. Only ending the process does.
+        long? left = _leftOnCard();
+        Log.Info("index", $"indexer released its models ({why})" +
+                          (left is { } b ? $", {Sizes.Human(b)} still on the card" : ""));
+        if (!ShouldRecycle(left)) return;
+        Log.Info("index", $"indexer recycling: {Sizes.Human(left!.Value)} of video memory outlived its models - " +
+                          "exiting so a fresh indexer can start without it");
+        _recycle = true;
     }
+
+    /// <summary>More than this left on the card after every model has gone means the speech
+    /// runtime's pool is still held. Far above the ~27 MB a freed model leaves and far below the
+    /// 1.2-1.7 GB the pool keeps.</summary>
+    public const long RecycleAboveBytes = 256L * 1024 * 1024;
+
+    /// <summary>Whether what is left on the card is worth a fresh process. A reading that could
+    /// not be taken is not: anything that cannot be measured changes nothing.</summary>
+    public static bool ShouldRecycle(long? leftOnCard) => leftOnCard is > RecycleAboveBytes;
 
     /// <summary>Count this attempt, and if the row has had its last, record it and take it out of
     /// the queue. True means "already dealt with; go to the next one".</summary>

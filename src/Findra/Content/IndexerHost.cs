@@ -82,6 +82,16 @@ public sealed class IndexerHost : IDisposable
     /// <summary>How long a child has to have run for its crash to start the backoff again.</summary>
     public const int HealthyMinutes = 10;
 
+    /// <summary>
+    /// The exit code of a child that ended ITSELF to give back video memory its models no longer
+    /// hold (the speech runtime keeps a pool for the life of the process; see
+    /// <c>Indexer.ShouldRecycle</c>). Not a crash: it is started again on the next turn with no
+    /// backoff, and it resets the count a string of crashes builds up.
+    /// </summary>
+    public const int RecycleExitCode = 3;
+
+    private static bool Recycled(IChild child) => !child.Alive && child.ExitCode == RecycleExitCode;
+
     private DateTime _diedAt = DateTime.MinValue;
 
     private static double Backoff(int restarts) => Math.Min(300, 5 * Math.Pow(2, Math.Max(0, restarts - 1)));
@@ -98,6 +108,7 @@ public sealed class IndexerHost : IDisposable
             lock (_gate)
             {
                 if (_stopped || _child is { Alive: true }) return 0;
+                if (_child is not null && Recycled(_child)) return 0;
                 // A child that has died and not been noticed yet will be on the next turn.
                 int restarts = _child is not null ? _restarts + 1 : _restarts;
                 DateTime diedAt = _child is not null ? _now() : _diedAt;
@@ -135,6 +146,13 @@ public sealed class IndexerHost : IDisposable
         {
             if (_stopped) return;
             if (_child is { Alive: true }) return;
+            if (_child is not null && Recycled(_child))
+            {
+                Log.Info("index", "indexer recycled itself to free video memory - starting a fresh one");
+                _child.Dispose(); _child = null;
+                _restarts = 0;
+                _diedAt = DateTime.MinValue;
+            }
             if (_child is not null)
             {
                 // A child that worked for a while before it died is not part of a storm: the count

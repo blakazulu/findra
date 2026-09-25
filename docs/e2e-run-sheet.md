@@ -494,7 +494,7 @@ stamped on every reply exists to prevent. Name search is a pipe round trip, not 
 
 # Phase 4 - Content
 
-Seventeen items. This phase is where the largest amount of never-executed code runs for the first
+Eighteen items. This phase is where the largest amount of never-executed code runs for the first
 time: everything below the gate in `Decoders` - photo, audio, video, transcription and the Meaning
 branch of a document - is unexercised at runtime until it does.
 
@@ -758,6 +758,23 @@ after. **This machine has only ever proven the other path**: one discrete card a
 integrated beside it means `VulkanAdapter.Visible()` always had nothing to choose, so every run
 here so far took the "leave it exactly as it was" branch, never this one.
 
+### 4.18 (catalogue 69) The indexer gives back the card after transcribing
+
+With Speech installed, drop two or three real songs (a few minutes each) into a folder Findra reads,
+let them transcribe, then wait a minute past the queue emptying.
+
+**Pass:**
+- the log says `indexer released its models (idle), N MB still on the card` with N above 256 MB,
+  then `indexer recycling`, `indexer down (recycled)`, and the interface's `indexer recycled itself
+  to free video memory - starting a fresh one`;
+- Task Manager's Details tab, with the "Dedicated GPU memory" column shown, has no `findra.exe`
+  holding more than a few MB on the card afterwards;
+- the capsule and Settings never say reading stopped or is restarting.
+
+**Then** index only pictures and documents and wait out the minute: the release reports a few MB and
+nothing recycles. **A failure where the memory stays and nothing is logged means** the counters could
+not be read (`gpu gate:` warnings) or the measured process is not the indexer.
+
 ---
 
 # Phase 5 - Search and the card
@@ -809,7 +826,7 @@ It was stubbed to return nothing until the framework moved, and this is the firs
 
 # Phase 6 - The interface by eye
 
-Ten items. Almost nothing here can be run; it is where the judgements get made.
+Eleven items. Almost nothing here can be run; it is where the judgements get made.
 
 ### 6.1 (catalogue 27a) Every control in the settings window, clicked by a person - eye
 
@@ -953,6 +970,16 @@ Then untick it, sign out, sign in.
 `HKCU\Software\Microsoft\Windows\CurrentVersion\Run`.
 
 **Step 6.1 watches the registry value change; only a sign-out shows that Windows acts on it.**
+
+### 6.11 (catalogue 68) Every window fits at 125%, 150% and 175% - eye
+
+On a 1920x1080 screen (or any screen, at a scaling that leaves under 930 units of height), set each
+scaling in Settings > System > Display in turn, then: run the first-run screen (`findra --uninstall`,
+reinstall), open Settings, and open the card with a full page of results and Advanced open.
+
+**Pass:** every window is wholly on the screen, every button answers where it is drawn (hover moves
+with the pointer, not offset from it), and text is smaller only where the screen needed it. This is
+the Store's 10.1.2.10 finding; `ScreenFitTests` holds only the arithmetic.
 
 ---
 
@@ -1304,8 +1331,8 @@ halves stable.
   kept, the step cannot be run until one exists - a schema stamp cannot honestly be rolled back by
   hand, because that would test the migration against a database this build wrote, not one an older
   build did.
-- Nothing else in the catalogue is unplaceable. Every numbered item from 1 to 66, including 23a,
-  23b, 27a and 63 to 66, appears above exactly once, except catalogue 33, 42 and 50, which are each
+- Nothing else in the catalogue is unplaceable. Every numbered item from 1 to 69, including 23a,
+  23b, 27a and 63 to 69, appears above exactly once, except catalogue 33, 42 and 50, which are each
   split across the phases where their halves become reachable.
 - **Step 6.9 is not a catalogue item.** The two dim behaviours are a rule in the specification and
   in `CLAUDE.md` that the catalogue never turned into a step, and they need two monitors to tell

@@ -576,6 +576,20 @@ person makes by looking; two are destructive and belong last.
     path with unusual characters surviving the hand-off have never been exercised on a machine
     where the restart actually fires.
 
+## From 0.4.1
+
+68. **Every window fits at 125%, 150% and 175% on a 1920x1080 screen.** Set the scaling in
+    Settings > System > Display, then run the first-run screen (`findra --uninstall`, reinstall),
+    open Settings and open the card with a full page of results and Advanced open. Every button is
+    on the screen and answers where it is drawn; text is smaller only where the screen needed it.
+    `ScreenFitTests` holds the arithmetic; nothing has looked at the real windows at those scalings.
+69. **The indexer gives back the card after transcribing.** With Speech installed, queue two or
+    three real songs, let them transcribe, and wait a minute past the queue emptying. The log says
+    `indexer released its models (idle), N MB still on the card`, then `indexer recycling`,
+    `indexer down (recycled)`, and the interface's `indexer recycled itself to free video memory`;
+    Task Manager's GPU memory column then shows no Findra process holding dedicated memory on the
+    card. Only pictures and documents read: the release reports a few MB and nothing recycles.
+
 ## What could not be verified in this project at all
 
 Written down so they are known gaps rather than assumed passes. Every one of them is a step above.
@@ -649,6 +663,6 @@ has to rediscover them and so that leaving them stays a decision rather than an 
 Steps 1 to 4, 9 to 13 and 29 to 59 are the ones that have never executed in any form, except 32,
 which is done, and 35, which has run and needs reading. Steps 5 to 8 have been verified by log
 line and by inspection, but not by eye. Steps 63 to 66 are new with the video-frame decoder and
-have never executed either.
+have never executed either, nor have 68 and 69, new with 0.4.1.
 
 `docs/e2e-run-sheet.md` is the order to work through them in.
