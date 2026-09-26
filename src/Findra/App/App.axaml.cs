@@ -67,7 +67,7 @@ public static class CardPlacement
     /// up front, because the card grows in place and is never moved again - clamping against the
     /// empty card puts the grown one off the bottom of a short screen.</summary>
     public static PixelSize GrownSize(double zoom, double scaling) => new(
-        (int)Math.Round(SearchCardLayout.Width * zoom * scaling),
+        (int)Math.Round(SearchCardLayout.WindowWidth * zoom * scaling),
         (int)Math.Round(SearchCardLayout.WindowHeight(SearchCardLayout.MaxRows, true, progress: true) * zoom * scaling));
 
     public static PixelPoint Centred(PixelRect workingArea, int width, int height)
@@ -405,7 +405,7 @@ internal sealed class Shell : ISettingsHost
                 Stage("hotkey", () =>
                 {
                     var host = new HotkeyHost();
-                    host.Pressed += () => Dispatcher.UIThread.Post(() => OpenCentred(fromClick: false));
+                    host.Pressed += () => Dispatcher.UIThread.Post(() => OpenCentred());
                     // Owned before it is started: Start creates a real window, and a throw inside
                     // it would otherwise leave that window with nobody holding it and nobody to
                     // Dispose it.
@@ -1594,6 +1594,19 @@ internal sealed class Shell : ISettingsHost
             Log.Info("index", "the card asked for reading inside files to be turned back on");
             ApplyConfig(_config with { IndexContent = true });
         };
+        // The reading pill: Settings' "Start reading now", from the card. Both halves, as there -
+        // the switch through ApplyConfig so an open settings window shows it move, and a start
+        // wakes the indexer through the same call Settings' button makes.
+        card.ReadingRequested += start =>
+        {
+            if (start)
+            {
+                if (!_config.IndexContent) ApplyConfig(_config with { IndexContent = true });
+                ((ISettingsHost)this).StartIndexing();
+            }
+            else if (_config.IndexContent)
+                ApplyConfig(_config with { IndexContent = false });
+        };
         card.Closed += (_, _) => { if (ReferenceEquals(_card, card)) _card = null; };
         _card = card;
         return card;
@@ -1611,9 +1624,8 @@ internal sealed class Shell : ISettingsHost
     private void OpenFromCapsule()
     {
         if (TheWelcomeScreenIsInTheWay()) return;
-        // A click on the capsule deactivated the card BEFORE this handler ran, so without this a
-        // click that dismissed the card would immediately reopen it.
-        if (CardWindow.JustClosed) return;
+        // A second click on the capsule puts the card away: it no longer goes by itself when
+        // somebody clicks elsewhere, so the capsule is a toggle like the hotkey.
         if (_card is not null) { CloseCard(); return; }
         if (_capsule is null) return;
 
@@ -1632,13 +1644,8 @@ internal sealed class Shell : ISettingsHost
 
     /// <summary>The open path shared by the hotkey, the tray icon and the tray's Search item. It
     /// dims the monitor under the CURSOR, which is not necessarily the one the capsule rests on -
-    /// two open paths, two dim behaviours.
-    ///
-    /// <paramref name="fromClick"/> is true for the two tray routes. A mouse click deactivates an
-    /// open card, and the card closes and nulls itself out BEFORE the handler runs, so without the
-    /// guard a click that dismissed the card would immediately open a fresh one. WM_HOTKEY moves
-    /// no focus and closes nothing, so the hotkey does not take the guard and keeps its plain
-    /// toggle: pressed while the card is open, it closes it.</summary>
+    /// two open paths, two dim behaviours. Each is a toggle: used while the card is open, it
+    /// closes it.</summary>
     /// <summary>
     /// Is the welcome screen still up, and therefore still the only door into Findra?
     ///
@@ -1667,10 +1674,9 @@ internal sealed class Shell : ISettingsHost
         return true;
     }
 
-    private void OpenCentred(bool fromClick)
+    private void OpenCentred()
     {
         if (TheWelcomeScreenIsInTheWay()) return;
-        if (fromClick && CardWindow.JustClosed) return;
         if (_card is not null) { CloseCard(); return; }
 
         try
@@ -1698,7 +1704,7 @@ internal sealed class Shell : ISettingsHost
         var menu = new NativeMenu();
 
         var search = new NativeMenuItem("Search");
-        search.Click += (_, _) => OpenCentred(fromClick: true);
+        search.Click += (_, _) => OpenCentred();
         menu.Items.Add(search);
 
         _showCapsuleItem = new NativeMenuItem("Show capsule")
@@ -1725,7 +1731,7 @@ internal sealed class Shell : ISettingsHost
 
         var icon = new TrayIcon { Menu = menu, ToolTipText = Tooltip(), IsVisible = true };
         if (TrayIconFactory.Draw() is { } drawn) icon.Icon = drawn;
-        icon.Clicked += (_, _) => OpenCentred(fromClick: true);
+        icon.Clicked += (_, _) => OpenCentred();
 
         TrayIcon.SetIcons(_app, new TrayIcons { icon });
         _tray = icon;

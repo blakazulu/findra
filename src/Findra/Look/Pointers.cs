@@ -39,7 +39,7 @@ public static class Pointers
         SearchTarget.Chip or SearchTarget.Row or SearchTarget.Open or SearchTarget.Reveal
             or SearchTarget.Copy or SearchTarget.Stage or SearchTarget.Content or SearchTarget.Adv
             or SearchTarget.Settings or SearchTarget.AdvCheck or SearchTarget.AdvKind
-            or SearchTarget.AdvButton => PointerShape.Hand,
+            or SearchTarget.AdvButton or SearchTarget.Reading or SearchTarget.Close => PointerShape.Hand,
         _ => throw new ArgumentOutOfRangeException(nameof(target), target, "no pointer shape for this card target"),
     };
 

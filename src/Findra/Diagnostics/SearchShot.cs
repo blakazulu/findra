@@ -22,7 +22,7 @@ public static class SearchShot
     public static readonly IReadOnlyList<string> States =
     [
         "capsule", "empty", "indexing", "contentmode", "contentwaiting", "typing", "results",
-        "noresults", "many", "adv", "opening", "openingempty",
+        "noresults", "many", "adv", "opening", "openingempty", "selected", "starting",
         "settings", "settingsopening", "settingssearches", "settingscontent", "settingsaddons",
         "settingsremove", "settingsabout",
         "settingsuptodate", "settingsupdate", "settingsasking",
@@ -350,7 +350,7 @@ public static class SearchShot
     private static SKBitmap RenderCard(string state, Derived d, SKTypeface face)
     {
         SearchCardState s = Build(state);
-        int w = (int)Math.Ceiling(SearchCardLayout.Width);
+        int w = (int)Math.Ceiling(SearchCardLayout.WindowWidth);
         int h = (int)Math.Ceiling(SearchCardLayout.WindowHeight(s.Rows.Count, s.HasQuery, s.AdvOpen, s.Progress.Show));
         var info = new SKImageInfo(w, h, SKColorType.Bgra8888, SKAlphaType.Premul);
         using SKSurface surface = SKSurface.Create(info);
@@ -404,6 +404,20 @@ public static class SearchShot
                 IndexLine = "indexing 1,030 · 688 done",
                 Progress = IndexStatus.Pill(contentEnabled: true, nameof(ResultKind.Document),
                                             pending: 342, indexed: 688, alive: true),
+                // Reading with work in hand, so the reading pill offers to stop; every other state
+                // leaves it offering to start.
+                Reading = ReadingShown.Stop,
+                Clock = 0.2,
+            };
+
+        // The reading pill after a start it has not seen arrive yet: faded, and hovered on purpose
+        // for the same reason `contentwaiting` is - a dead pill must not light up.
+        if (state == "starting")
+            return SearchCardState.Empty with
+            {
+                IndexLine = "index: 1.5M names · idle",
+                Reading = ReadingShown.Starting,
+                HoverTarget = SearchTarget.Reading,
                 Clock = 0.2,
             };
 
@@ -458,11 +472,12 @@ public static class SearchShot
         {
             "typing" => "sun",
             "noresults" => "zqxjkv",
+            "selected" => "sunset over water",
             _ => "sunset",
         };
 
         var fake = new List<SearchResult>();
-        if (state is "results" or "many" or "opening")
+        if (state is "results" or "many" or "opening" or "selected")
         {
             fake.Add(new SearchResult(ResultKind.Photo, "IMG_4471.HEIC",
                 @"D:\Photos\2025\08 Crete\IMG_4471.HEIC", 0.91f, "looks like \u201csunset over water\u201d"));
@@ -517,7 +532,10 @@ public static class SearchShot
             // `results` hovers a row that is not the selected one: without it the list's hover
             // fill is painted by no shot and no test, which is what let RowHover sit within
             // 1.4 L* of Row - and inverted on two palettes - without anything noticing.
-            HoverTarget: state == "results" ? SearchTarget.Row : SearchTarget.None,
+            // `selected` selects the last two words, so the field's selection highlight is drawn,
+            // and hovers the close button on the card's corner.
+            Anchor: state == "selected" ? 7 : -1,
+            HoverTarget: state == "results" ? SearchTarget.Row : state == "selected" ? SearchTarget.Close : SearchTarget.None,
             HoverIndex: state == "results" ? 2 : -1,
             // `opening` catches the card mid-unfold with a full list, a third of the way through
             // the 220 ms: the painter takes its SaveLayer + ClipRect branch and has to balance the

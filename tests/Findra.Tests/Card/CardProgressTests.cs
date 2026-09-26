@@ -40,10 +40,11 @@ public class CardProgressTests
     {
         // The card is the same height with the pill and without it: the pill adds a band to the
         // WINDOW. Anything that read the card's height as the window's put the hints outside.
+        // The window also carries the band above the card the close button hangs into.
         float card = SearchCardLayout.Height(count, hasQuery, advOpen);
-        Assert.Equal(card, SearchCardLayout.WindowHeight(count, hasQuery, advOpen, progress: false), 3);
+        Assert.Equal(card + SearchCardLayout.Overhang, SearchCardLayout.WindowHeight(count, hasQuery, advOpen, progress: false), 3);
         Assert.True(SearchCardLayout.WindowHeight(count, hasQuery, advOpen, progress: true)
-                    >= SearchCardLayout.ProgressRect(count, hasQuery, advOpen).Bottom);
+                    >= SearchCardLayout.ProgressRect(count, hasQuery, advOpen).Bottom + SearchCardLayout.Overhang);
     }
 
     [Fact]
@@ -53,16 +54,19 @@ public class CardProgressTests
         // height and the window to another, and no rectangle can see that. A column of pixels
         // down the middle has to read card, then desktop, then pill.
         SearchCardState s = SearchCardState.Empty with { Clock = 0.2, Progress = Working };
-        int w = (int)SearchCardLayout.Width;
+        int w = (int)Math.Ceiling(SearchCardLayout.WindowWidth);
         int h = (int)Math.Ceiling(SearchCardLayout.WindowHeight(0, false, false, progress: true));
-        float card = SearchCardLayout.Height(0, false);
+        // The painter draws the card below the close button's band, so every card y moves down by it.
+        float top = SearchCardLayout.Overhang;
+        float card = top + SearchCardLayout.Height(0, false);
         SKRect pill = SearchCardLayout.ProgressRect(0, false);
+        pill.Offset(0, top);
 
         using var bmp = new SKBitmap(new SKImageInfo(w, h, SKColorType.Bgra8888, SKAlphaType.Premul));
         using (var canvas = new SKCanvas(bmp))
             SearchCardPainter.Paint(canvas, s, Derived.From(Palette.Mond), Parts.Face);
 
-        int x = w / 2;
+        int x = (int)(SearchCardLayout.Width / 2);
         Assert.True(bmp.GetPixel(x, (int)card - 3).Alpha > 200, "the card's body stops short of its own bottom edge");
         Assert.Equal(0, bmp.GetPixel(x, (int)(card + SearchCardLayout.ProgressGap / 2)).Alpha);
         Assert.True(bmp.GetPixel(x, (int)pill.MidY).Alpha > 200, "nothing is painted where the pill should be");
@@ -105,11 +109,11 @@ public class CardProgressTests
         // question. Nothing that measured a rectangle could see that; the rendered height can.
         // The empty card is the card nearly everybody has nearly all of the time, so it is the
         // one this has to be true of.
-        Assert.Equal((int)Math.Ceiling(SearchCardLayout.Height(0, false)), ShotHeight("empty"));
+        Assert.Equal((int)Math.Ceiling(SearchCardLayout.Height(0, false) + SearchCardLayout.Overhang), ShotHeight("empty"));
 
         // And the indexing state still hangs the band under it, or the rule has been read as
         // "never draw the pill" rather than "draw it while there is work".
-        Assert.True(ShotHeight("indexing") > (int)Math.Ceiling(SearchCardLayout.Height(0, false)),
+        Assert.True(ShotHeight("indexing") > (int)Math.Ceiling(SearchCardLayout.Height(0, false) + SearchCardLayout.Overhang),
                     "the card with work in hand still carries the pill");
     }
 
@@ -131,7 +135,7 @@ public class CardProgressTests
         // Show false is no pill at all, not a pill at zero - and no gap reserved for one either.
         SearchCardState s = SearchCardState.Empty with { Clock = 0.2 };
         Assert.False(s.Progress.Show);
-        Assert.Equal(SearchCardLayout.Height(0, false),
+        Assert.Equal(SearchCardLayout.Height(0, false) + SearchCardLayout.Overhang,
                      SearchCardLayout.WindowHeight(0, false, false, s.Progress.Show), 3);
     }
 }

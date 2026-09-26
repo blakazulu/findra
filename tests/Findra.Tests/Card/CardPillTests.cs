@@ -16,6 +16,7 @@ public class CardPillTests
     private static SKRect Content => SearchCardLayout.ContentRect();
     private static SKRect Adv => SearchCardLayout.AdvRect();
     private static SKRect Settings => SearchCardLayout.SettingsRect();
+    private static SKRect Reading => SearchCardLayout.ReadingRect();
 
     [Fact]
     public void SettingsSitsUnderAdvancedInTheSameColumnOnTheSameTerms()
@@ -31,14 +32,88 @@ public class CardPillTests
     }
 
     [Fact]
+    public void ReadingSitsUnderSettingsInTheSameColumnOnTheSameTerms()
+    {
+        Assert.Equal(Settings.Left, Reading.Left, 3);
+        Assert.Equal(Settings.Right, Reading.Right, 3);
+        Assert.Equal(Settings.Height, Reading.Height, 3);
+        Assert.Equal(Settings.Top - Adv.Bottom, Reading.Top - Settings.Bottom, 3);
+    }
+
+    [Fact]
     public void TheEmptyCardIsTallEnoughToHoldTheWholePillColumn()
     {
         // The card with nothing typed into it used to end 120px down, which is five pixels below
-        // where the third pill now ends. A pill drawn over the card's own bottom edge is the one
+        // where the third pill ended. A pill drawn over the card's own bottom edge is the one
         // state of this surface a person sees before they have done anything at all.
         float h = SearchCardLayout.Height(0, hasQuery: false);
-        Assert.True(h >= Settings.Bottom + SearchCardLayout.Pad,
-            $"the empty card is {h}px tall and the pill column ends at {Settings.Bottom}");
+        Assert.True(h >= Reading.Bottom + SearchCardLayout.Pad,
+            $"the empty card is {h}px tall and the pill column ends at {Reading.Bottom}");
+    }
+
+    [Fact]
+    public void TheFourthPillEndsAboveTheResults()
+    {
+        // With a query the column reaches down beside the chips, and the list and the stage start
+        // under it. A pill overlapping the stage would take the stage's clicks.
+        Assert.True(Reading.Bottom <= SearchCardLayout.StageRect(5, true).Top,
+            $"the pill ends at {Reading.Bottom} and the stage starts at {SearchCardLayout.StageRect(5, true).Top}");
+    }
+
+    [Fact]
+    public void APressOnTheReadingPillIsAnsweredWithAndWithoutAQuery()
+    {
+        foreach (bool hasQuery in new[] { false, true })
+        {
+            SearchHit hit = SearchCardLayout.HitTest(Reading.MidX, Reading.MidY, count: 3, scroll: 0, hasQuery: hasQuery);
+            Assert.Equal(SearchTarget.Reading, hit.Target);
+        }
+    }
+
+    [Fact]
+    public void EveryLabelTheReadingPillCanShowFitsIt()
+    {
+        foreach (ReadingShown shown in Enum.GetValues<ReadingShown>())
+        {
+            string label = ReadingPill.Label(shown);
+            float need = CardText.Measure(label, Parts.Face, SearchCardPainter.PillTextSize);
+            Assert.True(need <= Reading.Width - 12,
+                $"'{label}' needs {need:F1}px and its pill gives {Reading.Width - 12:F1}px");
+        }
+    }
+
+    // ---- the close button --------------------------------------------------------------------
+
+    private static SKRect Close => SearchCardLayout.CloseRect();
+
+    [Fact]
+    public void TheCloseButtonSitsOnTheCardsTopRightCornerAndInsideTheWindow()
+    {
+        // Half over the card and half outside it, the way a sheet's close button sits on its
+        // corner - so the window is wider and taller than the card by the part that hangs out.
+        Assert.True(Close.Contains(SearchCardLayout.Width - 1, 1), "the button is not on the corner");
+        Assert.True(Close.Right > SearchCardLayout.Width && Close.Top < 0, "the button does not reach past the card");
+        Assert.True(Close.Right <= SearchCardLayout.WindowWidth, "the button is cut off at the window's right edge");
+        Assert.True(Close.Top >= -SearchCardLayout.Overhang, "the button is cut off at the window's top edge");
+    }
+
+    [Fact]
+    public void ThePressOnTheCloseButtonIsAnsweredWhateverTheCardIsShowing()
+    {
+        foreach ((bool hasQuery, bool advOpen) in new[] { (false, false), (true, false), (false, true) })
+        {
+            SearchHit hit = SearchCardLayout.HitTest(Close.MidX, Close.MidY, count: 3, scroll: 0, hasQuery: hasQuery, advOpen: advOpen);
+            Assert.Equal(SearchTarget.Close, hit.Target);
+        }
+    }
+
+    [Fact]
+    public void TheCloseButtonLeavesTheContentPillItsOwnPress()
+    {
+        Assert.Equal(SearchTarget.Content,
+            SearchCardLayout.HitTest(Content.MidX, Content.MidY, count: 0, scroll: 0, hasQuery: false).Target);
+        Assert.Equal(SearchTarget.Content,
+            SearchCardLayout.HitTest(Content.Right - Content.Height / 2, Content.MidY, count: 0, scroll: 0, hasQuery: false).Target);
     }
 
     [Fact]
@@ -98,7 +173,7 @@ public class CardPillTests
     [Fact]
     public void ThePillColumnDoesNotOverlapAnythingElseTheCardHitTests()
     {
-        // The three pills are stacked in a column the field, the chips and the rows all end
+        // The four pills are stacked in a column the field, the chips and the rows all end
         // before. A pill whose rectangle overlapped a chip would take the chip's clicks, because
         // the pills are tested first.
         Assert.True(SearchCardLayout.FieldRect().Right <= Settings.Left);

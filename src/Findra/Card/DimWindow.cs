@@ -8,8 +8,8 @@ using Avalonia.Threading;
 namespace Findra;
 
 /// <summary>The dark layer behind an open card: the whole monitor, black, fading to 45% over
-/// 200 ms, input-transparent so a click on the desktop still lands on the desktop (and closes the
-/// card by deactivating it). Topmost, shown just before the card, closed with it.</summary>
+/// 200 ms, input-transparent so a click on the desktop still lands on the desktop. Topmost, shown just
+/// before the card, closed with it or as soon as somebody clicks into another window.</summary>
 [System.Runtime.Versioning.SupportedOSPlatform("windows")]
 public sealed class DimWindow : Window
 {

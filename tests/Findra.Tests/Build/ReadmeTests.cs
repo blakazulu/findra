@@ -194,7 +194,7 @@ public class ReadmeTests
         16 => "sixteen", 17 => "seventeen", 18 => "eighteen", 19 => "nineteen", 20 => "twenty",
         21 => "twenty-one", 22 => "twenty-two", 23 => "twenty-three", 24 => "twenty-four",
         25 => "twenty-five", 26 => "twenty-six", 27 => "twenty-seven", 28 => "twenty-eight",
-        29 => "twenty-nine", 30 => "thirty",
+        29 => "twenty-nine", 30 => "thirty", 31 => "thirty-one", 32 => "thirty-two",
         _ => throw new InvalidOperationException($"{n} is outside the range the README's prose was written for"),
     };
 

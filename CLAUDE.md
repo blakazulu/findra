@@ -57,7 +57,7 @@ findra.exe --searchprobe [query]      # end to end: which process answered, the 
 findra.exe --searchmodels             # models present, loading, agreeing; provider per runtime
 findra.exe --searchindex [file|folder|q:query|why:path]...   # indexed/queued; paths queue and
                                       # drain, q: queries, why:<path> explains ONE file, read-only
-findra.exe --searchshot out.png <state> [palette]   # thirty states, listed below
+findra.exe --searchshot out.png <state> [palette]   # thirty-two states, listed below
 findra.exe --searchtest               # engine self-check
 findra.exe --searchbench [out.md] [corpus]   # measured numbers, pasteable Markdown; `corpus` is
                                       # how many files it generates
@@ -65,11 +65,11 @@ findra.exe --version                  # print the version and log location, then
 ```
 
 The `--searchshot` states are `SearchShot.States`, and that list is the only definition of them.
-Twelve draw the card, ten the settings window and eight the first-run screen:
+Fourteen draw the card, ten the settings window and eight the first-run screen:
 
 ```
 capsule  empty  indexing  contentmode  contentwaiting  typing  results  noresults  many  adv
-opening  openingempty
+opening  openingempty  selected  starting
 settings  settingsopening  settingssearches  settingscontent  settingsaddons  settingsremove  settingsabout
 settingsuptodate  settingsupdate  settingsasking
 firstrun  firstruninstalled  firstrunspeech  firstrundownloading
@@ -203,8 +203,19 @@ in `Opened`, and `KeepInside` the working area; the card folds it into its zoom
 
 ## The card and the pointer
 
-Three pills stack beside the field: Content, Advanced and **Settings**.
+Four pills stack beside the field: Content, Advanced, **Settings** and **reading** (`ReadingPill`:
+"Start now" / "Starting..." / "Stop", Settings' "Start reading now" from the card; the shell does
+both halves through `ApplyConfig` and `ISettingsHost.StartIndexing`).
 
+- **Clicking elsewhere does NOT close the card.** Esc (clears, then closes), the close button,
+  the hotkey, the capsule and opening a result do. Deactivation only closes the dim window.
+- **The close button hangs off the card's top-right corner**, so the window is
+  `SearchCardLayout.Overhang` wider and taller than the card: size windows and bitmaps with
+  `WindowWidth`/`WindowHeight`, and `Paint` draws the card that far down. `HitTest` takes CARD
+  coordinates, so callers subtract `Overhang` from y; the close button is its one negative answer.
+- **The field's editing is `FieldEdit`** (pure: selection anchor, replace, word jumps, word at a
+  double-click); `FieldCaret.Spans` places the highlight through the same bidi cells as the caret.
+  Ctrl+C copies a selection, else the highlighted result's path.
 - **`SearchCardLayout.HeaderRight` is the field's right edge, not the card's**, or a timing is drawn
   across the Settings pill.
 - **The empty card's height is the hint's OR the column's, whichever is larger.**

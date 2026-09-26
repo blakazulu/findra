@@ -35,7 +35,7 @@ public class CardPlacementTests
         // moved again, so the height that has to fit on screen is the tallest one - and that is
         // the WINDOW with the progress pill hanging under the card, not the card alone.
         PixelSize grown = CardPlacement.GrownSize(1.0, 1.0);
-        Assert.Equal((int)Math.Round(SearchCardLayout.Width), grown.Width);
+        Assert.Equal((int)Math.Round(SearchCardLayout.WindowWidth), grown.Width);
         Assert.Equal((int)Math.Round(SearchCardLayout.WindowHeight(SearchCardLayout.MaxRows, true, progress: true)), grown.Height);
         Assert.True(grown.Height > SearchCardLayout.Height(SearchCardLayout.MaxRows, true));
     }

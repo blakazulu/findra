@@ -103,6 +103,25 @@ public static class FieldCaret
         return ps[idx];
     }
 
+    /// <summary>Where the logical range <paramref name="lo"/>..<paramref name="hi"/> is drawn: the
+    /// cells inside it, joined wherever they touch. A range that crosses into a Hebrew run lands
+    /// in more than one place, because the letters it takes are not side by side on the
+    /// screen.</summary>
+    public static List<(float Left, float Right)> Spans(List<Cell> cells, int lo, int hi)
+    {
+        var spans = new List<(float Left, float Right)>();
+        if (hi <= lo) return spans;
+        foreach (var c in cells)
+        {
+            if (c.LogStart < lo || c.LogEnd > hi) continue;
+            if (spans.Count > 0 && Math.Abs(spans[^1].Right - c.Left) < 0.01f)
+                spans[^1] = (spans[^1].Left, c.Right);
+            else
+                spans.Add((c.Left, c.Right));
+        }
+        return spans;
+    }
+
     /// <summary>The position a click at <paramref name="x"/> lands on: the nearest slot, and at a
     /// seam the caret its left neighbour puts there.</summary>
     public static Position AtX(List<Cell> cells, string text, float x)

@@ -217,7 +217,7 @@ public static class SelfTest
         failed += Check("the card renders", () =>
         {
             using var surface = SKSurface.Create(new SKImageInfo(
-                (int)SearchCardLayout.Width, 400, SKColorType.Bgra8888, SKAlphaType.Premul));
+                (int)SearchCardLayout.WindowWidth, 400, SKColorType.Bgra8888, SKAlphaType.Premul));
             SearchCardPainter.Paint(surface.Canvas, SearchCardState.Empty,
                                     Derived.From(Palette.DefaultDark), Parts.Face);
             surface.Canvas.Flush();

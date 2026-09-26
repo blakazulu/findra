@@ -29,7 +29,7 @@ public static class CardOverPlacement
     {
         double s = screenScaling > 0 ? screenScaling : 1.0;
         return new PixelSize(
-            (int)Math.Ceiling(SearchCardLayout.Width * zoom * s),
+            (int)Math.Ceiling(SearchCardLayout.WindowWidth * zoom * s),
             (int)Math.Ceiling(SearchCardLayout.WindowHeight(SearchCardLayout.MaxRows, true, progress: true) * zoom * s));
     }
 
@@ -40,7 +40,7 @@ public static class CardOverPlacement
     public static double FittedZoom(double zoom, PixelRect workArea, double screenScaling)
     {
         double tallest = SearchCardLayout.WindowHeight(SearchCardLayout.MaxRows, true, advOpen: true, progress: true);
-        return zoom * ScreenFit.Factor(SearchCardLayout.Width * zoom, tallest * zoom, workArea, screenScaling);
+        return zoom * ScreenFit.Factor(SearchCardLayout.WindowWidth * zoom, tallest * zoom, workArea, screenScaling);
     }
 
     /// <param name="widgetPos">The widget window's top-left, in physical pixels.</param>
@@ -56,9 +56,10 @@ public static class CardOverPlacement
 
         // The offset is a distance in layout units, so it goes through BOTH factors before it can
         // be added to a physical position. Multiplying by zoom alone leaves the card's field 7 px
-        // right and 13 px high of the bar it is replacing at 150%.
+        // right and 13 px high of the bar it is replacing at 150%. The window starts Overhang above
+        // the card, in the band the close button hangs into.
         int x = widgetPos.X + (int)Math.Round((capsule.Left - SearchCardLayout.Pad) * zoom * s);
-        int y = widgetPos.Y + (int)Math.Round((capsule.Top - SearchCardLayout.FieldTop) * zoom * s);
+        int y = widgetPos.Y + (int)Math.Round((capsule.Top - SearchCardLayout.FieldTop - SearchCardLayout.Overhang) * zoom * s);
 
         x = Math.Clamp(x, screen.X, Math.Max(screen.X, screen.X + screen.Width - size.Width));
         y = Math.Clamp(y, screen.Y, Math.Max(screen.Y, screen.Y + screen.Height - size.Height));

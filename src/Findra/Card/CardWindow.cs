@@ -17,19 +17,14 @@ using SkiaSharp;
 namespace Findra;
 
 // The window behind the search card. Opens OVER the widget so the card's capsule lands where the
-// widget's capsule was, takes the keyboard, and closes on Esc (once the query is empty) or when it
-// loses focus. It carries a text field and a drag source, on top of the shape an ordinary
-// borderless popup window takes.
+// widget's capsule was, takes the keyboard, and closes on Esc (once the query is empty), on its
+// close button, from the hotkey or the capsule, or when a result is opened - never because
+// somebody clicked another window, so a search and its results stay up while they are used. It
+// carries a text field and a drag source, on top of the shape an ordinary borderless popup
+// window takes.
 [System.Runtime.Versioning.SupportedOSPlatform("windows")]
 public sealed class CardWindow : Window
 {
-    private static long _closedAt;
-
-    /// <summary>A click on the widget deactivates this card BEFORE reaching the widget's handler, so
-    /// a naive toggle would close and instantly reopen. A card that just closed is being dismissed.</summary>
-    public static bool JustClosed =>
-        _closedAt != 0 && Stopwatch.GetElapsedTime(_closedAt).TotalMilliseconds < 350;
-
     private readonly CardCanvas _canvas;
     private DimWindow? _dim;
 
@@ -43,6 +38,11 @@ public sealed class CardWindow : Window
     /// connection - so it asks the shell to move the setting and carries on with the search.
     /// </summary>
     public event Action? ContentReadingRequested;
+
+    /// <summary>The reading pill was pressed: true to start reading inside files now, false to
+    /// stop. The card cannot write a setting, so the shell does both halves - the switch and the
+    /// indexer - exactly as Settings' own button does.</summary>
+    public event Action<bool>? ReadingRequested;
 
     /// <summary><paramref name="content"/> is the process's ONE open content index, or null when
     /// this session has none. The window borrows it and never disposes it: the store outlives
@@ -58,7 +58,7 @@ public sealed class CardWindow : Window
                       Semantic? semantic = null, CapabilitySet installed = default)
     {
         Derived derived = Derived.From(palette);
-        _canvas = new CardCanvas(derived, scale, this, content, semantic, installed);
+        _canvas = new CardCanvas(derived, scale, content, semantic, installed);
         Content = _canvas;
 
         Title = "Findra";
@@ -75,6 +75,7 @@ public sealed class CardWindow : Window
         _canvas.CloseRequested += Close;
         _canvas.SettingsRequested += s => SettingsRequested?.Invoke(s);
         _canvas.ContentReadingRequested += () => ContentReadingRequested?.Invoke();
+        _canvas.ReadingRequested += start => ReadingRequested?.Invoke(start);
         Resize();
 
         // The field is drawn, not a TextBox, so the keys arrive here. TextInput carries typed
@@ -84,8 +85,11 @@ public sealed class CardWindow : Window
             Avalonia.Interactivity.RoutingStrategies.Tunnel);
 
         Opened += (_, _) => { Activate(); _canvas.Focus(); _canvas.OnOpened(); };
-        Deactivated += (_, _) => { if (!_canvas.Dragging) Close(); };
-        Closed += (_, _) => { _closedAt = Stopwatch.GetTimestamp(); _canvas.Stop(); _dim?.Close(); _dim = null; };
+        // Losing focus keeps the card and gives the monitor its light back: the dim is there to
+        // make the card stand out while it is being used, and somebody who has clicked into
+        // another window is using that one.
+        Deactivated += (_, _) => { _dim?.Close(); _dim = null; };
+        Closed += (_, _) => { _canvas.Stop(); _dim?.Close(); _dim = null; };
     }
 
     /// <summary>Darken the monitor behind the card so it stands out. Shown BEFORE the card so the
@@ -145,7 +149,6 @@ public sealed class CardWindow : Window
         private readonly Derived _derived;
         private readonly SKTypeface _face;
         private readonly double _scale;
-        private readonly Window _owner;
         private readonly Stopwatch _clock = Stopwatch.StartNew();
         private readonly DispatcherTimer _timer;
         private readonly DispatcherTimer _debounce;
@@ -217,19 +220,28 @@ public sealed class CardWindow : Window
         private bool _dragArmed;
         private PointerPressedEventArgs? _pressArgs;   // DoDragDropAsync wants the PRESS, not the move
 
-        public bool Dragging { get; private set; }
+        // A press in the field that is being dragged across it to select, and where it started.
+        private bool _selecting;
+        private int _selectFrom;
+
+        // The reading pill. What the status rows say, and what the last press asked for while it
+        // is still believed over them (ReadingPill.Settle), with when it was pressed.
+        private volatile bool _readingNow;
+        private bool? _readingAsked;
+        private long _readingAskedAt;
+
         public event Action? CloseRequested;
         public event Action? CardResized;
         public event Action<Section>? SettingsRequested;
         public event Action? ContentReadingRequested;
+        public event Action<bool>? ReadingRequested;
 
-        public double CardWidth => SearchCardLayout.Width * _scale;
+        public double CardWidth => SearchCardLayout.WindowWidth * _scale;
         public double CardHeight => SearchCardLayout.WindowHeight(_state.Rows.Count, _state.HasQuery, _state.AdvOpen, _state.Progress.Show) * _scale;
 
-        public CardCanvas(Derived derived, double scale, Window owner, ContentDb? db,
+        public CardCanvas(Derived derived, double scale, ContentDb? db,
                           Semantic? semantic = null, CapabilitySet installed = default)
         {
-            _owner = owner;
             _db = db;
             _semantic = semantic;
             _installed = installed;
@@ -262,7 +274,7 @@ public sealed class CardWindow : Window
                 // Typing a character raised CardResized for another reason and the pill appeared,
                 // which is what made it look intermittent.
                 bool grew = progress.Show != _state.Progress.Show;
-                _state = _state with { Clock = _clock.Elapsed.TotalSeconds, IndexLine = IndexLine(), ContentOffered = _contentOffered, Progress = progress };
+                _state = _state with { Clock = _clock.Elapsed.TotalSeconds, IndexLine = IndexLine(), ContentOffered = _contentOffered, Progress = progress, Reading = ReadingShown() };
                 if (grew) CardResized?.Invoke();
                 InvalidateVisual();
             };
@@ -374,6 +386,7 @@ public sealed class CardWindow : Window
             // have to be talking about the same index at the same moment.
             Volatile.Write(ref _contentIndexed, indexed);
             _contentReadingOn = contentOn;
+            _readingNow = ReadingPill.Reading(contentOn, IndexStatus.Alive(beat, pid), pending);
             // And whether the pill is offering anything, from the same reading. Decided HERE
             // rather than in the painter so the pill somebody sees, the shape the pointer takes
             // and the press it answers all come from one look at one index.
@@ -407,54 +420,39 @@ public sealed class CardWindow : Window
                 InvalidateVisual();
                 return;
             }
-            int caret = Math.Clamp(_state.Caret, 0, _state.Query.Length);
-            string q = _state.Query.Insert(caret, clean.ToString());
-            int newCaret = caret + clean.Length;
-            if (q.Length > 200) { q = q[..200]; newCaret = Math.Min(newCaret, 200); }
-            SetQuery(q, newCaret);
+            SetField(FieldEdit.Insert(_state.Field, clean.ToString(), MaxQuery));
         }
 
-        // Left is left on the screen: through a Hebrew run that is forward in the string
-        private void StepVisual(int dir)
+        private const int MaxQuery = 200;
+
+        /// <summary>An edit: a text that changed goes through <see cref="SetQuery"/> and searches
+        /// again; one that did not (Backspace at the start) only moves the caret.</summary>
+        private void SetField(FieldEdit.Text t)
         {
+            if (t.Value == _state.Query) { Select(t); return; }
+            SetQuery(t.Value, t.Caret);
+        }
+
+        /// <summary>The caret and the selection's other end, the text unchanged.</summary>
+        private void Select(FieldEdit.Text t, int slot = -1)
+        {
+            int caret = Math.Clamp(t.Caret, 0, _state.Query.Length);
+            _state = _state with { Caret = caret, Anchor = FieldEdit.HasSelection(t) ? t.Anchor : -1, CaretSlot = slot };
+            InvalidateVisual();
+        }
+
+        // Left is left on the screen: through a Hebrew run that is forward in the string. With
+        // Shift it takes the selection along; without, a selection collapses to its end that way.
+        private void StepVisual(int dir, bool extend)
+        {
+            if (!extend && FieldEdit.HasSelection(_state.Field)) { Select(FieldEdit.Collapse(_state.Field, dir)); return; }
             var (_, size, _) = SearchCardPainter.FieldText(SearchCardLayout.FieldRect());
             var p = SearchCardPainter.CaretStep(_state.Query, _state.Caret, _state.CaretSlot, _face, size, dir);
-            _state = _state with { Caret = Math.Clamp(p.Caret, 0, _state.Query.Length), CaretSlot = p.Slot };
-            InvalidateVisual();
+            Select(extend ? FieldEdit.Extend(_state.Field, p.Caret) : new FieldEdit.Text(_state.Query, p.Caret), p.Slot);
         }
 
-        private void MoveCaret(int to)
-        {
-            to = Math.Clamp(to, 0, _state.Query.Length);
-            if (to == _state.Caret && _state.CaretSlot < 0) return;
-            _state = _state with { Caret = to, CaretSlot = -1 };
-            InvalidateVisual();
-        }
-
-        private void MoveCaret(FieldCaret.Position p)
-        {
-            _state = _state with { Caret = Math.Clamp(p.Caret, 0, _state.Query.Length), CaretSlot = p.Slot };
-            InvalidateVisual();
-        }
-
-        // Ctrl+arrow: to the previous / next word boundary, the way every text field does it
-        private int WordLeft(int from)
-        {
-            string q = _state.Query;
-            int i = Math.Clamp(from, 0, q.Length);
-            while (i > 0 && q[i - 1] == ' ') i--;
-            while (i > 0 && q[i - 1] != ' ') i--;
-            return i;
-        }
-
-        private int WordRight(int from)
-        {
-            string q = _state.Query;
-            int i = Math.Clamp(from, 0, q.Length);
-            while (i < q.Length && q[i] != ' ') i++;
-            while (i < q.Length && q[i] == ' ') i++;
-            return i;
-        }
+        private void MoveCaret(int to, bool extend)
+            => Select(extend ? FieldEdit.Extend(_state.Field, to) : new FieldEdit.Text(_state.Query, to));
 
         public bool OnKey(KeyEventArgs e)
         {
@@ -492,38 +490,40 @@ public sealed class CardWindow : Window
                         return false;   // TextInput carries the typed characters into the field
                 }
             }
+            bool ctrl = e.KeyModifiers.HasFlag(KeyModifiers.Control);
+            bool shift = e.KeyModifiers.HasFlag(KeyModifiers.Shift);
             switch (e.Key)
             {
+                // The first press clears the field, the second closes the card.
                 case Key.Escape:
                     if (_state.Query.Length > 0) { SetQuery(""); return true; }
                     CloseRequested?.Invoke();
                     return true;
                 case Key.Back:
-                {
-                    int c = Math.Clamp(_state.Caret, 0, _state.Query.Length);
-                    if (c == 0) return true;
-                    int from = e.KeyModifiers.HasFlag(KeyModifiers.Control) ? WordLeft(c) : c - 1;
-                    SetQuery(_state.Query.Remove(from, c - from), from);
+                    SetField(FieldEdit.Backspace(_state.Field, word: ctrl));
                     return true;
-                }
+                case Key.Delete when shift && !ctrl:
+                    Cut();
+                    return true;
                 case Key.Delete:
-                {
-                    int c = Math.Clamp(_state.Caret, 0, _state.Query.Length);
-                    if (c >= _state.Query.Length) return true;
-                    int to = e.KeyModifiers.HasFlag(KeyModifiers.Control) ? WordRight(c) : c + 1;
-                    SetQuery(_state.Query.Remove(c, to - c), c);
+                    SetField(FieldEdit.Delete(_state.Field, word: ctrl));
                     return true;
-                }
                 case Key.Left:
-                    if (e.KeyModifiers.HasFlag(KeyModifiers.Control)) MoveCaret(WordLeft(_state.Caret)); else StepVisual(-1);
+                    if (ctrl) MoveCaret(FieldEdit.WordLeft(_state.Query, _state.Caret), shift); else StepVisual(-1, shift);
                     return true;
                 case Key.Right:
-                    if (e.KeyModifiers.HasFlag(KeyModifiers.Control)) MoveCaret(WordRight(_state.Caret)); else StepVisual(+1);
+                    if (ctrl) MoveCaret(FieldEdit.WordRight(_state.Query, _state.Caret), shift); else StepVisual(+1, shift);
                     return true;
-                case Key.Home: MoveCaret(0); return true;
-                case Key.End: MoveCaret(_state.Query.Length); return true;
-                case Key.V when e.KeyModifiers.HasFlag(KeyModifiers.Control):
-                case Key.Insert when e.KeyModifiers.HasFlag(KeyModifiers.Shift):
+                case Key.Home: MoveCaret(0, shift); return true;
+                case Key.End: MoveCaret(_state.Query.Length, shift); return true;
+                case Key.A when ctrl:
+                    Select(FieldEdit.SelectAll(_state.Field));
+                    return true;
+                case Key.X when ctrl:
+                    Cut();
+                    return true;
+                case Key.V when ctrl:
+                case Key.Insert when shift:
                     _ = Paste();
                     return true;
                 case Key.Down: MoveHighlight(1); return true;
@@ -535,8 +535,12 @@ public sealed class CardWindow : Window
                     int n = SearchCardLayout.ChipLabels.Length;
                     SetFilter((_state.Filter + (e.KeyModifiers.HasFlag(KeyModifiers.Shift) ? n - 1 : 1)) % n);
                     return true;
-                case Key.C when e.KeyModifiers.HasFlag(KeyModifiers.Control):
-                    CopyPath(_state.Highlight);
+                // The selected text when there is some, as in any text box; otherwise the highlighted
+                // result's path, which is what Ctrl+C on the card has always meant.
+                case Key.C when ctrl:
+                case Key.Insert when ctrl:
+                    if (FieldEdit.HasSelection(_state.Field)) CopyText(FieldEdit.Selected(_state.Field), "the selected text");
+                    else CopyPath(_state.Highlight);
                     return true;
                 case Key.D1 when e.KeyModifiers.HasFlag(KeyModifiers.Control): SetSort(SearchSort.Best); return true;
                 case Key.D2 when e.KeyModifiers.HasFlag(KeyModifiers.Control): SetSort(SearchSort.Newest); return true;
@@ -562,7 +566,7 @@ public sealed class CardWindow : Window
         {
             bool had = _state.HasQuery;
             if (caret < 0) caret = q.Length;
-            _state = _state with { Query = q, Caret = Math.Clamp(caret, 0, q.Length), CaretSlot = -1,
+            _state = _state with { Query = q, Caret = Math.Clamp(caret, 0, q.Length), CaretSlot = -1, Anchor = -1,
                 Searching = q.Trim().Length > 0, QueryAdv = SearchQuery.IsAdvanced(q) };
             if (q.Trim().Length == 0)
             {
@@ -661,14 +665,37 @@ public sealed class CardWindow : Window
             if (_state.HasQuery) RunSearch();
         }
 
-        /// <summary>Ask the shell for the settings window, and get out of the way. The card is
-        /// dismissed on deactivation anyway, so leaving it up would have it close under the new
-        /// window a moment later and read as a flicker rather than as a hand-off.</summary>
+        /// <summary>Ask the shell for the settings window, and get out of the way: the card is
+        /// kept above other windows, so leaving it up would sit it over the one just asked for.
+        /// </summary>
         private void OpenSettings(Section section)
         {
             Log.Info("card", $"settings asked for from the card, at {RailLayout.Title(section)}");
             SettingsRequested?.Invoke(section);
             CloseRequested?.Invoke();
+        }
+
+        /// <summary>What the reading pill says now: the status rows, less a press they have not
+        /// caught up with. Forgets the press once they agree or the wait is over.</summary>
+        private ReadingShown ReadingShown()
+        {
+            bool reading = _readingNow;
+            _readingAsked = ReadingPill.Settle(reading, _readingAsked, Stopwatch.GetElapsedTime(_readingAskedAt));
+            return ReadingPill.Shown(reading, _readingAsked);
+        }
+
+        private void PressReading()
+        {
+            ReadingPress press = ReadingPill.Press(ReadingShown());
+            if (press == ReadingPress.Nothing) return;   // starting: drawn faded, and says so
+            bool start = press == ReadingPress.Start;
+            Log.Info("index", start ? "reading inside files was started from the card"
+                                    : "reading inside files was stopped from the card");
+            _readingAsked = start;
+            _readingAskedAt = Stopwatch.GetTimestamp();
+            ReadingRequested?.Invoke(start);
+            _state = _state with { Reading = ReadingShown() };
+            InvalidateVisual();
         }
 
         private void SetSort(SearchSort sort)
@@ -1150,7 +1177,22 @@ public sealed class CardWindow : Window
         private void CopyPath(int index)
         {
             if (index < 0 || index >= _state.Rows.Count) return;
-            string path = _state.Rows[index].Path;
+            CopyText(_state.Rows[index].Path, "a path");
+        }
+
+        /// <summary>Ctrl+X and Shift+Delete: the selection to the clipboard, then out of the field.
+        /// Nothing selected is nothing to cut.</summary>
+        private void Cut()
+        {
+            if (!FieldEdit.HasSelection(_state.Field)) return;
+            CopyText(FieldEdit.Selected(_state.Field), "the selected text");
+            SetField(FieldEdit.Cut(_state.Field));
+        }
+
+        /// <param name="what">Names what was copied in the log, never the text itself - a query is
+        /// what somebody was looking for, and that stays off the disk.</param>
+        private void CopyText(string text, string what)
+        {
             _ = Task.Run(async () =>
             {
                 try
@@ -1158,9 +1200,9 @@ public sealed class CardWindow : Window
                     var clip = await Dispatcher.UIThread.InvokeAsync(() => TopLevel.GetTopLevel(this)?.Clipboard);
                     if (clip is null) return;
                     var data = new DataTransfer();
-                    data.Add(DataTransferItem.Create(DataFormat.Text, path));
+                    data.Add(DataTransferItem.Create(DataFormat.Text, text));
                     await clip.SetDataAsync(data);
-                    Log.Info("search", "copied a path");
+                    Log.Info("search", "copied " + what);
                 }
                 catch (Exception ex) { Log.Warn("search", "copy failed: " + ex.Message); }
             });
@@ -1168,14 +1210,30 @@ public sealed class CardWindow : Window
 
         // ---- pointer ----
 
+        // The card is drawn Overhang down the window, under the close button's band.
         private SearchHit HitAt(Point p)
-            => SearchCardLayout.HitTest((float)(p.X / _scale), (float)(p.Y / _scale),
+            => SearchCardLayout.HitTest((float)(p.X / _scale), (float)(p.Y / _scale) - SearchCardLayout.Overhang,
                 _state.Rows.Count, _state.Scroll, _state.HasQuery, _state.AdvOpen);
+
+        /// <summary>The caret position under the pointer, in the same window of the text the
+        /// painter drew. Off either end of the field it is the first or last position, so a drag
+        /// past the edge selects to the end.</summary>
+        private FieldCaret.Position CaretUnder(Point p)
+        {
+            var (left, size, maxW) = SearchCardPainter.FieldText(SearchCardLayout.FieldRect());
+            float x = Math.Clamp((float)(p.X / _scale) - left, -1f, maxW + 1f);
+            return SearchCardPainter.CaretAt(_state.Query, _state.Caret, _face, size, maxW, x);
+        }
 
         protected override void OnPointerMoved(PointerEventArgs e)
         {
             var p = e.GetPosition(this);
-            if (_dragArmed && _pressRow >= 0 && !Dragging && _pressArgs is { } press
+            if (_selecting)
+            {
+                Select(FieldEdit.Extend(new FieldEdit.Text(_state.Query, _selectFrom), CaretUnder(p).Caret));
+                return;
+            }
+            if (_dragArmed && _pressRow >= 0 && _pressArgs is { } press
                 && Math.Abs(p.X - _pressAt.X) + Math.Abs(p.Y - _pressAt.Y) > 8)
             {
                 _dragArmed = false;
@@ -1191,7 +1249,9 @@ public sealed class CardWindow : Window
             // hand. Mapped here rather than inside Pointers, which answers from the target alone
             // and has no way to know what the index holds.
             Cursor = PointerCursor.Of(Pointers.ForCard(
-                hit.Target == SearchTarget.Content && !_contentOffered ? SearchTarget.None : hit.Target));
+                hit.Target == SearchTarget.Content && !_contentOffered ? SearchTarget.None
+                : hit.Target == SearchTarget.Reading && !ReadingPill.Offers(_state.Reading) ? SearchTarget.None
+                : hit.Target));
             InvalidateVisual();
         }
 
@@ -1220,11 +1280,28 @@ public sealed class CardWindow : Window
                 case SearchTarget.Field:
                 {
                     // the same window the painter drew, so the click lands on the glyph it is over
-                    var (left, size, maxW) = SearchCardPainter.FieldText(SearchCardLayout.FieldRect());
-                    float x = (float)(p.X / _scale) - left;
-                    MoveCaret(SearchCardPainter.CaretAt(_state.Query, _state.Caret, _face, size, maxW, x));
+                    FieldCaret.Position at = CaretUnder(p);
+                    if (e.ClickCount >= 3)
+                        Select(FieldEdit.SelectAll(_state.Field));
+                    else if (e.ClickCount == 2)
+                    {
+                        var (lo, hi) = FieldEdit.WordAt(_state.Query, at.Caret);
+                        Select(new FieldEdit.Text(_state.Query, hi, lo));
+                    }
+                    else
+                    {
+                        // A press starts a selection that the drag carries; Shift extends the one
+                        // already there from its anchor.
+                        if (e.KeyModifiers.HasFlag(KeyModifiers.Shift)) Select(FieldEdit.Extend(_state.Field, at.Caret));
+                        else Select(new FieldEdit.Text(_state.Query, at.Caret), at.Slot);
+                        _selectFrom = _state.Anchor >= 0 ? _state.Anchor : _state.Caret;
+                        _selecting = true;
+                        e.Pointer.Capture(this);
+                    }
                     break;
                 }
+                case SearchTarget.Close: CloseRequested?.Invoke(); break;
+                case SearchTarget.Reading: PressReading(); break;
                 case SearchTarget.Content: ToggleContent(); break;
                 case SearchTarget.Adv: SetAdvOpen(!_state.AdvOpen); break;
                 case SearchTarget.Settings: OpenSettings(Section.Look); break;
@@ -1270,6 +1347,7 @@ public sealed class CardWindow : Window
         {
             // the press highlighted the row and armed a drag; letting go without moving is a click,
             // and the NEXT click on the same row opens it (see OnPointerPressed)
+            if (_selecting) { _selecting = false; e.Pointer.Capture(null); }
             _dragArmed = false;
             _pressRow = -1;
             _pressArgs = null;
@@ -1302,17 +1380,11 @@ public sealed class CardWindow : Window
                 var data = new DataTransfer();
                 data.Add(DataTransferItem.CreateFile(item));
                 data.Add(DataTransferItem.Create(DataFormat.Text, r.Path));
-                Dragging = true;
                 Log.Info("search", $"drag out: {r.Name}");
+                // The card stays up after the drop, like after any other click somewhere else.
                 await DragDrop.DoDragDropAsync(e, data, DragDropEffects.Copy | DragDropEffects.Link);
             }
             catch (Exception ex) { Log.Warn("search", "drag failed: " + ex.Message); }
-            finally
-            {
-                Dragging = false;
-                // the drop went elsewhere, so we are no longer the active window
-                if (!_owner.IsActive) CloseRequested?.Invoke();
-            }
         }
 
         // ---- paint ----

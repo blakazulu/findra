@@ -9,7 +9,7 @@ namespace Findra;
 // result large. The layout is a PURE FUNCTION of the state's shape, called by the painter and by
 // the hit test, so there is no stored rect list for a pointer event to race against. Do not add one.
 
-public enum SearchTarget { None, Field, Chip, Row, Open, Reveal, Copy, Stage, Content, Adv, Settings, AdvField, AdvCheck, AdvKind, AdvButton }
+public enum SearchTarget { None, Field, Chip, Row, Open, Reveal, Copy, Stage, Content, Adv, Settings, AdvField, AdvCheck, AdvKind, AdvButton, Reading, Close }
 
 public readonly record struct SearchHit(SearchTarget Target, int Index)
 {
@@ -37,7 +37,7 @@ public static class SearchCardLayout
     public static readonly string[] ChipLabels = { "All", "Photos", "Videos", "Documents", "Audio", "Files & folders" };
     private static readonly float[] ChipW = { 54, 76, 74, 104, 68, 128 };
 
-    public const float ContentW = 96f;        // the three pills beside the field, stacked
+    public const float ContentW = 96f;        // the four pills beside the field, stacked
 
     public static SKRect FieldRect() => new(Pad, FieldTop, Width - Pad - ContentW - 10, FieldTop + FieldH);
 
@@ -58,6 +58,39 @@ public static class SearchCardLayout
     /// </summary>
     public static SKRect SettingsRect()
         => new(Width - Pad - ContentW, FieldTop + FieldH + 5, Width - Pad, FieldTop + FieldH + 35);
+
+    /// <summary>The fourth pill, under Settings: start or stop reading inside files from where the
+    /// search is, rather than from a settings window. Six pixels under Settings, like the three
+    /// above it, and it ends above the results.</summary>
+    public static SKRect ReadingRect()
+    {
+        var above = SettingsRect();
+        return new(above.Left, above.Bottom + 6, above.Right, above.Bottom + 6 + above.Height);
+    }
+
+    /// <summary>
+    /// How far the close button reaches past the card's top and right edges. The window is this
+    /// much wider and taller than the card, and the card is drawn this far down in it.
+    ///
+    /// <para>The card is no longer dismissed by a click somewhere else, so it needs a way to close
+    /// that can be seen. It sits on the card's corner, half over it, because the pill column
+    /// fills the card's own top-right and a button squeezed in beside it would crowd Content.</para>
+    /// </summary>
+    public const float Overhang = 16f;
+
+    /// <summary>The close button's radius: large, because it is now the one way to put the card
+    /// away with the mouse.</summary>
+    public const float CloseR = 14f;
+
+    /// <summary>The window's width: the card and the band on its right the close button hangs
+    /// into. Everything that sizes a window or a bitmap takes this; the card's own shape is
+    /// <see cref="Width"/>.</summary>
+    public static float WindowWidth => Width + Overhang;
+
+    /// <summary>The close button's square, in the card's coordinates: centred just inside the
+    /// card's top-right corner, so most of it hangs above and to the right of the card.</summary>
+    public static SKRect CloseRect()
+        => new(Width - 1 - CloseR, 1 - CloseR, Width - 1 + CloseR, 1 + CloseR);
 
     /// <summary>The air between the card's bottom edge and the progress pill under it, and under
     /// the pill before the window ends. The same 8px the capsule leaves between its bar and its
@@ -81,11 +114,12 @@ public static class SearchCardLayout
         return new SKRect(Pad, top, Width - Pad, top + ProgressPillLayout.Height);
     }
 
-    /// <summary>The window's height: the card, and the progress pill under it when there is one.
-    /// The card itself is <see cref="Height"/>; everything that sizes a window or a bitmap takes
-    /// this one, and everything that draws or hit-tests the card takes that one.</summary>
+    /// <summary>The window's height: the band above the card the close button hangs into, the
+    /// card, and the progress pill under it when there is one. The card itself is
+    /// <see cref="Height"/>; everything that sizes a window or a bitmap takes this one, and
+    /// everything that draws or hit-tests the card takes that one.</summary>
     public static float WindowHeight(int count, bool hasQuery, bool advOpen = false, bool progress = false)
-        => progress ? ProgressRect(count, hasQuery, advOpen).Bottom + ProgressGap : Height(count, hasQuery, advOpen);
+        => Overhang + (progress ? ProgressRect(count, hasQuery, advOpen).Bottom + ProgressGap : Height(count, hasQuery, advOpen));
 
     /// <summary>Where the header line's right-aligned half ends: the field's own right edge,
     /// NOT the card's. The pill column now reaches down into the header's band, and a timing
@@ -118,7 +152,7 @@ public static class SearchCardLayout
         // the hint's alone, which ended nine pixels above the bottom of the third pill.
         float h = hasQuery
             ? BodyTop + BodyH(count, hasQuery) + FooterH
-            : Math.Max(FieldTop + FieldH + EmptyHintH + 6, SettingsRect().Bottom + Pad);
+            : Math.Max(FieldTop + FieldH + EmptyHintH + 6, ReadingRect().Bottom + Pad);
         // the popup draws inside this window, so the card grows to hold it while it is open
         return advOpen ? Math.Max(h, SearchAdvancedLayout.Panel().Bottom + 14) : h;
     }
@@ -183,8 +217,14 @@ public static class SearchCardLayout
         return (CardText.Ellipsize(FooterHint, face, size, Math.Max(0, left)), shown);
     }
 
+    /// <summary>What is under a point in the CARD's coordinates - the window's, less
+    /// <see cref="Overhang"/> from the top. The close button answers first, and is the one target
+    /// outside the card's own shape.</summary>
     public static SearchHit HitTest(float x, float y, int count, int scroll, bool hasQuery, bool advOpen = false)
     {
+        var close = CloseRect();
+        float dx = x - close.MidX, dy = y - close.MidY;
+        if (dx * dx + dy * dy <= CloseR * CloseR) return new SearchHit(SearchTarget.Close, -1);
         if (x < 0 || x > Width || y < 0 || y > Height(count, hasQuery, advOpen)) return SearchHit.None;
         // the open popup overlays the card: it answers first, and a miss outside it carries the
         // "close me" marker (Index -2) - except the three pills, which keep working
@@ -205,6 +245,9 @@ public static class SearchCardLayout
         if (ab.Contains(x, y)) return new SearchHit(SearchTarget.Adv, -1);
         var sb = SettingsRect(); sb.Inflate(2, 4);
         if (sb.Contains(x, y)) return new SearchHit(SearchTarget.Settings, -1);
+        // Inflated less than the others: the stage starts three pixels under it.
+        var rb = ReadingRect(); rb.Inflate(2, 2);
+        if (rb.Contains(x, y)) return new SearchHit(SearchTarget.Reading, -1);
         if (!hasQuery) return SearchHit.None;
 
         for (int i = 0; i < ChipLabels.Length; i++)
@@ -241,6 +284,9 @@ public sealed record SearchCardState(
     bool Searching,
     int Caret = 0,
     int CaretSlot = -1,
+
+    /// <summary>The other end of the field's selection, or -1 for none. See <c>FieldEdit</c>.</summary>
+    int Anchor = -1,
     SearchTarget HoverTarget = SearchTarget.None,
     int HoverIndex = -1,
     string IndexLine = "",
@@ -265,7 +311,10 @@ public sealed record SearchCardState(
     /// <summary>What the progress pill under the card says, or <c>default</c> for no pill. From
     /// <c>IndexStatus.Pill</c>, the same composer the capsule's pill and the tray's tooltip use.
     /// </summary>
-    IndexProgress Progress = default)
+    IndexProgress Progress = default,
+
+    /// <summary>What the reading pill says, from <c>ReadingPill.Shown</c>.</summary>
+    ReadingShown Reading = ReadingShown.Start)
 {
     public static readonly SearchCardState Empty =
         new("", SearchResults.Empty, Array.Empty<SearchResult>(), 0, 0, 0, false);
@@ -273,6 +322,9 @@ public sealed record SearchCardState(
     // The popup's rules are a DRAFT: Apply composes them into the field and empties them, so the
     // field is always the whole query. Only the field decides whether there is one.
     public bool HasQuery => Query.Trim().Length > 0;
+
+    /// <summary>The field as <c>FieldEdit</c> edits it.</summary>
+    public FieldEdit.Text Field => new(Query, Caret, Anchor);
     public SearchAdvanced Adv => AdvRules ?? SearchAdvanced.Empty;
 
     public static IReadOnlyList<SearchResult> Filtered(SearchResults r, int filter)
@@ -338,7 +390,38 @@ public static class SearchCardPainter
         "a sunset over water  ·  the lease agreement  ·  what was said in a recording  ·  type:photo still narrows",
     ];
 
+    /// <summary>The card, drawn <see cref="SearchCardLayout.Overhang"/> down the window, with the
+    /// close button on its corner reaching into the band above and beside it. The canvas is the
+    /// WINDOW's; sized by <see cref="SearchCardLayout.WindowWidth"/> and
+    /// <see cref="SearchCardLayout.WindowHeight"/>.</summary>
     public static void Paint(SKCanvas canvas, SearchCardState s, Derived d, SKTypeface face)
+    {
+        canvas.Clear(SKColors.Transparent);
+        canvas.Save();
+        canvas.Translate(0, SearchCardLayout.Overhang);
+        PaintCard(canvas, s, d, face);
+        DrawClose(canvas, s.HoverTarget == SearchTarget.Close, d);
+        canvas.Restore();
+    }
+
+    /// <summary>The close button: a disc on the card's corner with an X in it, opaque so the
+    /// card's edge does not show through it.</summary>
+    private static void DrawClose(SKCanvas canvas, bool hover, Derived d)
+    {
+        var r = SearchCardLayout.CloseRect();
+        float cx = r.MidX, cy = r.MidY, rad = SearchCardLayout.CloseR;
+        using (var bg = new SKPaint { Color = d.Ground, IsAntialias = true }) canvas.DrawCircle(cx, cy, rad, bg);
+        if (hover)
+            using (var p = new SKPaint { Color = d.RowHover, IsAntialias = true }) canvas.DrawCircle(cx, cy, rad, p);
+        using (var edge = new SKPaint { Color = hover ? d.Accent : d.Fade(90), IsAntialias = true, Style = SKPaintStyle.Stroke, StrokeWidth = 1.4f })
+            canvas.DrawCircle(cx, cy, rad - 0.7f, edge);
+        float arm = rad * 0.36f;
+        using var x = new SKPaint { Color = hover ? d.Ink : d.Fade(200), IsAntialias = true, StrokeWidth = 2f, StrokeCap = SKStrokeCap.Round };
+        canvas.DrawLine(cx - arm, cy - arm, cx + arm, cy + arm, x);
+        canvas.DrawLine(cx - arm, cy + arm, cx + arm, cy - arm, x);
+    }
+
+    private static void PaintCard(SKCanvas canvas, SearchCardState s, Derived d, SKTypeface face)
     {
         SKColor accent = d.Accent; SKColor text = d.Ink;
         // The card's face is opaque-ish rather than fully opaque: a few percent of the desktop
@@ -357,8 +440,6 @@ public static class SearchCardPainter
         // and a ramp tuned on Mond reads a full step fainter on Paper without it.
         var dim = d.Fade(200);
         var faint = d.Fade(130);
-
-        canvas.Clear(SKColors.Transparent);
 
         // The unfold: for the first 220 ms the card fades in and the part below the field is
         // revealed downward from under it, so the click on the capsule reads as the bar opening
@@ -384,9 +465,9 @@ public static class SearchCardPainter
         var f = SearchCardLayout.FieldRect();
         DrawCapsule(canvas, f, accent, text, d, s.Query, s.Caret,
             hasQuery ? "" : s.Content ? ContentPlaceholder : NamePlaceholder,
-            face, caret: true, clock: s.Clock, focused: true, caretSlot: s.CaretSlot);
+            face, caret: true, clock: s.Clock, focused: true, caretSlot: s.CaretSlot, anchor: s.Anchor);
 
-        // ---- the two pills: Content (what question the query asks) and Advanced (the popup).
+        // ---- the pills: Content (what question the query asks) and Advanced (the popup).
         // Advanced latches orange with a `!` badge while any rule is set, which is the whole
         // "an advanced search is active" indicator - the field stays the user's own words. ----
         void Pill(SKRect cr, string label, bool on, bool hover, bool badge, bool offered = true)
@@ -418,6 +499,11 @@ public static class SearchCardPainter
         Pill(SearchCardLayout.AdvRect(), AdvancedLabel, s.AdvOpen || s.QueryAdv, s.HoverTarget == SearchTarget.Adv, s.QueryAdv);
         // Never latched on: settings is a place to go, not a mode the card is in.
         Pill(SearchCardLayout.SettingsRect(), SettingsLabel, false, s.HoverTarget == SearchTarget.Settings, false);
+        // Never latched either: it says what a press would do, start or stop, not what state
+        // reading is in - the progress pill under the card is that.
+        bool readingOffered = ReadingPill.Offers(s.Reading);
+        Pill(SearchCardLayout.ReadingRect(), ReadingPill.Label(s.Reading), false,
+             readingOffered && s.HoverTarget == SearchTarget.Reading, false, readingOffered);
 
         // Under the card, whatever the card is showing. It draws nothing at all when there is
         // nothing to report, and the window is the card's own height in that case.
@@ -465,7 +551,8 @@ public static class SearchCardPainter
             CardText.Draw(canvas, num, x + lw + 5, r.MidY + 4.5f, 10.5f, face, ink.WithAlpha((byte)(ink.Alpha * 0.75)));
         }
 
-        DrawRule(canvas, SearchCardLayout.BodyTop - 4, w, d);
+        // Stopped short of the pill column, whose fourth pill reaches down to this line.
+        DrawRule(canvas, SearchCardLayout.BodyTop - 4, SearchCardLayout.HeaderRight + SearchCardLayout.Pad * 0.6f, d);
 
         // ---- list ----
         if (count == 0)
@@ -586,7 +673,7 @@ public static class SearchCardPainter
     }
 
     public static void DrawCapsule(SKCanvas canvas, SKRect r, SKColor accent, SKColor text, Derived derived, string query, int caretIndex,
-        string placeholder, SKTypeface face, bool caret, double clock, bool focused, int caretSlot = -1)
+        string placeholder, SKTypeface face, bool caret, double clock, bool focused, int caretSlot = -1, int anchor = -1)
     {
         var rr = new SKRoundRect(r, r.Height / 2);
         using (var bg = new SKPaint { Color = derived.Ground.WithAlpha(190), IsAntialias = true }) canvas.DrawRoundRect(rr, bg);
@@ -618,6 +705,17 @@ public static class SearchCardPainter
             var (skip, caretX) = FieldMetrics(query, caretIndex, face, size, maxW, caretSlot);
             canvas.Save();
             canvas.ClipRect(new SKRect(tx - 2, r.Top, tx + maxW + 2, r.Bottom));
+            var (lo, hi) = FieldEdit.Range(new FieldEdit.Text(query, caretIndex, anchor));
+            if (hi > lo)
+            {
+                // Behind the text, over exactly the letters selected: through the same cells the
+                // caret is placed by, so a Hebrew run is highlighted where it is drawn.
+                string shown = query[skip..];
+                var cells = FieldCaret.Cells(shown, face, size);
+                using var sel = new SKPaint { Color = accent.WithAlpha(78), IsAntialias = true };
+                foreach (var (left, right) in FieldCaret.Spans(cells, Math.Max(0, lo - skip), hi - skip))
+                    canvas.DrawRect(new SKRect(tx + left, cy - size * 0.62f, tx + right, cy + size * 0.62f), sel);
+            }
             CardText.Draw(canvas, query[skip..], tx, cy + size * 0.36f, size, face, text);
             canvas.Restore();
             if (caret && (int)(clock * 2) % 2 == 0)

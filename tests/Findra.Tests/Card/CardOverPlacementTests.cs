@@ -19,9 +19,10 @@ public class CardOverPlacementTests
         PixelPoint at = CardOverPlacement.Over(new PixelPoint(600, 300), 1.0, Bar,
             new PixelRect(0, 0, Wide, High), 1.0);
 
-        // The bar's left minus the card's padding, the bar's top minus the field's top.
+        // The bar's left minus the card's padding, the bar's top minus the field's top - and minus
+        // the band above the card the close button hangs into, since the window starts there.
         Assert.Equal(600 + (0 - 14), at.X);
-        Assert.Equal(300 + (38 - 12), at.Y);
+        Assert.Equal(300 + (int)(38 - 12 - SearchCardLayout.Overhang), at.Y);
     }
 
     [Fact]
@@ -34,7 +35,7 @@ public class CardOverPlacementTests
             new PixelRect(0, 0, Wide, High), 1.5);
 
         Assert.Equal(600 + (int)System.Math.Round((0 - 14) * 1.5), at.X);
-        Assert.Equal(300 + (int)System.Math.Round((38 - 12) * 1.5), at.Y);
+        Assert.Equal(300 + (int)System.Math.Round((38 - 12 - SearchCardLayout.Overhang) * 1.5), at.Y);
     }
 
     [Fact]
@@ -43,8 +44,9 @@ public class CardOverPlacementTests
         PixelSize one = CardOverPlacement.GrownSize(1.0, 1.0);
         PixelSize half = CardOverPlacement.GrownSize(1.0, 1.5);
 
-        Assert.Equal(820, one.Width);
-        Assert.Equal(1230, half.Width);
+        // The card's 820 and the band on its right the close button hangs into.
+        Assert.Equal((int)System.Math.Ceiling(SearchCardLayout.WindowWidth), one.Width);
+        Assert.Equal((int)System.Math.Ceiling(SearchCardLayout.WindowWidth * 1.5), half.Width);
         Assert.Equal((int)System.Math.Ceiling(one.Height * 1.5), half.Height);
     }
 
