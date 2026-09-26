@@ -7,6 +7,8 @@ and Findra follows [Semantic Versioning](https://semver.org/spec/v2.0.0/).
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-09-26
+
 ### Added
 
 - **The search field edits like any other text box.** Ctrl+A selects everything, Shift with the
@@ -26,6 +28,9 @@ and Findra follows [Semantic Versioning](https://semver.org/spec/v2.0.0/).
   up while you work in another window. Close it with the button on its corner, with Esc (the first
   press clears the search, the second closes the card), with the shortcut, or by clicking the
   capsule. The screen behind the card goes back to normal brightness once you click elsewhere.
+- Documentation: the screenshots in the README, on the website and in the Store listing show the
+  card with its close button and the new pill, and the README and the guide to searching inside
+  PDFs mention both.
 
 ## [0.4.3] - 2026-09-25
 
@@ -1774,7 +1779,8 @@ all of it gets verified without a screen.
 - The named pipe is restricted to the current user, and the interface verifies the
   owner before trusting a connection.
 
-[Unreleased]: https://github.com/blakazulu/findra/compare/v0.4.3...HEAD
+[Unreleased]: https://github.com/blakazulu/findra/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/blakazulu/findra/compare/v0.4.3...v0.5.0
 [0.4.3]: https://github.com/blakazulu/findra/compare/v0.4.2...v0.4.3
 [0.4.2]: https://github.com/blakazulu/findra/compare/v0.4.1...v0.4.2
 [0.4.1]: https://github.com/blakazulu/findra/compare/v0.4.0...v0.4.1

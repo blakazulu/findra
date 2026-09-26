@@ -153,8 +153,8 @@ set up. The welcome page and the fully grown card overflowed from 150%. Fixed in
 window shrinks as a whole to fit the screen it opens on (`ScreenFit`), held by `ScreenFitTests` at
 100-175% on 1080p.
 
-Resubmission: upload `findra_0.4.3.0.msixbundle` on the Packages page (replacing 0.3.1), set
-"What's new in this version" from the 0.4.3, 0.4.2, 0.4.1 and 0.4.0 CHANGELOG sections, and add to the notes for
+Resubmission: upload `findra_0.5.0.0.msixbundle` on the Packages page (replacing 0.3.1), set
+"What's new in this version" from the 0.5.0, 0.4.3, 0.4.2, 0.4.1 and 0.4.0 CHANGELOG sections, and add to the notes for
 certification: "Fixed 10.1.2.10: every window now shrinks to fit the display at 125% scaling and
 above on 1920x1080, including the first-run screen whose buttons were below the screen edge."
 

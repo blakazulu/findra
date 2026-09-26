@@ -122,7 +122,8 @@ then it stays unloaded, so a model that has nothing to search costs no memory.
 `findra --searchshot docs/shots/settings.png settingscontent Paper`
 
 Settings is on the card itself, under Advanced, as well as on the tray icon and a right-click
-on the capsule. "Start now" begins reading inside files in that session, and the line under it
+on the capsule. "Start now" begins reading inside files in that session - the card has the same
+button under Settings, which says "Stop" while reading runs - and the line under it
 says in plain words what reading is doing - including when it is waiting, and for what;
 "Indexing power" is how much of the machine that reading may take. Each model (photos and video,
 meaning, speech, Hebrew) has its own row on the Models toggle page, where it can be added, turned off
@@ -130,7 +131,10 @@ or removed; removing asks first, and keeps what was already found unless you say
 
 A global hotkey opens the card from anywhere, over whatever you were doing. If the
 combination you asked for is already taken, Findra walks a fallback chain, takes the first
-that registers, and tells you which one it landed on rather than failing quietly.
+that registers, and tells you which one it landed on rather than failing quietly. The card stays
+up while you work in another window; the button on its corner, Esc, the hotkey or the capsule puts
+it away. Its field edits like any text box: select with the mouse or Shift, Ctrl+A, cut, copy and
+paste.
 
 Six palettes ship, three dark and three light. Pick one of each and Findra follows the
 Windows setting, or pin it to either. `%APPDATA%\Findra\palettes.json` takes your own.

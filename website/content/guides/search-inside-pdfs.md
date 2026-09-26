@@ -8,7 +8,8 @@ from then on a search for a phrase finds the documents that contain it, whatever
 findra --content on
 ```
 
-The same switch is under Content in Findra's settings, beside a Start now button.
+The same switch is under Content in Findra's settings, beside a Start now button, and the search
+card has a Start now button of its own.
 
 ## What it reads
 

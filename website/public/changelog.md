@@ -5,6 +5,28 @@ All notable changes to Findra are documented here.
 The format follows [Keep a Changelog 1.1.0](https://keepachangelog.com/en/1.1.0/),
 and Findra follows [Semantic Versioning](https://semver.org/spec/v2.0.0/).
 
+## [0.5.0 - 26 September 2026](https://github.com/blakazulu/findra/releases/tag/v0.5.0)
+
+### Added
+
+- **The search field edits like any other text box.** Ctrl+A selects everything, Shift with the
+  arrows, Home and End selects (Ctrl+Shift by whole words), and the mouse selects by dragging
+  across the text, Shift+click extends a selection, a double-click takes a word and a triple-click
+  takes the lot. Typing, pasting, Backspace and Delete replace what is selected, Ctrl+X cuts it,
+  and Ctrl+C copies it - with nothing selected, Ctrl+C still copies the highlighted result's path.
+  Hebrew and mixed text select correctly.
+- **Start and stop reading from the search card.** A fourth pill under Settings says "Start now",
+  "Starting..." while reading gets going, and "Stop" while Findra is reading inside files. It does
+  what the button in Settings > Content does.
+- **A close button on the search card's top-right corner.**
+
+### Changed
+
+- **Clicking somewhere else no longer closes the search card**, so a search and its results stay
+  up while you work in another window. Close it with the button on its corner, with Esc (the first
+  press clears the search, the second closes the card), with the shortcut, or by clicking the
+  capsule. The screen behind the card goes back to normal brightness once you click elsewhere.
+
 ## [0.4.3 - 25 September 2026](https://github.com/blakazulu/findra/releases/tag/v0.4.3)
 
 ### Fixed
