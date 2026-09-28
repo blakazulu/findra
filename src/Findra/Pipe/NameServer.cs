@@ -610,12 +610,12 @@ public static class NameServer
         // drops the connection.
         int max = Math.Clamp(req.Max, 1, MaxRows);
 
-        // Search stops scanning once it has `max` CANDIDATES, and Allows then discards some
-        // of them - so capping the scan at the row count answers `sunset ext:png` with
-        // nothing while the .png files sit further down the volume. Over-fetch when the
-        // query filters. The index's own filters-only branch defends against exactly this;
-        // the word-scan path reaches it through here instead.
-        int scan = q.HasFilters ? Math.Min(max * 20, MaxRows) : max;
+        // Search keeps the best `max` CANDIDATES, and Allows then discards some of them - so
+        // keeping only the row count answers `sunset ext:png` with nothing when the best-named
+        // sunsets are all .jpg. Over-fetch when the query filters. The index's own filters-only
+        // branch defends against exactly this; the word-scan path reaches it through here
+        // instead.
+        int keep = q.HasFilters ? Math.Min(max * 20, MaxRows) : max;
 
         var candidates = new List<NameRow>(Math.Min(max, 512));
 
@@ -630,7 +630,7 @@ public static class NameServer
             using IDisposable? held = gate?.Read(letter);
 
             hits.Clear();
-            ix.Search(q, hits, scan);
+            ix.Search(q, hits, keep);
             foreach (NameIndex.Hit h in hits)
             {
                 string? path = ix.PathOf(h.Record);
@@ -649,12 +649,12 @@ public static class NameServer
             }
         }
 
-        // Every volume contributes, then the best `max` win. Stopping the volume walk the
-        // moment the cap fills lets C: take every slot and D: never appear at all - and
-        // NameIndex.Search appends in MFT order, so what survived was an arbitrary prefix of
-        // one disk rather than the best matches on the machine. The sort is over the accepted
+        // Every volume contributes its best, then the best `max` of those win. Stopping the
+        // volume walk the moment the cap fills lets C: take every slot and D: never appear at
+        // all. Ties are broken the way the card breaks them (Rank), or a shallow folder on D:
+        // is cut for deep ones on C: that merely came first. The sort is over the accepted
         // candidates, which the per-volume scan already bounds.
-        candidates.Sort(static (a, b) => b.Score.CompareTo(a.Score));
+        candidates.Sort(static (a, b) => Rank.Compare(a.Score, a.Path, b.Score, b.Path));
         List<NameRow> rows = candidates.Count > max ? candidates.GetRange(0, max) : candidates;
 
         return new QueryReply(req.Gen, Stopwatch.GetTimestamp() - started, rows);

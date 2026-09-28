@@ -752,11 +752,14 @@ public class WebsiteTests
 
         // ---- the range and the worst sample, wherever prose repeats them ----
 
+        // The fastest median, which each of these quotes as the low end of the range. It was
+        // config's once and this named config, so a run in which another query came first failed
+        // with nothing on the page wrong.
         foreach (string path in new[]
                  { "build/Make-Icon.mjs", "build/Make-Pages.mjs", "website/public/share/card.txt",
                    "website/public/llms.txt", "website/public/index.md", "README.md" })
         {
-            Assert.Contains(medians["config"].ToString("0.00"), Repo.Read(path), StringComparison.Ordinal);
+            Assert.Contains(medians.Values.Min().ToString("0.00"), Repo.Read(path), StringComparison.Ordinal);
         }
 
         foreach (string path in new[]

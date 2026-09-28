@@ -142,6 +142,37 @@ public class NameServerTests
     }
 
     [Fact]
+    public async Task EquallyGoodRowsFromDifferentVolumesGoShallowestFirst()
+    {
+        // Each volume sends its best; the merge has to break the tie the same way, or the
+        // shallow folder on D: is cut for three deep ones on C: that merely came first.
+        const uint dir = NtfsVolume.FileAttributeDirectory;
+        var c = new NameIndex('C');
+        c.Upsert(5, 0, dir, "C:");
+        c.Upsert(10, 5, dir, "Code");
+        for (ulong i = 0; i < 5; i++)
+        {
+            c.Upsert(100 + i, 10, dir, $"project{i}");
+            c.Upsert(200 + i, 100 + i, dir, ".claude");
+        }
+
+        var d = new NameIndex('D');
+        d.Upsert(5, 0, dir, "D:");
+        d.Upsert(100, 5, dir, ".claude");
+
+        var (server, client) = Pair();
+        var cts = new CancellationTokenSource();
+        _ = NameServer.Serve(server, new Dictionary<char, NameIndex> { ['C'] = c, ['D'] = d }, cts.Token);
+
+        await Frame.WriteAsync(client, Envelope.Pack(Envelope.KindQuery, new QueryRequest(1, ".claude", 3)), default);
+        QueryReply reply = Envelope.Unpack((await Frame.ReadAsync(client, default))!).Body<QueryReply>();
+
+        Assert.Equal(3, reply.Rows.Count);
+        Assert.Equal(@"D:\.claude", reply.Rows[0].Path);
+        await cts.CancelAsync();
+    }
+
+    [Fact]
     public async Task RefusesAnAbsurdlyLongQueryAndKeepsServing()
     {
         // Max is clamped; Raw was not, and a `regex:` prefix hands it to the Regex constructor

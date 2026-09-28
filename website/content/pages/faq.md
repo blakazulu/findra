@@ -20,10 +20,10 @@ stops it without discarding anything already read.
 
 ## How fast is Findra?
 
-0.60 to 3.78 ms median round trip for a filename across five measured queries - 0.60 ms for
-"config" and 3.78 ms for "sunset" - including the hop between processes; the worst single sample
-across the five measured name queries was 5.36 ms. 1,780,595 names were enumerated in 5.4 seconds
-when the name helper started, and the index holding them takes 200.3 MB of RAM. Measured with
+2.13 to 3.77 ms median round trip for a filename across five measured queries - 2.13 ms for
+"invoice" and 3.77 ms for "readme" - including the hop between processes; the worst single sample
+across the five measured name queries was 4.76 ms. 1,339,635 names were enumerated in 2.4 seconds
+when the name helper started, and the index holding them takes 172.0 MB of RAM. Measured with
 `findra --searchbench` on an AMD Ryzen 9 9900X3D, 47.1 GB of RAM, an NVMe SSD, Windows 11 Pro
 10.0.26200.9445. Yours will differ.
 

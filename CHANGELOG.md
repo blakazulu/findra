@@ -12,6 +12,23 @@ and Findra follows [Semantic Versioning](https://semver.org/spec/v2.0.0/).
 - Documentation: the website's front page quotes a Findra user, between the numbers and the
   install.
 
+### Changed
+
+- **Among names that match equally well, the one nearest the top of the drive comes first.**
+  Searching ".claude" puts the folder in your profile ahead of the ones inside every project,
+  because it sits fewer folders down. A better match still wins wherever it is: a folder named
+  exactly ".claude" deep in a project comes before ".claude.json" at the top of the drive.
+- Documentation: the README and the website carry a new benchmark run, taken with the change
+  above: filenames in 2.13 to 3.77 ms median across 1,339,635 names, and full-text search against
+  a content index of 5,284 files.
+
+### Fixed
+
+- **A search that matched many names could miss the best ones.** Findra ranked only the first
+  matches it came across, in the order the drive happens to list them, so an exact name could be
+  left off the card behind dozens of weaker ones. It now looks at every match and keeps the best.
+  Searches that match a great many names take a few milliseconds longer as a result.
+
 ## [0.5.0] - 2026-09-26
 
 ### Added

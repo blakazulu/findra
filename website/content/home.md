@@ -1,6 +1,6 @@
 # Findra - Fast, private desktop search for Windows
 
-Desktop search for Windows. Filenames come back from an index held in RAM in 0.60 to 3.78 ms median across five measured
+Desktop search for Windows. Filenames come back from an index held in RAM in 2.13 to 3.77 ms median across five measured
 queries, measured on one named desktop. It also finds files by what is written inside them, by what a photo
 shows and by what was said out loud, each an optional download. Free, open source, and nothing
 leaves your machine.
@@ -19,15 +19,15 @@ somebody said it - and not one of them has it in the filename.
 
 ## The numbers
 
-**Under 4 ms.** Type part of a filename and the matches are back: 0.60 to 3.78 ms median round trip
-for every query measured, across 1,780,595 names, from the moment the query leaves the window to the
+**Under 4 ms.** Type part of a filename and the matches are back: 2.13 to 3.77 ms median round trip
+for every query measured, across 1,339,635 names, from the moment the query leaves the window to the
 moment the results arrive.
 
-- 5.4 s from cold to ready, for 1,780,595 names read off the disk when the helper starts.
-- 200.3 MB for the name index of those 1,780,595 names.
+- 2.4 s from cold to ready, for 1,339,635 names read off the disk when the helper starts.
+- 172.0 MB for the name index of those 1,339,635 names.
 - 0 bytes sent anywhere about your files.
 
-Machine: AMD Ryzen 9 9900X3D, 47.1 GB RAM, NVMe SSD, Findra 0.3.1, n=50 per query. These numbers
+Machine: AMD Ryzen 9 9900X3D, 47.1 GB RAM, NVMe SSD, Findra built after 0.5.0, n=50 per query. These numbers
 are from one machine, and it has an NVIDIA card. AMD and Intel graphics have not been tested on
 real hardware, and neither has an arm64 machine. Every table is on
 https://findra-search.netlify.app/numbers/.

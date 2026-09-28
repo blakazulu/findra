@@ -247,9 +247,10 @@ public class ReadmeTests
         // Every heading Bench.Fragment writes, in the order it writes them. The fragment is
         // quoted verbatim precisely so that the sections nobody would choose - a store that is
         // larger than expected, a query with a bad p95 - travel with the ones anybody would.
-        // Picking two headings out of six is how a measurement becomes a selection.
+        // Picking two headings out of six is how a measurement becomes a selection. Name latency
+        // leads, as BenchTests.HowFastANameComesBackIsTheFirstTable holds the fragment to.
         string[] sections =
-            ["## Findra benchmark", "### Machine", "### Volumes", "### Name query latency",
+            ["## Findra benchmark", "### Name query latency", "### Machine", "### Volumes",
              "### Full-text query latency", "### Document extraction", "### Stores"];
 
         int at = -1;

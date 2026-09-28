@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Findra - Fast, private desktop search for Windows</title>
-<meta name="description" content="Private desktop search for Windows. Filenames from RAM in 0.60 to 3.78 ms median; documents, photos and speech when you ask. Free and open source.">
+<meta name="description" content="Private desktop search for Windows. Filenames from RAM in 2.13 to 3.77 ms median; documents, photos and speech when you ask. Free and open source.">
 <link rel="canonical" href="https://findra-search.netlify.app/">
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="Findra">
@@ -28,7 +28,7 @@
 <meta property="og:image:type" content="image/png">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
-<meta property="og:image:alt" content="Findra. Windows Search, but it works. Filenames in 0.60 to 3.78 ms median, straight from RAM. Nothing leaves your machine.">
+<meta property="og:image:alt" content="Findra. Windows Search, but it works. Filenames in 2.13 to 3.77 ms median, straight from RAM. Nothing leaves your machine.">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="theme-color" content="#08090c">
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
@@ -61,7 +61,7 @@
       "@id": "https://findra-search.netlify.app/#findra",
       "name": "Findra",
       "url": "https://findra-search.netlify.app/",
-      "description": "Desktop search for Windows. Filenames come back from an index held in RAM in 0.60 to 3.78 ms median across five measured queries, measured on one named desktop. It also finds files by what is written inside them, by what a photo shows and by what was said out loud, each an optional download. Free, open source, and nothing leaves your machine.",
+      "description": "Desktop search for Windows. Filenames come back from an index held in RAM in 2.13 to 3.77 ms median across five measured queries, measured on one named desktop. It also finds files by what is written inside them, by what a photo shows and by what was said out loud, each an optional download. Free, open source, and nothing leaves your machine.",
       "applicationCategory": "UtilitiesApplication",
       "applicationSubCategory": "Desktop search",
       "disambiguatingDescription": "Findra is an independent third-party application by blakazulu. It is not made by, affiliated with or endorsed by Microsoft, and it is not a version, component, fork or replacement of the Windows Search service built into Windows. It runs on Windows only and is not related to any other application that shares its name.",
@@ -79,7 +79,7 @@
         "availability": "https://schema.org/InStock"
       },
       "featureList": [
-        "Filename search answered from an in-RAM index in 0.60 to 3.78 ms median across five measured queries",
+        "Filename search answered from an in-RAM index in 2.13 to 3.77 ms median across five measured queries",
         "Full-text search inside documents, off until you turn it on",
         "Photo and video search by what the image shows",
         "Speech search by what was said in a recording, including Hebrew",
@@ -105,7 +105,7 @@
       ],
       "softwareRequirements": "Windows 10 or Windows 11. No runtime to install: the build is self-contained. Filename search uses one helper process, which asks for administrator rights once in order to open the NTFS volume.",
       "storageRequirements": "The application itself is a self-contained build. Capabilities that use a model are separate, optional downloads: 629 MB for photos and video, 1.04 GB for meaning in documents, 547 MB for speech on top of the document models, and 1.51 GB for the Hebrew second pass. Taking every one of them is 3.7 GB. Taking none of them still searches every filename on the machine.",
-      "memoryRequirements": "About 200.3 MB of RAM for the name index of 1,780,595 files, measured on one desktop. That is the index itself; the helper process that holds it needs some memory of its own beside it.",
+      "memoryRequirements": "About 172.0 MB of RAM for the name index of 1,339,635 files, measured on one desktop. That is the index itself; the helper process that holds it needs some memory of its own beside it.",
       "permissions": "Administrator rights are requested once, by a helper process, to open the NTFS volume and read the file table. Nothing else in Findra requires them, and the process that opens and decodes files deliberately runs without them.",
       "identifier": {
         "@type": "PropertyValue",
@@ -271,7 +271,7 @@
 
       <p class="hero-sub">
         Findra is a free, open-source desktop search program for Windows 10 and 11. It finds files
-        by name from an index held in RAM, in 0.60 to 3.78 ms median across five measured queries, and - if
+        by name from an index held in RAM, in 2.13 to 3.77 ms median across five measured queries, and - if
         you turn it on - by the words inside documents, by what a photograph shows, and by what was said in a
         recording. Everything runs on your own machine.
       </p>
@@ -322,8 +322,8 @@
         </p>
         <p class="hero-sub bright">
           Findra holds the file table in RAM and answers before your finger comes off Enter.
-          A median of 0.60 ms for "config", measured, on a disk with 1.78 million files
-          on it. The slowest of the five medians was 3.78 ms.
+          A median of 2.13 ms for "invoice", measured, on a disk with 1.34 million files
+          on it. The slowest of the five medians was 3.77 ms.
         </p>
 
         <div class="hero-actions">
@@ -382,7 +382,7 @@
               <span class="name">receipt_final.pdf</span>
               <span class="path">C:\Users\you\Downloads\ (yes, there)</span>
             </span>
-            <span class="ms">0.60 ms</span>
+            <span class="ms">2.13 ms</span>
           </div>
           <div class="cap-row">
             <span class="info">
@@ -424,28 +424,28 @@
           <div class="big" aria-hidden="true">&lt;4<small>ms</small></div>
           <p class="sr-only">Under 4 ms.</p>
           <div class="say">Type part of a filename. The matches are back.</div>
-          <div class="fine">0.60 to 3.78 ms median round trip for every query measured, across 1,780,595 names, from the moment the query leaves the window to the moment the results arrive.</div>
+          <div class="fine">2.13 to 3.77 ms median round trip for every query measured, across 1,339,635 names, from the moment the query leaves the window to the moment the results arrive.</div>
         </div>
         <div class="bars">
-          <div class="bar"><span>config</span><span class="track"><span class="fill" style="width:15%"></span></span><span class="ms">0.60 ms</span></div>
-          <div class="bar"><span>report</span><span class="track"><span class="fill" style="width:17.5%"></span></span><span class="ms">0.70 ms</span></div>
-          <div class="bar"><span>readme</span><span class="track"><span class="fill" style="width:25.75%"></span></span><span class="ms">1.03 ms</span></div>
-          <div class="bar"><span>invoice</span><span class="track"><span class="fill" style="width:81%"></span></span><span class="ms">3.24 ms</span></div>
-          <div class="bar"><span>sunset</span><span class="track"><span class="fill" style="width:94.5%"></span></span><span class="ms">3.78 ms</span></div>
+          <div class="bar"><span>invoice</span><span class="track"><span class="fill" style="width:53.25%"></span></span><span class="ms">2.13 ms</span></div>
+          <div class="bar"><span>sunset</span><span class="track"><span class="fill" style="width:69.25%"></span></span><span class="ms">2.77 ms</span></div>
+          <div class="bar"><span>report</span><span class="track"><span class="fill" style="width:84%"></span></span><span class="ms">3.36 ms</span></div>
+          <div class="bar"><span>config</span><span class="track"><span class="fill" style="width:93.25%"></span></span><span class="ms">3.73 ms</span></div>
+          <div class="bar"><span>readme</span><span class="track"><span class="fill" style="width:94.25%"></span></span><span class="ms">3.77 ms</span></div>
           <div class="axis" aria-hidden="true"><span></span><span><span>0</span><span>1</span><span>2</span><span>3</span><span>4 ms</span></span><span></span></div>
         </div>
       </div>
 
       <div class="stat-row three">
         <div class="stat reveal">
-          <span class="v">5.4 s</span>
+          <span class="v">2.4 s</span>
           <span class="k">From cold to ready</span>
-          <span class="n">1,780,595 names read off the disk when the helper starts. Longer right after a restart.</span>
+          <span class="n">1,339,635 names read off the disk when the helper starts. Longer right after a restart.</span>
         </div>
         <div class="stat reveal">
-          <span class="v">200.3 MB</span>
+          <span class="v">172.0 MB</span>
           <span class="k">What it costs to hold</span>
-          <span class="n">The name index for 1,780,595 names, measured by the helper that holds it.</span>
+          <span class="n">The name index for 1,339,635 names, measured by the helper that holds it.</span>
         </div>
         <div class="stat reveal">
           <span class="v">0</span>
@@ -455,7 +455,7 @@
       </div>
 
       <div class="more-row reveal">
-        <span class="machine-inline">AMD Ryzen 9 9900X3D &middot; 47.1 GB &middot; NVMe SSD &middot; Findra 0.3.1 &middot; n=50 per query.
+        <span class="machine-inline">AMD Ryzen 9 9900X3D &middot; 47.1 GB &middot; NVMe SSD &middot; Findra built after 0.5.0 &middot; n=50 per query.
           One machine, with an NVIDIA card: AMD and Intel graphics have not been tested on real hardware, and neither has an arm64 machine.</span>
         <a class="btn btn-ghost" href="/numbers/">Every table, and the machine</a>
       </div>

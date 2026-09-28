@@ -19,28 +19,28 @@
           <div class="big" aria-hidden="true">&lt;4<small>ms</small></div>
           <p class="sr-only">Under 4 ms.</p>
           <div class="say">Type part of a filename. The matches are back.</div>
-          <div class="fine">Median round trip for every query measured, across 1,780,595 names, from the moment the query leaves the window to the moment the results arrive.</div>
+          <div class="fine">Median round trip for every query measured, across 1,339,635 names, from the moment the query leaves the window to the moment the results arrive.</div>
         </div>
         <div class="bars">
-          <div class="bar"><span>config</span><span class="track"><span class="fill" style="width:15%"></span></span><span class="ms">0.60 ms</span></div>
-          <div class="bar"><span>report</span><span class="track"><span class="fill" style="width:17.5%"></span></span><span class="ms">0.70 ms</span></div>
-          <div class="bar"><span>readme</span><span class="track"><span class="fill" style="width:25.75%"></span></span><span class="ms">1.03 ms</span></div>
-          <div class="bar"><span>invoice</span><span class="track"><span class="fill" style="width:81%"></span></span><span class="ms">3.24 ms</span></div>
-          <div class="bar"><span>sunset</span><span class="track"><span class="fill" style="width:94.5%"></span></span><span class="ms">3.78 ms</span></div>
+          <div class="bar"><span>invoice</span><span class="track"><span class="fill" style="width:53.25%"></span></span><span class="ms">2.13 ms</span></div>
+          <div class="bar"><span>sunset</span><span class="track"><span class="fill" style="width:69.25%"></span></span><span class="ms">2.77 ms</span></div>
+          <div class="bar"><span>report</span><span class="track"><span class="fill" style="width:84%"></span></span><span class="ms">3.36 ms</span></div>
+          <div class="bar"><span>config</span><span class="track"><span class="fill" style="width:93.25%"></span></span><span class="ms">3.73 ms</span></div>
+          <div class="bar"><span>readme</span><span class="track"><span class="fill" style="width:94.25%"></span></span><span class="ms">3.77 ms</span></div>
           <div class="axis" aria-hidden="true"><span></span><span><span>0</span><span>1</span><span>2</span><span>3</span><span>4 ms</span></span><span></span></div>
         </div>
       </div>
 
       <div class="stat-row three">
         <div class="stat reveal">
-          <span class="v">5.4 s</span>
+          <span class="v">2.4 s</span>
           <span class="k">From cold to ready</span>
-          <span class="n">1,780,595 names read off the disk when the helper starts. Longer right after a restart, when nothing is cached.</span>
+          <span class="n">1,339,635 names read off the disk when the helper starts. Longer right after a restart, when nothing is cached.</span>
         </div>
         <div class="stat reveal">
-          <span class="v">200.3 MB</span>
+          <span class="v">172.0 MB</span>
           <span class="k">What it costs to hold</span>
-          <span class="n">The name index for 1,780,595 names, measured by the helper that holds it.</span>
+          <span class="n">The name index for 1,339,635 names, measured by the helper that holds it.</span>
         </div>
         <div class="stat reveal">
           <span class="v">0</span>
@@ -76,11 +76,11 @@
             </tr>
           </thead>
           <tbody>
-            <tr><td>config</td><td class="num">0.60 ms</td><td class="num">0.78 ms</td><td class="num">0.15 ms</td><td class="num">1.13 ms</td><td>50</td></tr>
-            <tr><td>report</td><td class="num">0.70 ms</td><td class="num">0.89 ms</td><td class="num">0.26 ms</td><td class="num">0.96 ms</td><td>50</td></tr>
-            <tr><td>readme</td><td class="num">1.03 ms</td><td class="num">1.25 ms</td><td class="num">0.58 ms</td><td class="num">1.55 ms</td><td>50</td></tr>
-            <tr><td>invoice</td><td class="num">3.24 ms</td><td class="num">4.57 ms</td><td class="num">2.81 ms</td><td class="num">4.88 ms</td><td>43</td></tr>
-            <tr><td>sunset</td><td class="num">3.78 ms</td><td class="num">4.62 ms</td><td class="num">3.41 ms</td><td class="num">5.36 ms</td><td>21</td></tr>
+            <tr><td>invoice</td><td class="num">2.13 ms</td><td class="num">2.45 ms</td><td class="num">1.77 ms</td><td class="num">2.77 ms</td><td>50</td></tr>
+            <tr><td>sunset</td><td class="num">2.77 ms</td><td class="num">3.00 ms</td><td class="num">2.41 ms</td><td class="num">3.99 ms</td><td>23</td></tr>
+            <tr><td>report</td><td class="num">3.36 ms</td><td class="num">3.74 ms</td><td class="num">2.98 ms</td><td class="num">4.18 ms</td><td>50</td></tr>
+            <tr><td>config</td><td class="num">3.73 ms</td><td class="num">4.61 ms</td><td class="num">3.26 ms</td><td class="num">4.76 ms</td><td>50</td></tr>
+            <tr><td>readme</td><td class="num">3.77 ms</td><td class="num">4.20 ms</td><td class="num">3.26 ms</td><td class="num">4.75 ms</td><td>50</td></tr>
           </tbody>
         </table>
       </div>
@@ -106,11 +106,11 @@
             </tr>
           </thead>
           <tbody>
-            <tr><td>lease</td><td class="num">1.90 ms</td><td class="num">2.59 ms</td><td class="num">4.07 ms</td><td>50</td></tr>
-            <tr><td>agreement</td><td class="num">3.68 ms</td><td class="num">4.43 ms</td><td class="num">4.70 ms</td><td>50</td></tr>
-            <tr><td>invoice</td><td class="num">0.79 ms</td><td class="num">1.08 ms</td><td class="num">1.80 ms</td><td>32</td></tr>
-            <tr><td>total</td><td class="num">9.41 ms</td><td class="num">10.89 ms</td><td class="num">13.53 ms</td><td>50</td></tr>
-            <tr><td>report</td><td class="num">15.36 ms</td><td class="num">16.67 ms</td><td class="num">16.87 ms</td><td>50</td></tr>
+            <tr><td>lease</td><td class="num">1.12 ms</td><td class="num">1.31 ms</td><td class="num">2.67 ms</td><td>50</td></tr>
+            <tr><td>agreement</td><td class="num">4.18 ms</td><td class="num">4.66 ms</td><td class="num">5.23 ms</td><td>50</td></tr>
+            <tr><td>invoice</td><td class="num">0.82 ms</td><td class="num">0.91 ms</td><td class="num">1.77 ms</td><td>50</td></tr>
+            <tr><td>total</td><td class="num">8.89 ms</td><td class="num">11.80 ms</td><td class="num">12.75 ms</td><td>50</td></tr>
+            <tr><td>report</td><td class="num">14.95 ms</td><td class="num">15.94 ms</td><td class="num">16.98 ms</td><td>50</td></tr>
           </tbody>
         </table>
       </div>
@@ -120,8 +120,8 @@
         <span><b>RAM</b> 47.1 GB</span>
         <span><b>Disk</b> NVMe SSD</span>
         <span><b>OS</b> Windows 11 Pro 10.0.26200.9445</span>
-        <span><b>Accelerator</b> ONNX via DirectML</span>
-        <span><b>Build</b> Findra 0.3.1</span>
+        <span><b>Accelerator</b> none loaded</span>
+        <span><b>Build</b> Findra, built after 0.5.0</span>
         <span><b>Samples</b> n=50 per query</span>
       </div>
 

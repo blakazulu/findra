@@ -135,12 +135,7 @@ public static class ResultMapper
         }
     }
 
-    // Score first, then the shorter path: a hit near the top of the disk explains itself.
-    private static int Tie(SearchResult a, SearchResult b)
-    {
-        int c = b.Score.CompareTo(a.Score);
-        if (c != 0) return c;
-        c = a.Path.Length.CompareTo(b.Path.Length);
-        return c != 0 ? c : string.CompareOrdinal(a.Path, b.Path);
-    }
+    // Score first, then fewer folders down, then the shorter path: a hit near the top of the disk
+    // explains itself.
+    private static int Tie(SearchResult a, SearchResult b) => Rank.Compare(a.Score, a.Path, b.Score, b.Path);
 }

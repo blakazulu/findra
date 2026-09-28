@@ -50,6 +50,13 @@ public sealed class NameIndex
 
     private readonly LongIntMap _byFrn = new();
 
+    // Depth + 1 per record, 0 = not worked out yet; see Depth. Searches fill it side by side under
+    // a read lock, and two of them only ever write the same value. Moving or deleting a folder
+    // changes the depth of everything under it, so it bumps _treeEpoch (under the write lock) and
+    // the next Depth starts from an empty table.
+    private byte[] _depthOf = new byte[1 << 16];
+    private int _treeEpoch, _depthEpoch;
+
     public NameIndex(char letter) => Letter = char.ToUpperInvariant(letter);
 
     public int Count => _live;
@@ -61,7 +68,7 @@ public sealed class NameIndex
     /// only its names, about a third of it.</summary>
     public long ResidentBytes =>
         (long)_orig.Length + _fold.Length
-        + (long)_frn.Length * (sizeof(ulong) * 2 + sizeof(uint) + sizeof(int) + sizeof(ushort) * 2)
+        + (long)_frn.Length * (sizeof(ulong) * 2 + sizeof(uint) + sizeof(int) + sizeof(ushort) * 2 + sizeof(byte))
         + (long)_segStart.Length * (sizeof(int) * 2)
         + _byFrn.Bytes;
 
@@ -74,6 +81,11 @@ public sealed class NameIndex
         if (_byFrn.TryGet(frn, out int i))
         {
             bool moved = _parent[i] != parent;
+            if (moved)
+            {
+                if (IsDirectory(i)) _treeEpoch++;
+                else _depthOf[i] = 0;
+            }
             _parent[i] = parent;
             _attr[i] = attr;
             if (!NameEquals(i, name)) { Place(i, name); return true; }
@@ -94,6 +106,7 @@ public sealed class NameIndex
     public bool Remove(ulong frn)
     {
         if (!_byFrn.TryGet(frn, out int i)) return false;
+        if (IsDirectory(i)) _treeEpoch++;
         _byFrn.Remove(frn);
         _len[i] = 0;
         _flen[i] = 0;
@@ -160,6 +173,7 @@ public sealed class NameIndex
         {
             Array.Resize(ref _frn, n); Array.Resize(ref _parent, n); Array.Resize(ref _attr, n);
             Array.Resize(ref _start, n); Array.Resize(ref _len, n); Array.Resize(ref _flen, n);
+            Array.Resize(ref _depthOf, n);
         }
         int bytes = _used + Math.Max(4 << 20, _used / 16);
         if (_orig.Length > bytes) { Array.Resize(ref _orig, bytes); Array.Resize(ref _fold, bytes); }
@@ -176,6 +190,7 @@ public sealed class NameIndex
         Array.Resize(ref _start, n);
         Array.Resize(ref _len, n);
         Array.Resize(ref _flen, n);
+        Array.Resize(ref _depthOf, n);
     }
 
     // ---- reading -----------------------------------------------------------------------------------
@@ -192,7 +207,7 @@ public sealed class NameIndex
     /// index no longer has - a race with a delete, or a damaged enumeration).</summary>
     public string? PathOf(int record)
     {
-        Span<int> chain = stackalloc int[128];
+        Span<int> chain = stackalloc int[MaxDepth];
         int depth = 0;
         int i = record;
         if (IsAlive(i) && IsRoot(i)) return $"{Letter}:\\";
@@ -216,6 +231,40 @@ public sealed class NameIndex
         return sb.ToString();
     }
 
+    private const int MaxDepth = 128;
+
+    /// <summary>How many folders down the record sits (C:\Users\me\.claude is three), or -1 exactly
+    /// when <see cref="PathOf"/> would give null. A search asks this of every hit that ties for a
+    /// place, so the answers are kept in <c>_depthOf</c>: a walk stops at the first folder whose
+    /// depth is already known.</summary>
+    public int Depth(int record)
+    {
+        if (!IsAlive(record)) return -1;
+        if (IsRoot(record)) return 0;
+        if (_depthEpoch != _treeEpoch)
+        {
+            Array.Clear(_depthOf);
+            _depthEpoch = _treeEpoch;
+        }
+        if (_depthOf[record] != 0) return _depthOf[record] - 1;
+
+        // up to the root or to the first record whose depth is known, collecting the unknown ones
+        Span<int> chain = stackalloc int[MaxDepth];
+        int n = 0, i = record, above;
+        while (true)
+        {
+            if (!IsAlive(i) || n == MaxDepth) return -1;
+            if (_depthOf[i] != 0) { above = _depthOf[i] - 1; break; }
+            chain[n++] = i;
+            ulong p = _parent[i];
+            if ((p & 0xFFFFFFFFFFFF) == 5) { above = 0; break; }
+            if (!_byFrn.TryGet(p, out i)) return -1;
+        }
+        if (above + n > MaxDepth) return -1;
+        for (int k = 0; k < n; k++) _depthOf[chain[k]] = (byte)(above + n - k + 1);
+        return above + n;
+    }
+
     /// <summary>The root directory is MFT record 5, and it is its own parent.</summary>
     public bool IsRoot(int record) => (_frn[record] & 0xFFFFFFFFFFFF) == 5;
 
@@ -224,8 +273,7 @@ public sealed class NameIndex
     /// <summary>
     /// Records whose name contains every token of <paramref name="query"/> (case-folded), scored.
     /// One vectorised pass for the longest token, then the rest are verified per candidate.
-    /// <paramref name="max"/> caps the candidate scan, not the score sort, so a query that matches
-    /// half the volume still answers in the time it takes to find <paramref name="max"/> hits.
+    /// The best <paramref name="max"/> are kept, best first (see <see cref="Best"/>).
     /// </summary>
     public void Search(string query, List<Hit> into, int max = 4000)
         => Search(new SearchQuery(query), into, max);
@@ -239,12 +287,19 @@ public sealed class NameIndex
     /// </summary>
     public void Search(SearchQuery q, List<Hit> into, int max = 4000)
     {
+        var best = new Best(this, max);
+        Scan(q, best);
+        best.CopyTo(into);
+    }
+
+    private void Scan(SearchQuery q, Best best)
+    {
         // A regex has nothing the vectorised scan can look for, so it walks every live name.
         // Slower than a word (a few hundred ms on 1.5M names) and priced accordingly: it only
         // runs when the person typed `regex:`.
         if (q.Rx is not null)
         {
-            for (int rec = 0; rec < _count && into.Count < max; rec++)
+            for (int rec = 0; rec < _count; rec++)
             {
                 if (_len[rec] == 0 || IsMetafile(rec)) continue;
                 if (q.Exts.Count > 0 && !ExtMatches(rec, q.Exts)) continue;
@@ -263,7 +318,7 @@ public sealed class NameIndex
                     if (!all) continue;
                 }
                 if (q.Globs.Count > 0 && !GlobsMatch(rec, q.Globs)) continue;
-                into.Add(new Hit(rec, 0.88f, 5));
+                best.Offer(rec, 0.88f, 5);
             }
             return;
         }
@@ -284,15 +339,16 @@ public sealed class NameIndex
         {
             // nothing to scan for: every live name, checked against the globs (if any)
             if (!q.HasNameTerms && !q.HasFilters) return;
-            // the extension and kind filters are applied HERE, not after: a walk that stops at
-            // its cap before reaching the first .mp4 answers "ext:mp4" with nothing
-            for (int rec = 0; rec < _count && into.Count < max; rec++)
+            // the extension and kind filters are applied HERE, not after: every name ties in this
+            // walk, so keeping the shallowest and filtering afterwards answers "ext:mp4" with
+            // whatever sits nearest the root, which is rarely an .mp4
+            for (int rec = 0; rec < _count; rec++)
             {
                 if (_len[rec] == 0 || IsMetafile(rec)) continue;
                 if (q.Exts.Count > 0 && !ExtMatches(rec, q.Exts)) continue;
                 if (q.Kinds.Count > 0 && !q.Kinds.Contains(FileKinds.Classify(Name(rec), IsDirectory(rec)))) continue;
                 if (globs.Count > 0 && !GlobsMatch(rec, globs)) continue;
-                into.Add(new Hit(rec, globs.Count > 0 ? 0.88f : 0.7f, globs.Count > 0 ? 5 : 6));
+                best.Offer(rec, globs.Count > 0 ? 0.88f : 0.7f, globs.Count > 0 ? 5 : 6);
             }
             return;
         }
@@ -302,14 +358,14 @@ public sealed class NameIndex
         bool needleIsWord = tokens.Contains(needle);
         ReadOnlySpan<byte> hay = _fold.AsSpan(0, _used);
 
-        int pos = 0;
-        while (pos < hay.Length && into.Count < max)
+        int pos = 0, from = 0;
+        while (pos < hay.Length)
         {
             int rel = hay.Slice(pos).IndexOf(needle);
             if (rel < 0) break;
             int at = pos + rel;
 
-            int seg = SegmentAt(at);
+            int seg = SegmentAt(at, from);
             int rec = seg >= 0 ? _segRecord[seg] : -1;
             int segStart = seg >= 0 ? _segStart[seg] : 0;
             // skip orphaned bytes (a renamed record's old name) and tombstones
@@ -318,11 +374,12 @@ public sealed class NameIndex
             if (valid && AllTokens(rec, tokens) && (globs.Count == 0 || GlobsMatch(rec, globs)) && !IsMetafile(rec))
             {
                 int match = globs.Count > 0 && !needleIsWord ? 5 : MatchClass(rec, at - segStart, needle.Length);
-                into.Add(new Hit(rec, Score(rec, match), match));
+                best.Offer(rec, Score(rec, match), match);
             }
 
             // continue at the next name; more hits inside this one are the same record
             pos = seg < 0 ? at + 1 : seg + 1 < _segCount ? _segStart[seg + 1] : _used;
+            from = seg + 1;
         }
     }
 
@@ -465,8 +522,59 @@ public sealed class NameIndex
         return s;
     }
 
+    // The best `max` hits of a whole scan, by score and then by how few folders down they sit.
+    // Names sit in the index in the order the disk listed them, so a scan that stopped at the
+    // first `max` ranked whichever came first, and an exact name listed last never reached the
+    // ranking. The worst hit kept is on top of a heap, so a weaker one is turned away with one
+    // comparison; the depth, a walk up the parents, is worked out only for a hit that ties or
+    // beats it.
+    private sealed class Best(NameIndex ix, int max)
+    {
+        // smallest first: the lowest score, and among equal scores the deepest
+        private readonly PriorityQueue<Hit, (float Score, int Shallowness)> _kept = new();
+
+        public void Offer(int rec, float score, int match)
+        {
+            if (max <= 0) return;
+            bool full = _kept.Count == max;
+            (float Score, int Shallowness) worst = default;
+            if (full && _kept.TryPeek(out _, out worst) && score < worst.Score) return;
+            int depth = ix.Depth(rec);
+            // under something the index no longer has: there is no path, so it is never a row
+            if (depth < 0) return;
+            (float Score, int Shallowness) key = (score, -depth);
+            if (!full) _kept.Enqueue(new Hit(rec, score, match), key);
+            else if (key.CompareTo(worst) > 0) _kept.EnqueueDequeue(new Hit(rec, score, match), key);
+        }
+
+        public void CopyTo(List<Hit> into)
+        {
+            var kept = new List<(Hit Hit, (float Score, int Shallowness) Key)>(_kept.UnorderedItems);
+            kept.Sort(static (a, b) => b.Key.CompareTo(a.Key) is var c && c != 0 ? c : a.Hit.Record.CompareTo(b.Hit.Record));
+            foreach (var k in kept) into.Add(k.Hit);
+        }
+    }
+
     private static bool IsWordStart(byte before)
         => before is (byte)' ' or (byte)'.' or (byte)'_' or (byte)'-' or (byte)'(' or (byte)'[' or (byte)',' or (byte)'+';
+
+    // SegmentAt for a scan that only moves forward: the answer is at or after `from`, and for a
+    // query that matches most names it IS `from`, so gallop out from there rather than search the
+    // whole table for every hit.
+    private int SegmentAt(int offset, int from)
+    {
+        if (from < 0 || from >= _segCount || _segStart[from] > offset) return SegmentAt(offset);
+        int lo = from, step = 1;
+        while (lo + step < _segCount && _segStart[lo + step] <= offset) { lo += step; step <<= 1; }
+        int hi = Math.Min(lo + step, _segCount) - 1;
+        while (lo < hi)
+        {
+            int mid = (lo + hi + 1) >> 1;
+            if (_segStart[mid] <= offset) lo = mid;
+            else hi = mid - 1;
+        }
+        return lo;
+    }
 
     private int SegmentAt(int offset)
     {

@@ -1,7 +1,7 @@
 # Findra
 
 Desktop search for Windows. A capsule sits on your desktop; click it, or press a global
-hotkey, and it unfolds into a results card. It finds files by name the second it starts - 0.60 to 3.78 ms median across five
+hotkey, and it unfolds into a results card. It finds files by name the second it starts - 2.13 to 3.77 ms median across five
 measured queries, on the machine named under The numbers - and
 it can be taught to find them by what is written inside them, by what a photo shows, and by
 what was said in a recording.
@@ -178,14 +178,16 @@ does. `dotnet run --project src/Findra -- --searchtest` waits, if you would rath
 ## The numbers
 
 **How fast is a filename search? Under 4 ms.** Type part of a filename and the matches are back
-in 0.60 to 3.78 ms median, for every query measured, across 1,780,595 names - from the moment the
+in 2.13 to 3.77 ms median, for every query measured, across 1,339,635 names - from the moment the
 query leaves the window to the moment the results arrive, the hop to the name helper included.
 That is the first table below.
 
 What follows was produced by `findra --searchbench readme-bench.md 10000` and pasted without
 editing. Ten thousand rather than the default 2,500, because a run of a second or two
-disagrees with itself by more than a published rate deserves. The run was taken on the build that
-became 0.3.1, before its version number was raised, which is why its machine table says 0.3.0.
+disagrees with itself by more than a published rate deserves. The run was taken on the code that
+follows 0.5.0, before the next version number was raised, which is why its machine table says
+0.5.0. No model was installed for it, so the machine table names no accelerator; nothing the
+run measures needs one.
 
 **One machine, and it has an NVIDIA card.** These numbers come from a single desktop with a
 discrete NVIDIA GPU, so they say what Findra does there and nothing about anywhere else.
@@ -199,7 +201,7 @@ are chosen precisely so that they should work there; that is a design decision, 
 measurement, and it is written here as one.
 
 Two things to read honestly. The full-text table was measured against this machine's own
-content index - 6,861 files and 64,623 text segments, read from a real disk - so its slowest
+content index - 5,284 files and 74,333 text segments, read from a real disk - so its slowest
 query is in there beside its fastest. And the extraction row is measured over files the
 benchmark generates and then deletes, which is what makes it reproducible on your machine
 rather than a fact about this one.
@@ -208,6 +210,16 @@ rather than a fact about this one.
 
 Produced by `findra --searchbench`. Every number below was measured on the machine
 named here, by this build, and re-running that command reproduces the whole page.
+
+### Name query latency
+
+| Query | Round trip p50 | Round trip p95 | Index scan p50 | Pipe share p50 | Worst | Hits | Samples |
+|---|---|---|---|---|---|---|---|
+| report | 3.36 ms | 3.74 ms | 2.98 ms | 0.38 ms | 4.18 ms | 50 | n=50 |
+| invoice | 2.13 ms | 2.45 ms | 1.77 ms | 0.35 ms | 2.77 ms | 50 | n=50 |
+| sunset | 2.77 ms | 3.00 ms | 2.41 ms | 0.37 ms | 3.99 ms | 23 | n=50 |
+| readme | 3.77 ms | 4.20 ms | 3.26 ms | 0.51 ms | 4.75 ms | 50 | n=50 |
+| config | 3.73 ms | 4.61 ms | 3.26 ms | 0.47 ms | 4.76 ms | 50 | n=50 |
 
 ### Machine
 
@@ -218,51 +230,44 @@ named here, by this build, and re-running that command reproduces the whole page
 | RAM | 47.1 GB |
 | Disk | NVMe SSD |
 | Windows | Windows 11 Pro 10.0.26200.9445 |
-| Accelerator | ONNX: DirectML (NVIDIA GeForce RTX 5070 Ti) · Whisper: Vulkan |
-| Findra | 0.3.0 |
+| Accelerator | ONNX: not loaded · Whisper: not loaded |
+| Findra | 0.5.0 |
 
 ### Volumes
 
 | Volume | Names | Name index resident | Cold-start enumeration | Journal position |
 |---|---|---|---|---|
-| C: | 1,780,595 | 200.3 MB | 5,365 ms | 34,428,276,528 |
-| D: | 68,970 | 14.0 MB | 111 ms | 72,177,992 |
+| C: | 1,339,635 | 172.0 MB | 2,423 ms | 35,745,734,752 |
+| D: | 485,227 | 46.5 MB | 739 ms | 1,252,641,944 |
+| E: | 69,078 | 14.1 MB | 110 ms | 72,232,360 |
 
-### Name query latency
-
-| Query | Round trip p50 | Round trip p95 | Index scan p50 | Pipe share p50 | Worst | Hits | Samples |
-|---|---|---|---|---|---|---|---|
-| report | 0.70 ms | 0.89 ms | 0.26 ms | 0.44 ms | 0.96 ms | 50 | n=50 |
-| invoice | 3.24 ms | 4.57 ms | 2.81 ms | 0.44 ms | 4.88 ms | 43 | n=50 |
-| sunset | 3.78 ms | 4.62 ms | 3.41 ms | 0.37 ms | 5.36 ms | 21 | n=50 |
-| readme | 1.03 ms | 1.25 ms | 0.58 ms | 0.45 ms | 1.55 ms | 50 | n=50 |
-| config | 0.60 ms | 0.78 ms | 0.15 ms | 0.45 ms | 1.13 ms | 50 | n=50 |
+Name helper working set: 109.3 MB - the whole process, every index included.
 
 ### Full-text query latency
 
 | Query | p50 | p95 | Worst | Hits | Samples |
 |---|---|---|---|---|---|
-| lease | 1.90 ms | 2.59 ms | 4.07 ms | 50 | n=50 |
-| agreement | 3.68 ms | 4.43 ms | 4.70 ms | 50 | n=50 |
-| invoice | 0.79 ms | 1.08 ms | 1.80 ms | 32 | n=50 |
-| total | 9.41 ms | 10.89 ms | 13.53 ms | 50 | n=50 |
-| report | 15.36 ms | 16.67 ms | 16.87 ms | 50 | n=50 |
+| lease | 1.12 ms | 1.31 ms | 2.67 ms | 50 | n=50 |
+| agreement | 4.18 ms | 4.66 ms | 5.23 ms | 50 | n=50 |
+| invoice | 0.82 ms | 0.91 ms | 1.77 ms | 50 | n=50 |
+| total | 8.89 ms | 11.80 ms | 12.75 ms | 50 | n=50 |
+| report | 14.95 ms | 15.94 ms | 16.98 ms | 50 | n=50 |
 
 ### Document extraction
 
 | Kind | Files | Seconds | files/min | MB/s |
 |---|---|---|---|---|
-| Doc | 11,000 | 13.73 | 48,056 | 5.77 |
+| Doc | 11,000 | 9.91 | 66,590 | 7.99 |
 
 ### Stores
 
 | Store | Path | Size |
 |---|---|---|
-| search.db | %LOCALAPPDATA%\Findra\index\search.db | 120.8 MB |
-| search.db-wal | %LOCALAPPDATA%\Findra\index\search.db-wal | 11.8 MB |
+| search.db | %LOCALAPPDATA%\Findra\index\search.db | 157.8 MB |
+| search.db-wal | %LOCALAPPDATA%\Findra\index\search.db-wal | 13.4 MB |
 | search.db-shm | %LOCALAPPDATA%\Findra\index\search.db-shm | 32.0 KB |
 
-Indexed items: 6,861. Text segments: 64,623.
+Indexed items: 5,284. Text segments: 74,333.
 
 Corpus for the extraction row: 10,000 generated .txt of 8 KB and 1,000 generated .docx of 1 KB, indexed into a throwaway database with no model loaded, and deleted.
 

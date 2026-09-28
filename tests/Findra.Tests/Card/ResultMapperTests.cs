@@ -170,6 +170,48 @@ public class ResultMapperTests
     }
 
     [Fact]
+    public void EquallyScoredRowsGoShallowestFirstEvenWhenTheDeeperPathIsShorter()
+    {
+        // Counting characters put five short folder names ahead of three long ones.
+        var rows = new List<NameRow>
+        {
+            Row(".claude", @"C:\a\b\c\d\.claude", score: 0.99f),
+            Row(".claude", @"C:\Users\Someone\.claude", score: 0.99f),
+        };
+        SearchResults r = ResultMapper.Build("x", rows, new SearchQuery("x"), SearchSort.Best, 1.0,
+            (_, _) => ResultMapper.Stat.Missing);
+        Assert.Equal(new[] { @"C:\Users\Someone\.claude", @"C:\a\b\c\d\.claude" },
+                     r.Rows.Select(x => x.Path).ToArray());
+    }
+
+    [Fact]
+    public void AtTheSameDepthTheShorterPathGoesFirst()
+    {
+        var rows = new List<NameRow>
+        {
+            Row(".claude", @"C:\Projects\.claude", score: 0.99f),
+            Row(".claude", @"C:\Code\.claude", score: 0.99f),
+        };
+        SearchResults r = ResultMapper.Build("x", rows, new SearchQuery("x"), SearchSort.Best, 1.0,
+            (_, _) => ResultMapper.Stat.Missing);
+        Assert.Equal(@"C:\Code\.claude", r.Rows[0].Path);
+    }
+
+    [Fact]
+    public void DepthOnlyBreaksTiesAndNeverBeatsABetterScore()
+    {
+        // A deep folder named exactly ".claude" outranks ".claude.json" at the top of the disk.
+        var rows = new List<NameRow>
+        {
+            Row(".claude.json", @"C:\.claude.json", score: 0.89f),
+            Row(".claude", @"C:\a\b\c\d\.claude", score: 0.99f),
+        };
+        SearchResults r = ResultMapper.Build("x", rows, new SearchQuery("x"), SearchSort.Best, 1.0,
+            (_, _) => ResultMapper.Stat.Missing);
+        Assert.Equal(".claude", r.Rows[0].Name);
+    }
+
+    [Fact]
     public void NewestAndLargestReorderTheSameRows()
     {
         var rows = new List<NameRow> { Row("old-big.txt", score: 0.9f), Row("new-small.txt", score: 0.1f) };

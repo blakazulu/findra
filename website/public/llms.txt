@@ -2,7 +2,7 @@
 
 > A desktop search widget for Windows. A capsule sits on the desktop and a global hotkey brings
 > it up from anywhere; it answers filename searches from an in-RAM index in
-> 0.60 to 3.78 ms median across five measured queries,
+> 2.13 to 3.77 ms median across five measured queries,
 > and can also search what is written inside documents, what a photograph shows and
 > what somebody said out loud in a recording. Free, open source under Apache-2.0, and nothing
 > leaves the machine it runs on.
@@ -170,10 +170,10 @@ inside files is off until somebody turns it on, because it walks every drive and
 hours. `findra --content on` starts it and `findra --content off` stops it without discarding
 anything already read.
 
-**How fast is a filename search?** Under 4 ms: 0.60 to 3.78 ms median round trip for every query
-measured, 0.60 ms for "config", including the hop between processes. The worst single sample
-across the five measured name queries was 5.36 ms. 1,780,595 names were enumerated off the volume
-in 5.4 seconds when the name helper started, and the index holding them takes 200.3 MB of RAM.
+**How fast is a filename search?** Under 4 ms: 2.13 to 3.77 ms median round trip for every query
+measured, 2.13 ms for "invoice", including the hop between processes. The worst single sample
+across the five measured name queries was 4.76 ms. 1,339,635 names were enumerated off the volume
+in 2.4 seconds when the name helper started, and the index holding them takes 172.0 MB of RAM.
 Measured with `findra --searchbench` on an AMD Ryzen 9 9900X3D, 47.1 GB of RAM, an NVMe SSD,
 Windows 11 Pro 10.0.26200.9445. Every table is on https://findra-search.netlify.app/numbers/.
 Yours will differ.

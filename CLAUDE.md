@@ -396,6 +396,12 @@ what to enqueue):
 - **Name search is async everywhere** - a round trip, not an in-RAM `IndexOf`.
 - **Every query carries a generation counter, stamped on the reply, checked by the UI**, so a late
   answer cannot overwrite a newer result. Needs an explicit adversarial test.
+- **The index keeps the best `max` hits of the whole scan, never the first `max` it meets** (names
+  sit in the order the disk listed them). Ties go to fewer folders down, then the shorter path:
+  `Rank` is that order, shared by `NameIndex.Best`, the helper's merge across volumes and the card.
+  **Depth only breaks ties**; it never beats a better score. `NameIndex.Depth` remembers answers
+  in `_depthOf`, thrown away when a folder moves or is deleted. The cost is per match: a query
+  matching most names reads the whole index instead of stopping at the cap.
 
 **The helper's memory is `NameIndex.ResidentBytes`, never `BufferBytes`** (the names alone, about a
 third). Building doubles every array and `Trim` copies each once more, so `RunAsync` runs one
