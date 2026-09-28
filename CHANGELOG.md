@@ -16,7 +16,7 @@ and Findra follows [Semantic Versioning](https://semver.org/spec/v2.0.0/).
   Windows asks for permission, Findra closes while the new version installs, and it starts again
   when the installer is done.
   If Windows is not given permission, or winget cannot run the upgrade, the window says so and
-  nothing has changed.
+  nothing has changed. Cancel stops a download part-way and deletes what arrived.
 - Documentation: the design and the implementation plan for the update window.
 
 ### Changed
