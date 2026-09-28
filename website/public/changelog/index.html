@@ -40,7 +40,7 @@
       "name": "Findra changelog - every release and what it changed",
       "description": "What each Findra release added, changed and fixed, newest first. The release notes on GitHub are these same sections.",
       "inLanguage": "en",
-      "dateModified": "2026-09-28",
+      "dateModified": "2026-09-29",
       "isPartOf": {
         "@id": "https://findra-search.netlify.app/#site"
       },
@@ -129,7 +129,7 @@
       <span class="kicker">CHANGELOG</span>
       <h1>Every release, and what it changed for you.</h1>
       <div class="doc-meta">
-        <span class="d">Findra 0.6.1 &middot; last reviewed 2026-09-28</span>
+        <span class="d">Findra 0.6.2 &middot; last reviewed 2026-09-29</span>
         <a class="doc-chip on" href="/changelog.md">Read as Markdown</a>
         <a class="doc-chip" href="https://github.com/blakazulu/findra/blob/main/CHANGELOG.md" rel="noopener">History on GitHub</a>
       </div>
@@ -139,6 +139,17 @@
       <p>All notable changes to Findra are documented here.</p>
 
       <p>The format follows <a href="https://keepachangelog.com/en/1.1.0/">Keep a Changelog 1.1.0</a>, and Findra follows <a href="https://semver.org/spec/v2.0.0/">Semantic Versioning</a>.</p>
+
+      <h2><a href="https://github.com/blakazulu/findra/releases/tag/v0.6.2">0.6.2 - 29 September 2026</a></h2>
+
+      <h3>Changed</h3>
+
+      <ul>
+        <li><strong>Quit closes all of Findra.</strong> The name search helper used to keep running after Quit, so Task Manager still listed Findra. It now stops too, and starts again the next time you open Findra. Names take a few seconds to answer after that, while the disk is read again.</li>
+        <li><strong>Signing in to Windows starts the helper only if it starts Findra too.</strong> With &quot;Start Findra when I sign in&quot; off, or Findra switched off under Startup apps, nothing of Findra's runs after a restart until you open it.</li>
+        <li><strong>After an update, Check for updates stays where it always is in the tray menu</strong>, with a greyed line above it naming the version now running. The item itself used to read &quot;Updated to 0.6.1&quot;, which looked like an offer to update again.</li>
+        <li><strong>The log records each step of Update now</strong>: the download, its checksum, the installer or winget starting, and whatever stopped it. A log sent with a report now shows what happened.</li>
+      </ul>
 
       <h2><a href="https://github.com/blakazulu/findra/releases/tag/v0.6.1">0.6.1 - 28 September 2026</a></h2>
 

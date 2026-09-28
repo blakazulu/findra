@@ -5,6 +5,22 @@ All notable changes to Findra are documented here.
 The format follows [Keep a Changelog 1.1.0](https://keepachangelog.com/en/1.1.0/),
 and Findra follows [Semantic Versioning](https://semver.org/spec/v2.0.0/).
 
+## [0.6.2 - 29 September 2026](https://github.com/blakazulu/findra/releases/tag/v0.6.2)
+
+### Changed
+
+- **Quit closes all of Findra.** The name search helper used to keep running after Quit, so Task
+  Manager still listed Findra. It now stops too, and starts again the next time you open Findra.
+  Names take a few seconds to answer after that, while the disk is read again.
+- **Signing in to Windows starts the helper only if it starts Findra too.** With "Start Findra
+  when I sign in" off, or Findra switched off under Startup apps, nothing of Findra's runs after
+  a restart until you open it.
+- **After an update, Check for updates stays where it always is in the tray menu**, with a greyed
+  line above it naming the version now running. The item itself used to read "Updated to 0.6.1",
+  which looked like an offer to update again.
+- **The log records each step of Update now**: the download, its checksum, the installer or winget
+  starting, and whatever stopped it. A log sent with a report now shows what happened.
+
 ## [0.6.1 - 28 September 2026](https://github.com/blakazulu/findra/releases/tag/v0.6.1)
 
 ### Changed
