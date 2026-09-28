@@ -21,7 +21,6 @@ public class SettingsActionTests
         public void PickFolder() => Calls.Add("folder");
         public void InstallCapability(Capability c) => Calls.Add("install:" + c);
         public void CheckNow() => Calls.Add("check");
-        public void UpdateNow() => Calls.Add("update");
         public void RecentreCapsule() => Calls.Add("recentre");
         public void StartIndexing() => Calls.Add("start");
         public void OpenLogs() => Calls.Add("logs");
@@ -49,7 +48,6 @@ public class SettingsActionTests
             [SettingsAction.PickFolder] = "folder",
             [SettingsAction.InstallCapability] = "install:Photos",
             [SettingsAction.CheckNow] = "check",
-            [SettingsAction.UpdateNow] = "update",
             [SettingsAction.RecentreCapsule] = "recentre",
             [SettingsAction.StartIndexing] = "start",
             [SettingsAction.OpenLogs] = "logs",

@@ -57,7 +57,7 @@ findra.exe --searchprobe [query]      # end to end: which process answered, the 
 findra.exe --searchmodels             # models present, loading, agreeing; provider per runtime
 findra.exe --searchindex [file|folder|q:query|why:path]...   # indexed/queued; paths queue and
                                       # drain, q: queries, why:<path> explains ONE file, read-only
-findra.exe --searchshot out.png <state> [palette]   # thirty-two states, listed below
+findra.exe --searchshot out.png <state> [palette]   # forty states, listed below
 findra.exe --searchtest               # engine self-check
 findra.exe --searchbench [out.md] [corpus]   # measured numbers, pasteable Markdown; `corpus` is
                                       # how many files it generates
@@ -65,13 +65,15 @@ findra.exe --version                  # print the version and log location, then
 ```
 
 The `--searchshot` states are `SearchShot.States`, and that list is the only definition of them.
-Fourteen draw the card, ten the settings window and eight the first-run screen:
+Fourteen draw the card, seven the settings window, eight the first-run screen and eleven the update
+window:
 
 ```
 capsule  empty  indexing  contentmode  contentwaiting  typing  results  noresults  many  adv
 opening  openingempty  selected  starting
 settings  settingsopening  settingssearches  settingscontent  settingsaddons  settingsremove  settingsabout
-settingsuptodate  settingsupdate  settingsasking
+updatechecking  updateuptodate  updateunreachable  updateavailable  updateavailablewinget  updatedownloading
+updatedownloadfailed  updateinstalling  updatedidnotrun  updatewinget  updatewingetfailed
 firstrun  firstruninstalled  firstrunspeech  firstrundownloading
 firstrunfinished  firstrunready  firstrunnames  firstrunworking
 ```

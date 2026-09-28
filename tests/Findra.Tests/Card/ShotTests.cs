@@ -33,8 +33,12 @@ public class ShotTests
             // Measured, not guessed. With Derived.From returning the ground for all fourteen
             // fields the nine states span 46-191 distinct colours; as they actually paint they
             // span 382-2583. 280 sits between the two with about a third of headroom either way.
+            // The update window's three states without buttons are a title and a line on one
+            // small panel, measured the same way: 142-185 as painted, 43-71 flattened. 110 sits
+            // between those with the same headroom.
+            int floor = state is "updatechecking" or "updateinstalling" or "updatewinget" ? 110 : 280;
             int colours = Distinct(bmp, 0, bmp.Width);
-            Assert.True(colours >= 280,
+            Assert.True(colours >= floor,
                 $"{state}/{palette}: only {colours} distinct colours - the render is flat");
 
             // The global count is blind in the three states that draw result rows: their kind

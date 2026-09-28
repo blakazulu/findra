@@ -23,6 +23,8 @@ and Findra follows [Semantic Versioning](https://semver.org/spec/v2.0.0/).
 
 - **Check now checks, even with the daily check switched off.** Turning the switch off stops the
   once-a-day check in the background; pressing Check now still asks, once, because you asked.
+- **Settings no longer puts an update panel over its page.** Check now opens the update window,
+  the same one the tray opens.
 
 ## [0.5.1] - 2026-09-28
 

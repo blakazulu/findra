@@ -25,7 +25,9 @@ public static class SearchShot
         "noresults", "many", "adv", "opening", "openingempty", "selected", "starting",
         "settings", "settingsopening", "settingssearches", "settingscontent", "settingsaddons",
         "settingsremove", "settingsabout",
-        "settingsuptodate", "settingsupdate", "settingsasking",
+        "updatechecking", "updateuptodate", "updateunreachable", "updateavailable", "updateavailablewinget",
+        "updatedownloading", "updatedownloadfailed", "updateinstalling", "updatedidnotrun", "updatewinget",
+        "updatewingetfailed",
         "firstrun", "firstruninstalled", "firstrunspeech", "firstrundownloading", "firstrunfinished",
         "firstrunready", "firstrunnames", "firstrunworking",
     ];
@@ -72,6 +74,7 @@ public static class SearchShot
         using SKBitmap content =
             state == "capsule" ? RenderCapsule(d, face)
             : state.StartsWith("settings", StringComparison.Ordinal) ? RenderSettings(state, d, face)
+            : state.StartsWith("update", StringComparison.Ordinal) ? RenderUpdate(state, d, face)
             : state.StartsWith("firstrun", StringComparison.Ordinal) ? RenderFirstRun(state, d, face)
             : RenderCard(state, d, face);
 
@@ -144,20 +147,10 @@ public static class SearchShot
             // The three prompt states are About with a panel over it: the panel is only ever
             // raised by the button that lives there, so any other section behind it would be a
             // picture of something that cannot happen.
-            "settingsabout" or "settingsuptodate" or "settingsupdate" or "settingsasking" => Section.About,
+            "settingsabout" => Section.About,
             _ => Section.Look,
         };
 
-        // Each of the three answers the panel can give, because they are three different shapes -
-        // two buttons and news, one button and reassurance, and no button at all while the request
-        // is out. A surface reviewed in only one of them is a painter branch nobody has looked at.
-        UpdatePromptState prompt = state switch
-        {
-            "settingsuptodate" => UpdatePromptState.UpToDate,
-            "settingsupdate" => UpdatePromptState.Available,
-            "settingsasking" => UpdatePromptState.Asking,
-            _ => UpdatePromptState.None,
-        };
 
         var config = Config.Default with
         {
@@ -194,8 +187,7 @@ public static class SearchShot
             ReadingSentence = IndexStatus.Sentence(true, "indexing", 273_845, 1_204, alive: true,
                                                    new IndexExtra(Processor: "other programs hold 2.04 GB", LeftOut: 4_210, Failed: 12)),
             ReadingTone = StatusTone.Reading,
-            // The question over the page, with something removed alongside it and the button
-            // somebody would press hovered, as the update panel's states do.
+            // The question over the page, with the button somebody would press hovered.
             Removing = state == "settingsremove" ? Capability.Speech : null,
             RemoveHover = state == "settingsremove" ? RemoveTarget.Remove : RemoveTarget.None,
             // One codec on this machine, so the row's number and the total are the same 212. The
@@ -204,13 +196,6 @@ public static class SearchShot
             BlockedVideos = 212, BlockedCodec = "HEVC", BlockedForCodec = 212,
             Version = BuildInfo.Version, Update = UpdateState.Available, Latest = "1.4.0",
             HoverTarget = PanelTarget.Section, HoverRow = 1,
-            Prompt = prompt,
-            // Hovered on purpose, on the button somebody would actually press: the hover fill is
-            // half of what makes a pill read as pressable, and a state that never hovers one
-            // proves only its resting colour.
-            PromptHover = prompt == UpdatePromptState.Available ? UpdatePromptTarget.Go
-                        : prompt == UpdatePromptState.None ? UpdatePromptTarget.None
-                        : UpdatePromptTarget.Close,
         };
 
         int w = (int)Math.Ceiling(RailLayout.Width), h = (int)Math.Ceiling(RailLayout.Height);
@@ -220,6 +205,55 @@ public static class SearchShot
         surface.Canvas.Flush();
         var bmp = new SKBitmap(info);
         surface.ReadPixels(info, bmp.GetPixels(), info.RowBytes, 0, 0);
+        return bmp;
+    }
+
+    /// <summary>
+    /// The update window in every state it can show, each from the real flow: problems come through
+    /// <see cref="UpdateFlow.Downloaded"/> and <see cref="UpdateFlow.HandedOff"/> rather than being
+    /// typed here, so a shot cannot say what the product would not. The installer and winget offers
+    /// are separate states because their bodies differ.
+    /// </summary>
+    private static SKBitmap RenderUpdate(string state, Derived d, SKTypeface face)
+    {
+        var installer = new ReleaseAsset("findra-setup-x64.exe",
+            "https://github.com/blakazulu/findra/releases/download/v1.4.0/findra-setup-x64.exe", 85_727_274, new string('0', 64));
+        bool winget = state.Contains("winget", StringComparison.Ordinal);
+        UpdateView start = UpdateFlow.Start("1.3.0", winget ? "winget" : "installer");
+        UpdateView offer = start with { Step = UpdateStep.Available, Latest = "1.4.0", Installer = winget ? null : installer };
+        UpdateView downloading = UpdateFlow.Go(offer).View with { Got = 36_000_000 };
+
+        UpdateView v = state switch
+        {
+            "updatechecking" => start,
+            "updateuptodate" => start with { Step = UpdateStep.UpToDate, Latest = "1.3.0" },
+            "updateunreachable" => start with { Step = UpdateStep.Unreachable },
+            "updateavailable" or "updateavailablewinget" => offer,
+            "updatedownloading" => downloading,
+            "updatedownloadfailed" => UpdateFlow.Downloaded(downloading, DownloadResult.Failed(DownloadFailure.Digest, "")).View,
+            "updateinstalling" => downloading with { Step = UpdateStep.Installing },
+            "updatedidnotrun" => UpdateFlow.HandedOff(downloading with { Step = UpdateStep.Installing },
+                                     new Handoff(HandoffOutcome.DidNotRun, UpdateHandoff.PermissionRefused)),
+            "updatewinget" => UpdateFlow.Go(offer).View,
+            "updatewingetfailed" => UpdateFlow.HandedOff(UpdateFlow.Go(offer).View,
+                                        new Handoff(HandoffOutcome.WingetFailed, "Installer failed with exit code: 1")),
+            _ => throw new ArgumentOutOfRangeException(nameof(state), state, "no update view for this shot"),
+        };
+
+        // Hovered on the button somebody would press, as the other surfaces' shots are: the hover
+        // fill is half of what makes a pill read as pressable.
+        int buttons = UpdatePrompt.Buttons(v);
+        UpdatePromptTarget hover = buttons == 2 ? UpdatePromptTarget.Go
+                                 : buttons == 1 ? UpdatePromptTarget.Close : UpdatePromptTarget.None;
+
+        SKRect surface = UpdatePainter.Surface(v, face);
+        var info = new SKImageInfo((int)Math.Ceiling(surface.Width), (int)Math.Ceiling(surface.Height),
+                                   SKColorType.Bgra8888, SKAlphaType.Premul);
+        using SKSurface s = SKSurface.Create(info);
+        UpdatePainter.Paint(s.Canvas, v, hover, d, face);
+        s.Canvas.Flush();
+        var bmp = new SKBitmap(info);
+        s.ReadPixels(info, bmp.GetPixels(), info.RowBytes, 0, 0);
         return bmp;
     }
 

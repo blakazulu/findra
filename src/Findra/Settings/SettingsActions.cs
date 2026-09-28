@@ -14,10 +14,6 @@ public interface ISettingsHost
     void InstallCapability(Capability capability);
     void CheckNow();
 
-    /// <summary>Start the upgrade. Never by replacing anything itself: winget in a visible
-    /// window for a winget copy, the releases page for anything else.</summary>
-    void UpdateNow();
-
     void RecentreCapsule();
     void StartIndexing();
 
@@ -57,7 +53,6 @@ public static class SettingsActions
             case SettingsAction.RegisterHelper: host.RegisterHelper(); return;
             case SettingsAction.PickFolder: host.PickFolder(); return;
             case SettingsAction.CheckNow: host.CheckNow(); return;
-            case SettingsAction.UpdateNow: host.UpdateNow(); return;
             case SettingsAction.RecentreCapsule: host.RecentreCapsule(); return;
             case SettingsAction.StartIndexing: host.StartIndexing(); return;
             case SettingsAction.OpenLogs: host.OpenLogs(); return;

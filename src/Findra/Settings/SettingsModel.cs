@@ -50,12 +50,6 @@ public enum SettingsAction
     /// yesterday's log, and a folder reaches both.</summary>
     OpenLogs,
 
-    /// <summary>Start the upgrade the way the person would have started it: winget in a window
-    /// they can watch, or the releases page. Findra still replaces nothing itself - spec 9b's
-    /// rule is about who does the replacing, and the answer stays winget or the installer.
-    /// </summary>
-    UpdateNow,
-
     /// <summary>Open the Store page for a codec Windows has not got. Findra installs nothing
     /// itself - the same rule updates follow - so this opens a page and gets out of the way.
     /// </summary>
@@ -213,27 +207,9 @@ public sealed record SettingsState(Config Config)
     public int HoverRow { get; init; } = -1;
     public int HoverOption { get; init; } = -1;
 
-    /// <summary>
-    /// The update panel, or <see cref="UpdatePromptState.None"/> when there is not one.
-    ///
-    /// <para>A field of its own rather than something derived from <see cref="Update"/>, because
-    /// the two answer different questions. <c>Update</c> is what the last check FOUND, whenever it
-    /// ran; this is whether somebody is standing in front of a question they asked. The background
-    /// check runs on startup at most once a day and must never raise a panel over anything - a
-    /// person who asked nothing is not waiting for an answer.</para>
-    ///
-    /// <para>Transient, like <see cref="Busy"/>: it belongs to this window's session and is never
-    /// written to the configuration.</para>
-    /// </summary>
-    public UpdatePromptState Prompt { get; init; } = UpdatePromptState.None;
-
-    /// <summary>Which button in the panel the pointer is over. Separate from
-    /// <see cref="HoverTarget"/> because the panel is over the pane rather than in it, and a row
-    /// underneath must not light up through it.</summary>
-    public UpdatePromptTarget PromptHover { get; init; } = UpdatePromptTarget.None;
-
     /// <summary>The add-on whose Remove question is up, or null. Transient, like
-    /// <see cref="Prompt"/>.</summary>
+    /// <see cref="Busy"/>: it belongs to this window's session and is never written to the
+    /// configuration.</summary>
     public Capability? Removing { get; init; }
 
     /// <summary>The Remove question's tick: keep what the add-on already found. On by default,
@@ -683,8 +659,8 @@ public static class SettingsModel
 
     // ---- About -------------------------------------------------------------------------------
 
-    /// <summary>What About says about updates. Findra never installs anything itself (spec §9b),
-    /// so this is a sentence and never a button that acts.</summary>
+    /// <summary>What About says about updates: the last answer, in a sentence. Check now opens the
+    /// update window, which is where anything is done about it.</summary>
     public static string AboutUpdateLine(string version, UpdateState state, string? latest, string? installSource) =>
         state switch
         {
@@ -710,7 +686,7 @@ public static class SettingsModel
             on: s.Config.CheckForUpdates,
             note: "One anonymous request to GitHub, at most once every 24 hours, in the background. " +
                   "No query parameters, no machine or install identifier, nothing about your files. " +
-                  "Findra never installs anything itself, and off means the request is not made."),
+                  "Off stops it; Check now still asks when you press it."),
         Control.Plain(ControlId.CheckNow, ControlKind.Button, "Check now",
                       s.Waiting(ControlId.CheckNow) ? "Asking..." : "Check"),
         Control.Plain(ControlId.InstalledVia, ControlKind.Text, "Installed via", s.Config.InstallSource ?? "unknown"),

@@ -113,40 +113,9 @@ public sealed class SettingsWindow : Window
     public void RemovingDone(CapabilitySet installed) =>
         _canvas.Refresh(s => s with { Installed = installed, RemovingNow = null });
 
-    /// <summary>What the last check found. <paramref name="raise"/> also puts the panel up, and
-    /// is true only when somebody pressed for it: the daily background check must change the
-    /// About row and nothing else, because a person who asked no question is not waiting for an
-    /// answer.</summary>
-    public void NoteUpdate(UpdateState update, string? latest, bool raise = false) =>
-        _canvas.Refresh(s => s with
-        {
-            Update = update,
-            Latest = latest,
-            Prompt = raise ? Prompted(update) : s.Prompt,
-        });
-
-    /// <summary>Put the panel up, take it down, or say the request is out. Separate from
-    /// <see cref="NoteUpdate"/> because the Asking state has no answer behind it yet.</summary>
-    public void ShowUpdatePrompt(UpdatePromptState state) =>
-        _canvas.Refresh(s => s with { Prompt = state, PromptHover = UpdatePromptTarget.None });
-
-    /// <summary>
-    /// What the check found, as the panel says it.
-    ///
-    /// <para><c>Disabled</c> gets an arm of its own because <c>CheckAsync</c> short-circuits on it
-    /// even when forced - pressing Check now with the switch off makes no request at all, and
-    /// answering that with silence is the defect this panel exists to remove. <c>NotDue</c> cannot
-    /// happen on a forced check and takes the panel down rather than inventing a sentence.</para>
-    /// </summary>
-    private static UpdatePromptState Prompted(UpdateState update) => update switch
-    {
-        UpdateState.Current => UpdatePromptState.UpToDate,
-        UpdateState.Available => UpdatePromptState.Available,
-        UpdateState.Unknown => UpdatePromptState.Unreachable,
-        UpdateState.Disabled => UpdatePromptState.Off,
-        UpdateState.NotDue => UpdatePromptState.None,
-        _ => throw new ArgumentOutOfRangeException(nameof(update), update, "no prompt for this update state"),
-    };
+    /// <summary>What the last check found, for the About row.</summary>
+    public void NoteUpdate(UpdateState update, string? latest) =>
+        _canvas.Refresh(s => s with { Update = update, Latest = latest });
 
     /// <summary>
     /// What the index is doing now, pushed while the window is open.
@@ -312,21 +281,6 @@ public sealed class SettingsWindow : Window
             SettingsModel.OptionCounts(_state), SettingsModel.NoteLines(_state, _face),
             SettingsModel.ListRows(_state));
 
-        /// <summary>The panel's rectangle for the state it is in, or an empty one when it is not
-        /// up. The body wraps, so the height is measured rather than assumed - the painter does
-        /// the same measurement and the two disagreeing is a button drawn where nothing is
-        /// hit-tested.</summary>
-        private SKRect PromptPanel()
-        {
-            if (_state.Prompt == UpdatePromptState.None) return SKRect.Empty;
-            string body = UpdatePrompt.Body(_state.Prompt, _state.Version, _state.Latest,
-                                            _state.Config.InstallSource);
-            int lines = Parts.Wrap(body, _face, Parts.NoteSize,
-                                   UpdatePrompt.Width - 2 * UpdatePrompt.Pad).Count;
-            return UpdatePrompt.Panel(RailLayout.Width, RailLayout.Height, lines,
-                                      UpdatePrompt.Buttons(_state.Prompt));
-        }
-
         private RemoveTarget RemoveAt(Point p)
         {
             if (_state.Removing is not { } c) return RemoveTarget.None;
@@ -335,28 +289,11 @@ public sealed class SettingsWindow : Window
             return RemovePrompt.HitTest((float)p.X, (float)p.Y, panel, body, RemovePrompt.KeepLabel(c).Length > 0 ? keep : 0);
         }
 
-        private UpdatePromptTarget PromptAt(Point p) =>
-            _state.Prompt == UpdatePromptState.None
-                ? UpdatePromptTarget.None
-                : UpdatePrompt.HitTest((float)p.X, (float)p.Y, PromptPanel(),
-                                       UpdatePrompt.Buttons(_state.Prompt));
-
         protected override void OnPointerMoved(PointerEventArgs e)
         {
-            // While the panel is up it is the only thing under the pointer. The pane behind is
-            // dimmed and inert, and a row that lit up through the scrim would be a control
-            // somebody can see and cannot press.
-            if (_state.Prompt != UpdatePromptState.None)
-            {
-                UpdatePromptTarget over = PromptAt(At(e));
-                if (over == _state.PromptHover) return;
-                _state = _state with { PromptHover = over, HoverTarget = PanelTarget.None, HoverRow = -1 };
-                Cursor = PointerCursor.Of(Pointers.ForPrompt(over));
-                InvalidateVisual();
-                return;
-            }
-
-            // The Remove question, on the same terms: while it is up it is the only thing here.
+            // The Remove question: while it is up it is the only thing under the pointer. The pane
+            // behind is dimmed and inert, and a row that lit up through the scrim would be a
+            // control somebody can see and cannot press.
             if (_state.Removing is not null)
             {
                 RemoveTarget over = RemoveAt(At(e));
@@ -392,27 +329,9 @@ public sealed class SettingsWindow : Window
             Focus();
             Point p = At(e);
 
-            // The panel first, and nothing else while it is up - including the window's own close
-            // cross and the title strip. A question is answered before the window it is over.
-            if (_state.Prompt != UpdatePromptState.None)
-            {
-                switch (PromptAt(p))
-                {
-                    case UpdatePromptTarget.Close:
-                        _state = _state with { Prompt = UpdatePromptState.None, PromptHover = UpdatePromptTarget.None };
-                        Cursor = PointerCursor.Of(PointerShape.Arrow);
-                        InvalidateVisual();
-                        return;
-                    case UpdatePromptTarget.Go:
-                        // The host takes the panel down once it has started something, so a failed
-                        // launch leaves the question on screen rather than closing on a lie.
-                        SettingsActions.Dispatch(SettingsAction.UpdateNow, "", _host);
-                        return;
-                    default:
-                        return;   // the scrim and the panel's own body answer nothing
-                }
-            }
-
+            // The Remove question first, and nothing else while it is up - including the window's
+            // own close cross and the title strip. A question is answered before the window it is
+            // over.
             if (_state.Removing is not null)
             {
                 SettingsState asked = _state;
