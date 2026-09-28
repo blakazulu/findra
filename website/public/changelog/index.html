@@ -129,7 +129,7 @@
       <span class="kicker">CHANGELOG</span>
       <h1>Every release, and what it changed for you.</h1>
       <div class="doc-meta">
-        <span class="d">Findra 0.6.0 &middot; last reviewed 2026-09-28</span>
+        <span class="d">Findra 0.6.1 &middot; last reviewed 2026-09-28</span>
         <a class="doc-chip on" href="/changelog.md">Read as Markdown</a>
         <a class="doc-chip" href="https://github.com/blakazulu/findra/blob/main/CHANGELOG.md" rel="noopener">History on GitHub</a>
       </div>
@@ -139,6 +139,25 @@
       <p>All notable changes to Findra are documented here.</p>
 
       <p>The format follows <a href="https://keepachangelog.com/en/1.1.0/">Keep a Changelog 1.1.0</a>, and Findra follows <a href="https://semver.org/spec/v2.0.0/">Semantic Versioning</a>.</p>
+
+      <h2><a href="https://github.com/blakazulu/findra/releases/tag/v0.6.1">0.6.1 - 28 September 2026</a></h2>
+
+      <h3>Changed</h3>
+
+      <ul>
+        <li><strong>Settings' About line matches the update window.</strong> When a newer version exists it says that Check now installs it, or updates it with winget, instead of sending you to download it yourself.</li>
+      </ul>
+
+      <h3>Fixed</h3>
+
+      <ul>
+        <li><strong>Refusing Windows' permission prompt during an update is said plainly</strong>, instead of as the installer's exit code.</li>
+        <li><strong>Closing the update window while it checks no longer tells Settings the check failed.</strong></li>
+        <li><strong>A download larger than the release says is reported as too large</strong>, not as incomplete.</li>
+        <li><strong>An installer that did not run is deleted straight away</strong>, so an uninstall before Findra's next start no longer leaves about 80 MB behind.</li>
+        <li><strong>The update window stays where you put it during a download.</strong> Moved partly off the screen, it was pulled back at every step; the bar now also repaints once per percent rather than at every chunk.</li>
+        <li><strong>A silent install no longer starts Findra when it could not tell whether Findra had been running.</strong></li>
+      </ul>
 
       <h2><a href="https://github.com/blakazulu/findra/releases/tag/v0.6.0">0.6.0 - 28 September 2026</a></h2>
 

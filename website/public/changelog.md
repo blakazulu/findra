@@ -5,6 +5,28 @@ All notable changes to Findra are documented here.
 The format follows [Keep a Changelog 1.1.0](https://keepachangelog.com/en/1.1.0/),
 and Findra follows [Semantic Versioning](https://semver.org/spec/v2.0.0/).
 
+## [0.6.1 - 28 September 2026](https://github.com/blakazulu/findra/releases/tag/v0.6.1)
+
+### Changed
+
+- **Settings' About line matches the update window.** When a newer version exists it says that
+  Check now installs it, or updates it with winget, instead of sending you to download it
+  yourself.
+
+### Fixed
+
+- **Refusing Windows' permission prompt during an update is said plainly**, instead of as the
+  installer's exit code.
+- **Closing the update window while it checks no longer tells Settings the check failed.**
+- **A download larger than the release says is reported as too large**, not as incomplete.
+- **An installer that did not run is deleted straight away**, so an uninstall before Findra's
+  next start no longer leaves about 80 MB behind.
+- **The update window stays where you put it during a download.** Moved partly off the screen,
+  it was pulled back at every step; the bar now also repaints once per percent rather than at
+  every chunk.
+- **A silent install no longer starts Findra when it could not tell whether Findra had been
+  running.**
+
 ## [0.6.0 - 28 September 2026](https://github.com/blakazulu/findra/releases/tag/v0.6.0)
 
 ### Added
