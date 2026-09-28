@@ -345,7 +345,7 @@ public static class SettingsModel
         Control.Plain(ControlId.Autostart, ControlKind.Toggle, "Start Findra when I sign in", on: s.StartsAtLogon),
         s.Helper == HelperTaskState.Registered
             ? Control.Plain(ControlId.Helper, ControlKind.Text, "The name helper", "registered",
-                note: "It starts at sign-in and reads file names. The only part needing administrator rights.")
+                note: "It runs while Findra does and reads file names. The only part needing administrator rights.")
             : Control.Plain(ControlId.Helper, ControlKind.Button, "The name helper",
                             s.Waiting(ControlId.Helper) ? "Asking Windows..." : "Register it",
                 note: s.Helper == HelperTaskState.Unknown

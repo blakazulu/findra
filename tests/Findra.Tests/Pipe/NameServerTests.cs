@@ -95,6 +95,46 @@ public class NameServerTests
         await cts.CancelAsync();
     }
 
+    private static Dictionary<char, VolumeView> Views() =>
+        new() { ['C'] = new VolumeView(Sample(), JournalId: 0, NextUsn: 0, EnumerateMs: 0) };
+
+    [Fact]
+    public async Task AStopIsAnsweredFirstAndThenStopsTheHelper()
+    {
+        // Quit means all of Findra. The answer goes out BEFORE the stop: stopping cancels this very
+        // session, and an answer written after it never arrives, so Quit would wait for nothing.
+        var (server, client) = Pair();
+        var cts = new CancellationTokenSource();
+        int stops = 0;
+        Task serving = NameServer.Serve(server, Views(), gate: null, bus: null, gap: null, cts.Token,
+                                        stop: () => { stops++; cts.Cancel(); });
+
+        await Frame.WriteAsync(client, Envelope.Pack(Envelope.KindStop, new StopRequest()), default);
+        StopReply reply = Envelope.Unpack((await Frame.ReadAsync(client, default).WaitAsync(TimeSpan.FromSeconds(5)))!).Body<StopReply>();
+
+        Assert.True(reply.Stopping);
+        Assert.Equal(Environment.ProcessId, reply.ProcessId);
+        await serving.WaitAsync(TimeSpan.FromSeconds(5));
+        Assert.Equal(1, stops);
+    }
+
+    [Fact]
+    public async Task ASessionWithNothingToStopSaysSoAndKeepsServing()
+    {
+        var (server, client) = Pair();
+        var cts = new CancellationTokenSource();
+        _ = NameServer.Serve(server, new Dictionary<char, NameIndex> { ['C'] = Sample() }, cts.Token);
+
+        await Frame.WriteAsync(client, Envelope.Pack(Envelope.KindStop, new StopRequest()), default);
+        StopReply reply = Envelope.Unpack((await Frame.ReadAsync(client, default).WaitAsync(TimeSpan.FromSeconds(5)))!).Body<StopReply>();
+        await Frame.WriteAsync(client, Envelope.Pack(Envelope.KindQuery, new QueryRequest(3, "sunset", 50)), default);
+        QueryReply query = Envelope.Unpack((await Frame.ReadAsync(client, default))!).Body<QueryReply>();
+
+        Assert.False(reply.Stopping);
+        Assert.Equal(3, query.Gen);
+        await cts.CancelAsync();
+    }
+
     [Fact]
     public async Task IgnoresAnUnknownKindAndKeepsServing()
     {

@@ -938,7 +938,11 @@ event.
 - untick "Show capsule": it disappears and **the hotkey still works**;
 - click "Check for updates": the update window opens, checks and answers;
 - then Quit, and confirm the log's closing lines, that `%LOCALAPPDATA%\Findra\ui.json` is **gone**,
-  and that no `findra` process survives **except the elevated helper**.
+  and that no `findra` process survives, **the elevated helper included** (the log says
+  `the names helper (process N) has stopped`); start Findra again and names answer within seconds;
+- turn "Start Findra when I sign in" off, Quit and restart Windows: after signing in **no**
+  `findra` process runs and the log says `the helper is not staying`; turn it back on and restart:
+  Findra and the helper both run.
 
 **A failure where `ui.json` survives means** the interface did not quit cleanly, and
 `--searchprobe` will report a running interface that is not there. That is why step 0.6 deleted the
@@ -1321,8 +1325,8 @@ halves stable.
 tray, press Update now, and answer the permission prompt Yes.
 
 **Pass:** the window shows the bar counting up to the installer's size, then "Installing"; Findra
-closes; the release installs; `findra --version` names the release; the next start's tray item
-reads "Updated to" the release.
+closes; the release installs; `findra --version` names the release; the next start's tray menu
+has a greyed "Now on" line naming the release above Check for updates.
 
 **A failure at the download means** the host rule or the digest refused it: the window says
 which, and the log line under `update` names the host or the mismatch.

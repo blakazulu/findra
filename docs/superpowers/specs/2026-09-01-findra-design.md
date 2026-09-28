@@ -155,6 +155,15 @@ content.
 The helper registers itself on first run via a `HighestAvailable` logon scheduled task
 (`schtasks` with an XML definition). One UAC prompt, once, ever.
 
+Quit stops it too. The interface asks rather than kills, so the helper closes its volume handles
+and logs its own end: a `stop` message over the pipe, answered before the helper stops, and waits until the pipe goes quiet. The task
+stays registered: the next launch runs it again.
+
+At sign-in the task still fires, and the helper stays only when Findra starts too: when the
+interface is already running (it ran the task), when Findra starts at sign-in and is not switched
+off under Startup apps, or when somebody started the helper from a terminal. Otherwise it exits
+before reading the disk. Nothing about the task changes, so an upgrade asks for no permission.
+
 > **Trap.** `schtasks` CSV column headings are localized but the XML is not. Query and parse
 > the XML form, never the CSV columns.
 
@@ -648,6 +657,7 @@ The README states the same in plain language above the fold.
 | Model install | per capability | all-or-nothing asks for a Hebrew speech model to get document search |
 | Elevation | thin helper, names only | fat daemon runs untrusted decoders at high integrity; a service buys pre-logon indexing that is not wanted |
 | Indexing lifetime | stops when Findra quits | explicitly chosen |
+| Name helper lifetime | while Findra runs: from launch, or from sign-in when Findra starts at sign-in, until Quit | outliving Quit, or starting at a sign-in that did not start Findra, left an elevated process running that nobody had asked for |
 | Entry | capsule + hotkey | capsule-only is unusable with a maximised window; hotkey-first throws away the identity |
 | Palettes | six, dark+light pair, follow Windows | one look is less than wanted; the light repaint is paid once either way |
 | Theming depth | `palettes.json`, four fields | a full element manifest is generality for widgets that do not exist |

@@ -30,7 +30,7 @@ public class AutostartTests
         //
         // The subkey path is the same under either hive, so pinning it said nothing about the one
         // thing this test is named for: the edit it claimed to catch is CurrentUser becoming
-        // LocalMachine at the three call sites, and that left every assertion here green. The hive
+        // LocalMachine at the four call sites, and that left every assertion here green. The hive
         // is not a value this test can reach - Set, Clear and IsSet each open it themselves and
         // need a real registry - so it is read out of the source, which is the same shape
         // TypefaceTests uses for "only one place in the tree resolves a typeface".
@@ -40,7 +40,7 @@ public class AutostartTests
         string source = Repo.Read("src/Findra/Startup/Autostart.cs");
         Assert.DoesNotContain("Registry.LocalMachine", source, StringComparison.Ordinal);
         Assert.DoesNotContain("HKEY_LOCAL_MACHINE", source, StringComparison.Ordinal);
-        Assert.Equal(3, Regex.Matches(source, @"Registry\.CurrentUser").Count);
+        Assert.Equal(4, Regex.Matches(source, @"Registry\.CurrentUser").Count);
     }
 
     // ---- the round trip -------------------------------------------------------------------------
@@ -115,5 +115,39 @@ public class AutostartTests
         public string? Read() => throw new UnauthorizedAccessException("no");
         public void Write(string value) => throw new UnauthorizedAccessException("no");
         public void Remove() => throw new UnauthorizedAccessException("no");
+    }
+
+    // ---- whether Windows will actually start it -------------------------------------------------
+
+    private static Fake Entry() => new() { Value = @"""C:\Findra\findra.exe""" };
+
+    [Fact]
+    public void AnEntryNobodySwitchedOffStartsAtSignIn()
+    {
+        Assert.True(Autostart.StartsAtSignIn(Entry(), approval: () => null));
+        Assert.True(Autostart.StartsAtSignIn(Entry(), approval: () => [0x02, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]));
+    }
+
+    [Fact]
+    public void AnEntrySwitchedOffInStartupAppsDoesNotStartAtSignIn()
+    {
+        // Startup apps, in Task Manager or Settings, leaves the Run entry where it is and marks it
+        // off in the StartupApproved key: an odd first byte, then when it was switched off.
+        Assert.False(Autostart.StartsAtSignIn(Entry(),
+            approval: () => [0x03, 0, 0, 0, 0x0A, 0x85, 0xE6, 0x90, 0x48, 0xFC, 0xDC, 0x01]));
+        Assert.False(Autostart.StartsAtSignIn(Entry(),
+            approval: () => [0x01, 0, 0, 0, 0x0A, 0x85, 0xE6, 0x90, 0x48, 0xFC, 0xDC, 0x01]));
+    }
+
+    [Fact]
+    public void NoEntryDoesNotStartAtSignInWhateverTheMarkSays()
+        => Assert.False(Autostart.StartsAtSignIn(new Fake(), approval: () => [0x02]));
+
+    [Fact]
+    public void AMarkThatCannotBeReadBelievesTheEntry()
+    {
+        // Wrong one way, a helper stays that need not have; wrong the other, somebody who asked for
+        // Findra at sign-in waits for names until the interface starts the helper itself.
+        Assert.True(Autostart.StartsAtSignIn(Entry(), approval: () => throw new UnauthorizedAccessException("no")));
     }
 }

@@ -125,11 +125,20 @@ public static class UpdateMemory
     public static bool JustUpdated(string? lastRun, string running) =>
         !string.IsNullOrWhiteSpace(lastRun) && Remembered(lastRun, running) == UpdateState.Available;
 
-    /// <summary>The tray item's words: what it was updated to on the first start after an update,
-    /// and Check for updates every other time. It opens the update window either way.</summary>
-    public static string TrayHeader(string? updatedTo) =>
-        updatedTo is null ? "Check for updates" : $"Updated to {updatedTo}";
+    /// <summary>
+    /// The tray's update lines, top to bottom. Check for updates is always there, in the same
+    /// place, and opens the update window. On the first start after an update a greyed line above
+    /// it says which version is running. It has no verb: "Updated to 0.6.1" in the check item's
+    /// place was read as an offer to update.
+    /// </summary>
+    public static IReadOnlyList<TrayLine> TrayLines(string? updatedTo) =>
+        updatedTo is null
+            ? [new TrayLine("Check for updates", Clickable: true)]
+            : [new TrayLine($"Now on {updatedTo}", Clickable: false), new TrayLine("Check for updates", Clickable: true)];
 }
+
+/// <summary>One line of the tray menu. A line that is not clickable is drawn greyed.</summary>
+public readonly record struct TrayLine(string Text, bool Clickable);
 
 /// <summary>
 /// Everything that has to exist for Findra to be running: the settings, the palette in force, the
@@ -1741,9 +1750,12 @@ internal sealed class Shell : ISettingsHost
         menu.Items.Add(settings);
         menu.Items.Add(new NativeMenuItemSeparator());
 
-        var check = new NativeMenuItem(UpdateMemory.TrayHeader(_updatedTo));
-        check.Click += (_, _) => OpenUpdateWindow();
-        menu.Items.Add(check);
+        foreach (TrayLine line in UpdateMemory.TrayLines(_updatedTo))
+        {
+            var item = new NativeMenuItem(line.Text) { IsEnabled = line.Clickable };
+            if (line.Clickable) item.Click += (_, _) => OpenUpdateWindow();
+            menu.Items.Add(item);
+        }
 
         var quit = new NativeMenuItem("Quit");
         quit.Click += (_, _) => Quit();
@@ -1818,6 +1830,10 @@ internal sealed class Shell : ISettingsHost
             try { _semantic?.Dispose(); } catch { }
             try { _content?.Dispose(); } catch { }
         }
+
+        // Quit means all of Findra: the elevated name helper goes too, and the next launch starts
+        // it again. Only Quit - an installer stopping Findra and Windows signing out do their own.
+        try { HelperTask.Stop(); } catch (Exception ex) { Log.Warn("app", "the names helper could not be asked to stop: " + ex.Message); }
 
         Log.Info("app", Log.SessionSummary());
         Log.Flush();

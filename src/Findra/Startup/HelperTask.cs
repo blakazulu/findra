@@ -2,6 +2,7 @@
 using System.Globalization;
 using System.Security;
 using System.Security.Principal;
+using Findra.Pipe;
 
 namespace Findra.Startup;
 
@@ -261,6 +262,59 @@ $"""
             Thread.Sleep(250);
         }
         return false;
+    }
+
+    /// <summary>
+    /// Quit means all of Findra, the helper included. This asks over the pipe rather than killing
+    /// it, so the helper closes its volume handles and logs its own end, and then waits until the
+    /// pipe stops answering: the task runs one instance at a time, and a launch straight after Quit would
+    /// otherwise ask it for a new one while the last is still going. The task stays registered,
+    /// so the next launch starts the helper again, and so does a sign-in that starts Findra.
+    ///
+    /// <para>True when no helper answers afterwards, including when none was running. The answer
+    /// and the wait each take at most <paramref name="timeout"/>, so a helper that does not know
+    /// the message never holds Quit up.</para>
+    /// </summary>
+    public static bool Stop() =>
+        Stop(ct => NameClient.ConnectAsync(TimeSpan.FromMilliseconds(500), ct), IsHelperAnswering,
+             TimeSpan.FromSeconds(2));
+
+    /// <summary><see cref="Stop()"/> with the pipe passed in, so the sequence runs in a test.</summary>
+    public static bool Stop(Func<CancellationToken, Task<NameClient>> connect, Func<bool> answering,
+                            TimeSpan timeout)
+    {
+        ArgumentNullException.ThrowIfNull(connect);
+        ArgumentNullException.ThrowIfNull(answering);
+
+        StopReply? reply = null;
+        string why = "";
+        try
+        {
+            using var cts = new CancellationTokenSource(timeout);
+            reply = Task.Run(async () =>
+            {
+                await using NameClient client = await connect(cts.Token).ConfigureAwait(false);
+                return await client.StopAsync(cts.Token).ConfigureAwait(false);
+            }).GetAwaiter().GetResult();
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException) { why = ex.Message; }
+
+        var clock = Stopwatch.StartNew();
+        bool up = answering();
+        while (up && clock.Elapsed < timeout)
+        {
+            Thread.Sleep(50);
+            up = answering();
+        }
+
+        Log.Info("app", (up, reply) switch
+        {
+            (false, { Stopping: true }) => $"the names helper (process {reply.ProcessId}) has stopped",
+            (false, _) => "no names helper was running",
+            (true, null) => $"the names helper did not answer a request to stop ({why}); it keeps running until sign-out",
+            (true, _) => "the names helper was asked to stop and is still answering; it keeps running until sign-out",
+        });
+        return !up;
     }
 
     private static bool IsHelperAnswering()

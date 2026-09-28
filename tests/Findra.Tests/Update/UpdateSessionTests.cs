@@ -15,6 +15,7 @@ public class UpdateSessionTests
         public List<(TaskCompletionSource<DownloadResult> Result, Action<long, long> Progress, CancellationToken Token)> DownloadCalls = [];
         public int Installs, Wingets, Releases, Closes;
         public List<UpdateView> Shown = [];
+        public List<string> Notes = [];
         public UpdateSession Session;
         private readonly BlockingCollection<Action> _posted = [];
 
@@ -34,7 +35,8 @@ public class UpdateSessionTests
                 openReleases: () => Releases++,
                 show: v => Shown.Add(v),
                 close: () => Closes++,
-                post: a => _posted.Add(a));
+                post: a => _posted.Add(a),
+                note: n => { lock (Notes) Notes.Add(n); });
         }
 
         public int Downloads { get { lock (DownloadCalls) return DownloadCalls.Count; } }
@@ -238,5 +240,51 @@ public class UpdateSessionTests
         h.Pump();
 
         Assert.Equal(UpdateStep.Unreachable, h.Session.View.Step);
+    }
+
+    [Fact]
+    public void UpdateNowLeavesATrailInTheLog()
+    {
+        // The log is what arrives from somebody else's machine. Without these lines the only sign
+        // that Update now was pressed is the installer stopping Findra.
+        var h = new Harness();
+        h.Session.Begin();
+        h.Offer();
+        h.Session.PressGo();
+        h.Download.SetResult(DownloadResult.Ok(@"C:\u\findra-setup-x64.exe"));
+        h.Pump();
+
+        Assert.Collection(h.Notes,
+            n => Assert.StartsWith("Update now: downloading findra-setup-x64.exe", n),
+            n => Assert.StartsWith("downloaded findra-setup-x64.exe", n),
+            n => Assert.StartsWith("starting the installer findra-setup-x64.exe", n));
+    }
+
+    [Fact]
+    public void ARefusedDownloadSaysWhyInTheLog()
+    {
+        var h = new Harness();
+        h.Session.Begin();
+        h.Offer();
+        h.Session.PressGo();
+        h.Download.SetResult(DownloadResult.Failed(DownloadFailure.Digest, "the checksum does not match"));
+        h.Pump();
+
+        Assert.Contains(h.Notes, n => n.Contains("Digest") && n.Contains("the checksum does not match"));
+    }
+
+    [Fact]
+    public void AHandOffThatReturnsIsLoggedAsInstallingNothing()
+    {
+        var h = new Harness("winget", _ => Task.FromResult(new Handoff(HandoffOutcome.WingetFailed, "winget exited 1")));
+        h.Session.Begin();
+        h.Check.SetResult(new UpdateResult(UpdateState.Available, "1.1.0", null, Config.Default));
+        h.Pump();
+        h.Session.PressGo();
+        h.Pump();
+
+        Assert.Collection(h.Notes,
+            n => Assert.StartsWith("Update now: starting winget upgrade", n),
+            n => Assert.Equal("the hand-off returned, so nothing was installed (WingetFailed): winget exited 1", n));
     }
 }

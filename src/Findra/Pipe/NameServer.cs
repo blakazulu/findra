@@ -115,10 +115,15 @@ public static class NameServer
     /// through one per-session semaphore, because two writers interleaving their bytes into one
     /// stream leave a half-written frame, and the framing never recovers - every later read is
     /// garbage, with nothing in the log to say when it started.
+    ///
+    /// <para><paramref name="stop"/> ends the whole helper, and is what a <c>stop</c> frame runs
+    /// after it has been answered. Any process of this user may send one, which crosses no
+    /// boundary: the pipe admits nobody else, and what it costs is name search until Findra next
+    /// starts.</para>
     /// </summary>
     public static async Task Serve(Stream transport, IReadOnlyDictionary<char, VolumeView> views,
                                    IndexLock? gate, JournalBroadcast? bus, GapReader? gap,
-                                   CancellationToken ct)
+                                   CancellationToken ct, Action? stop = null)
     {
         var hits = new List<NameIndex.Hit>();
 
@@ -475,6 +480,19 @@ public static class NameServer
                         case Envelope.KindEnumerate:
                             await AnswerEnumerateAsync((EnumerateRequest)body!, ct).ConfigureAwait(false);
                             break;
+                        case Envelope.KindStop:
+                            // Answered BEFORE stopping: stopping cancels this session too, and an
+                            // answer written after it never arrives.
+                            await SendAsync(Envelope.KindStopReply,
+                                new StopReply(Environment.ProcessId, Stopping: stop is not null), ct).ConfigureAwait(false);
+                            if (stop is null)
+                            {
+                                Log.Info("pipe", "asked to stop, and this session has nothing to stop");
+                                break;
+                            }
+                            Log.Info("names", "Findra is quitting; the helper is stopping");
+                            stop();
+                            break;
                         default:
                             Log.Info("pipe", $"ignoring unknown kind '{e.Kind}'");
                             break;
@@ -689,10 +707,17 @@ public static class NameServer
 
     /// <summary>
     /// What `--names` runs: build the indexes, start the journal tail, then serve clients over
-    /// the pipe.
+    /// the pipe - until the logon session ends, or Findra quits and a client sends <c>stop</c>.
     /// </summary>
     public static async Task RunAsync(CancellationToken ct)
     {
+        using var quitting = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        await RunAsync(quitting).ConfigureAwait(false);
+    }
+
+    private static async Task RunAsync(CancellationTokenSource quitting)
+    {
+        CancellationToken ct = quitting.Token;
         var views = new Dictionary<char, VolumeView>();
         var volumes = new List<NtfsVolume>();
         var tailed = new List<(NtfsVolume Volume, VolumeView View)>();
@@ -800,7 +825,7 @@ public static class NameServer
             // subscribing to a journal already being read rather than to a silent bus.
             Task tail = Task.Run(() => JournalTail.RunAsync(tailed, gate, bus, ct), CancellationToken.None);
 
-            await ListenAsync(views, gate, bus, ReadGap, ct).ConfigureAwait(false);
+            await ListenAsync(views, gate, bus, ReadGap, quitting.Cancel, ct).ConfigureAwait(false);
             try { await tail.ConfigureAwait(false); } catch (OperationCanceledException) { }
 
             (bool Reachable, IReadOnlyList<JournalEvent> Events) ReadGap(char volume, ulong journalId, long fromUsn)
@@ -857,7 +882,8 @@ public static class NameServer
     /// for - the serialisation this header used to say a future reader would owe.
     /// </summary>
     private static async Task ListenAsync(IReadOnlyDictionary<char, VolumeView> views, IndexLock gate,
-                                          JournalBroadcast bus, GapReader gap, CancellationToken ct)
+                                          JournalBroadcast bus, GapReader gap, Action stop,
+                                          CancellationToken ct)
     {
         var sessions = new List<Task>();
         int live = 0;         // instances that exist right now: the listener plus every session
@@ -896,7 +922,7 @@ public static class NameServer
                     try
                     {
                         using (connected)
-                            await Serve(connected, views, gate, bus, gap, ct).ConfigureAwait(false);
+                            await Serve(connected, views, gate, bus, gap, ct, stop).ConfigureAwait(false);
                     }
                     finally
                     {

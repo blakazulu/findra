@@ -389,7 +389,20 @@ success; the source reader takes 17-24 ms).
 **Three processes**, from the first commit:
 
 - `findra.exe --names` - elevated, headless, started by a `HighestAvailable` logon scheduled task.
-  Owns the NTFS volume handle and the in-RAM name index, and nothing else.
+  Owns the NTFS volume handle and the in-RAM name index, and nothing else. **Quit stops it too**:
+  asked, not killed (it closes its volume handles and logs its own end, and whether this process
+  may terminate an elevated one is the process's security descriptor's call). `HelperTask.Stop`
+  sends a `stop` frame (answered BEFORE the helper cancels itself) and waits until the pipe goes
+  quiet, because the task is `IgnoreNew` and a launch straight after Quit would otherwise be
+  ignored. The task
+  stays registered; the next launch's `EnsureRunning` starts it again. Only Quit sends it:
+  `--stop`, the installer and sign-out do their own. **At sign-in it stays only when Findra
+  starts too**: the task still fires at every logon, and `HelperStart.ShouldStay` lets it stay
+  when another findra.exe runs in this session (the interface ran the task), when
+  `Autostart.StartsAtSignIn` (the Run entry, not switched off under Startup apps: an odd first
+  byte in `StartupApproved\Run`), or when it was started from a terminal (`findra --names` from
+  source); otherwise it exits before reading the disk. No task change, so no UAC prompt on
+  upgrade.
 - `findra.exe` - the UI, normal integrity: grammar, ranking, content search, settings, card, tray,
   hotkey.
 - `findra.exe --index` - the content indexer, a child of the UI.

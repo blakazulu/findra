@@ -55,10 +55,27 @@ public class UpdateMemoryTests
         Assert.Equal(updated, UpdateMemory.JustUpdated(lastRun, running));
 
     [Fact]
-    public void TheTrayItemSaysWhatItWasUpdatedTo()
+    public void TheTrayOffersCheckForUpdatesAndNothingElseOnAnOrdinaryStart()
     {
-        Assert.Equal("Check for updates", UpdateMemory.TrayHeader(null));
-        Assert.Equal("Updated to 0.6.0", UpdateMemory.TrayHeader("0.6.0"));
+        TrayLine only = Assert.Single(UpdateMemory.TrayLines(null));
+        Assert.Equal(new TrayLine("Check for updates", Clickable: true), only);
+    }
+
+    [Fact]
+    public void AfterAnUpdateAGreyedLineAboveCheckForUpdatesSaysWhichVersionIsRunning()
+    {
+        // "Updated to 0.6.1", in the place the check item always sits, was read as an offer to
+        // update. So the item keeps its words and place, and the news is a line nobody can press.
+        Assert.Equal(
+            new[] { new TrayLine("Now on 0.6.1", Clickable: false), new TrayLine("Check for updates", Clickable: true) },
+            UpdateMemory.TrayLines("0.6.1"));
+    }
+
+    [Fact]
+    public void TheLineAfterAnUpdateHasNoVerbToMisreadAsAnOffer()
+    {
+        string note = UpdateMemory.TrayLines("0.6.1")[0].Text;
+        Assert.DoesNotContain("update", note, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]

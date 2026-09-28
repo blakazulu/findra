@@ -16,6 +16,7 @@ public sealed class UpdateSession
     private readonly Action<UpdateView> _show;
     private readonly Action _close;
     private readonly Action<Action> _post;
+    private readonly Action<string> _note;
     private readonly CancellationTokenSource _gone = new();
     private CancellationTokenSource? _downloading;
     private Task? _lastDownload;
@@ -28,7 +29,8 @@ public sealed class UpdateSession
                          Func<ReleaseAsset, Action<long, long>, CancellationToken, Task<DownloadResult>> download,
                          Func<string, ReleaseAsset, CancellationToken, Task<Handoff>> runInstaller,
                          Func<CancellationToken, Task<Handoff>> runWinget,
-                         Action openReleases, Action<UpdateView> show, Action close, Action<Action> post)
+                         Action openReleases, Action<UpdateView> show, Action close, Action<Action> post,
+                         Action<string>? note = null)
     {
         View = first ?? throw new ArgumentNullException(nameof(first));
         _check = check ?? throw new ArgumentNullException(nameof(check));
@@ -39,6 +41,7 @@ public sealed class UpdateSession
         _show = show ?? throw new ArgumentNullException(nameof(show));
         _close = close ?? throw new ArgumentNullException(nameof(close));
         _post = post ?? throw new ArgumentNullException(nameof(post));
+        _note = note ?? (line => Log.Info("update", line));
     }
 
     public void Begin() => Apply(new UpdateMove(View, UpdateAction.Check));
@@ -65,16 +68,26 @@ public sealed class UpdateSession
         {
             case UpdateAction.None: return;
             case UpdateAction.Check: _ = CheckAsync(); return;
-            case UpdateAction.Download: _lastDownload = DownloadAsync(_lastDownload); return;
-            case UpdateAction.CancelDownload: _downloading?.Cancel(); return;
+            case UpdateAction.Download:
+                _note($"Update now: downloading {View.Installer!.Name} ({View.Installer.Size:N0} bytes) for {View.Latest}");
+                _lastDownload = DownloadAsync(_lastDownload);
+                return;
+            case UpdateAction.CancelDownload:
+                _note("Update now: the download was cancelled");
+                _downloading?.Cancel();
+                return;
             case UpdateAction.RunInstaller:
             {
                 string path = View.DownloadedTo!;
                 ReleaseAsset asset = View.Installer!;
+                _note($"starting the installer {asset.Name}; it stops Findra, installs {View.Latest} and starts it again");
                 _ = HandOffAsync(ct => _runInstaller(path, asset, ct), HandoffOutcome.DidNotRun);
                 return;
             }
-            case UpdateAction.RunWinget: _ = HandOffAsync(_runWinget, HandoffOutcome.WingetFailed); return;
+            case UpdateAction.RunWinget:
+                _note($"Update now: starting winget upgrade for {View.Latest}");
+                _ = HandOffAsync(_runWinget, HandoffOutcome.WingetFailed);
+                return;
             case UpdateAction.OpenReleases: _openReleases(); _close(); return;
             case UpdateAction.Close: _close(); return;
             default: throw new ArgumentOutOfRangeException(nameof(m), m.Action, "no work for this action");
@@ -131,7 +144,16 @@ public sealed class UpdateSession
             Log.Warn("update", "the download failed: " + ex.Message);
             r = DownloadResult.Failed(DownloadFailure.Network, ex.Message);
         }
-        _post(() => { if (Current(mine)) Apply(UpdateFlow.Downloaded(View, r)); });
+        _post(() =>
+        {
+            if (!Current(mine)) return;
+            // A cancelled download was said when Cancel was pressed.
+            if (r.Failure == DownloadFailure.None)
+                _note($"downloaded {asset.Name}; its size and SHA-256 match the release");
+            else if (r.Failure != DownloadFailure.Cancelled)
+                _note($"the download stopped ({r.Failure}): {r.Message}");
+            Apply(UpdateFlow.Downloaded(View, r));
+        });
     }
 
     private static int Percent(UpdateView v) => v.Total > 0 ? (int)(v.Got * 100 / v.Total) : 0;
@@ -150,6 +172,12 @@ public sealed class UpdateSession
             Log.Warn("update", "the hand-off failed: " + ex.Message);
             h = new Handoff(whenItFaults, "It could not be started: " + ex.Message);
         }
-        _post(() => { if (!_closed) Apply(new UpdateMove(UpdateFlow.HandedOff(View, h), UpdateAction.None)); });
+        _post(() =>
+        {
+            if (_closed) return;
+            // The installer stops Findra before it installs, so an answer at all means it did not.
+            _note($"the hand-off returned, so nothing was installed ({h.Outcome}): {h.Message}");
+            Apply(new UpdateMove(UpdateFlow.HandedOff(View, h), UpdateAction.None));
+        });
     }
 }

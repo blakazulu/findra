@@ -118,6 +118,14 @@ public sealed record EnumerateRequest(long Id, char Volume, IReadOnlyList<string
 /// </summary>
 public sealed record EnumerateReply(long Id, char Volume, IReadOnlyList<EnumeratedFile> Files, bool Done);
 
+/// <summary>Quit means all of Findra. The interface asks rather than kills, so the helper closes
+/// its volume handles and logs its own end. The scheduled task stays registered: the next launch starts the helper
+/// again, and so does a sign-in that starts Findra.</summary>
+public sealed record StopRequest();
+
+/// <summary><c>Stopping</c> is false from a session that has nothing to stop.</summary>
+public sealed record StopReply(int ProcessId, bool Stopping);
+
 /// <summary>
 /// Kind outside, body inside. An envelope whose kind is unknown can still be read and
 /// skipped, so one side can learn a message the other has not.
@@ -140,6 +148,10 @@ public sealed record Envelope(string Kind, string Json)
     // The first pass. Many reply frames per request, matched by id rather than by position.
     public const string KindEnumerate      = "enumerate";
     public const string KindEnumerateReply = "enumerate-reply";
+
+    // Quit. Answered once, positionally, like status.
+    public const string KindStop      = "stop";
+    public const string KindStopReply = "stop-reply";
 
     private static readonly JsonSerializerOptions Opts = new()
     {

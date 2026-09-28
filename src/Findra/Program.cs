@@ -159,10 +159,22 @@ public static class Program
     private static int RunNames()
     {
         Log.Info("names", "helper starting");
+
+        // Before the disk is read, which takes seconds and a few hundred megabytes.
+        if (!Startup.HelperStart.ShouldStay(Startup.HelperStart.AnotherFindraIsRunning,
+                                            Startup.Autostart.StartsAtSignIn,
+                                            ParentConsole.WasStartedFromOne))
+        {
+            Log.Info("names", "Findra is not open and does not start at sign-in, so the helper is not staying");
+            Log.Flush();
+            return 0;
+        }
+
         using var cts = new CancellationTokenSource();
         Console.CancelKeyPress += (_, e) => { e.Cancel = true; cts.Cancel(); };
         try { Pipe.NameServer.RunAsync(cts.Token).GetAwaiter().GetResult(); }
         catch (OperationCanceledException) { }
+        Log.Info("names", "helper stopped");
         Log.Flush();
         return 0;
     }

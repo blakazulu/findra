@@ -89,7 +89,27 @@ internal static class ParentConsole
         });
     }
 
+    /// <summary>
+    /// Whether this process was started from a terminal: its parent has a console to join. Joined
+    /// and let go of at once, so a process that never borrows the console is left as it was.
+    /// </summary>
+    internal static bool WasStartedFromOne()
+    {
+        try
+        {
+            if (!AttachConsole(AttachParentProcess)) return false;
+            FreeConsole();
+            return true;
+        }
+        catch (DllNotFoundException) { return false; }
+        catch (EntryPointNotFoundException) { return false; }
+    }
+
     private static bool Usable(nint handle) => handle != 0 && handle != -1;
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool FreeConsole();
 
     [DllImport("kernel32.dll", SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]

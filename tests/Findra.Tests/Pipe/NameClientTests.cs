@@ -45,6 +45,24 @@ public class NameClientTests
     }
 
     [Fact]
+    public async Task StopReturnsTheHelpersAnswer()
+    {
+        var (server, client) = NameServerTests.PairForTests();
+        var cts = new CancellationTokenSource();
+        bool stopped = false;
+        _ = NameServer.Serve(server,
+            new Dictionary<char, VolumeView> { ['C'] = new VolumeView(Sample(), 0, 0, 0) },
+            gate: null, bus: null, gap: null, cts.Token, stop: () => stopped = true);
+
+        await using var c = new NameClient(client);
+        StopReply reply = await c.StopAsync(default).WaitAsync(TimeSpan.FromSeconds(5));
+
+        Assert.True(reply.Stopping);
+        Assert.True(stopped);
+        await cts.CancelAsync();
+    }
+
+    [Fact]
     public async Task KeepsServingAfterAnUndecodableFrame()
     {
         // One malformed reply must not end the pump. If it does, the transport stays

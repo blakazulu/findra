@@ -49,7 +49,10 @@ Before starting, tail the log in a spare window so every step's proof appears as
    carries the version, the hotkey and the update state. Untick "Show capsule": it
    disappears and the hotkey still works. Click "Check for updates": the update window opens,
    checks and answers. Then Quit, and confirm the log's closing lines, that `ui.json` is gone,
-   and that no `findra` process survives except the elevated helper.
+   and that no `findra` process survives, the elevated helper included; start Findra again and
+   names answer within seconds. Then turn "Start Findra when I sign in" off, Quit and restart
+   Windows: after signing in no `findra` process runs, and the log says `the helper is not
+   staying`. Turn it back on and restart: Findra and the helper both run.
 
 ## From Plan 4, content
 

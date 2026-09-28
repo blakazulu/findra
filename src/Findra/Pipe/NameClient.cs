@@ -17,6 +17,7 @@ public sealed class NameClient : IAsyncDisposable
     private readonly ConcurrentDictionary<long, TaskCompletionSource<QueryReply>> _pending = new();
     private readonly ConcurrentQueue<TaskCompletionSource<StatusReply>> _statusWaiters = new();
     private readonly ConcurrentQueue<TaskCompletionSource<SubscribeReply>> _subscribeWaiters = new();
+    private readonly ConcurrentQueue<TaskCompletionSource<StopReply>> _stopWaiters = new();
 
     // Enumerations are matched BY ID, not positionally like status and subscribe. One request
     // produces many frames, and a positional queue cannot express that: the head waiter would take
@@ -158,6 +159,33 @@ public sealed class NameClient : IAsyncDisposable
 
         // Same race as SearchAsync: the pump may have died between the entry check and the
         // enqueue. Marking the waiter dead is enough - the pump's skip-on-dequeue discards it.
+        if (_pumpGone) { tcs.TrySetCanceled(); ThrowIfPumpGone(); }
+
+        return await tcs.Task.WaitAsync(ct).ConfigureAwait(false);
+    }
+
+    /// <summary>Ask the helper to stop, because Findra is quitting. The answer comes before it
+    /// stops; the pipe ends soon after.</summary>
+    public async Task<StopReply> StopAsync(CancellationToken ct)
+    {
+        ThrowIfPumpGone();
+
+        var tcs = new TaskCompletionSource<StopReply>(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        await _writeLock.WaitAsync(ct).ConfigureAwait(false);
+        try
+        {
+            // Positional, and enqueued inside the lock, for the reasons StatusAsync gives.
+            _stopWaiters.Enqueue(tcs);
+            try
+            {
+                await Frame.WriteAsync(_transport, Envelope.Pack(Envelope.KindStop, new StopRequest()), ct)
+                    .ConfigureAwait(false);
+            }
+            catch { tcs.TrySetCanceled(); throw; }
+        }
+        finally { _writeLock.Release(); }
+
         if (_pumpGone) { tcs.TrySetCanceled(); ThrowIfPumpGone(); }
 
         return await tcs.Task.WaitAsync(ct).ConfigureAwait(false);
@@ -363,6 +391,13 @@ public sealed class NameClient : IAsyncDisposable
                                 if (waiting.TrySetResult(s)) break;
                             break;
                         }
+                        case Envelope.KindStopReply:
+                        {
+                            StopReply s = e.Body<StopReply>();
+                            while (_stopWaiters.TryDequeue(out var waiting))
+                                if (waiting.TrySetResult(s)) break;
+                            break;
+                        }
                         case Envelope.KindEnumerateReply:
                         {
                             // By id: many frames answer one request. An unbounded channel because
@@ -405,6 +440,7 @@ public sealed class NameClient : IAsyncDisposable
             foreach (var kv in _pending) kv.Value.TrySetCanceled();
             while (_statusWaiters.TryDequeue(out var s)) s.TrySetCanceled();
             while (_subscribeWaiters.TryDequeue(out var sub)) sub.TrySetCanceled();
+            while (_stopWaiters.TryDequeue(out var stop)) stop.TrySetCanceled();
 
             // Completed, never faulted: a walk in flight sees its channel end without a Done
             // frame and throws its own IOException, which says what was actually lost.

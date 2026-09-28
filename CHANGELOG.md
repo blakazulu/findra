@@ -7,6 +7,20 @@ and Findra follows [Semantic Versioning](https://semver.org/spec/v2.0.0/).
 
 ## [Unreleased]
 
+### Changed
+
+- **Quit closes all of Findra.** The name search helper used to keep running after Quit, so Task
+  Manager still listed Findra. It now stops too, and starts again the next time you open Findra.
+  Names take a few seconds to answer after that, while the disk is read again.
+- **Signing in to Windows starts the helper only if it starts Findra too.** With "Start Findra
+  when I sign in" off, or Findra switched off under Startup apps, nothing of Findra's runs after
+  a restart until you open it.
+- **After an update, Check for updates stays where it always is in the tray menu**, with a greyed
+  line above it naming the version now running. The item itself used to read "Updated to 0.6.1",
+  which looked like an offer to update again.
+- **The log records each step of Update now**: the download, its checksum, the installer or winget
+  starting, and whatever stopped it. A log sent with a report now shows what happened.
+
 ## [0.6.1] - 2026-09-28
 
 ### Changed

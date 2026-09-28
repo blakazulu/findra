@@ -86,8 +86,10 @@ copy falls back to **Open releases** too, and the body says why.
 ### After an update
 
 - Findra starts again by itself (see *Starting again*).
-- On the first start on a new version, the tray item reads **Updated to 0.5.2** for that session,
-  instead of **Check for updates**, and clicking it still opens the window. Nothing pops up.
+- On the first start on a new version, a greyed line that cannot be clicked, **Now on 0.5.2**,
+  sits above **Check for updates** for that session. The item keeps its words and place. Nothing
+  pops up. (It first read **Updated to 0.5.2** in the item's place, and a tester read that as an
+  offer to update.)
 - The tray item no longer changes to "Checked: ..." after a manual check: the window is the answer.
   The tooltip's update line is unchanged.
 
@@ -188,7 +190,7 @@ A winget copy asks the catalogue, which lists versions and no files, so it keeps
 | `UpdateFlow` (new, pure) | The states and transitions above, as a list a test walks without a window. |
 | `UpdateWindow` (new) | A small Skia-painted window like Settings and the welcome page. It reuses `UpdatePrompt`'s wording and layout, extended with the new states. It fits the screen at every scaling through `ScreenFit`; its hit test takes the state, never the bounds; every new target gets a written-out arm in `Pointers`. |
 | `SettingsWindow` (changed) | Check now opens the window. The in-pane panel, its hit-test branch, `SettingsState.Prompt` and `UpdatePromptState.Off` go. `RemovePrompt` keeps the layout constants it borrows from `UpdatePrompt`. |
-| Tray (changed) | Check for updates opens the window. `Config.LastRunVersion` (new) decides **Updated to**. `UpdateMemory.CheckedHeader` goes. |
+| Tray (changed) | Check for updates opens the window. `Config.LastRunVersion` (new) decides the greyed **Now on** line. `UpdateMemory.CheckedHeader` goes. |
 | `--stop` (changed) | Exit code 2 when it stopped a running interface. |
 | `installer/findra.iss` (changed) | Keeps `--stop`'s answer; a `[Run]` entry for `explorer.exe` with a `Check` that is true only for a silent install that stopped a running interface. |
 | `--searchshot` (changed) | `settingsuptodate`, `settingsupdate` and `settingsasking` become `update*` states, one per window state, including an installer-copy and a winget-copy Available, because the painter branches on the install source. |
@@ -219,7 +221,7 @@ Written first, each failing before its code exists:
   winget failing, winget with nothing newer, winget missing, the time limit.
 - Every `UpdateFlow` transition, including Try again from each state that offers it.
 - `--stop` returns 2 when an interface was running and 0 when not (through the `Discover` seam).
-- **Updated to** appears only when `LastRunVersion` is older than the running version, and not on a
+- **Now on** appears only when `LastRunVersion` is older than the running version, and not on a
   first run.
 - Every new `--searchshot` state renders; the window fits 1080p at 100 to 175%; every `Pointers` arm.
 - The installer script's new `[Run]` entry and its `Check`, as text (`InstallerScriptTests`).

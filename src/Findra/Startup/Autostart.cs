@@ -10,9 +10,10 @@ namespace Findra.Startup;
 /// installs for somebody else is the wrong person entirely. Findra writes it itself, from its own
 /// session, where HKCU means what it says.</para>
 ///
-/// <para>Separate from the scheduled task: the task starts the elevated NAME HELPER at logon, and
-/// without it there are no file names to search; this starts the interface, and Findra works fine
-/// without it - you just have to launch it.</para>
+/// <para>Separate from the scheduled task: the task starts the elevated NAME HELPER, and without
+/// it there are no file names to search; this starts the interface, and Findra works fine without
+/// it - you just have to launch it. At sign-in the helper stays only when this entry starts Findra
+/// too (<see cref="HelperStart"/>).</para>
 /// </summary>
 public static class Autostart
 {
@@ -56,6 +57,41 @@ public static class Autostart
             return store.Read() is { Length: > 0 };
         }
         catch (Exception ex) { Log.Warn("startup", "could not read the autostart entry: " + ex.Message); return false; }
+    }
+
+    /// <summary>Where Startup apps, in Task Manager or Settings, marks an entry off.</summary>
+    public const string ApprovedKeyPath = @"Software\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\Run";
+
+    /// <summary>
+    /// Whether Windows will start Findra at the next sign-in: the entry is there, and nobody
+    /// switched it off under Startup apps. Switching it off leaves the entry where it is and
+    /// writes a mark beside it whose first byte is odd (01 or 03, then the time it was switched
+    /// off); 02 or no mark at all means on.
+    /// </summary>
+    public static bool StartsAtSignIn() => StartsAtSignIn(RunKey, ReadApproval);
+
+    public static bool StartsAtSignIn(IStore store, Func<byte[]?> approval)
+    {
+        ArgumentNullException.ThrowIfNull(store);
+        ArgumentNullException.ThrowIfNull(approval);
+        if (!IsSet(store)) return false;
+        try
+        {
+            return approval() is not { Length: > 0 } mark || (mark[0] & 1) == 0;
+        }
+        catch (Exception ex)
+        {
+            // Believe the entry. Wrong this way, a helper stays that need not have; wrong the
+            // other, somebody who asked for Findra at sign-in waits for names.
+            Log.Warn("startup", "could not read whether Startup apps switched Findra off: " + ex.Message);
+            return true;
+        }
+    }
+
+    private static byte[]? ReadApproval()
+    {
+        using RegistryKey? key = Registry.CurrentUser.OpenSubKey(ApprovedKeyPath);
+        return key?.GetValue(ValueName) as byte[];
     }
 
     public static void Set(string exePath) => Set(exePath, RunKey);

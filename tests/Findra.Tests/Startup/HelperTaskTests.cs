@@ -1,4 +1,6 @@
 using System.Xml.Linq;
+using Findra;
+using Findra.Pipe;
 using Findra.Startup;
 using Xunit;
 
@@ -140,6 +142,71 @@ public class HelperTaskTests
         (bool gone, _) = Unregister(HelperTaskState.Registered);
 
         Assert.False(gone);
+    }
+
+    // ---- Quit ---------------------------------------------------------------------------------
+
+    /// <summary>A helper on the other end of an in-process pipe, which stops when asked, or never
+    /// answers at all.</summary>
+    private static Func<CancellationToken, Task<NameClient>> Helper(bool answers, Action? stopped = null)
+    {
+        return ct =>
+        {
+            var (server, client) = NameServerTests.PairForTests();
+            if (answers)
+                _ = NameServer.Serve(server,
+                    new Dictionary<char, VolumeView> { ['C'] = new VolumeView(new NameIndex('C'), 0, 0, 0) },
+                    gate: null, bus: null, gap: null, CancellationToken.None, stop: stopped ?? (() => { }));
+            else
+                _ = Frame.ReadAsync(server, default);          // reads the request and says nothing
+            return Task.FromResult(new NameClient(client));
+        };
+    }
+
+    [Fact]
+    public void QuitStopsARunningHelperAndWaitsUntilItHasGone()
+    {
+        // Quit asks over the pipe rather than killing, so the helper ends cleanly and says so.
+        // Then it waits until the pipe stops answering: the task runs one instance at a time, and
+        // a launch straight after Quit would otherwise ask it to start one that is still going.
+        bool stopped = false;
+        int asked = 0;
+        bool gone = HelperTask.Stop(Helper(answers: true, () => stopped = true),
+                                    answering: () => ++asked < 3, TimeSpan.FromSeconds(2));
+
+        Assert.True(stopped);
+        Assert.True(gone);
+        Assert.Equal(3, asked);
+    }
+
+    [Fact]
+    public void AHelperThatNeverAnswersDoesNotHoldQuitUp()
+    {
+        // An older helper does not know the message and says nothing back.
+        var clock = System.Diagnostics.Stopwatch.StartNew();
+        bool gone = HelperTask.Stop(Helper(answers: false), answering: () => true, TimeSpan.FromMilliseconds(300));
+
+        Assert.False(gone);
+        Assert.True(clock.Elapsed < TimeSpan.FromSeconds(3), $"Quit waited {clock.Elapsed}");
+    }
+
+    [Fact]
+    public void NoHelperIsNothingToStop()
+    {
+        bool gone = HelperTask.Stop(_ => Task.FromException<NameClient>(new TimeoutException("no pipe")),
+                                    answering: () => false, TimeSpan.FromMilliseconds(300));
+
+        Assert.True(gone, "no helper running is the outcome Quit wants");
+    }
+
+    [Fact]
+    public void AHelperThatSaysItIsStoppingButStaysIsNotReportedGone()
+    {
+        var clock = System.Diagnostics.Stopwatch.StartNew();
+        bool gone = HelperTask.Stop(Helper(answers: true), answering: () => true, TimeSpan.FromMilliseconds(300));
+
+        Assert.False(gone);
+        Assert.True(clock.Elapsed < TimeSpan.FromSeconds(3), $"Quit waited {clock.Elapsed}");
     }
 
     [Fact]
