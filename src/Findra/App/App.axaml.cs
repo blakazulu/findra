@@ -120,15 +120,15 @@ public static class UpdateMemory
         }
     }
 
-    /// <summary>What the tray's "Check for updates" item says once a check the user asked for has
-    /// come back. A menu item that never changes leaves a click looking like it did nothing.</summary>
-    public static string CheckedHeader(UpdateState state, string? latest) => state switch
-    {
-        UpdateState.Available when !string.IsNullOrWhiteSpace(latest) => $"Checked: {latest} available",
-        UpdateState.Current => "Checked: up to date",
-        UpdateState.Disabled => "Update checks are turned off",
-        _ => "Checked: could not reach GitHub",
-    };
+    /// <summary>Whether this start is the first on a newer version than the last one that ran.
+    /// Not on a first run ever (nothing ran before), and not when either side does not parse.</summary>
+    public static bool JustUpdated(string? lastRun, string running) =>
+        !string.IsNullOrWhiteSpace(lastRun) && Remembered(lastRun, running) == UpdateState.Available;
+
+    /// <summary>The tray item's words: what it was updated to on the first start after an update,
+    /// and Check for updates every other time. It opens the update window either way.</summary>
+    public static string TrayHeader(string? updatedTo) =>
+        updatedTo is null ? "Check for updates" : $"Updated to {updatedTo}";
 }
 
 /// <summary>
@@ -169,11 +169,18 @@ internal sealed class Shell : ISettingsHost
     private HotkeyHost? _hotkey;
     private TrayIcon? _tray;
     private NativeMenuItem? _showCapsuleItem;
-    private NativeMenuItem? _checkForUpdatesItem;
     private CardWindow? _card;
 
     private UpdateState _update = UpdateState.NotDue;
     private string? _latest;
+
+    /// <summary>The version this start is the first on, when it follows an update; the tray item
+    /// says so for the session.</summary>
+    private string? _updatedTo;
+
+    /// <summary>For downloading an installer only: no cookies, redirects followed by
+    /// <see cref="UpdateDownload"/> itself so every hop is held to GitHub.</summary>
+    private static readonly HttpClient DownloadHttp = UpdateDownload.CreateClient();
 
     // ---- what the settings window and the capsule menu are shown ----
     //
@@ -337,6 +344,20 @@ internal sealed class Shell : ISettingsHost
                 Log.Info("startup", $"install source recorded as {_config.InstallSource}");
             }
 
+            // The first start on a new version says so in the tray, once. Then the installer an
+            // update downloaded, or one left over from an update that did not run, goes.
+            if (UpdateMemory.JustUpdated(_config.LastRunVersion, Log.Version))
+            {
+                _updatedTo = Log.Version;
+                Log.Info("startup", $"updated from {_config.LastRunVersion} to {Log.Version}");
+            }
+            if (_config.LastRunVersion != Log.Version)
+            {
+                _config = _config with { LastRunVersion = Log.Version };
+                _config.Save();
+            }
+            UpdateDownload.Sweep(Paths.Updates);
+
             IReadOnlyList<Palette> palettes = PaletteStore.LoadFromDisk();
             // Follow Windows is read once, here. Switching the palette live when Windows flips
             // between light and dark mid-session lands with the settings surface in a later plan.
@@ -435,7 +456,7 @@ internal sealed class Shell : ISettingsHost
                 Stage("update check", () => _ = Task.Run(async () =>
                 {
                     await Task.Delay(UpdateCheckDelay).ConfigureAwait(false);
-                    await RunUpdateCheck(force: false).ConfigureAwait(false);
+                    await RunUpdateCheck(manual: false, _shutdown.Token).ConfigureAwait(false);
                 }));
                 return;
 
@@ -1720,10 +1741,9 @@ internal sealed class Shell : ISettingsHost
         menu.Items.Add(settings);
         menu.Items.Add(new NativeMenuItemSeparator());
 
-        var check = new NativeMenuItem("Check for updates");
-        check.Click += (_, _) => _ = RunUpdateCheck(force: true);
+        var check = new NativeMenuItem(UpdateMemory.TrayHeader(_updatedTo));
+        check.Click += (_, _) => OpenUpdateWindow();
         menu.Items.Add(check);
-        _checkForUpdatesItem = check;
 
         var quit = new NativeMenuItem("Quit");
         quit.Click += (_, _) => Quit();
@@ -2130,7 +2150,8 @@ internal sealed class Shell : ISettingsHost
         }
     }
 
-    void ISettingsHost.CheckNow() => _ = RunUpdateCheck(force: true);
+    // The same window the tray opens: one place to ask, one place the answer and Update now are.
+    void ISettingsHost.CheckNow() => OpenUpdateWindow();
 
     void ISettingsHost.RecentreCapsule()
     {
@@ -2326,18 +2347,19 @@ internal sealed class Shell : ISettingsHost
 
     // ---- the update check ------------------------------------------------------------------------
 
-    /// <summary>The tray's "Check for updates" forces the request past the 24 hour gate; startup
-    /// does not. Either way the result only ever becomes a tooltip line and a log line - Findra
-    /// downloads nothing and installs nothing.</summary>
-    private async Task RunUpdateCheck(bool force)
+    /// <summary>The check behind both the daily background run (<paramref name="manual"/> false:
+    /// the 24 hour gate and the switch hold) and the update window (true: they do not). Either
+    /// way what it found is remembered, the tooltip and Settings' About row follow it, and nothing
+    /// else is opened: only the window shows an answer, and only a person opens the window.</summary>
+    private async Task<UpdateResult> RunUpdateCheck(bool manual, CancellationToken ct)
     {
         try
         {
             UpdateResult result = await UpdateCheck.CheckAsync(
                 _config,
-                ct => UpdateCheck.FetchLatestAsync(Http, Log.Version, _config.InstallSource,
-                                                   System.Runtime.InteropServices.RuntimeInformation.ProcessArchitecture, ct),
-                DateTime.UtcNow, _shutdown.Token, manual: force).ConfigureAwait(false);
+                c => UpdateCheck.FetchLatestAsync(Http, Log.Version, _config.InstallSource,
+                                                  System.Runtime.InteropServices.RuntimeInformation.ProcessArchitecture, c),
+                DateTime.UtcNow, ct, manual).ConfigureAwait(false);
 
             await Dispatcher.UIThread.InvokeAsync(() =>
             {
@@ -2368,20 +2390,60 @@ internal sealed class Shell : ISettingsHost
                     _latest = result.Latest;
                 }
 
-                // A check the user asked for has to visibly answer. The header goes back to
-                // "Check for updates" on the next launch, where the item is built fresh.
-                if (force && _checkForUpdatesItem is not null)
-                    _checkForUpdatesItem.Header = UpdateMemory.CheckedHeader(result.State, result.Latest);
-
                 SettingsWindow.Open?.NoteUpdate(result.State, result.Latest);
-
                 RefreshTooltip();
                 if (result.Advice is { } advice) Log.Info("startup", advice);
             });
+            return result;
         }
         catch (Exception ex)
         {
             Log.Warn("startup", "the update check could not run: " + ex.Message);
+            return new UpdateResult(UpdateState.Unknown, null, null, _config);
         }
+    }
+
+    // ---- the update window -----------------------------------------------------------------------
+
+    /// <summary>Open the update window, or bring the open one forward. A second window would be a
+    /// second check and possibly a second download of the same file.</summary>
+    private void OpenUpdateWindow()
+    {
+        if (TheWelcomeScreenIsInTheWay()) return;
+        if (UpdateWindow.Open is { } open) { open.Activate(); return; }
+        try
+        {
+            UpdateWindow? window = null;
+            var session = new UpdateSession(
+                UpdateFlow.Start(Log.Version, _config.InstallSource),
+                check: async ct =>
+                {
+                    using var both = CancellationTokenSource.CreateLinkedTokenSource(ct, _shutdown.Token);
+                    return await RunUpdateCheck(manual: true, both.Token).ConfigureAwait(false);
+                },
+                download: (asset, progress, ct) =>
+                    UpdateDownload.GetAsync(DownloadHttp, asset, Paths.Updates, Log.Version, progress, ct),
+                // No time limit on the installer: the person may take their time over the permission
+                // prompt, and killing the installer under it would be worse than waiting.
+                runInstaller: (path, ct) => UpdateHandoff.RunInstallerAsync(path, UpdateHandoff.Real(Timeout.InfiniteTimeSpan), ct),
+                runWinget: ct => UpdateHandoff.RunWingetAsync(UpdateHandoff.Real(UpdateHandoff.WingetLimit), ct),
+                openReleases: OpenReleasesPage,
+                show: v => window?.ShowView(v),
+                close: () => window?.Close(),
+                post: a => Dispatcher.UIThread.Post(a));
+            window = new UpdateWindow(session, _palette);
+            window.Show();
+            session.Begin();
+        }
+        catch (Exception ex) { Log.Error("app", "the update window could not open", ex); }
+    }
+
+    private static void OpenReleasesPage()
+    {
+        try
+        {
+            Process.Start(new ProcessStartInfo("https://github.com/blakazulu/findra/releases/latest") { UseShellExecute = true });
+        }
+        catch (Exception ex) { Log.Warn("update", "could not open the releases page: " + ex.Message); }
     }
 }

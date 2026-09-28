@@ -45,6 +45,22 @@ public class TrayTextTests
 
 public class UpdateMemoryTests
 {
+    [Theory]
+    [InlineData("0.5.1", "0.6.0", true)]
+    [InlineData("0.6.0", "0.6.0", false)]
+    [InlineData("0.7.0", "0.6.0", false)]
+    [InlineData(null, "0.6.0", false)]
+    [InlineData("nightly", "0.6.0", false)]
+    public void UpdatedToIsSaidOnlyWhenTheLastRunWasAnOlderVersion(string? lastRun, string running, bool updated) =>
+        Assert.Equal(updated, UpdateMemory.JustUpdated(lastRun, running));
+
+    [Fact]
+    public void TheTrayItemSaysWhatItWasUpdatedTo()
+    {
+        Assert.Equal("Check for updates", UpdateMemory.TrayHeader(null));
+        Assert.Equal("Updated to 0.6.0", UpdateMemory.TrayHeader("0.6.0"));
+    }
+
     [Fact]
     public void ARememberedNewerTagStillReadsAsAnUpdateOnALaunchThatChecksNothing()
     {
@@ -82,19 +98,6 @@ public class UpdateMemoryTests
         Assert.Equal(2, TrayText.Tooltip("1.2.0", "Alt+Space", UpdateMemory.Remembered("1.2.0", "nightly"), "nightly")
             .Split('\n').Length);
     }
-
-    [Fact]
-    public void TheMenuItemSaysWhatTheCheckFound()
-    {
-        Assert.Equal("Checked: 1.3.0 available", UpdateMemory.CheckedHeader(UpdateState.Available, "1.3.0"));
-        Assert.Equal("Checked: up to date", UpdateMemory.CheckedHeader(UpdateState.Current, "1.2.0"));
-        Assert.Equal("Checked: could not reach GitHub", UpdateMemory.CheckedHeader(UpdateState.Unknown, null));
-        Assert.Equal("Update checks are turned off", UpdateMemory.CheckedHeader(UpdateState.Disabled, null));
-    }
-
-    [Fact]
-    public void AnAvailableUpdateWithNoTagDoesNotClaimAVersionItDoesNotHave()
-        => Assert.Equal("Checked: could not reach GitHub", UpdateMemory.CheckedHeader(UpdateState.Available, null));
 
     [Fact]
     public void TheTooltipSaysWhatTheIndexIsDoing()

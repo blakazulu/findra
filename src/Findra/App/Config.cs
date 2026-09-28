@@ -42,6 +42,10 @@ public sealed record Config
 
     public string? InstallSource { get; init; }
 
+    /// <summary>The version that last started, so the first start on a new one can say what it
+    /// was updated to. Null before the first start that records it.</summary>
+    public string? LastRunVersion { get; init; }
+
     /// <summary>Path fragments the indexer will not open. Names stay searchable regardless -
     /// this decides only what is read from inside a file.</summary>
     public string[] SearchExclusions { get; init; } = [.. FileKinds.DefaultExclusions];
@@ -101,6 +105,7 @@ public sealed record Config
         && LastUpdateCheck == other.LastUpdateCheck
         && LatestKnownVersion == other.LatestKnownVersion
         && InstallSource == other.InstallSource
+        && LastRunVersion == other.LastRunVersion
         && IndexContent == other.IndexContent && IndexPower == other.IndexPower
         && FirstRunDone == other.FirstRunDone
         && TranscribeMinutes == other.TranscribeMinutes
@@ -113,7 +118,7 @@ public sealed record Config
         var h = new HashCode();
         h.Add(DarkPalette); h.Add(LightPalette); h.Add(Mode); h.Add(Hotkey);
         h.Add(CapsuleX); h.Add(CapsuleY); h.Add(ShowCapsule); h.Add(CheckForUpdates);
-        h.Add(LastUpdateCheck); h.Add(LatestKnownVersion); h.Add(InstallSource);
+        h.Add(LastUpdateCheck); h.Add(LatestKnownVersion); h.Add(InstallSource); h.Add(LastRunVersion);
         h.Add(IndexContent); h.Add(IndexPower); h.Add(TranscribeMinutes); h.Add(FirstRunDone);
         foreach (string s in SearchExclusions) h.Add(s);
         foreach (string s in IndexDrives) h.Add(s);

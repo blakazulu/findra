@@ -1,5 +1,6 @@
 using Avalonia;
 using Findra;
+using SkiaSharp;
 using Xunit;
 
 /// <summary>
@@ -73,6 +74,20 @@ public class ScreenFitTests
         Assert.True(tallest * zoom * scaling <= room.Height,
             $"the card is {tallest * zoom * scaling:0} physical pixels tall at {scaling:P0} and the screen has {room.Height}");
         Assert.True(CardOverPlacement.GrownSize(zoom, scaling).Height <= room.Height);
+    }
+
+    [Theory]
+    [MemberData(nameof(Scalings))]
+    public void TheUpdateWindowFits(double scaling)
+    {
+        // The tallest thing it shows: a download with its bar and a button.
+        UpdateView v = UpdateFlow.Start("1.0.0", "installer") with
+        {
+            Step = UpdateStep.Downloading, Latest = "1.1.0", Got = 1, Total = 2,
+            Installer = new ReleaseAsset("findra-setup-x64.exe", "https://github.com/a", 2, new string('a', 64)),
+        };
+        SKRect surface = UpdatePainter.Surface(v, Parts.Face);
+        AssertFits("the update window", surface.Width, surface.Height, scaling);
     }
 
     [Fact]
