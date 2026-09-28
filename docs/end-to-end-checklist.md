@@ -47,8 +47,8 @@ Before starting, tail the log in a spare window so every step's proof appears as
    pixel. Then drag a result row into an Explorer window and confirm the file copies.
 8. **The tray, and quitting.** The icon reads as a capsule at its real size. The tooltip
    carries the version, the hotkey and the update state. Untick "Show capsule": it
-   disappears and the hotkey still works. Click "Check for updates": the menu item's own
-   text changes. Then Quit, and confirm the log's closing lines, that `ui.json` is gone,
+   disappears and the hotkey still works. Click "Check for updates": the update window opens,
+   checks and answers. Then Quit, and confirm the log's closing lines, that `ui.json` is gone,
    and that no `findra` process survives except the elevated helper.
 
 ## From Plan 4, content
@@ -594,6 +594,12 @@ person makes by looking; two are destructive and belong last.
     `indexer recycling` and exit code 3. An installed 0.4.2 also logged `0 MB still on the card`
     after photos and documents, with no recycle. Still unwatched: an installed interface
     restarting the recycled child.
+70. **Update now installs the newer release.** Install a build stamped older than the latest
+    release (`dotnet publish` with `-p:Version=0.0.1`, then the installer from it), then Check for
+    updates in the tray, then Update now. The installer downloads with a bar, Windows asks for
+    permission, Findra closes, the release installs, and `findra --version` names it. The log has
+    `updated from 0.0.1`. From the release after 0.6.0, Findra also starts again by itself once
+    the installer is done.
 
 ## What could not be verified in this project at all
 

@@ -32,9 +32,10 @@ when the name helper started, and the index holding them takes 172.0 MB of RAM. 
 One request, and it is not about you. Once every 24 hours on startup, Findra makes an anonymous
 HTTPS GET to GitHub - the releases API, or the winget catalogue's listing for a winget install -
 to ask whether a newer version exists: no query parameters, no
-machine identifier, no install identifier, nothing about your files or your searches. It can be
-switched off, and off means the request is not made. Model downloads happen only when you choose a
-capability and ask for it.
+machine identifier, no install identifier, nothing about your files or your searches. Off stops
+that daily check; pressing Check now still asks, once. An update is downloaded and installed only
+when you press Update now, and model downloads happen only when you choose a capability and ask
+for it.
 
 ## How do I install Findra?
 
@@ -90,8 +91,12 @@ The one exception is an anonymous HTTPS GET to GitHub - the releases API, or the
 catalogue's listing for a winget install - at most once every 24
 hours, on startup, in the background, to learn whether a newer version exists. No query
 parameters, no machine identifier, no install identifier. It is disclosed on the first-run screen,
-it can be switched off, and off means the request is not made.
+it can be switched off. Off stops the daily check; pressing Check now still asks, once, because
+you asked.
 
-Findra never installs an update by itself.
+Findra installs an update only when you press Update now: it downloads the installer from the
+release page, checks it against the checksum GitHub publishes for it, and runs it, or runs the
+winget upgrade for a winget copy. The installer or winget replaces the files, never Findra
+itself.
 
 Full text: https://findra-search.netlify.app/privacy/

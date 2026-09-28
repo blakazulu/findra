@@ -936,7 +936,7 @@ event.
 - the icon reads as a capsule **at its real size**;
 - the tooltip carries the version, the hotkey and the update state;
 - untick "Show capsule": it disappears and **the hotkey still works**;
-- click "Check for updates": the menu item's own text changes;
+- click "Check for updates": the update window opens, checks and answers;
 - then Quit, and confirm the log's closing lines, that `%LOCALAPPDATA%\Findra\ui.json` is **gone**,
   and that no `findra` process survives **except the elevated helper**.
 
@@ -1315,6 +1315,18 @@ needs a second machine or a second install.
 The install source is recorded at first run, not guessed each launch, which is what makes both
 halves stable.
 
+### 9.10 (catalogue 70) Update now, end to end - admin
+
+**Do:** install a build stamped `0.0.1` from this code, start it, open Check for updates in the
+tray, press Update now, and answer the permission prompt Yes.
+
+**Pass:** the window shows the bar counting up to the installer's size, then "Installing"; Findra
+closes; the release installs; `findra --version` names the release; the next start's tray item
+reads "Updated to" the release.
+
+**A failure at the download means** the host rule or the digest refused it: the window says
+which, and the log line under `update` names the host or the mismatch.
+
 ---
 
 # What this run sheet cannot place
@@ -1331,8 +1343,8 @@ halves stable.
   kept, the step cannot be run until one exists - a schema stamp cannot honestly be rolled back by
   hand, because that would test the migration against a database this build wrote, not one an older
   build did.
-- Nothing else in the catalogue is unplaceable. Every numbered item from 1 to 69, including 23a,
-  23b, 27a and 63 to 69, appears above exactly once, except catalogue 33, 42 and 50, which are each
+- Nothing else in the catalogue is unplaceable. Every numbered item from 1 to 70, including 23a,
+  23b, 27a and 63 to 70, appears above exactly once, except catalogue 33, 42 and 50, which are each
   split across the phases where their halves become reachable.
 - **Step 6.9 is not a catalogue item.** The two dim behaviours are a rule in the specification and
   in `CLAUDE.md` that the catalogue never turned into a step, and they need two monitors to tell

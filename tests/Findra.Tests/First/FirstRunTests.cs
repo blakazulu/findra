@@ -406,7 +406,7 @@ public class FirstRunTests
         Assert.Contains("GitHub", FirstRun.Disclosure, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("anonymous", FirstRun.Disclosure, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("24 hours", FirstRun.Disclosure, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("never installs", FirstRun.Disclosure, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("only when you press Update now", FirstRun.Disclosure, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]

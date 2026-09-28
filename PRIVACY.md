@@ -10,8 +10,10 @@ sends anywhere.
 ## The one request Findra makes on its own
 
 Findra checks whether a newer version has been released. That is the only time Findra
-reaches the network without being asked. The one other time it goes out at all is when you
-choose a capability and tell it to download the models, which is described further down.
+reaches the network without being asked. The other times it goes out at all are when you ask:
+pressing Check now, which makes the same request; pressing Update now, which downloads the new
+installer; and choosing a capability and telling it to download the models. All three are
+described below.
 
 - It is an anonymous HTTPS GET to the GitHub releases API. A copy installed with winget asks
   the winget catalogue's listing on GitHub instead, because that is what `winget upgrade` can
@@ -20,11 +22,14 @@ choose a capability and tell it to download the models, which is described furth
 - It carries no query parameters, no machine identifier, no install identifier, and nothing
   about your files or your searches.
 - It never blocks anything. A failure is a line in the log, not a dialog.
-- It is disclosed on the first-run screen and can be switched off, and off means the
-  request is not made at all.
+- It is disclosed on the first-run screen and can be switched off. Off stops the daily check;
+  pressing Check now still asks, once, because you asked.
 
-Findra never downloads or installs an update by itself. It tells you a newer version exists
-and leaves the decision to you.
+Findra downloads and installs an update only when you press Update now. It downloads the
+installer from the release page on GitHub and checks it against the checksum GitHub publishes
+for it before running it; a copy installed with winget runs the winget upgrade instead. The
+installer or winget replaces the files, never Findra itself. The download is a plain file
+request and sends nothing about you.
 
 Downloading a capability's model files is the other time Findra uses the network, and it
 happens only when you choose a capability and ask for it. Those requests fetch model files

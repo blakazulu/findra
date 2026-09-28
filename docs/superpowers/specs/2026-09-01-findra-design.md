@@ -544,8 +544,8 @@ carries a deliberately plain placeholder that promises nothing it cannot yet sho
 
 ## 9b. Versions and updates
 
-Findra knows its own version, learns whether a newer one exists, and tells you. It does not
-install anything by itself.
+Findra knows its own version, learns whether a newer one exists, tells you, and starts the
+upgrade when you press Update now.
 
 ### The honesty problem, faced first
 
@@ -563,29 +563,28 @@ be worse than not checking at all, so it is written down here rather than buried
   keystroke, never per search.
 - **It never blocks anything.** The check runs after the UI is up. A failure is a log line,
   not a dialog - a broken network is not an error the user needs to acknowledge.
-- **It can be switched off** in settings, and off means off: no request is made.
+- **It can be switched off** in settings. Off stops the daily check; pressing Check now still
+  asks, once, because the person asked.
 - **It is on by default**, and disclosed on the first-run screen beside the model downloads.
   A search tool that silently withholds a fix from its users is worse than one that asks for
   a single anonymous GET a day, but that trade is the user's to see and reverse.
 
 ### What it does with the answer
 
-Findra **never updates itself**. It has no self-updater, no elevation for updates, no
-background installer. It tells you what it found and hands you the action appropriate to how
-you installed it:
+Findra **never replaces its own files**. The installer and winget do, because replacing a
+running executable and re-registering an elevated scheduled task are the two operations in this
+product most likely to leave a machine broken, and both already do them correctly. What Findra
+does is start them, when the person presses **Update now** in the update window:
 
-| Installed via | What Findra says |
+| Installed via | Update now |
 |---|---|
-| winget | the version, and `winget upgrade blakazulu.Findra` |
-| `git clone` + `dotnet publish` | the version, and a link to the release notes |
-| unknown | both |
+| the installer, or unknown | downloads this machine's installer from the release, checks its size and SHA-256 against the release record, and runs it silently |
+| winget | runs `winget upgrade --id blakazulu.Findra` with no console window |
+| `git clone` + `dotnet publish` | opens the release page |
 
-The install source is recorded at first run, not guessed at every launch.
-
-A self-updater would need to replace a running executable and re-register an elevated
-scheduled task - the two operations in this product most likely to leave a machine in a
-broken state, and the ones a user is least able to recover from. Handing off to winget, which
-already solves this correctly, is worth more than the convenience of doing it here.
+The window, its states and the download rules are in
+`docs/superpowers/specs/2026-09-28-update-window-design.md`. The install source is recorded at
+first run, not guessed at every launch.
 
 ### Version identity
 

@@ -85,9 +85,12 @@ unknown publisher until that changes; `docs/code-signing-policy.md` says where t
 the site carries the same page at
 [/code-signing/](https://findra-search.netlify.app/code-signing/).
 
-Findra never installs anything by itself. It checks whether a newer version exists and tells
-you; replacing a running executable and re-registering an elevated task are the two things
-most likely to leave a machine broken, and it declines to do either behind your back.
+Findra installs an update only when you press Update now. Check for updates in the tray, or
+Check now in Settings, asks whether a newer version exists; Update now then downloads the
+installer from the release page, checks it against the checksum GitHub publishes for it, and
+runs it (a copy installed with winget runs the winget upgrade instead). Findra never replaces
+its own files: the installer or winget does, because replacing a running executable and
+re-registering an elevated task are the two things most likely to leave a machine broken.
 
 ## What it costs, the first time you run it
 
@@ -284,8 +287,8 @@ every 24 hours, on startup, in
 the background, to learn whether a newer version exists. It carries no query parameters, no
 machine identifier, no install identifier, and nothing about your files or your searches. It
 never blocks anything, and a failure is a line in the log rather than a dialog. It is
-disclosed on the first-run screen and can be switched off, and off means the request is not
-made at all.
+disclosed on the first-run screen and can be switched off. Off stops the daily check; pressing
+Check now still asks, once, because you asked.
 
 Downloading a capability's model files is a separate thing, and it happens only when you
 choose a capability and ask for it.

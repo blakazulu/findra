@@ -28,8 +28,9 @@ public sealed record UpdateResult(UpdateState State, string? Latest, string? Adv
 
 /// <summary>
 /// The one thing Findra sends off this machine (spec 9b): an anonymous check against GitHub - the
-/// releases page, or for a winget copy the winget catalogue's listing - at most once a day, that
-/// never blocks and never installs anything.
+/// releases page, or for a winget copy the winget catalogue's listing - at most once a day in the
+/// background, and whenever somebody presses Check now. It never blocks, and it installs nothing:
+/// the update window does that, and only when Update now is pressed.
 /// Every comparison here is on parsed version numbers, never string ordering, and a version
 /// that fails to parse is never treated as newer than one that does.
 /// </summary>

@@ -188,21 +188,27 @@ First-run and Settings resize through their own fit method (never set `Width`/`H
 in `Opened`, and `KeepInside` the working area; the card folds it into its zoom
 (`CardOverPlacement.FittedZoom`). `ScreenFitTests` holds every surface to 1080p at 100-175%.
 
-## The update panel
+## The update window
 
-**Check now** in Settings raises a panel over the pane.
+**Check for updates** in the tray and **Check now** in Settings open one small window
+(`src/Findra/Update/`); nothing else does, and the daily background check never does.
 
-- **Only the button raises it.** `RunUpdateCheck(force)` passes `force` to `NoteUpdate(..., raise:)`;
-  the daily background check passes false (spec §3: no loud idle widget).
-- **Findra installs nothing itself.** "Update now" runs `winget upgrade blakazulu.Findra` in a
-  **visible** console for winget copies, else opens the releases page. `UpdatePrompt.GoLabel` and
-  `Body` switch on the install source. Spec §9b: winget or the installer replaces the binary.
-- **`Disabled` has its own arm.** `UpdateCheck.CheckAsync` makes no request when updates are off,
-  *even when forced* - and the panel still answers.
-- **While up, it is the only thing on the surface**: the hit test refuses scrim, panel body, the
-  pane behind and the window's close cross.
-- **`SettingsState.Prompt` is a field, not derived from `Update`** (what the last check found vs.
-  whether somebody is facing a question they asked).
+- **A manual check ignores the 24 hour gate and the switch** (`CheckAsync(manual: true)`); the
+  background check keeps both, and off still means it makes no request.
+- **`UpdateFlow` is the window as a list of states**, pure and tested; `UpdateSession` starts
+  what each move names through delegates, and the window only paints and reports presses.
+- **The check keeps this machine's installer from the same response** (`InstallerOf`, by
+  `ProcessArchitecture`); an entry with no `sha256:` digest is never offered.
+- **Downloads are GitHub-only, over HTTPS, capped at 512 MB, and checked** (size and SHA-256)
+  before anything runs. Redirects are followed one hop at a time, each held to the host rule.
+- **Findra never replaces its own files.** The installer runs with
+  `/SILENT /SUPPRESSMSGBOXES /NORESTART /SP-`; winget with exactly
+  `upgrade --id blakazulu.Findra --exact --accept-source-agreements --accept-package-agreements
+  --disable-interactivity`, no window, both streams drained, killed at 20 minutes. A hand-off
+  that returns at all installed nothing, because the installer stops Findra first.
+- **`--stop` exits 2 when it stopped a running interface**, and the installer starts Findra again
+  through `explorer.exe` (never elevated) only after a silent install that stopped one.
+- **While the installer or winget runs, the window cannot be closed**: they cannot be called back.
 
 ## The card and the pointer
 
@@ -847,8 +853,8 @@ folder.
 
 ## Versions and updates
 
-**Findra never installs anything by itself** - no self-updater, background installer or elevation;
-winget does it correctly.
+**Findra never replaces its own files.** Update now runs the installer or winget, and they do;
+nothing happens without the press.
 
 The update check is the **one exception** to "nothing leaves the machine" (spec §9b): an anonymous
 HTTPS GET to the GitHub Releases API - for a winget install, to `UpdateCheck.CatalogueUrl`, the
@@ -856,7 +862,8 @@ winget catalogue's folder in `microsoft/winget-pkgs` (`winget upgrade` can only 
 catalogue has, and it trails the releases page by a manual submission) - at most once per 24
 hours, on startup, in the background. No
 query parameters, machine or install identifier, nothing about files or searches. Never blocks; a
-failure is a log line. On by default, disclosed on the first-run screen; off means no request.
+failure is a log line. On by default, disclosed on the first-run screen; off stops the daily
+check, and Check now still asks.
 
 It reports the action for how the user installed (`winget upgrade blakazulu.Findra`, or release
 notes for a source build). The install source is recorded at first run, not guessed.

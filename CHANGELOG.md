@@ -14,10 +14,10 @@ and Findra follows [Semantic Versioning](https://semver.org/spec/v2.0.0/).
   now downloads the installer from the release page, checks it against the checksum GitHub
   publishes for it, and runs it; a copy installed with winget runs the winget upgrade instead.
   Windows asks for permission, Findra closes while the new version installs, and it starts again
-  when the installer is done.
-  If Windows is not given permission, or winget cannot run the upgrade, the window says so and
-  nothing has changed. Cancel stops a download part-way and deletes what arrived. After an update,
-  the tray menu says what Findra was updated to until it is next closed.
+  when the installer is done. If Windows is not given permission, or winget cannot run the
+  upgrade, the window says so and nothing has changed. Cancel stops a download part-way and
+  deletes what arrived. After an update, the tray menu says what Findra was updated to until it
+  is next closed.
 - Documentation: the design and the implementation plan for the update window.
 
 ### Changed
@@ -26,6 +26,9 @@ and Findra follows [Semantic Versioning](https://semver.org/spec/v2.0.0/).
   once-a-day check in the background; pressing Check now still asks, once, because you asked.
 - **Settings no longer puts an update panel over its page.** Check now opens the update window,
   the same one the tray opens.
+- Documentation: the privacy policy, the README, the FAQ and the About page say that Findra
+  installs an update only when you press Update now, and that off stops the daily check rather
+  than refusing a check you ask for.
 
 ### Fixed
 

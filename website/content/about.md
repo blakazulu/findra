@@ -55,4 +55,4 @@ or on this site claims otherwise.
 
 Findra does not have an account, a cloud service, analytics, crash reporting or telemetry. It
 makes one request on its own, once a day, to ask whether a newer version exists, and that request
-is described in full on the privacy page. It never installs an update by itself.
+is described in full on the privacy page. It installs an update only when you press Update now.
