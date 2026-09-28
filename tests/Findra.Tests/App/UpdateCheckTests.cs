@@ -103,7 +103,7 @@ public class UpdateCheckTests
         // has never heard of on their machine, which fails with a message about no packages found.
         string advice = UpdateCheck.Advice("installer", "1.3.0");
 
-        Assert.Contains("releases", advice, StringComparison.Ordinal);
+        Assert.Contains("Check now", advice, StringComparison.Ordinal);
         Assert.DoesNotContain("winget upgrade", advice, StringComparison.Ordinal);
     }
 
@@ -226,6 +226,18 @@ public class UpdateCheckTests
 
         Assert.Equal(UpdateState.Unknown, r.State);
         Assert.Equal(config.LastUpdateCheck, r.Config.LastUpdateCheck);
+        // Said, so nothing reports a check that was called off as one that could not get through.
+        Assert.True(r.Cancelled);
+    }
+
+    [Fact]
+    public async Task AFailedCheckIsNotACancelledOne()
+    {
+        UpdateResult r = await UpdateCheck.CheckAsync(Config.Default,
+            _ => throw new HttpRequestException("no route"), DateTime.UtcNow, default, manual: true);
+
+        Assert.Equal(UpdateState.Unknown, r.State);
+        Assert.False(r.Cancelled);
     }
 
     [Fact]

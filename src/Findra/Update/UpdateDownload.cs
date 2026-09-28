@@ -4,7 +4,7 @@ using System.Security.Cryptography;
 namespace Findra;
 
 /// <summary>Why a download did not produce a file that may be run.</summary>
-public enum DownloadFailure { None, Host, TooLarge, Short, Digest, Network, Cancelled }
+public enum DownloadFailure { None, Host, TooLarge, Short, Oversized, Digest, Network, Cancelled }
 
 /// <summary>A downloaded installer that checked out, or why there is not one.</summary>
 public sealed record DownloadResult(string? Path, DownloadFailure Failure, string? Message)
@@ -94,7 +94,7 @@ public static class UpdateDownload
                     {
                         file.Close();
                         TryDelete(path);
-                        return DownloadResult.Failed(DownloadFailure.Short, "longer than declared");
+                        return DownloadResult.Failed(DownloadFailure.Oversized, "longer than declared");
                     }
                     await file.WriteAsync(buffer.AsMemory(0, n), ct).ConfigureAwait(false);
                     got += n;
@@ -153,6 +153,9 @@ public static class UpdateDownload
             }
         }
     }
+
+    /// <summary>Delete a download that will not be run, and say so in the log if it cannot go.</summary>
+    internal static void Discard(string path) => TryDelete(path);
 
     private static void TryDelete(string path)
     {

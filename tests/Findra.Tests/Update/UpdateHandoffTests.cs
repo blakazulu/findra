@@ -50,6 +50,38 @@ public class UpdateHandoffTests
     }
 
     [Fact]
+    public async Task AnInstallerThatExitsWithTwoWasRefusedPermission()
+    {
+        // Inno's installer elevates itself after it has started, so a No on the permission prompt
+        // reaches Findra as the installer's own "cancelled before the installation started", 2.
+        // Run silently with no opening question, nothing else produces it.
+        using var d = new Downloaded();
+        Handoff h = await UpdateHandoff.RunInstallerAsync(d.Path, d.Asset, Returns(2, ""), default);
+        Assert.Equal(UpdateHandoff.PermissionRefused, h.Message);
+    }
+
+    [Theory]
+    [InlineData(2)]
+    [InlineData(5)]
+    public async Task AnInstallerThatDidNotRunIsDeleted(int code)
+    {
+        // Try again downloads afresh, and a verified installer left on the disk is 80 MB that only
+        // the next start would sweep - an uninstall before then kept it for good.
+        using var d = new Downloaded();
+        await UpdateHandoff.RunInstallerAsync(d.Path, d.Asset, Returns(code, ""), default);
+        Assert.False(File.Exists(d.Path));
+    }
+
+    [Fact]
+    public async Task AnInstallerThatChangedAfterItWasCheckedIsDeleted()
+    {
+        using var d = new Downloaded();
+        File.AppendAllText(d.Path, "swapped");
+        await UpdateHandoff.RunInstallerAsync(d.Path, d.Asset, Returns(0, ""), default);
+        Assert.False(File.Exists(d.Path));
+    }
+
+    [Fact]
     public async Task RefusingThePermissionPromptIsSaidPlainly()
     {
         using var d = new Downloaded();

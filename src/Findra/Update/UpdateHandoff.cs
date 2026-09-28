@@ -38,6 +38,10 @@ public static class UpdateHandoff
     /// <summary>ERROR_CANCELLED: the permission prompt was answered No.</summary>
     private const int Cancelled = 1223;
 
+    /// <summary>Inno Setup's exit code for "cancelled before the installation started", which is
+    /// what a No on its own permission prompt produces.</summary>
+    private const int InstallerCancelledBeforeInstall = 2;
+
     public const string PermissionRefused = "Windows was not given permission to install it. Nothing was installed.";
     public const string NothingNewer = "winget found nothing newer to install. The catalogue can take a few days to list a new release.";
     public const string WingetMissing = "winget is not installed on this computer, so it could not run the upgrade.";
@@ -67,6 +71,17 @@ public static class UpdateHandoff
     public static async Task<Handoff> RunInstallerAsync(string installer, ReleaseAsset asset, RunProcess run,
                                                         CancellationToken ct)
     {
+        Handoff h = await StartInstallerAsync(installer, asset, run, ct).ConfigureAwait(false);
+        // Anything that comes back here installed nothing: an install that worked stopped Findra on
+        // its way through. Try again downloads afresh, so the file goes now rather than waiting for
+        // the next start to sweep it - an uninstall before then used to keep it for good.
+        UpdateDownload.Discard(installer);
+        return h;
+    }
+
+    private static async Task<Handoff> StartInstallerAsync(string installer, ReleaseAsset asset, RunProcess run,
+                                                           CancellationToken ct)
+    {
         ArgumentNullException.ThrowIfNull(asset);
         ArgumentNullException.ThrowIfNull(run);
         Task<(int ExitCode, string Output)> running;
@@ -88,6 +103,11 @@ public static class UpdateHandoff
         try
         {
             (int code, _) = await running.ConfigureAwait(false);
+            // The installer asks for permission itself, after it has started, and a No makes it
+            // exit with its own "cancelled before the installation started". Run silently with no
+            // opening question, nothing else produces that code.
+            if (code == InstallerCancelledBeforeInstall)
+                return new Handoff(HandoffOutcome.DidNotRun, PermissionRefused);
             return new Handoff(HandoffOutcome.DidNotRun,
                 $"The installer stopped before installing anything (exit code {code}). Nothing was installed.");
         }

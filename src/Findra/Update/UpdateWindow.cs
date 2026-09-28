@@ -67,13 +67,17 @@ public sealed class UpdateWindow : Window
         _canvas.InvalidateVisual();
     }
 
+    /// <summary>Take the view's size - only when it changed, so a window somebody dragged partly
+    /// off the screen is not pulled back at every step of a download.</summary>
     private void Fit()
     {
         SKRect surface = UpdatePainter.Surface(_canvas.View, Parts.Face);
         double k = ScreenFit.For(this, surface.Width, surface.Height);
+        double w = surface.Width * k, h = surface.Height * k;
         _canvas.Fit = k;
-        Width = surface.Width * k;
-        Height = surface.Height * k;
+        if (w == Width && h == Height) return;
+        Width = w;
+        Height = h;
         if (IsVisible) ScreenFit.KeepInside(this);
     }
 

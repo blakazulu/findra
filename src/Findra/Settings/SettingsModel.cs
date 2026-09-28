@@ -687,8 +687,7 @@ public static class SettingsModel
             note: "One anonymous request to GitHub, at most once every 24 hours, in the background. " +
                   "No query parameters, no machine or install identifier, nothing about your files. " +
                   "Off stops it; Check now still asks when you press it."),
-        Control.Plain(ControlId.CheckNow, ControlKind.Button, "Check now",
-                      s.Waiting(ControlId.CheckNow) ? "Asking..." : "Check"),
+        Control.Plain(ControlId.CheckNow, ControlKind.Button, "Check now", "Check"),
         Control.Plain(ControlId.InstalledVia, ControlKind.Text, "Installed via", s.Config.InstallSource ?? "unknown"),
         // The FOLDER, not today's file. "It stopped working last night" is answered by yesterday's
         // log, and a folder reaches both. It sits here because a person who has come to About is

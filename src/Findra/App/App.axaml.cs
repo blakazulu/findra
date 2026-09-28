@@ -2361,6 +2361,10 @@ internal sealed class Shell : ISettingsHost
                                                   System.Runtime.InteropServices.RuntimeInformation.ProcessArchitecture, c),
                 DateTime.UtcNow, ct, manual).ConfigureAwait(false);
 
+            // Called off - the window closed mid-check, or Findra is quitting - is not "could not
+            // reach GitHub", and About must not say it was.
+            if (result.Cancelled) return result;
+
             await Dispatcher.UIThread.InvokeAsync(() =>
             {
                 // Only the timestamp and the tag are taken back, and both are merged onto the

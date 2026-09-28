@@ -118,9 +118,11 @@ begin
   Result := True;
   if FileExists(ExpandConstant('{app}\findra.exe')) then
   begin
-    Exec(ExpandConstant('{app}\findra.exe'), '--stop', '', SW_HIDE, ewWaitUntilTerminated, code);
     // 2: an interface was running and has been stopped. An older findra.exe always answers 0.
-    WasRunning := code = 2;
+    // Read only when --stop actually ran: when Exec cannot start it, `code` holds a Windows error
+    // instead, and ERROR_FILE_NOT_FOUND is also 2.
+    if Exec(ExpandConstant('{app}\findra.exe'), '--stop', '', SW_HIDE, ewWaitUntilTerminated, code) then
+      WasRunning := code = 2;
   end;
 end;
 

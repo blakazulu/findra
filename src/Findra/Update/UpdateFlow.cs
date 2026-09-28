@@ -122,8 +122,8 @@ public static class UpdateFlow
         {
             DownloadFailure.None => new(v with { Step = UpdateStep.Installing, DownloadedTo = r.Path }, UpdateAction.RunInstaller),
             DownloadFailure.Cancelled => new(v with { Step = UpdateStep.Available, Got = 0 }, UpdateAction.None),
-            DownloadFailure.Digest or DownloadFailure.Short or DownloadFailure.Host or DownloadFailure.TooLarge
-                or DownloadFailure.Network => new(v with { Step = UpdateStep.DownloadFailed, Problem = Problem(r.Failure) },
+            DownloadFailure.Digest or DownloadFailure.Short or DownloadFailure.Oversized or DownloadFailure.Host
+                or DownloadFailure.TooLarge or DownloadFailure.Network => new(v with { Step = UpdateStep.DownloadFailed, Problem = Problem(r.Failure) },
                                                   UpdateAction.None),
             _ => throw new ArgumentOutOfRangeException(nameof(r), r.Failure, "no step for this download failure"),
         };
@@ -159,6 +159,7 @@ public static class UpdateFlow
     {
         DownloadFailure.Digest => "The download did not match the checksum GitHub published for it, so it was deleted. Nothing was installed.",
         DownloadFailure.Short => "The download arrived incomplete, so it was deleted. Nothing was installed.",
+        DownloadFailure.Oversized => "The download was larger than GitHub said it would be, so it was deleted. Nothing was installed.",
         DownloadFailure.Host => "The download pointed somewhere other than GitHub, so it was refused. Nothing was installed.",
         DownloadFailure.TooLarge => "The installer was far larger than any Findra installer, so it was refused. Nothing was installed.",
         DownloadFailure.Network => "The download did not get through. Nothing was installed.",

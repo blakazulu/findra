@@ -67,6 +67,24 @@ public class ShotTests
     }
 
     [Fact]
+    public void EveryRouteUpdateNowCanTakeHasAShotOfItsOwn()
+    {
+        // The offer's body and its button change with the route, so each route is drawn and
+        // looked at. A route added with no shot fails here.
+        var shots = new Dictionary<UpdateRoute, string>
+        {
+            [UpdateRoute.Installer] = "updateavailable",
+            [UpdateRoute.Winget] = "updateavailablewinget",
+            [UpdateRoute.Releases] = "updatereleases",
+        };
+        foreach (UpdateRoute route in Enum.GetValues<UpdateRoute>())
+        {
+            Assert.True(shots.TryGetValue(route, out string? state), $"no --searchshot state for the {route} route");
+            Assert.Contains(state, SearchShot.States);
+        }
+    }
+
+    [Fact]
     public void EverySectionOfTheSettingsWindowHasAShotOfItsOwn()
     {
         // "--searchshot must learn every new palette and every new surface as it is written"

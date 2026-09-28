@@ -118,8 +118,11 @@ public sealed class UpdateSession
                 (got, total) => _post(() =>
                 {
                     if (!Current(mine)) return;
+                    // Repainted only when the whole percent moves: a download reports about a
+                    // thousand times, and each repaint re-measures the window.
+                    int before = Percent(View);
                     View = UpdateFlow.Progress(View, got, total);
-                    _show(View);
+                    if (Percent(View) != before) _show(View);
                 }),
                 mine.Token).ConfigureAwait(false);
         }
@@ -130,6 +133,8 @@ public sealed class UpdateSession
         }
         _post(() => { if (Current(mine)) Apply(UpdateFlow.Downloaded(View, r)); });
     }
+
+    private static int Percent(UpdateView v) => v.Total > 0 ? (int)(v.Got * 100 / v.Total) : 0;
 
     private bool Current(CancellationTokenSource download) => !_closed && ReferenceEquals(download, _downloading);
 

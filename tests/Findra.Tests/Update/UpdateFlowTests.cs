@@ -76,6 +76,7 @@ public class UpdateFlowTests
     [Theory]
     [InlineData(DownloadFailure.Digest, "checksum")]
     [InlineData(DownloadFailure.Short, "incomplete")]
+    [InlineData(DownloadFailure.Oversized, "larger than GitHub said")]
     [InlineData(DownloadFailure.Host, "other than GitHub")]
     [InlineData(DownloadFailure.TooLarge, "larger")]
     [InlineData(DownloadFailure.Network, "did not get through")]

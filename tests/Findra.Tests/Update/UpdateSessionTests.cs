@@ -142,6 +142,26 @@ public class UpdateSessionTests
     }
 
     [Fact]
+    public void ProgressRepaintsOnlyWhenTheWholePercentMoves()
+    {
+        // A download reports every 80 KB, about a thousand times for an installer; each repaint
+        // re-measures the window and pulls it back inside the screen.
+        var h = new Harness();
+        h.Session.Begin();
+        h.Offer();
+        h.Session.PressGo();
+        int before = h.Shown.Count;
+
+        var progress = h.DownloadCalls[0].Progress;
+        for (long got = 1; got <= 9; got++) progress(got, 1000);   // all under one percent
+        progress(10, 1000);                                         // one percent
+        h.Pump();
+
+        Assert.Equal(before + 1, h.Shown.Count);
+        Assert.Equal(10, h.Session.View.Got);
+    }
+
+    [Fact]
     public void ADownloadThatThrowsSaysSoRatherThanHanging()
     {
         var h = new Harness();

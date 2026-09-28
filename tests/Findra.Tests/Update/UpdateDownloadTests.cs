@@ -123,7 +123,7 @@ public sealed class UpdateDownloadTests : IDisposable
     {
         DownloadResult r = await Get(new FakeHttp(_ => Ok([.. Body, 1, 2, 3])), Asset());
 
-        Assert.Equal(DownloadFailure.Short, r.Failure);
+        Assert.Equal(DownloadFailure.Oversized, r.Failure);
         Assert.Empty(Directory.EnumerateFiles(_dir));
     }
 

@@ -193,6 +193,11 @@ public class InstallerScriptTests
         Assert.Contains("WizardSilent", check, StringComparison.Ordinal);
         Assert.Contains("WasRunning", check, StringComparison.Ordinal);
         Assert.Contains("WasRunning := code = 2", Body("StopFindra"), StringComparison.Ordinal);
+
+        // Only when --stop actually ran: when Exec cannot start it, `code` holds a Windows error
+        // instead, and ERROR_FILE_NOT_FOUND is also 2.
+        Assert.Matches(@"(?s)if\s+Exec\(ExpandConstant\('\{app\}\\findra\.exe'\),\s*'--stop'.*?\)\s+then\s+WasRunning\s*:=\s*code\s*=\s*2",
+                       Body("StopFindra"));
     }
 
     [Fact]

@@ -27,7 +27,7 @@ public static class SearchShot
         "settingsremove", "settingsabout",
         "updatechecking", "updateuptodate", "updateunreachable", "updateavailable", "updateavailablewinget",
         "updatedownloading", "updatedownloadfailed", "updateinstalling", "updatedidnotrun", "updatewinget",
-        "updatewingetfailed",
+        "updatewingetfailed", "updatereleases",
         "firstrun", "firstruninstalled", "firstrunspeech", "firstrundownloading", "firstrunfinished",
         "firstrunready", "firstrunnames", "firstrunworking",
     ];
@@ -219,7 +219,10 @@ public static class SearchShot
         var installer = new ReleaseAsset("findra-setup-x64.exe",
             "https://github.com/blakazulu/findra/releases/download/v1.4.0/findra-setup-x64.exe", 85_727_274, new string('0', 64));
         bool winget = state.Contains("winget", StringComparison.Ordinal);
-        UpdateView start = UpdateFlow.Start("1.3.0", winget ? "winget" : "installer");
+        // "updatereleases" is a source build's offer: Open releases, and the words for a pull and
+        // a rebuild.
+        string source = winget ? "winget" : state == "updatereleases" ? "source" : "installer";
+        UpdateView start = UpdateFlow.Start("1.3.0", source);
         UpdateView offer = start with { Step = UpdateStep.Available, Latest = "1.4.0", Installer = winget ? null : installer };
         UpdateView downloading = UpdateFlow.Go(offer).View with { Got = 36_000_000 };
 
@@ -228,7 +231,7 @@ public static class SearchShot
             "updatechecking" => start,
             "updateuptodate" => start with { Step = UpdateStep.UpToDate, Latest = "1.3.0" },
             "updateunreachable" => start with { Step = UpdateStep.Unreachable },
-            "updateavailable" or "updateavailablewinget" => offer,
+            "updateavailable" or "updateavailablewinget" or "updatereleases" => offer,
             "updatedownloading" => downloading,
             "updatedownloadfailed" => UpdateFlow.Downloaded(downloading, DownloadResult.Failed(DownloadFailure.Digest, "")).View,
             "updateinstalling" => downloading with { Step = UpdateStep.Installing },

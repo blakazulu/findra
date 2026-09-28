@@ -783,7 +783,8 @@ public class SettingsModelTests
 
     [Theory]
     [InlineData("winget", "winget upgrade blakazulu.Findra")]
-    [InlineData("installer", "releases")]
+    [InlineData("installer", "Check now")]
+    [InlineData("unknown", "Check now")]
     [InlineData("source", "releases")]
     public void TheAboutLineNamesTheActionThatMatchesHowThisCopyWasInstalled(string source, string expect)
     {
@@ -901,7 +902,6 @@ public class SettingsModelTests
     }
 
     [Theory]
-    [InlineData(Section.About, ControlId.CheckNow)]
     [InlineData(Section.Opening, ControlId.Helper)]
     [InlineData(Section.Content, ControlId.StartIndexing)]
     [InlineData(Section.AddOns, ControlId.Capability)]
@@ -928,7 +928,6 @@ public class SettingsModelTests
     }
 
     [Theory]
-    [InlineData(Section.About, ControlId.CheckNow)]
     [InlineData(Section.Opening, ControlId.Helper)]
     [InlineData(Section.Content, ControlId.StartIndexing)]
     [InlineData(Section.AddOns, ControlId.Capability)]

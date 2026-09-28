@@ -24,7 +24,13 @@ public enum UpdateState
 /// <summary>What a check found, plus the <see cref="Config"/> to save afterwards - the
 /// caller persists it so a dead network does not retry on every launch.</summary>
 public sealed record UpdateResult(UpdateState State, string? Latest, string? Advice, Config Config,
-                                  ReleaseAsset? Installer = null);
+                                  ReleaseAsset? Installer = null)
+{
+    /// <summary>The check was called off before it answered - the window closed, or Findra is
+    /// quitting - which is not the same as a check that could not get through, and is not
+    /// reported as one.</summary>
+    public bool Cancelled { get; init; }
+}
 
 /// <summary>
 /// The one thing Findra sends off this machine (spec 9b): an anonymous check against GitHub - the
@@ -65,22 +71,17 @@ public static class UpdateCheck
         config.CheckForUpdates &&
         (config.LastUpdateCheck is null || utcNow - config.LastUpdateCheck.Value >= CheckInterval);
 
-    /// <summary>The action matching how this copy was installed. winget gets the upgrade
-    /// command; a downloaded installer and a source build get a link to the releases page; an
-    /// unrecognised source gets both, since it might be any of them. Matched case-insensitively -
-    /// nothing writes <see cref="Config.InstallSource"/> yet, so its casing convention is not
-    /// fixed.</summary>
+    /// <summary>What to do about a newer version, matched to what Update now in the update window
+    /// does for this copy - Check now opens that window, so the sentence and the button agree. A
+    /// winget copy is upgraded by winget; a source build is pointed at the release notes, since it
+    /// is pulled and rebuilt; every other copy, including one that never recorded how it arrived,
+    /// is installed by the installer, never sent to a winget command it may not be able to act on.
+    /// Matched case-insensitively.</summary>
     public static string Advice(string installSource, string version) => installSource.ToLowerInvariant() switch
     {
-        "winget" => $"Findra {version} is available. Run winget upgrade blakazulu.Findra to update.",
-        // An installed copy and a source build get the same place to go and different reasons for
-        // going there: one downloads the new installer, the other pulls and rebuilds. Neither can
-        // act on a winget command, which is why they are not in the default arm.
-        "installer" => $"Findra {version} is available. Download it from " +
-                       "https://github.com/blakazulu/findra/releases.",
+        "winget" => $"Findra {version} is available. Check now updates it with winget upgrade blakazulu.Findra.",
         "source" => $"Findra {version} is available. See https://github.com/blakazulu/findra/releases for the release notes.",
-        _ => $"Findra {version} is available. Run winget upgrade blakazulu.Findra, or see " +
-             "https://github.com/blakazulu/findra/releases for the release notes.",
+        _ => $"Findra {version} is available. Check now downloads and installs it.",
     };
 
     /// <summary>Runs the check against a caller-supplied fetch delegate, never the network
@@ -111,8 +112,8 @@ public static class UpdateCheck
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
-            Log.Warn("startup", "update check cancelled (shutdown), not counted against the daily check");
-            return new UpdateResult(UpdateState.Unknown, null, null, config);
+            Log.Warn("startup", "update check cancelled, not counted against the daily check");
+            return new UpdateResult(UpdateState.Unknown, null, null, config) { Cancelled = true };
         }
         catch (Exception ex)
         {
