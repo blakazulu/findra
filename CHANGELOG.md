@@ -9,6 +9,12 @@ and Findra follows [Semantic Versioning](https://semver.org/spec/v2.0.0/).
 
 ### Added
 
+- **Update now installs the new version for you.** Check for updates in the tray, or Check now in
+  Settings, opens a small window that checks straight away. When there is a newer version, Update
+  now downloads the installer from the release page, checks it against the checksum GitHub
+  publishes for it, and runs it; a copy installed with winget runs the winget upgrade instead.
+  Windows asks for permission, Findra closes while the new version installs, and it starts again
+  when the installer is done.
 - Documentation: the design and the implementation plan for the update window.
 
 ### Changed

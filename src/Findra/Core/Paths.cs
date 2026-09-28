@@ -17,6 +17,9 @@ public static class Paths
     public static string Index  => Path.Combine(Local, "index");
     public static string Logs   => Path.Combine(Local, "logs");
 
+    /// <summary>Where an update's installer is downloaded to. Emptied at every start.</summary>
+    public static string Updates => Path.Combine(Local, "updates");
+
     public static string ConfigFile   => Path.Combine(Roaming, "config.json");
     public static string PalettesFile => Path.Combine(Roaming, "palettes.json");
 
