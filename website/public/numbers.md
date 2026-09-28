@@ -29,7 +29,7 @@ moment the results arrive. The worst single sample across the five measured name
 | report | 14.95 ms | 15.94 ms | 16.98 ms | 50 |
 
 Machine: AMD Ryzen 9 9900X3D, 47.1 GB RAM, NVMe SSD, Windows 11 Pro 10.0.26200.9445, no model
-loaded, Findra built after 0.5.0, n=50 per query. Yours will differ.
+loaded, Findra 0.5.1, n=50 per query. Yours will differ.
 
 **These numbers are from one machine, and it has an NVIDIA card. AMD and Intel graphics have not
 been tested on real hardware, and neither has an arm64 machine.** The paths Findra uses are

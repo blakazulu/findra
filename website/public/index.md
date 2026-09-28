@@ -9,7 +9,7 @@ leaves your machine.
 - Source: https://github.com/blakazulu/findra
 - Licence: Apache-2.0
 - Platform: Windows 10 and 11, x64 and arm64
-- Version: 0.5.0
+- Version: 0.5.1
 
 ## We fixed Windows Search. You're welcome.
 
@@ -27,7 +27,7 @@ moment the results arrive.
 - 172.0 MB for the name index of those 1,339,635 names.
 - 0 bytes sent anywhere about your files.
 
-Machine: AMD Ryzen 9 9900X3D, 47.1 GB RAM, NVMe SSD, Findra built after 0.5.0, n=50 per query. These numbers
+Machine: AMD Ryzen 9 9900X3D, 47.1 GB RAM, NVMe SSD, Findra 0.5.1, n=50 per query. These numbers
 are from one machine, and it has an NVIDIA card. AMD and Intel graphics have not been tested on
 real hardware, and neither has an arm64 machine. Every table is on
 https://findra-search.netlify.app/numbers/.

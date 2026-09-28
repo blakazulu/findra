@@ -184,8 +184,8 @@ That is the first table below.
 
 What follows was produced by `findra --searchbench readme-bench.md 10000` and pasted without
 editing. Ten thousand rather than the default 2,500, because a run of a second or two
-disagrees with itself by more than a published rate deserves. The run was taken on the code that
-follows 0.5.0, before the next version number was raised, which is why its machine table says
+disagrees with itself by more than a published rate deserves. The run was taken on the build that
+became 0.5.1, before its version number was raised, which is why its machine table says
 0.5.0. No model was installed for it, so the machine table names no accelerator; nothing the
 run measures needs one.
 

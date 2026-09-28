@@ -7,6 +7,8 @@ and Findra follows [Semantic Versioning](https://semver.org/spec/v2.0.0/).
 
 ## [Unreleased]
 
+## [0.5.1] - 2026-09-28
+
 ### Added
 
 - Documentation: the website's front page quotes a Findra user, between the numbers and the
@@ -1801,7 +1803,8 @@ all of it gets verified without a screen.
 - The named pipe is restricted to the current user, and the interface verifies the
   owner before trusting a connection.
 
-[Unreleased]: https://github.com/blakazulu/findra/compare/v0.5.0...HEAD
+[Unreleased]: https://github.com/blakazulu/findra/compare/v0.5.1...HEAD
+[0.5.1]: https://github.com/blakazulu/findra/compare/v0.5.0...v0.5.1
 [0.5.0]: https://github.com/blakazulu/findra/compare/v0.4.3...v0.5.0
 [0.4.3]: https://github.com/blakazulu/findra/compare/v0.4.2...v0.4.3
 [0.4.2]: https://github.com/blakazulu/findra/compare/v0.4.1...v0.4.2
