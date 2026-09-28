@@ -6,6 +6,9 @@ using Xunit;
 
 public class UpdateCheckTests
 {
+    private static Task<LatestRelease?> Release(string? tag) =>
+        Task.FromResult(tag is null ? null : new LatestRelease(tag, null));
+
     [Theory]
     [InlineData("1.9.0", "1.10.0", -1)]   // the one string ordering gets wrong
     [InlineData("1.10.0", "1.9.0", 1)]
@@ -52,7 +55,7 @@ public class UpdateCheckTests
         Config off = Config.Default with { CheckForUpdates = false };
 
         UpdateResult r = await UpdateCheck.CheckAsync(off,
-            _ => { called = true; return Task.FromResult<string?>("9.9.9"); },
+            _ => { called = true; return Release("9.9.9"); },
             DateTime.UtcNow, default);
 
         Assert.False(called);              // off means off
@@ -66,11 +69,11 @@ public class UpdateCheckTests
         int calls = 0;
         Config recent = Config.Default with { LastUpdateCheck = now.AddHours(-3) };
 
-        await UpdateCheck.CheckAsync(recent, _ => { calls++; return Task.FromResult<string?>("9.9.9"); }, now, default);
+        await UpdateCheck.CheckAsync(recent, _ => { calls++; return Release("9.9.9"); }, now, default);
         Assert.Equal(0, calls);
 
         Config old = Config.Default with { LastUpdateCheck = now.AddHours(-25) };
-        await UpdateCheck.CheckAsync(old, _ => { calls++; return Task.FromResult<string?>("9.9.9"); }, now, default);
+        await UpdateCheck.CheckAsync(old, _ => { calls++; return Release("9.9.9"); }, now, default);
         Assert.Equal(1, calls);
     }
 
@@ -120,7 +123,7 @@ public class UpdateCheckTests
         // routing that 0 straight into ">= 0 => Current" was exactly the bug: it must be
         // caught before the comparison, not after.
         UpdateResult r = await UpdateCheck.CheckAsync(Config.Default with { LastUpdateCheck = default },
-            _ => Task.FromResult<string?>("nightly"), DateTime.UtcNow, default);
+            _ => Release("nightly"), DateTime.UtcNow, default);
 
         Assert.Equal(UpdateState.Unknown, r.State);
     }
@@ -193,32 +196,19 @@ public class UpdateCheckTests
     }
 
     [Fact]
-    public async Task ForceBypassesTheDailyGate()
+    public async Task AManualCheckBypassesTheDailyGate()
     {
         var now = new DateTime(2026, 5, 1, 12, 0, 0, DateTimeKind.Utc);
         int calls = 0;
         Config recent = Config.Default with { LastUpdateCheck = now.AddHours(-3) };
 
         UpdateResult r = await UpdateCheck.CheckAsync(recent,
-            _ => { calls++; return Task.FromResult<string?>("9.9.9"); }, now, default, force: true);
+            _ => { calls++; return Release("9.9.9"); }, now, default, manual: true);
 
         Assert.Equal(1, calls);
         Assert.NotEqual(UpdateState.NotDue, r.State);
     }
 
-    [Fact]
-    public async Task ForceDoesNotBypassCheckForUpdatesBeingOff()
-    {
-        // Off means off, even when a user forces a check from the tray.
-        bool called = false;
-        Config off = Config.Default with { CheckForUpdates = false };
-
-        UpdateResult r = await UpdateCheck.CheckAsync(off,
-            _ => { called = true; return Task.FromResult<string?>("9.9.9"); }, DateTime.UtcNow, default, force: true);
-
-        Assert.False(called);
-        Assert.Equal(UpdateState.Disabled, r.State);
-    }
 
     [Fact]
     public async Task ShutdownDuringFetchDoesNotBurnTheDailyCheck()
@@ -231,7 +221,7 @@ public class UpdateCheckTests
         Config config = Config.Default with { LastUpdateCheck = default };
 
         UpdateResult r = await UpdateCheck.CheckAsync(config,
-            ct => { ct.ThrowIfCancellationRequested(); return Task.FromResult<string?>("9.9.9"); },
+            ct => { ct.ThrowIfCancellationRequested(); return Release("9.9.9"); },
             DateTime.UtcNow, cts.Token);
 
         Assert.Equal(UpdateState.Unknown, r.State);
@@ -256,7 +246,7 @@ public class UpdateCheckTests
     public async Task RunningVersionMatchingTheTaggedReleaseIsCurrent()
     {
         UpdateResult r = await UpdateCheck.CheckAsync(Config.Default with { LastUpdateCheck = default },
-            _ => Task.FromResult<string?>("v" + Log.Version), DateTime.UtcNow, default);
+            _ => Release("v" + Log.Version), DateTime.UtcNow, default);
 
         Assert.Equal(UpdateState.Current, r.State);
     }
@@ -335,10 +325,83 @@ public class UpdateCheckTests
 
         UpdateResult r = await UpdateCheck.CheckAsync(
             Config.Default with { LastUpdateCheck = default, InstallSource = "source" },
-            _ => Task.FromResult<string?>(newer), DateTime.UtcNow, default);
+            _ => Release(newer), DateTime.UtcNow, default);
 
         Assert.Equal(UpdateState.Available, r.State);
         Assert.Equal(newer, r.Latest);
         Assert.False(string.IsNullOrWhiteSpace(r.Advice));
+    }
+
+    [Fact]
+    public async Task AManualCheckAsksEvenWithTheSwitchOff()
+    {
+        // The person pressed Check now. Off stops the daily check; it does not refuse an answer
+        // to somebody who asked.
+        int calls = 0;
+        Config off = Config.Default with { CheckForUpdates = false };
+
+        UpdateResult r = await UpdateCheck.CheckAsync(off,
+            _ => { calls++; return Release("9.9.9"); }, DateTime.UtcNow, default, manual: true);
+
+        Assert.Equal(1, calls);
+        Assert.Equal(UpdateState.Available, r.State);
+    }
+
+    [Fact]
+    public async Task AnAvailableUpdateCarriesThisMachinesInstaller()
+    {
+        var asset = new ReleaseAsset("findra-setup-x64.exe", "https://github.com/x/y.exe", 10, new string('a', 64));
+        UpdateResult r = await UpdateCheck.CheckAsync(Config.Default,
+            _ => Task.FromResult<LatestRelease?>(new LatestRelease("9.9.9", asset)), DateTime.UtcNow, default, manual: true);
+
+        Assert.Equal(asset, r.Installer);
+    }
+
+    private const string ReleaseJson = """
+        {"tag_name":"v0.6.0","assets":[
+          {"name":"findra-setup-arm64.exe","browser_download_url":"https://github.com/blakazulu/findra/releases/download/v0.6.0/findra-setup-arm64.exe","size":82456001,"digest":"sha256:d8c8d89f22335ff99cd053aa882e7e4273ec03838d1b568d1391f6fff06b1ea3"},
+          {"name":"findra-setup-x64.exe","browser_download_url":"https://github.com/blakazulu/findra/releases/download/v0.6.0/findra-setup-x64.exe","size":85727274,"digest":"SHA256:B4AE568C139F6FD3563EA1CC4AA7DC5B43AAAA695308090692A6679ACAF1B0B4"}]}
+        """;
+
+    [Theory]
+    [InlineData(System.Runtime.InteropServices.Architecture.X64, "findra-setup-x64.exe", 85727274L)]
+    [InlineData(System.Runtime.InteropServices.Architecture.Arm64, "findra-setup-arm64.exe", 82456001L)]
+    public void TheInstallerIsTheOneForThisMachinesArchitecture(
+        System.Runtime.InteropServices.Architecture arch, string name, long size)
+    {
+        using var doc = System.Text.Json.JsonDocument.Parse(ReleaseJson);
+        ReleaseAsset? a = UpdateCheck.InstallerOf(doc.RootElement, arch);
+
+        Assert.NotNull(a);
+        Assert.Equal(name, a.Name);
+        Assert.Equal(size, a.Size);
+        Assert.EndsWith("/" + name, a.Url, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void AnUpperCaseDigestIsReadAsLowerCase()
+    {
+        using var doc = System.Text.Json.JsonDocument.Parse(ReleaseJson);
+        ReleaseAsset? a = UpdateCheck.InstallerOf(doc.RootElement, System.Runtime.InteropServices.Architecture.X64);
+        Assert.Equal("b4ae568c139f6fd3563ea1cc4aa7dc5b43aaaa695308090692a6679acaf1b0b4", a!.Sha256);
+    }
+
+    [Fact]
+    public void AnotherArchitectureHasNoInstaller()
+    {
+        using var doc = System.Text.Json.JsonDocument.Parse(ReleaseJson);
+        Assert.Null(UpdateCheck.InstallerOf(doc.RootElement, System.Runtime.InteropServices.Architecture.X86));
+    }
+
+    [Theory]
+    [InlineData("""{"name":"findra-setup-x64.exe","browser_download_url":"https://github.com/a.exe","size":10}""")]
+    [InlineData("""{"name":"findra-setup-x64.exe","browser_download_url":"https://github.com/a.exe","size":10,"digest":null}""")]
+    [InlineData("""{"name":"findra-setup-x64.exe","browser_download_url":"https://github.com/a.exe","size":10,"digest":"md5:abc"}""")]
+    [InlineData("""{"name":"findra-setup-x64.exe","browser_download_url":"https://github.com/a.exe","size":10,"digest":"sha256:zz"}""")]
+    [InlineData("""{"name":"findra-setup-x64.exe","browser_download_url":"https://github.com/a.exe","size":"10","digest":"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}""")]
+    public void AnEntryWithNoUsableDigestOrSizeOffersNoDownload(string entry)
+    {
+        using var doc = System.Text.Json.JsonDocument.Parse($$"""{"tag_name":"v1.0.0","assets":[{{entry}}]}""");
+        Assert.Null(UpdateCheck.InstallerOf(doc.RootElement, System.Runtime.InteropServices.Architecture.X64));
     }
 }

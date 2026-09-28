@@ -2383,8 +2383,9 @@ internal sealed class Shell : ISettingsHost
         {
             UpdateResult result = await UpdateCheck.CheckAsync(
                 _config,
-                ct => UpdateCheck.FetchLatestAsync(Http, Log.Version, _config.InstallSource, ct),
-                DateTime.UtcNow, _shutdown.Token, force).ConfigureAwait(false);
+                ct => UpdateCheck.FetchLatestAsync(Http, Log.Version, _config.InstallSource,
+                                                   System.Runtime.InteropServices.RuntimeInformation.ProcessArchitecture, ct),
+                DateTime.UtcNow, _shutdown.Token, manual: force).ConfigureAwait(false);
 
             await Dispatcher.UIThread.InvokeAsync(() =>
             {

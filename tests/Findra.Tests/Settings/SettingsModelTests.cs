@@ -848,10 +848,10 @@ public class SettingsModelTests
     }
 
     [Fact]
-    public async Task TurningTheCheckOffHereMeansNoRequestIsMadeEvenWhenSomebodyForcesOne()
+    public async Task TurningTheCheckOffHereStopsTheDailyCheck()
     {
-        // Off means off (spec §9b, PRIVACY.md). The fetch below fails the test if it is ever
-        // called, and force: true is the tray's own "Check for updates" path.
+        // Off stops the daily check (spec §9b, PRIVACY.md). The fetch below fails the test if the
+        // background check ever calls it. (Check now still asks: somebody pressed it.)
         SettingsState s = State(section: Section.About);
         SettingsOutcome o = SettingsModel.Apply(s, new PanelHit(PanelTarget.Control, RowOf(s, ControlId.CheckUpdates), -1));
 
@@ -860,7 +860,7 @@ public class SettingsModelTests
         UpdateResult r = await UpdateCheck.CheckAsync(
             o.State.Config,
             _ => throw new InvalidOperationException("a request was made after the check was turned off"),
-            DateTime.UtcNow, CancellationToken.None, force: true);
+            DateTime.UtcNow, CancellationToken.None);
 
         Assert.Equal(UpdateState.Disabled, r.State);
     }

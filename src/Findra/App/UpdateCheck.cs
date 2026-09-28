@@ -1,4 +1,5 @@
 ﻿using System.Net.Http;
+using System.Runtime.InteropServices;
 using System.Text.Json;
 
 namespace Findra;
@@ -22,7 +23,8 @@ public enum UpdateState
 
 /// <summary>What a check found, plus the <see cref="Config"/> to save afterwards - the
 /// caller persists it so a dead network does not retry on every launch.</summary>
-public sealed record UpdateResult(UpdateState State, string? Latest, string? Advice, Config Config);
+public sealed record UpdateResult(UpdateState State, string? Latest, string? Advice, Config Config,
+                                  ReleaseAsset? Installer = null);
 
 /// <summary>
 /// The one thing Findra sends off this machine (spec 9b): an anonymous check against GitHub - the
@@ -81,29 +83,30 @@ public static class UpdateCheck
     };
 
     /// <summary>Runs the check against a caller-supplied fetch delegate, never the network
-    /// directly, so every test runs offline. Short-circuits when disabled (no call to
-    /// <paramref name="fetch"/> either way, <paramref name="force"/> included - off means off
-    /// even from a forced tray check) or, unless <paramref name="force"/> bypasses the gate,
-    /// not due yet. Catches everything the fetch can throw because a broken network is a log
+    /// directly, so every test runs offline. Short-circuits, unless <paramref name="manual"/>,
+    /// when disabled or not due yet: a manual check is somebody pressing Check now, and it asks
+    /// whatever the switch and the clock say. Catches everything the fetch can throw because a broken network is a log
     /// line, not a dialog - except <paramref name="ct"/> itself being cancelled, which means
     /// the app is quitting rather than that the network failed, and is reported without
     /// touching <c>LastUpdateCheck</c> so a quit during startup does not silently use up
     /// today's check. Every other outcome, including the fetch's own internal timeout, stamps
     /// the new <c>LastUpdateCheck</c> so a dead network is not retried every launch.</summary>
     public static async Task<UpdateResult> CheckAsync(
-        Config config, Func<CancellationToken, Task<string?>> fetch, DateTime utcNow, CancellationToken ct,
-        bool force = false)
+        Config config, Func<CancellationToken, Task<LatestRelease?>> fetch, DateTime utcNow, CancellationToken ct,
+        bool manual = false)
     {
-        if (!config.CheckForUpdates)
+        // A manual check is somebody pressing Check now. Off stops the daily check and nothing
+        // else: refusing to answer a person who asked is the silence the update window replaces.
+        if (!manual && !config.CheckForUpdates)
             return new UpdateResult(UpdateState.Disabled, null, null, config);
 
-        if (!force && !IsDue(config, utcNow))
+        if (!manual && !IsDue(config, utcNow))
             return new UpdateResult(UpdateState.NotDue, null, null, config);
 
-        string? latest;
+        LatestRelease? found;
         try
         {
-            latest = await fetch(ct).ConfigureAwait(false);
+            found = await fetch(ct).ConfigureAwait(false);
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
@@ -116,6 +119,7 @@ public static class UpdateCheck
             return new UpdateResult(UpdateState.Unknown, null, null, config with { LastUpdateCheck = utcNow });
         }
 
+        string? latest = found?.Tag;
         Config checkedConfig = config with { LastUpdateCheck = utcNow };
 
         if (string.IsNullOrWhiteSpace(latest))
@@ -156,7 +160,7 @@ public static class UpdateCheck
 
         string advice = Advice(config.InstallSource ?? "unknown", latest);
         Log.Info("startup", $"running {Log.Version}, latest release is {latest}: update available");
-        return new UpdateResult(UpdateState.Available, latest, advice, checkedConfig);
+        return new UpdateResult(UpdateState.Available, latest, advice, checkedConfig, found!.Installer);
     }
 
     /// <summary>Builds the <see cref="HttpClient"/> this file's "no machine or install
@@ -252,14 +256,59 @@ public static class UpdateCheck
         return newest;
     }
 
+    /// <summary>The installer this machine runs, by the architecture of the running process, never
+    /// assumed. Null for any architecture no installer is built for.</summary>
+    public static string? InstallerName(Architecture arch) => arch switch
+    {
+        Architecture.X64 => "findra-setup-x64.exe",
+        Architecture.Arm64 => "findra-setup-arm64.exe",
+        _ => null,
+    };
+
+    /// <summary>This machine's installer from a release record, or null when the record has none,
+    /// or has one without a size or a SHA-256 digest: a file that cannot be checked is never
+    /// offered, because nothing unchecked is ever run.</summary>
+    public static ReleaseAsset? InstallerOf(JsonElement release, Architecture arch)
+    {
+        if (InstallerName(arch) is not { } want) return null;
+        if (release.ValueKind != JsonValueKind.Object ||
+            !release.TryGetProperty("assets", out JsonElement assets) ||
+            assets.ValueKind != JsonValueKind.Array) return null;
+
+        foreach (JsonElement a in assets.EnumerateArray())
+        {
+            if (Text(a, "name") != want) continue;
+            if (Text(a, "browser_download_url") is not { Length: > 0 } url) return null;
+            if (!a.TryGetProperty("size", out JsonElement size) || size.ValueKind != JsonValueKind.Number ||
+                !size.TryGetInt64(out long bytes) || bytes <= 0) return null;
+            if (Sha256Of(Text(a, "digest")) is not { } hex) return null;
+            return new ReleaseAsset(want, url, bytes, hex);
+        }
+        return null;
+    }
+
+    private static string? Text(JsonElement o, string name) =>
+        o.ValueKind == JsonValueKind.Object && o.TryGetProperty(name, out JsonElement v) &&
+        v.ValueKind == JsonValueKind.String ? v.GetString() : null;
+
+    // GitHub writes "sha256:<64 hex>". Anything else - another algorithm, a short value, no value -
+    // is no digest at all.
+    private static string? Sha256Of(string? digest)
+    {
+        const string prefix = "sha256:";
+        if (digest is null || !digest.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)) return null;
+        string hex = digest[prefix.Length..].ToLowerInvariant();
+        return hex.Length == 64 && hex.All(Uri.IsHexDigit) ? hex : null;
+    }
+
     /// <summary>The real fetch (spec 9b): a single anonymous GET to <see cref="SourceUrl"/>,
     /// User-Agent only, no query parameters, no machine or install identifier - provided
     /// <paramref name="client"/> came from <see cref="CreateClient"/>; see its doc comment for why
     /// a default <c>HttpClient</c> would not hold that guarantee. No test calls it, since every
     /// test runs offline; <c>App.RunUpdateCheck</c> passes it, over <c>CreateClient()</c>'s
     /// client, as the <c>fetch</c> delegate to <see cref="CheckAsync"/>.</summary>
-    public static async Task<string?> FetchLatestAsync(HttpClient client, string version, string? installSource,
-                                                       CancellationToken ct)
+    public static async Task<LatestRelease?> FetchLatestAsync(HttpClient client, string version, string? installSource,
+                                                              Architecture arch, CancellationToken ct)
     {
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
         timeout.CancelAfter(TimeSpan.FromSeconds(10));
@@ -274,6 +323,8 @@ public static class UpdateCheck
         using Stream stream = await response.Content.ReadAsStreamAsync(timeout.Token).ConfigureAwait(false);
         using JsonDocument doc = await JsonDocument.ParseAsync(stream, cancellationToken: timeout.Token).ConfigureAwait(false);
 
-        return url == CatalogueUrl ? NewestInCatalogue(doc.RootElement) : TagOf(doc.RootElement);
+        if (url == CatalogueUrl)
+            return NewestInCatalogue(doc.RootElement) is { } newest ? new LatestRelease(newest, null) : null;
+        return TagOf(doc.RootElement) is { } tag ? new LatestRelease(tag, InstallerOf(doc.RootElement, arch)) : null;
     }
 }

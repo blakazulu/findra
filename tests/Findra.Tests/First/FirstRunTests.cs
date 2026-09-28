@@ -410,10 +410,10 @@ public class FirstRunTests
     }
 
     [Fact]
-    public async Task TurningTheCheckOffHereMeansTheRequestIsNeverMade()
+    public async Task TurningTheCheckOffHereStopsTheDailyCheck()
     {
-        // Off means off, from the very first screen. The fetch below fails the test if it is ever
-        // called, and force: true is the strongest path there is.
+        // Off stops the daily check, from the very first screen. The fetch below fails the test if
+        // the background check ever calls it. (Check now still asks: somebody pressed it.)
         FirstRunState off = FirstRun.Apply(new FirstRunState { CheckUpdates = true },
                                            new FirstRunHit(FirstRunTarget.Updates, -1));
         Config config = FirstRun.Outcome(off, Config.Default);
@@ -422,7 +422,7 @@ public class FirstRunTests
 
         UpdateResult r = await UpdateCheck.CheckAsync(
             config, _ => throw new InvalidOperationException("a request was made after it was turned off"),
-            DateTime.UtcNow, CancellationToken.None, force: true);
+            DateTime.UtcNow, CancellationToken.None);
 
         Assert.Equal(UpdateState.Disabled, r.State);
     }
