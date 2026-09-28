@@ -7,6 +7,10 @@ and Findra follows [Semantic Versioning](https://semver.org/spec/v2.0.0/).
 
 ## [Unreleased]
 
+### Added
+
+- Documentation: the design and the implementation plan for the update window.
+
 ## [0.5.1] - 2026-09-28
 
 ### Added
