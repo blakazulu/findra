@@ -179,6 +179,13 @@ public static class UpdatePrompt
         return new SKRect(x, panel.Bottom - Pad - ButtonH, x + ButtonW, panel.Bottom - Pad);
     }
 
+    /// <summary>What a press does. The second press of a double-click does nothing: the button a
+    /// first press brings up can sit exactly where the pressed one was - Cancel is where Update now
+    /// was - so a double-click on Update now would otherwise start the download and cancel it.
+    /// </summary>
+    public static UpdatePromptTarget Press(float x, float y, SKRect panel, int buttons, int clickCount) =>
+        clickCount > 1 ? UpdatePromptTarget.None : HitTest(x, y, panel, buttons);
+
     /// <summary>What is under the pointer. Only the buttons answer; everything else moves the
     /// window.</summary>
     public static UpdatePromptTarget HitTest(float x, float y, SKRect panel, int buttons)

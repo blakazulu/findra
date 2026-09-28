@@ -47,7 +47,13 @@ public sealed class UpdateWindow : Window
             e.Handled = true;
             Close();
         };
-        Closing += (_, e) => { if (!UpdateFlow.Closable(_session.View)) e.Cancel = true; };
+        // Only a person's close is refused while a hand-off runs: Alt+F4, not Findra quitting and
+        // not Windows shutting down, which a refused close would hold up.
+        Closing += (_, e) =>
+        {
+            bool personClosing = e.CloseReason == WindowCloseReason.WindowClosing && !e.IsProgrammatic;
+            if (UpdateFlow.RefusesClose(_session.View, personClosing)) e.Cancel = true;
+        };
         Opened += (_, _) => { Open = this; Fit(); Activate(); _canvas.Focus(); };
         Closed += (_, _) => { if (ReferenceEquals(Open, this)) Open = null; _session.Closed(); };
     }
@@ -119,12 +125,16 @@ public sealed class UpdateWindow : Window
         protected override void OnPointerPressed(PointerPressedEventArgs e)
         {
             Focus();
-            switch (HitAt(At(e)))
+            Point p = At(e);
+            switch (UpdatePrompt.Press((float)p.X, (float)p.Y, UpdatePainter.Surface(View, Parts.Face),
+                                       UpdatePrompt.Buttons(View), e.ClickCount))
             {
                 case UpdatePromptTarget.Close: _session.PressClose(); return;
                 case UpdatePromptTarget.Go: _session.PressGo(); return;
                 case UpdatePromptTarget.None:
-                    // A borderless window is picked up by its body.
+                    // A borderless window is picked up by its body - by a single press, not the
+                    // second of a double-click, which UpdatePrompt.Press has already set aside.
+                    if (e.ClickCount > 1) return;
                     try { _owner.BeginMoveDrag(e); }
                     catch (Exception ex) { Log.Warn("update", "the window would not move: " + ex.Message); }
                     return;

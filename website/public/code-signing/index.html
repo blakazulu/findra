@@ -167,7 +167,9 @@
 
       <p>This program will not transfer any information to other networked systems unless specifically requested.</p>
 
-      <p>One exception exists and it is switchable off: Findra checks whether a newer version has been released. It is an anonymous HTTPS request to the GitHub releases API - or, for a copy installed with winget, to the winget catalogue's listing on GitHub - made at most once every 24 hours, in the background, on startup. It carries no query parameters, no machine or install identifier, and nothing about your files or your searches. It never blocks anything, and a failure is a line in the log rather than a dialog. Turning the check off means the request is not made at all.</p>
+      <p>One exception exists and it is switchable off: Findra checks whether a newer version has been released. It is an anonymous HTTPS request to the GitHub releases API - or, for a copy installed with winget, to the winget catalogue's listing on GitHub - made at most once every 24 hours, in the background, on startup. It carries no query parameters, no machine or install identifier, and nothing about your files or your searches. It never blocks anything, and a failure is a line in the log rather than a dialog. Turning the check off stops it; pressing Check now still makes the same request, once, because you asked.</p>
+
+      <p>Pressing Update now is also &quot;specifically requested&quot;: it downloads the new installer from the release page on GitHub, checks it against the checksum GitHub publishes for it, and runs it. It sends nothing about you.</p>
 
       <p>The model downloads are the &quot;specifically requested&quot; case in the sentence above: they happen only when you choose a capability and ask for it, they fetch model files, and they send nothing about you. If you never choose one, Findra never makes them.</p>
 

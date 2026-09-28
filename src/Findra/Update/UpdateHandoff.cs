@@ -54,12 +54,40 @@ public static class UpdateHandoff
             RedirectStandardError = true,
         };
 
-    public static async Task<Handoff> RunInstallerAsync(string installer, RunProcess run, CancellationToken ct)
+    public const string ChangedSinceChecked =
+        "The downloaded installer changed after it was checked, so it was not run. Nothing was installed.";
+
+    /// <summary>
+    /// Check the installer once more and start it, under one handle that denies writing and
+    /// deleting to everybody else until the process has started - so the file that runs is the file
+    /// that was checked, not one swapped in between. The real runner starts the process before it
+    /// returns its task; once started, Windows itself keeps a running executable from being
+    /// replaced.
+    /// </summary>
+    public static async Task<Handoff> RunInstallerAsync(string installer, ReleaseAsset asset, RunProcess run,
+                                                        CancellationToken ct)
     {
+        ArgumentNullException.ThrowIfNull(asset);
         ArgumentNullException.ThrowIfNull(run);
+        Task<(int ExitCode, string Output)> running;
         try
         {
-            (int code, _) = await run(InstallerStart(installer), ct).ConfigureAwait(false);
+            using var locked = new FileStream(installer, FileMode.Open, FileAccess.Read, FileShare.Read);
+            if (UpdateDownload.Verify(locked, asset.Size, asset.Sha256) != DownloadFailure.None)
+                return new Handoff(HandoffOutcome.DidNotRun, ChangedSinceChecked);
+            // A runner that throws before it returns is answered below with one that failed after:
+            // either way the file is still locked while the start is attempted.
+            try { running = run(InstallerStart(installer), ct); }
+            catch (Exception ex) when (ex is not OutOfMemoryException) { running = Task.FromException<(int, string)>(ex); }
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return new Handoff(HandoffOutcome.DidNotRun, "The downloaded installer could not be opened: " + ex.Message);
+        }
+
+        try
+        {
+            (int code, _) = await running.ConfigureAwait(false);
             return new Handoff(HandoffOutcome.DidNotRun,
                 $"The installer stopped before installing anything (exit code {code}). Nothing was installed.");
         }

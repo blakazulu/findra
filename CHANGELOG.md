@@ -38,6 +38,9 @@ and Findra follows [Semantic Versioning](https://semver.org/spec/v2.0.0/).
   wizard, closed Findra and left it closed until the next sign-in. It now starts again when the
   installer is done, if it had been running. This takes effect from the update after this one,
   because it is the version being replaced that reports whether it was running.
+- **An upgrade started from inside Findra can replace it.** Findra stopped itself for an installer
+  by stopping its whole process tree, and an installer Findra had started is inside that tree, so
+  Windows refused and Findra kept running with its files in use. It now stops only itself.
 
 ## [0.5.1] - 2026-09-28
 

@@ -11,14 +11,32 @@ public class UpdateHandoffTests
 
     private static RunProcess Throws(Exception ex) => (_, _) => throw ex;
 
+    /// <summary>A downloaded installer on disk and the release entry it was checked against.</summary>
+    private sealed class Downloaded : IDisposable
+    {
+        public string Path { get; } = System.IO.Path.Combine(System.IO.Path.GetTempPath(), $"findra-handoff-{Guid.NewGuid():N}.exe");
+        public ReleaseAsset Asset { get; }
+
+        public Downloaded()
+        {
+            byte[] body = [.. Enumerable.Range(0, 4096).Select(i => (byte)(i % 7))];
+            File.WriteAllBytes(Path, body);
+            Asset = new ReleaseAsset("findra-setup-x64.exe", "https://github.com/a.exe", body.Length,
+                                     Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(body)));
+        }
+
+        public void Dispose() { try { File.Delete(Path); } catch (IOException) { } }
+    }
+
     [Fact]
     public async Task TheInstallerIsStartedSilentlyWithAProgressWindow()
     {
+        using var d = new Downloaded();
         var started = new List<ProcessStartInfo>();
-        await UpdateHandoff.RunInstallerAsync(@"C:\u\findra-setup-x64.exe", Returns(5, "", started), default);
+        await UpdateHandoff.RunInstallerAsync(d.Path, d.Asset, Returns(5, "", started), default);
 
         ProcessStartInfo s = Assert.Single(started);
-        Assert.Equal(@"C:\u\findra-setup-x64.exe", s.FileName);
+        Assert.Equal(d.Path, s.FileName);
         Assert.Equal("/SILENT /SUPPRESSMSGBOXES /NORESTART /SP-", s.Arguments);
         Assert.True(s.UseShellExecute);
     }
@@ -26,16 +44,50 @@ public class UpdateHandoffTests
     [Fact]
     public async Task AnInstallerThatReturnsWhileFindraRunsInstalledNothing()
     {
-        Handoff h = await UpdateHandoff.RunInstallerAsync("x.exe", Returns(5, ""), default);
+        using var d = new Downloaded();
+        Handoff h = await UpdateHandoff.RunInstallerAsync(d.Path, d.Asset, Returns(5, ""), default);
         Assert.Equal(HandoffOutcome.DidNotRun, h.Outcome);
     }
 
     [Fact]
     public async Task RefusingThePermissionPromptIsSaidPlainly()
     {
-        Handoff h = await UpdateHandoff.RunInstallerAsync("x.exe", Throws(new Win32Exception(1223)), default);
+        using var d = new Downloaded();
+        Handoff h = await UpdateHandoff.RunInstallerAsync(d.Path, d.Asset, Throws(new Win32Exception(1223)), default);
         Assert.Equal(HandoffOutcome.DidNotRun, h.Outcome);
         Assert.Equal(UpdateHandoff.PermissionRefused, h.Message);
+    }
+
+    [Fact]
+    public async Task AnInstallerChangedAfterItWasCheckedIsNeverRun()
+    {
+        using var d = new Downloaded();
+        File.AppendAllText(d.Path, "swapped");
+        var started = new List<ProcessStartInfo>();
+
+        Handoff h = await UpdateHandoff.RunInstallerAsync(d.Path, d.Asset, Returns(0, "", started), default);
+
+        Assert.Empty(started);
+        Assert.Equal(HandoffOutcome.DidNotRun, h.Outcome);
+        Assert.Equal(UpdateHandoff.ChangedSinceChecked, h.Message);
+    }
+
+    [Fact]
+    public async Task NobodyCanChangeTheInstallerWhileItIsBeingStarted()
+    {
+        // Checked and started under one handle that denies writing and deleting, so the file that
+        // runs is the file that was checked.
+        using var d = new Downloaded();
+        Exception? writing = null;
+        RunProcess run = (_, _) =>
+        {
+            writing = Record.Exception(() => File.OpenWrite(d.Path).Dispose());
+            return Task.FromResult((5, ""));
+        };
+
+        await UpdateHandoff.RunInstallerAsync(d.Path, d.Asset, run, default);
+
+        Assert.IsAssignableFrom<IOException>(writing);
     }
 
     [Fact]

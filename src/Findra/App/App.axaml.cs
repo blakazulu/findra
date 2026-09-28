@@ -2425,7 +2425,8 @@ internal sealed class Shell : ISettingsHost
                     UpdateDownload.GetAsync(DownloadHttp, asset, Paths.Updates, Log.Version, progress, ct),
                 // No time limit on the installer: the person may take their time over the permission
                 // prompt, and killing the installer under it would be worse than waiting.
-                runInstaller: (path, ct) => UpdateHandoff.RunInstallerAsync(path, UpdateHandoff.Real(Timeout.InfiniteTimeSpan), ct),
+                runInstaller: (path, asset, ct) =>
+                    UpdateHandoff.RunInstallerAsync(path, asset, UpdateHandoff.Real(Timeout.InfiniteTimeSpan), ct),
                 runWinget: ct => UpdateHandoff.RunWingetAsync(UpdateHandoff.Real(UpdateHandoff.WingetLimit), ct),
                 openReleases: OpenReleasesPage,
                 show: v => window?.ShowView(v),

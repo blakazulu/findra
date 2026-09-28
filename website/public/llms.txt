@@ -146,8 +146,10 @@ phone number and no postal address, deliberately - the contact page says why.
   unknown publisher.
 - **Network**: one anonymous HTTPS GET to the GitHub releases API (for a winget install, to the
   winget catalogue's listing on GitHub instead), at most once every 24 hours, to check for a newer
-  version. It can be switched off. Model downloads happen only when somebody
-  chooses a capability and asks for them. Nothing else leaves the machine, ever.
+  version. Switching it off stops that daily check; pressing Check now still asks, once. Pressing
+  Update now downloads the new installer from the release page. Model downloads happen only when
+  somebody chooses a capability and asks for them. Nothing about files or searches ever leaves the
+  machine.
 - **Models**: capabilities are independently installable and total 3.7 GB if all four are taken:
   629 MB for photos and video, 1.04 GB for meaning in documents, 547 MB for speech on top of the
   document models, and 1.51 GB for the Hebrew second pass. Speech and meaning share files, so a

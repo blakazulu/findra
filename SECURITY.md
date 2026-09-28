@@ -56,14 +56,20 @@ What helps, roughly in order of how much:
 
 ## What Findra does about the network
 
-Nothing leaves your machine except one anonymous HTTPS GET to the GitHub releases API (or, for a
-winget install, to the winget catalogue's listing on GitHub), at most
-once every 24 hours, to learn whether a newer version exists, and it can be switched off. Model
-files are downloaded only when you choose a capability and ask for it. Your files, their names,
-their contents and your searches are never sent anywhere. The full statement is in
-[PRIVACY.md](PRIVACY.md).
+On its own, Findra makes one anonymous HTTPS GET to the GitHub releases API (or, for a winget
+install, to the winget catalogue's listing on GitHub), at most once every 24 hours, to learn
+whether a newer version exists. Switching it off stops that daily check; pressing Check now still
+makes it, once. Model files are downloaded only when you choose a capability and ask for it. Your
+files, their names, their contents and your searches are never sent anywhere. The full statement
+is in [PRIVACY.md](PRIVACY.md).
 
-Findra never installs an update by itself.
+Findra installs an update only when you press Update now. It downloads the installer from the
+release page on GitHub, over HTTPS and from GitHub's own hosts only, and runs it only if its size
+and SHA-256 checksum match what GitHub publishes for that release. That catches a broken,
+truncated or swapped download. It cannot catch somebody who controls the project's GitHub
+account, who could publish a bad installer together with its matching checksum: only code signing
+closes that, and the installer is not signed yet. A copy installed with winget runs the winget
+upgrade instead, which checks the installer against the hash in its own manifest.
 
 ## Supported versions
 

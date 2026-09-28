@@ -33,8 +33,12 @@ released. It is an anonymous HTTPS request to the GitHub releases API - or, for 
 with winget, to the winget catalogue's listing on GitHub - made at most once every
 24 hours, in the background, on startup. It carries no query parameters, no machine or install
 identifier, and nothing about your files or your searches. It never blocks anything, and a
-failure is a line in the log rather than a dialog. Turning the check off means the request is
-not made at all.
+failure is a line in the log rather than a dialog. Turning the check off stops it; pressing Check
+now still makes the same request, once, because you asked.
+
+Pressing Update now is also "specifically requested": it downloads the new installer from the
+release page on GitHub, checks it against the checksum GitHub publishes for it, and runs it. It
+sends nothing about you.
 
 The model downloads are the "specifically requested" case in the sentence above: they happen
 only when you choose a capability and ask for it, they fetch model files, and they send nothing

@@ -552,30 +552,53 @@ public static class Uninstall
     /// and two of Findra's three processes have no window at all.</summary>
     public static int StopAll() => StopAll(spare: [Environment.ProcessId]);
 
-    /// <summary>What <c>--stop</c> exits with: 2 when it stopped a running interface, 0 otherwise.
-    /// The installer reads it to start Findra again after a silent install, and only then.</summary>
-    public static int StopExitCode(Running running, IReadOnlyList<int> spare)
-    {
-        ArgumentNullException.ThrowIfNull(spare);
-        return running.Interface is { } ui && !spare.Contains(ui) ? 2 : 0;
-    }
+    /// <summary>Stop one process, alone or with its tree; true when it stopped.</summary>
+    public delegate bool KillProcess(int pid, bool tree);
 
-    private static int StopAll(IReadOnlyList<int> spare)
+    /// <summary>
+    /// Stop everything in <see cref="StopOrder"/>, and answer what <c>--stop</c> exits with: 2 when
+    /// it stopped a running interface, 0 otherwise. The installer reads 2 as "start Findra again
+    /// after a silent install".
+    ///
+    /// <para><b>The interface is stopped alone, never as a tree.</b> An installer started by Update
+    /// now, or by winget that Update now started, is a descendant of the interface, and so is the
+    /// <c>--stop</c> that installer runs. .NET refuses to kill a tree that contains the caller, so a
+    /// tree kill left the interface running and holding the files the installer had to replace; and
+    /// a tree kill that were allowed would take the installer and winget down with it. Its indexer
+    /// is in the interface's kill-on-close job and goes with it, and every other findra process is
+    /// in the order anyway.</para>
+    /// </summary>
+    public static int StopAll(Running running, IReadOnlyList<int> spare, KillProcess kill)
     {
-        Running running = Discover();
+        ArgumentNullException.ThrowIfNull(kill);
+        bool interfaceStopped = false;
         foreach (int pid in StopOrder(running, spare))
         {
-            try
-            {
-                using Process p = Process.GetProcessById(pid);
-                p.Kill(entireProcessTree: true);
-                p.WaitForExit(5000);
-                Log.Info("uninstall", $"stopped process {pid.ToString(Fixed)}");
-            }
-            catch (ArgumentException) { }        // already gone between Discover and here
-            catch (Exception ex) { Log.Warn("uninstall", $"could not stop {pid.ToString(Fixed)}: {ex.Message}"); }
+            bool isInterface = pid == running.Interface;
+            bool stopped = kill(pid, tree: !isInterface);
+            if (isInterface) interfaceStopped = stopped;
         }
-        return StopExitCode(running, spare);
+        return interfaceStopped ? 2 : 0;
+    }
+
+    private static int StopAll(IReadOnlyList<int> spare) => StopAll(Discover(), spare, KillOne);
+
+    private static bool KillOne(int pid, bool tree)
+    {
+        try
+        {
+            using Process p = Process.GetProcessById(pid);
+            p.Kill(entireProcessTree: tree);
+            p.WaitForExit(5000);
+            Log.Info("uninstall", $"stopped process {pid.ToString(Fixed)}");
+            return true;
+        }
+        catch (ArgumentException) { return false; }   // already gone between Discover and here
+        catch (Exception ex)
+        {
+            Log.Warn("uninstall", $"could not stop {pid.ToString(Fixed)}: {ex.Message}");
+            return false;
+        }
     }
 
     /// <summary>

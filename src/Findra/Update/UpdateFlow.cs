@@ -150,6 +150,11 @@ public static class UpdateFlow
         return v.Step is not (UpdateStep.Installing or UpdateStep.Winget);
     }
 
+    /// <summary>Whether a close is refused: only one a person started, and only while a hand-off
+    /// runs. Quitting Findra and Windows shutting down are never refused - a window that did would
+    /// hold Findra open and keep Windows from shutting down.</summary>
+    public static bool RefusesClose(UpdateView v, bool personClosing) => personClosing && !Closable(v);
+
     private static string Problem(DownloadFailure why) => why switch
     {
         DownloadFailure.Digest => "The download did not match the checksum GitHub published for it, so it was deleted. Nothing was installed.",

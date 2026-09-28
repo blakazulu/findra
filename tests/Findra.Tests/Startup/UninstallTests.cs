@@ -398,12 +398,32 @@ public class UninstallTests : IDisposable
     // ---- the process list ---------------------------------------------------------------------
 
     [Fact]
-    public void StopSaysWhetherItStoppedARunningInterface()
+    public void TheInterfaceIsStoppedAloneAndNeverAsATree()
     {
-        // The installer reads this to decide whether to start Findra again after a silent install.
-        Assert.Equal(2, Uninstall.StopExitCode(new Running(Interface: 200, Helper: null, Others: [300]), spare: [999]));
-        Assert.Equal(0, Uninstall.StopExitCode(new Running(Interface: null, Helper: null, Others: [300]), spare: [999]));
-        Assert.Equal(0, Uninstall.StopExitCode(new Running(Interface: 999, Helper: null, Others: []), spare: [999]));
+        // An installer started by Update now, or by winget that Update now started, is a
+        // descendant of the interface, and so is the --stop it runs. .NET refuses to kill a tree
+        // that contains the caller, so a tree kill left the interface running and holding its
+        // files. Its indexer is in its kill-on-close job and goes with it; the others are stopped
+        // one by one anyway.
+        var running = new Running(Interface: 200, Helper: 300, Others: [400]);
+        var kills = new List<(int Pid, bool Tree)>();
+
+        Uninstall.StopAll(running, spare: [999], (pid, tree) => { kills.Add((pid, tree)); return true; });
+
+        Assert.Contains((200, false), kills);
+        Assert.Contains((400, true), kills);
+        Assert.Contains((300, true), kills);
+    }
+
+    [Fact]
+    public void StopSaysTheInterfaceWasRunningOnlyWhenItActuallyStoppedIt()
+    {
+        // The installer reads 2 as "start Findra again after a silent install".
+        var running = new Running(Interface: 200, Helper: null, Others: [300]);
+        Assert.Equal(2, Uninstall.StopAll(running, spare: [999], (_, _) => true));
+        Assert.Equal(0, Uninstall.StopAll(running, spare: [999], (pid, _) => pid != 200));
+        Assert.Equal(0, Uninstall.StopAll(new Running(Interface: null, Helper: null, Others: [300]), spare: [999], (_, _) => true));
+        Assert.Equal(0, Uninstall.StopAll(new Running(Interface: 999, Helper: null, Others: []), spare: [999], (_, _) => true));
     }
 
     [Fact]

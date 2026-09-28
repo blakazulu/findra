@@ -109,6 +109,21 @@ public class UpdatePromptTests
     }
 
     [Fact]
+    public void TheSecondPressOfADoubleClickPressesNothing()
+    {
+        // Update now brings up the download, whose one button, Cancel, sits almost exactly where
+        // Update now was: a double-click on Update now would start the download and cancel it.
+        SKRect offer = UpdatePrompt.Panel(3, 2, bar: false);
+        SKRect updateNow = UpdatePrompt.Button(offer, 1, 2);
+        SKRect downloading = UpdatePrompt.Panel(1, 1, bar: true);
+
+        Assert.Equal(UpdatePromptTarget.Close,
+            UpdatePrompt.Press(updateNow.MidX, updateNow.Bottom - 4, downloading, 1, clickCount: 1));
+        Assert.Equal(UpdatePromptTarget.None,
+            UpdatePrompt.Press(updateNow.MidX, updateNow.Bottom - 4, downloading, 1, clickCount: 2));
+    }
+
+    [Fact]
     public void TheWindowIsTallerWithButtonsAndTallerStillWithTheBar()
     {
         float none = UpdatePrompt.Panel(2, 0, bar: false).Height;

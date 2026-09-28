@@ -145,6 +145,16 @@ public class UpdateFlowTests
         Assert.Equal(closable, UpdateFlow.Closable(UpdateFlow.Start("1.0.0", null) with { Step = step }));
 
     [Theory]
+    [InlineData(UpdateStep.Installing, true, true)]
+    [InlineData(UpdateStep.Winget, true, true)]
+    [InlineData(UpdateStep.Installing, false, false)]
+    [InlineData(UpdateStep.Available, true, false)]
+    public void OnlyAPersonClosingTheWindowIsRefusedWhileAHandOffRuns(UpdateStep step, bool personClosing, bool refused) =>
+        // Quitting Findra and Windows shutting down are not somebody closing the window, and a
+        // window that refused them would hold Findra open and keep Windows from shutting down.
+        Assert.Equal(refused, UpdateFlow.RefusesClose(UpdateFlow.Start("1.0.0", null) with { Step = step }, personClosing));
+
+    [Theory]
     [InlineData(UpdateStep.Checking)]
     [InlineData(UpdateStep.Installing)]
     [InlineData(UpdateStep.Winget)]

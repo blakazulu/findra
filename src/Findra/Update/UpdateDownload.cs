@@ -124,10 +124,19 @@ public static class UpdateDownload
     /// a different file because its hash was written in capitals.</summary>
     public static DownloadFailure Verify(string path, long size, string sha256)
     {
-        var info = new FileInfo(path);
-        if (!info.Exists || info.Length != size) return DownloadFailure.Short;
+        if (!File.Exists(path)) return DownloadFailure.Short;
         using FileStream s = File.OpenRead(path);
-        string hex = Convert.ToHexStringLower(SHA256.HashData(s));
+        return Verify(s, size, sha256);
+    }
+
+    /// <summary>The same, through a handle the caller already holds - so a caller that keeps the
+    /// file locked can check exactly the bytes it is about to run.</summary>
+    public static DownloadFailure Verify(FileStream file, long size, string sha256)
+    {
+        ArgumentNullException.ThrowIfNull(file);
+        if (file.Length != size) return DownloadFailure.Short;
+        file.Position = 0;
+        string hex = Convert.ToHexStringLower(SHA256.HashData(file));
         return string.Equals(hex, sha256, StringComparison.OrdinalIgnoreCase) ? DownloadFailure.None : DownloadFailure.Digest;
     }
 

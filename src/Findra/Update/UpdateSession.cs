@@ -10,7 +10,7 @@ public sealed class UpdateSession
 {
     private readonly Func<CancellationToken, Task<UpdateResult>> _check;
     private readonly Func<ReleaseAsset, Action<long, long>, CancellationToken, Task<DownloadResult>> _download;
-    private readonly Func<string, CancellationToken, Task<Handoff>> _runInstaller;
+    private readonly Func<string, ReleaseAsset, CancellationToken, Task<Handoff>> _runInstaller;
     private readonly Func<CancellationToken, Task<Handoff>> _runWinget;
     private readonly Action _openReleases;
     private readonly Action<UpdateView> _show;
@@ -18,6 +18,7 @@ public sealed class UpdateSession
     private readonly Action<Action> _post;
     private readonly CancellationTokenSource _gone = new();
     private CancellationTokenSource? _downloading;
+    private Task? _lastDownload;
     private bool _closed;
 
     public UpdateView View { get; private set; }
@@ -25,7 +26,7 @@ public sealed class UpdateSession
     public UpdateSession(UpdateView first,
                          Func<CancellationToken, Task<UpdateResult>> check,
                          Func<ReleaseAsset, Action<long, long>, CancellationToken, Task<DownloadResult>> download,
-                         Func<string, CancellationToken, Task<Handoff>> runInstaller,
+                         Func<string, ReleaseAsset, CancellationToken, Task<Handoff>> runInstaller,
                          Func<CancellationToken, Task<Handoff>> runWinget,
                          Action openReleases, Action<UpdateView> show, Action close, Action<Action> post)
     {
@@ -64,10 +65,16 @@ public sealed class UpdateSession
         {
             case UpdateAction.None: return;
             case UpdateAction.Check: _ = CheckAsync(); return;
-            case UpdateAction.Download: _ = DownloadAsync(); return;
+            case UpdateAction.Download: _lastDownload = DownloadAsync(_lastDownload); return;
             case UpdateAction.CancelDownload: _downloading?.Cancel(); return;
-            case UpdateAction.RunInstaller: _ = HandOffAsync(ct => _runInstaller(View.DownloadedTo!, ct)); return;
-            case UpdateAction.RunWinget: _ = HandOffAsync(_runWinget); return;
+            case UpdateAction.RunInstaller:
+            {
+                string path = View.DownloadedTo!;
+                ReleaseAsset asset = View.Installer!;
+                _ = HandOffAsync(ct => _runInstaller(path, asset, ct), HandoffOutcome.DidNotRun);
+                return;
+            }
+            case UpdateAction.RunWinget: _ = HandOffAsync(_runWinget, HandoffOutcome.WingetFailed); return;
             case UpdateAction.OpenReleases: _openReleases(); _close(); return;
             case UpdateAction.Close: _close(); return;
             default: throw new ArgumentOutOfRangeException(nameof(m), m.Action, "no work for this action");
@@ -86,20 +93,58 @@ public sealed class UpdateSession
         _post(() => { if (!_closed) Apply(new UpdateMove(UpdateFlow.Checked(View, r), UpdateAction.None)); });
     }
 
-    private async Task DownloadAsync()
+    /// <summary>
+    /// One download. Its progress and its answer count only while it is still the current one:
+    /// Update now, Cancel, Update now again leaves the first download's own "cancelled" and its
+    /// last progress on their way, and they must not move the window back to the offer or move the
+    /// new bar. It also waits for the download before it to let go of the file, which it opens
+    /// exclusively and which this one is about to write.
+    /// </summary>
+    private async Task DownloadAsync(Task? before)
     {
-        _downloading?.Dispose();
-        _downloading = CancellationTokenSource.CreateLinkedTokenSource(_gone.Token);
-        CancellationToken ct = _downloading.Token;
-        DownloadResult r = await _download(View.Installer!,
-            (got, total) => _post(() => { if (!_closed) { View = UpdateFlow.Progress(View, got, total); _show(View); } }),
-            ct).ConfigureAwait(false);
-        _post(() => { if (!_closed) Apply(UpdateFlow.Downloaded(View, r)); });
+        var mine = CancellationTokenSource.CreateLinkedTokenSource(_gone.Token);
+        _downloading = mine;
+        ReleaseAsset asset = View.Installer!;
+        if (before is not null)
+        {
+            try { await before.ConfigureAwait(false); }
+            catch (Exception ex) when (ex is not OutOfMemoryException) { }   // it answered for itself
+        }
+
+        DownloadResult r;
+        try
+        {
+            r = await _download(asset,
+                (got, total) => _post(() =>
+                {
+                    if (!Current(mine)) return;
+                    View = UpdateFlow.Progress(View, got, total);
+                    _show(View);
+                }),
+                mine.Token).ConfigureAwait(false);
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            Log.Warn("update", "the download failed: " + ex.Message);
+            r = DownloadResult.Failed(DownloadFailure.Network, ex.Message);
+        }
+        _post(() => { if (Current(mine)) Apply(UpdateFlow.Downloaded(View, r)); });
     }
 
-    private async Task HandOffAsync(Func<CancellationToken, Task<Handoff>> run)
+    private bool Current(CancellationTokenSource download) => !_closed && ReferenceEquals(download, _downloading);
+
+    /// <summary>A hand-off that faults rather than answering still answers: the window has no
+    /// buttons and cannot be closed while one runs, so silence would keep it up until Findra
+    /// quit.</summary>
+    private async Task HandOffAsync(Func<CancellationToken, Task<Handoff>> run, HandoffOutcome whenItFaults)
     {
-        Handoff h = await run(_gone.Token).ConfigureAwait(false);
+        Handoff h;
+        try { h = await run(_gone.Token).ConfigureAwait(false); }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            Log.Warn("update", "the hand-off failed: " + ex.Message);
+            h = new Handoff(whenItFaults, "It could not be started: " + ex.Message);
+        }
         _post(() => { if (!_closed) Apply(new UpdateMove(UpdateFlow.HandedOff(View, h), UpdateAction.None)); });
     }
 }
