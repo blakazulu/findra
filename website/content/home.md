@@ -32,6 +32,12 @@ are from one machine, and it has an NVIDIA card. AMD and Intel graphics have not
 real hardware, and neither has an arm64 machine. Every table is on
 https://findra-search.netlify.app/numbers/.
 
+## From a Findra user
+
+> "This is insane, and crazy fast! I can absolutely see myself replacing Windows' crappy search with it."
+>
+> - [IIMrRobotII](https://github.com/IIMrRobotII), GitHub user
+
 ## Install
 
 `winget install blakazulu.Findra` is the whole install. The installer on the releases page,

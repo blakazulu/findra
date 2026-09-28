@@ -7,6 +7,11 @@ and Findra follows [Semantic Versioning](https://semver.org/spec/v2.0.0/).
 
 ## [Unreleased]
 
+### Added
+
+- Documentation: the website's front page quotes a Findra user, between the numbers and the
+  install.
+
 ## [0.5.0] - 2026-09-26
 
 ### Added

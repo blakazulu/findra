@@ -507,6 +507,22 @@ td.num { font-family: var(--mono); color: var(--accent); white-space: nowrap; }
 td.yes { color: var(--accent); }
 td.no { color: var(--ink-dim); }
 
+/* ---------- user quote -------------------------------------------------- */
+
+.testimonial {
+  max-width: 940px; margin-inline: auto; padding: clamp(28px, 4vw, 48px);
+  border: 1px solid var(--accent-line); border-radius: var(--r-lg);
+  background: linear-gradient(135deg, rgba(250,126,0,0.09), var(--card) 60%);
+}
+.testimonial figure { margin: 20px 0 0; }
+.testimonial blockquote { margin: 0; }
+.testimonial blockquote p {
+  color: var(--ink-bright); font-size: clamp(22px, 2.5vw, 32px);
+  font-weight: 600; line-height: 1.4; letter-spacing: -0.02em;
+}
+.testimonial figcaption { margin-top: 22px; font-family: var(--mono); font-size: 13px; color: var(--ink-dim); }
+.testimonial figcaption a { color: var(--accent); text-decoration: underline; text-underline-offset: 3px; }
+
 /* ---------- numbers ----------------------------------------------------- */
 
 .stat-row { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 18px; margin-bottom: 26px; }

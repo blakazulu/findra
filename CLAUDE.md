@@ -634,7 +634,8 @@ run by hand. **CI runs it and `git diff --exit-code` over `website/public`**, si
 date needs git history a shallow clone lacks).
 
 **The front page is short, on purpose**: the lede, "We fixed Windows Search", the numbers (one
-derived figure, a bar per query, three tiles) and the install. Everything else has a page:
+derived figure, a bar per query, three tiles), one user's words and the install. Everything else
+has a page:
 `/features/`, `/why/`, `/numbers/`, `/faq/`, `/install/`. Those five are **hand-written HTML bodies
 with hand-written Markdown twins** in `website/content/pages/` (the front page's own pattern, with
 `home.md`); `Make-Pages.mjs` wraps each body in the shared shell (`html: true` in `PAGES`) and stamps
