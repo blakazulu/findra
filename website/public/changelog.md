@@ -5,6 +5,37 @@ All notable changes to Findra are documented here.
 The format follows [Keep a Changelog 1.1.0](https://keepachangelog.com/en/1.1.0/),
 and Findra follows [Semantic Versioning](https://semver.org/spec/v2.0.0/).
 
+## [0.6.0 - 28 September 2026](https://github.com/blakazulu/findra/releases/tag/v0.6.0)
+
+### Added
+
+- **Update now installs the new version for you.** Check for updates in the tray, or Check now in
+  Settings, opens a small window that checks straight away. When there is a newer version, Update
+  now downloads the installer from the release page, checks it against the checksum GitHub
+  publishes for it, and runs it; a copy installed with winget runs the winget upgrade instead.
+  Windows asks for permission, Findra closes while the new version installs, and it starts again
+  when the installer is done. If Windows is not given permission, or winget cannot run the
+  upgrade, the window says so and nothing has changed. Cancel stops a download part-way and
+  deletes what arrived. After an update, the tray menu says what Findra was updated to until it
+  is next closed.
+
+### Changed
+
+- **Check now checks, even with the daily check switched off.** Turning the switch off stops the
+  once-a-day check in the background; pressing Check now still asks, once, because you asked.
+- **Settings no longer puts an update panel over its page.** Check now opens the update window,
+  the same one the tray opens.
+
+### Fixed
+
+- **Findra starts again after an update.** A winget upgrade, or any installer run without its
+  wizard, closed Findra and left it closed until the next sign-in. It now starts again when the
+  installer is done, if it had been running. This takes effect from the update after this one,
+  because it is the version being replaced that reports whether it was running.
+- **An upgrade started from inside Findra can replace it.** Findra stopped itself for an installer
+  by stopping its whole process tree, and an installer Findra had started is inside that tree, so
+  Windows refused and Findra kept running with its files in use. It now stops only itself.
+
 ## [0.5.1 - 28 September 2026](https://github.com/blakazulu/findra/releases/tag/v0.5.1)
 
 ### Changed
