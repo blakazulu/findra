@@ -177,6 +177,25 @@ public class InstallerScriptTests
     }
 
     [Fact]
+    public void ASilentInstallStartsFindraAgainOnlyIfItHadBeenRunning()
+    {
+        // Every winget upgrade and every Update now is silent, and "Start Findra" is skipped when
+        // silent, so without this Findra stayed closed after every update. Started through
+        // explorer.exe, so it runs as the signed-in user: an elevated Findra cannot drag a result
+        // into Explorer, and this installer runs elevated.
+        Match run = Regex.Match(Script, @"(?m)^Filename:\s*""\{win\}\\explorer\.exe"";.*$");
+        Assert.True(run.Success, "no [Run] entry starts Findra through explorer.exe");
+        Assert.Contains(@"Parameters: """"""{app}\findra.exe""""""", run.Value, StringComparison.Ordinal);
+        Assert.Contains("Check: RestartAfterSilentInstall", run.Value, StringComparison.Ordinal);
+        Assert.DoesNotContain("runascurrentuser", run.Value, StringComparison.OrdinalIgnoreCase);
+
+        string check = Body("RestartAfterSilentInstall");
+        Assert.Contains("WizardSilent", check, StringComparison.Ordinal);
+        Assert.Contains("WasRunning", check, StringComparison.Ordinal);
+        Assert.Contains("WasRunning := code = 2", Body("StopFindra"), StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void TheProcessesAreStoppedBeforeAnyFileIsReplaced()
     {
         // Inno's own CloseApplications only closes windowed applications, and two of Findra's

@@ -91,6 +91,10 @@ Name: "{group}\Findra"; Filename: "{app}\findra.exe"
 
 [Run]
 Filename: "{app}\findra.exe"; Description: "Start Findra"; Flags: nowait postinstall skipifsilent
+; A silent install (every winget upgrade, and Update now) skips the line above, so Findra would stay
+; closed after every update. This puts back what the install stopped, and only that, through the
+; shell so it runs as the person at the desktop: this installer runs elevated, and Findra must not.
+Filename: "{win}\explorer.exe"; Parameters: """{app}\findra.exe"""; Flags: nowait; Check: RestartAfterSilentInstall
 
 [UninstallDelete]
 ; installed-by.txt is written by RecordInstallSource below, from [Code], with SaveStringToFile.
@@ -103,6 +107,7 @@ Type: files; Name: "{app}\installed-by.txt"
 [Code]
 var
   Purge: Boolean;
+  WasRunning: Boolean;
 
 function StopFindra(): Boolean;
 var
@@ -112,7 +117,11 @@ begin
   // hidden child, and neither has a window for Inno to close.
   Result := True;
   if FileExists(ExpandConstant('{app}\findra.exe')) then
+  begin
     Exec(ExpandConstant('{app}\findra.exe'), '--stop', '', SW_HIDE, ewWaitUntilTerminated, code);
+    // 2: an interface was running and has been stopped. An older findra.exe always answers 0.
+    WasRunning := code = 2;
+  end;
 end;
 
 function PrepareToInstall(var NeedsRestart: Boolean): String;
@@ -120,6 +129,12 @@ begin
   // Before any file is copied. See rule 2.
   StopFindra();
   Result := '';
+end;
+
+function RestartAfterSilentInstall(): Boolean;
+begin
+  // An interactive install asks with its own "Start Findra" checkbox instead.
+  Result := WizardSilent() and WasRunning;
 end;
 
 procedure RecordInstallSource();

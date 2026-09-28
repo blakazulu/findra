@@ -113,7 +113,8 @@ findra.exe --index <parentPid>        # the content indexer, started by the UI
 findra.exe --uninstall [--purge] [--dry-run]   # stop everything, remove the scheduled task,
                                       # autostart entry and program files; --purge also deletes
                                       # models, index, settings; --dry-run prints the plan only
-findra.exe --stop                     # stop the interface, the indexer and the name helper
+findra.exe --stop                     # stop the interface, the indexer and the name helper; exits 2
+                                      # when it stopped a running interface (the installer reads it)
 ```
 
 - Any other `--` argument exits 1 and prints the list; never fall through to the greeting.

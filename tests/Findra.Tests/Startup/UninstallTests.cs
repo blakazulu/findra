@@ -398,6 +398,15 @@ public class UninstallTests : IDisposable
     // ---- the process list ---------------------------------------------------------------------
 
     [Fact]
+    public void StopSaysWhetherItStoppedARunningInterface()
+    {
+        // The installer reads this to decide whether to start Findra again after a silent install.
+        Assert.Equal(2, Uninstall.StopExitCode(new Running(Interface: 200, Helper: null, Others: [300]), spare: [999]));
+        Assert.Equal(0, Uninstall.StopExitCode(new Running(Interface: null, Helper: null, Others: [300]), spare: [999]));
+        Assert.Equal(0, Uninstall.StopExitCode(new Running(Interface: 999, Helper: null, Others: []), spare: [999]));
+    }
+
+    [Fact]
     public void TheUninstallerNeverStopsItself()
     {
         // "Stop every process called findra" kills the uninstaller in the middle of its own run,

@@ -271,7 +271,10 @@ public static class Uninstall
                 // so a ui.json still held open by an interface killed a moment earlier left the
                 // exit code at 0, never reached the loop that prints failures, and left standing
                 // the very folder the sweep exists to empty.
-                IReadOnlyList<Removal> removed = Delete(deletes, Roots());
+                // The downloaded installers go with a purge. They are nobody's data, so they are
+                // never priced in the report, and an empty "updates" folder left behind would keep
+                // %LOCALAPPDATA%\Findra standing after a purge that said it was gone.
+                IReadOnlyList<Removal> removed = Delete([.. deletes, new DataSize("updates", Paths.Updates, 0)], Roots());
                 return [.. removed, .. SweepLooseFiles(Roots())];
             },
             forgetTheWelcomeScreen: ForgetTheWelcomeScreen);
@@ -549,9 +552,18 @@ public static class Uninstall
     /// and two of Findra's three processes have no window at all.</summary>
     public static int StopAll() => StopAll(spare: [Environment.ProcessId]);
 
+    /// <summary>What <c>--stop</c> exits with: 2 when it stopped a running interface, 0 otherwise.
+    /// The installer reads it to start Findra again after a silent install, and only then.</summary>
+    public static int StopExitCode(Running running, IReadOnlyList<int> spare)
+    {
+        ArgumentNullException.ThrowIfNull(spare);
+        return running.Interface is { } ui && !spare.Contains(ui) ? 2 : 0;
+    }
+
     private static int StopAll(IReadOnlyList<int> spare)
     {
-        foreach (int pid in StopOrder(Discover(), spare))
+        Running running = Discover();
+        foreach (int pid in StopOrder(running, spare))
         {
             try
             {
@@ -563,7 +575,7 @@ public static class Uninstall
             catch (ArgumentException) { }        // already gone between Discover and here
             catch (Exception ex) { Log.Warn("uninstall", $"could not stop {pid.ToString(Fixed)}: {ex.Message}"); }
         }
-        return 0;
+        return StopExitCode(running, spare);
     }
 
     /// <summary>

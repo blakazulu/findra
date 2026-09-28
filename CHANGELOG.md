@@ -27,6 +27,13 @@ and Findra follows [Semantic Versioning](https://semver.org/spec/v2.0.0/).
 - **Settings no longer puts an update panel over its page.** Check now opens the update window,
   the same one the tray opens.
 
+### Fixed
+
+- **Findra starts again after an update.** A winget upgrade, or any installer run without its
+  wizard, closed Findra and left it closed until the next sign-in. It now starts again when the
+  installer is done, if it had been running. This takes effect from the update after this one,
+  because it is the version being replaced that reports whether it was running.
+
 ## [0.5.1] - 2026-09-28
 
 ### Added
