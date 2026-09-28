@@ -29,6 +29,8 @@ and Findra follows [Semantic Versioning](https://semver.org/spec/v2.0.0/).
 - Documentation: the privacy policy, the README, the FAQ and the About page say that Findra
   installs an update only when you press Update now, and that off stops the daily check rather
   than refusing a check you ask for.
+- Documentation: the welcome-screen screenshot in the README and on the website shows the new
+  wording of the update check.
 
 ### Fixed
 
