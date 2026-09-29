@@ -5,6 +5,50 @@ All notable changes to Findra are documented here.
 The format follows [Keep a Changelog 1.1.0](https://keepachangelog.com/en/1.1.0/),
 and Findra follows [Semantic Versioning](https://semver.org/spec/v2.0.0/).
 
+## [0.7.0 - 29 September 2026](https://github.com/blakazulu/findra/releases/tag/v0.7.0)
+
+### Added
+
+- **The capsule can be hidden from its own right-click menu.** The item says which shortcut
+  still opens search (or the tray icon, when no shortcut could be registered). Bring the capsule
+  back from the tray menu or Settings > Opening it.
+
+### Changed
+
+- **Searching inside files by meaning and by picture is much faster on a large index.** Each
+  search used to read the whole file of pictures and passages twice, one row at a time. It now
+  reads it once, skips what was deleted and what the search is not about, and shares the work
+  across several processor cores.
+- **That file gives disk space back.** Deleting or re-reading a file used to leave its old entries
+  in place for good. When a quarter or more of the file is left over, Findra copies what is still
+  in use into a fresh file while it has nothing else to read, and deletes the old one.
+- **Removing many files from the index is quicker.** Files that are gone are taken out up to 200
+  at a time instead of one at a time.
+- **The log says where a slow content search spent its time.** Any search inside files that takes
+  more than half a second leaves one line with the breakdown.
+- **The search window says when a search is still running.** While you type, the results on
+  screen keep the words they are the answer to, and "searching..." shows on the right until the
+  new answer arrives. Before, the old results were labelled with the new words and looked finished.
+- **Searching inside files right after Findra starts says it is not the whole answer yet.** For
+  the first few seconds, while meaning and picture search are still loading, the window says so
+  and shows the word matches it has; once they are ready it searches again by itself.
+
+### Fixed
+
+- **Files deleted while Findra could not see them are taken out of the index.** When Windows'
+  record of changes no longer reached back to where Findra stopped, or changes were missed, Findra
+  looked at the whole drive again but only ever added to the index. It now also removes what the
+  drive no longer has. The first start after this update looks at each drive once to clear what
+  earlier versions left behind; nothing already read is read again.
+- **A file replaced while it was waiting to be read no longer ends up in the index twice.** Saving
+  by writing a new copy over the old one, as many editors and build tools do, left an extra entry
+  for the old copy that nothing could remove.
+- **Content search no longer shows files that are no longer on the disk.** They had nothing to
+  preview and could not be opened.
+- **Pictures and passages deleted after a search window was opened no longer come back in it.**
+- **The search window could crash when moving quickly between results.** Going back to a result
+  whose preview was still being prepared could draw a picture that had already been thrown away.
+
 ## [0.6.3 - 29 September 2026](https://github.com/blakazulu/findra/releases/tag/v0.6.3)
 
 ### Changed
