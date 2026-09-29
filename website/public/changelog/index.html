@@ -129,7 +129,7 @@
       <span class="kicker">CHANGELOG</span>
       <h1>Every release, and what it changed for you.</h1>
       <div class="doc-meta">
-        <span class="d">Findra 0.6.2 &middot; last reviewed 2026-09-29</span>
+        <span class="d">Findra 0.6.3 &middot; last reviewed 2026-09-29</span>
         <a class="doc-chip on" href="/changelog.md">Read as Markdown</a>
         <a class="doc-chip" href="https://github.com/blakazulu/findra/blob/main/CHANGELOG.md" rel="noopener">History on GitHub</a>
       </div>
@@ -139,6 +139,20 @@
       <p>All notable changes to Findra are documented here.</p>
 
       <p>The format follows <a href="https://keepachangelog.com/en/1.1.0/">Keep a Changelog 1.1.0</a>, and Findra follows <a href="https://semver.org/spec/v2.0.0/">Semantic Versioning</a>.</p>
+
+      <h2><a href="https://github.com/blakazulu/findra/releases/tag/v0.6.3">0.6.3 - 29 September 2026</a></h2>
+
+      <h3>Changed</h3>
+
+      <ul>
+        <li><strong>The log says why reading stopped at a file</strong>: what the last attempt did, the error it hit, and how many attempts the file has had.</li>
+      </ul>
+
+      <h3>Fixed</h3>
+
+      <ul>
+        <li><strong>A file saved again straight after Findra read it no longer counts as stuck.</strong> Findra took the new save for the old one refusing to leave the queue, paused reading for two seconds, could show &quot;a problem&quot; on the capsule for that moment, and logged a warning about a failure that never happened. The next file saved after the queue had emptied could trip it too.</li>
+      </ul>
 
       <h2><a href="https://github.com/blakazulu/findra/releases/tag/v0.6.2">0.6.2 - 29 September 2026</a></h2>
 

@@ -7,6 +7,8 @@ and Findra follows [Semantic Versioning](https://semver.org/spec/v2.0.0/).
 
 ## [Unreleased]
 
+## [0.6.3] - 2026-09-29
+
 ### Changed
 
 - **The log says why reading stopped at a file**: what the last attempt did, the error it hit,
@@ -1892,7 +1894,8 @@ all of it gets verified without a screen.
 - The named pipe is restricted to the current user, and the interface verifies the
   owner before trusting a connection.
 
-[Unreleased]: https://github.com/blakazulu/findra/compare/v0.6.2...HEAD
+[Unreleased]: https://github.com/blakazulu/findra/compare/v0.6.3...HEAD
+[0.6.3]: https://github.com/blakazulu/findra/compare/v0.6.2...v0.6.3
 [0.6.2]: https://github.com/blakazulu/findra/compare/v0.6.1...v0.6.2
 [0.6.1]: https://github.com/blakazulu/findra/compare/v0.6.0...v0.6.1
 [0.6.0]: https://github.com/blakazulu/findra/compare/v0.5.1...v0.6.0
