@@ -166,6 +166,31 @@ public static class SearchCardLayout
     public static SKRect FooterRect(int count, bool hasQuery)
         => new(0, BodyTop + BodyH(count, hasQuery), Width, Height(count, hasQuery));
 
+    /// <summary>The stage's text under the picture: the name's baseline this far below it, the
+    /// first line about the file this far below the name, and each further line this far on.</summary>
+    public const float StageNameGap = 24f, StageFirstLineGap = 20f, StageLineH = 17f;
+
+    /// <summary>Clear air between the last line about the file and the buttons under it.</summary>
+    public const float StageActionsAir = 12f;
+
+    /// <summary>
+    /// The stage's picture: square for photos and files, 16:9 for video, and never so tall that the
+    /// <paramref name="lines"/> about the file under it reach the buttons. Beside a list of six or
+    /// fewer the stage is only its minimum height, and at full size the fourth line was drawn a
+    /// pixel above the Open button. The picture gives way, because the text and the buttons are
+    /// what has to be read and pressed; it is centre-cropped, so a shorter one is never squashed.
+    /// </summary>
+    public static SKRect StagePicture(int count, bool hasQuery, bool wide, int lines)
+    {
+        var st = StageRect(count, hasQuery);
+        float pw = st.Width - 16;
+        float whole = wide ? pw * 9 / 16 : Math.Min(pw, 190);
+        float text = StageNameGap + StageFirstLineGap + Math.Max(0, lines - 1) * StageLineH;
+        float room = ActionRect(count, hasQuery, 0).Top - StageActionsAir - text - (st.Top + 8);
+        float ph = Math.Clamp(room, 0, whole);
+        return new SKRect(st.Left + 8, st.Top + 8, st.Left + 8 + pw, st.Top + 8 + ph);
+    }
+
     // the three actions under the stage, right column, bottom
     public static SKRect ActionRect(int count, bool hasQuery, int which)
     {
@@ -786,11 +811,16 @@ public static class SearchCardPainter
         var dim = d.Fade(215);
         var faint = d.Fade(140);
 
+        // What is said about the file decides how much room the picture has. Counted here, with
+        // the same conditions the lines below are drawn under.
+        string file = s.StageDetail.Length > 0 ? s.StageDetail
+            : row.Modified != default ? (row.Size > 0 ? Human(row.Size) + " · " : "") + row.Modified.ToString("d MMM yyyy HH:mm")
+            : "";
+        int lines = file.Length > 0 ? 4 : 3;
+
         // the picture: square for photos and files, 16:9 for video
         bool wide = row.Kind == ResultKind.Video;
-        float pw = st.Width - 16;
-        float ph = wide ? pw * 9 / 16 : Math.Min(pw, 190);
-        var pic = new SKRect(st.Left + 8, st.Top + 8, st.Left + 8 + pw, st.Top + 8 + ph);
+        var pic = SearchCardLayout.StagePicture(count, true, wide, lines);
         var prr = new SKRoundRect(pic, 10);
 
         if (s.StageImage is SKImage img)
@@ -838,20 +868,19 @@ public static class SearchCardPainter
             CardText.Draw(canvas, ts, tr.Left + 6, tr.MidY + 4, 11f, face, text);
         }
 
-        float y2 = pic.Bottom + 24;
+        float y2 = pic.Bottom + SearchCardLayout.StageNameGap;
         CardText.Draw(canvas, CardText.Ellipsize(row.Name, face, 15f, st.Width - 16), st.Left + 8, y2, 15f, face, text, bold: true);
-        y2 += 20;
+        y2 += SearchCardLayout.StageFirstLineGap;
 
         void Kv(string k, string v)
         {
             CardText.Draw(canvas, k, st.Left + 8, y2, 11.5f, face, faint);
             CardText.Draw(canvas, CardText.Ellipsize(v, face, 11.5f, st.Width - 72, keepEnd: k == "where"), st.Left + 60, y2, 11.5f, face, dim);
-            y2 += 17;
+            y2 += SearchCardLayout.StageLineH;
         }
         Kv("where", Folder(row.Path));
         Kv("match", row.Why);
-        if (s.StageDetail.Length > 0) Kv("file", s.StageDetail);
-        else if (row.Modified != default) Kv("file", (row.Size > 0 ? Human(row.Size) + " · " : "") + row.Modified.ToString("d MMM yyyy HH:mm"));
+        if (file.Length > 0) Kv("file", file);
         Kv("score", $"{row.Score * 100:0}%");
 
         // the three actions

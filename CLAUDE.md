@@ -235,6 +235,9 @@ both halves through `ApplyConfig` and `ISettingsHost.StartIndexing`).
 - **The empty card's height is the hint's OR the column's, whichever is larger.**
 - **The card's pills do not ellipsise.** `SearchCardPainter`'s three labels and two empty hints are
   named constants so `CardPillTests` measures what is drawn.
+- **The stage's picture gives way to its text** (`SearchCardLayout.StagePicture`): beside six rows
+  or fewer the stage is only `StageMinH`, and the picture shrinks so every line about the file sits
+  above the buttons. `CardStageTests` reads the pixels just above Open.
 - **`ContentPill.Decide` owns what pressing Content means**, not `CardWindow`. Release: search
   again. Files read and reading off: turn reading back on in place. Nothing read: open Settings at
   Content. A count nothing has read yet: search.

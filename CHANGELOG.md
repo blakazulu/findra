@@ -7,6 +7,13 @@ and Findra follows [Semantic Versioning](https://semver.org/spec/v2.0.0/).
 
 ## [Unreleased]
 
+### Fixed
+
+- **With a short list of results, the details beside it no longer run into the buttons.** The
+  last line about the highlighted file ("score") was drawn on top of the Open button whenever six
+  results or fewer were shown. The preview picture is now a little shorter in that case, so every
+  line fits above the buttons.
+
 ## [0.7.0] - 2026-09-29
 
 ### Added
