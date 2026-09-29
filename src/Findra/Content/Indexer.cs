@@ -69,6 +69,13 @@ public sealed class Indexer
     private string _processorWhy = "";
     private string _aroundKind = "";
 
+    /// <summary>What went wrong in the last <see cref="Handle"/>, or empty when nothing did: the
+    /// file's own error, and the one that stopped the outcome being recorded if there was one.</summary>
+    private string _lastError = "";
+
+    /// <summary>Why the loop is stuck on a row, while it is; written as <c>indexer:stuck</c>.</summary>
+    private string _stuckWhy = "";
+
     /// <summary>What this process still holds on the graphics card, read after a release; null
     /// where it is not measured (a diagnostic, a test) or could not be.</summary>
     private readonly Func<long?>? _leftOnCard;
@@ -232,6 +239,7 @@ public sealed class Indexer
             // The kind waiting for the card while other files are read, or empty. What the surfaces
             // say "photos wait" or "recordings wait" from.
             _db.Set("indexer:around", _aroundKind);
+            _db.Set("indexer:stuck", _stuckWhy);
             _db.Set("indexer:pending", _db.PendingCount().ToString(CultureInfo.InvariantCulture));
             _db.Set("indexer:beat", DateTimeOffset.UtcNow.ToUnixTimeSeconds().ToString(CultureInfo.InvariantCulture));
             _db.Set("indexer:pid", Environment.ProcessId.ToString(CultureInfo.InvariantCulture));
@@ -264,6 +272,8 @@ public sealed class Indexer
     {
         string lastState = "";
         long stuck = -1;
+        string lastOutcome = "";
+        int attemptsAfter = 0;
         var lastStatus = Stopwatch.StartNew();
         var idleFor = new Stopwatch();
         bool workingAround = false;
@@ -291,6 +301,9 @@ public sealed class Indexer
                     idleFor.Restart();
                 }
                 if (idleFor.Elapsed.TotalSeconds >= KeepModelsIdleSeconds) LetModelsGo("idle");
+                // An empty queue numbers its next row 1 again, so the last row's id says nothing
+                // about whatever is queued next.
+                stuck = -1;
                 Status("idle");
                 Thread.Sleep(2000);
                 continue;
@@ -336,7 +349,11 @@ public sealed class Indexer
                 Thread.Sleep(2000);
                 continue;
             }
-            if (item.Id == stuck)
+            // The same ROW, not merely the same id. Ids are reused: a file queued again straight after
+            // it was read - saved twice in quick succession - comes back under the id it had, and
+            // that is new work. Its new row's count starts from nothing; a row that was never taken
+            // off still carries the attempt just made.
+            if (item.Id == stuck && item.Attempts >= attemptsAfter)
             {
                 // Handle failed even at recording its own failure, so the row was never dequeued
                 // and TakeNext keeps handing back the same one. At the 30 ms working rest that is
@@ -345,14 +362,16 @@ public sealed class Indexer
                 // exactly where it was, a transient cause still clears on the next attempt, and a
                 // permanent one costs the machine one attempt every two seconds rather than the
                 // whole of a core.
+                _stuckWhy = StuckDetail(lastOutcome, _lastError, item.Attempts);
                 Log.Once($"index|stuck|{item.Id.ToString(CultureInfo.InvariantCulture)}", "WARN", "index",
-                    $"the queue could not be advanced past {Path.GetFileName(item.Path)} - retrying it slowly");
+                    $"the queue could not be advanced past {Path.GetFileName(item.Path)} - retrying it slowly ({_stuckWhy})");
                 lastState = "stuck";
                 Status("stuck", Path.GetFileName(item.Path), item.Kind);
                 stuck = -1;
                 Thread.Sleep(2000);
                 continue;
             }
+            _stuckWhy = "";
             if (lastState != "indexing") { Log.Info("index", "indexer working"); lastState = "indexing"; }
 
             // Where this file's models open. Only a file that loads one says anything: a document
@@ -375,7 +394,8 @@ public sealed class Indexer
             // Written first, the raised count survives the crash. So the row is written off on the
             // fourth sight of it, the queue moves, and the file is named in the index with a reason
             // somebody can read rather than being an invisible full stop.
-            if (item.Reason != ContentDb.ReasonDelete && WriteOffIfItKeepsComingBack(item)) continue;
+            bool counted = false;
+            if (item.Reason != ContentDb.ReasonDelete && WriteOffIfItKeepsComingBack(item, out counted)) continue;
 
             // BEFORE the file is opened, not after it is finished. Status is the only writer of
             // indexer:beat, and writing it afterwards meant the beat covering a file was written
@@ -385,8 +405,11 @@ public sealed class Indexer
             if (lastStatus.ElapsedMilliseconds > 1500) { Status("indexing", Path.GetFileName(item.Path), item.Kind); lastStatus.Restart(); UpdateRate(); }
 
             var busy = Stopwatch.StartNew();
-            _ = Handle(item);
+            lastOutcome = Handle(item);
             stuck = item.Id;
+            // What the row's count reads if this very row comes back: raised once, before the file
+            // was opened, unless it was not counted (a delete, or a count the database refused).
+            attemptsAfter = item.Attempts + (counted ? 1 : 0);
             busy.Stop();
             // The power setting is a duty cycle: at 50% the indexer rests as long as it worked, at
             // 25% three times as long. The rest is between files, where nothing is running, so it
@@ -402,6 +425,12 @@ public sealed class Indexer
         }
         return _recycle;
     }
+
+    /// <summary>Why the loop is stuck on a row: what the last attempt did, the error it hit and the
+    /// one that stopped it being recorded, and how many attempts the row has had.</summary>
+    public static string StuckDetail(string outcome, string error, int attempts) =>
+        "last attempt: " + (outcome.Length > 0 ? outcome : "unknown") + (error.Length > 0 ? " :: " + error : "") +
+        $"; the same row is still queued, attempt {attempts.ToString(CultureInfo.InvariantCulture)}";
 
     private void LetModelsGo(string why)
     {
@@ -435,10 +464,11 @@ public sealed class Indexer
 
     /// <summary>Count this attempt, and if the row has had its last, record it and take it out of
     /// the queue. True means "already dealt with; go to the next one".</summary>
-    private bool WriteOffIfItKeepsComingBack(ContentDb.Pending item)
+    private bool WriteOffIfItKeepsComingBack(ContentDb.Pending item, out bool counted)
     {
         bool spent;
-        try { spent = _db.CountAttempt(item.Id); }
+        counted = false;
+        try { spent = _db.CountAttempt(item.Id); counted = true; }
         catch (Exception ex)
         {
             // The counter is a safety net, not the work. A database that will not take the update
@@ -557,6 +587,7 @@ public sealed class Indexer
     private string Handle(ContentDb.Pending item)
     {
         var sw = Stopwatch.StartNew();
+        _lastError = "";
         try
         {
             if (item.Reason == ContentDb.ReasonDelete)
@@ -651,6 +682,7 @@ public sealed class Indexer
                     // empty segment set, which is right for a file being read from scratch and
                     // wrong here: it would take the speech rows with it and leave the item Failed,
                     // where nothing re-queues it.
+                    _lastError = $"{ex.GetType().Name}: {ex.Message}";
                     Log.Once($"index|reframe|{ex.GetType().Name}", "WARN", "index",
                         $"the pictures of {Path.GetFileName(item.Path)} could not be read again :: " +
                         $"{ex.GetType().Name}: {ex.Message}");
@@ -705,6 +737,7 @@ public sealed class Indexer
         catch (Exception ex)
         {
             _failed++;
+            _lastError = $"{ex.GetType().Name}: {ex.Message}";
             Log.Once($"index|fail|{item.Kind}|{ex.GetType().Name}|{Path.GetExtension(item.Path)}", "WARN", "index",
                 $"cannot index {Path.GetFileName(item.Path)} ({item.Kind}) :: {ex.GetType().Name}: {ex.Message}");
             try
@@ -723,7 +756,11 @@ public sealed class Indexer
                 }
                 _decoders.Release(dead);
             }
-            catch (Exception ex2) { Log.Once("index|fail|record", "ERROR", "index", $"could not record a failure :: {ex2.Message}"); }
+            catch (Exception ex2)
+            {
+                _lastError += $"; recording it failed :: {ex2.GetType().Name}: {ex2.Message}";
+                Log.Once("index|fail|record", "ERROR", "index", $"could not record a failure :: {ex2.Message}");
+            }
             return "FAILED";
         }
     }

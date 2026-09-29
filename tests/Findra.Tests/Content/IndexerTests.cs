@@ -330,6 +330,66 @@ public sealed class IndexerTests : IDisposable
         Assert.Equal("stuck", db.Get("indexer:state"));
         Assert.Equal("1", db.Get("indexer:failed"));    // handled once, not once per pass
         Assert.Equal(1, db.PendingCount());             // and left where a later run can retry it
+
+        // And it says why: the attempt's own error, the one that stopped the row being recorded,
+        // and that it is the same row, not the file queued again.
+        string why = db.Get("indexer:stuck") ?? "";
+        Assert.Contains("last attempt: FAILED", why, StringComparison.Ordinal);
+        Assert.Contains("recording it failed", why, StringComparison.Ordinal);
+        Assert.Contains("no such table: items", why, StringComparison.Ordinal);
+        Assert.Contains("the same row is still queued", why, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void AFileQueuedAgainUnderTheSameIdIsReadAgainRatherThanCalledStuck()
+    {
+        // The queue's ids are reused: a file read, taken off, and queued again at once (saved
+        // twice in quick succession) gets the id its last row had. That is new work, not a row
+        // left behind. Called stuck, it cost a two-second pause, "a problem" on the capsule and a
+        // warning naming a failure that never happened.
+        string doc = Under("changelog.md");
+        File.WriteAllText(doc, "the quarterly lease agreement, signed and countersigned");
+
+        using ContentDb db = Open();
+        db.Enqueue("C", 1, doc, ResultKind.Document, "probe");
+
+        int passes = 0;
+        Indexer.Loop(db, parentPid: 0, decoders: Dec(), running: () =>
+        {
+            passes++;
+            // Between the first attempt and the next look at the queue, as the journal would.
+            if (passes == 2) db.Enqueue("C", 1, doc, ResultKind.Document, "journal");
+            return passes <= 2;
+        });
+
+        Assert.Equal(0, db.PendingCount());             // the second save was read on the next pass
+        Assert.True(string.IsNullOrEmpty(db.Get("indexer:stuck")), db.Get("indexer:stuck"));
+    }
+
+    [Fact]
+    public void AnIdSeenBeforeTheQueueEmptiedIsNotHeldAgainstTheNextFile()
+    {
+        // An empty queue numbers its next row 1 again. Remembering the last row across an idle
+        // spell made the next file saved - any file - look like the one before it coming back.
+        // The first row is a delete because a delete is not counted, so its count cannot tell
+        // the two rows apart and only forgetting it can.
+        string first = Under("first.md"), second = Under("second.md");
+        File.WriteAllText(second, "the annual report, reviewed and approved by the board");
+
+        using ContentDb db = Open();
+        db.Enqueue("C", 1, first, ResultKind.Document, ContentDb.ReasonDelete);
+
+        int passes = 0;
+        Indexer.Loop(db, parentPid: 0, decoders: Dec(), running: () =>
+        {
+            passes++;
+            // Pass 2 finds the queue empty and idles; pass 3 finds the next file under id 1.
+            if (passes == 3) db.Enqueue("C", 2, second, ResultKind.Document, "journal");
+            return passes <= 3;
+        });
+
+        Assert.Equal(0, db.PendingCount());
+        Assert.True(string.IsNullOrEmpty(db.Get("indexer:stuck")), db.Get("indexer:stuck"));
     }
 
     [Fact]

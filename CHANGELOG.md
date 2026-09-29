@@ -7,6 +7,18 @@ and Findra follows [Semantic Versioning](https://semver.org/spec/v2.0.0/).
 
 ## [Unreleased]
 
+### Changed
+
+- **The log says why reading stopped at a file**: what the last attempt did, the error it hit,
+  and how many attempts the file has had.
+
+### Fixed
+
+- **A file saved again straight after Findra read it no longer counts as stuck.** Findra took the
+  new save for the old one refusing to leave the queue, paused reading for two seconds, could
+  show "a problem" on the capsule for that moment, and logged a warning about a failure that
+  never happened. The next file saved after the queue had emptied could trip it too.
+
 ## [0.6.2] - 2026-09-29
 
 ### Changed
