@@ -5,6 +5,15 @@ All notable changes to Findra are documented here.
 The format follows [Keep a Changelog 1.1.0](https://keepachangelog.com/en/1.1.0/),
 and Findra follows [Semantic Versioning](https://semver.org/spec/v2.0.0/).
 
+## [0.7.1 - 29 September 2026](https://github.com/blakazulu/findra/releases/tag/v0.7.1)
+
+### Fixed
+
+- **With a short list of results, the details beside it no longer run into the buttons.** The
+  last line about the highlighted file ("score") was drawn on top of the Open button whenever six
+  results or fewer were shown. The preview picture is now a little shorter in that case, so every
+  line fits above the buttons.
+
 ## [0.7.0 - 29 September 2026](https://github.com/blakazulu/findra/releases/tag/v0.7.0)
 
 ### Added

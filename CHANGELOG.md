@@ -7,6 +7,8 @@ and Findra follows [Semantic Versioning](https://semver.org/spec/v2.0.0/).
 
 ## [Unreleased]
 
+## [0.7.1] - 2026-09-29
+
 ### Fixed
 
 - **With a short list of results, the details beside it no longer run into the buttons.** The
@@ -1945,7 +1947,8 @@ all of it gets verified without a screen.
 - The named pipe is restricted to the current user, and the interface verifies the
   owner before trusting a connection.
 
-[Unreleased]: https://github.com/blakazulu/findra/compare/v0.7.0...HEAD
+[Unreleased]: https://github.com/blakazulu/findra/compare/v0.7.1...HEAD
+[0.7.1]: https://github.com/blakazulu/findra/compare/v0.7.0...v0.7.1
 [0.7.0]: https://github.com/blakazulu/findra/compare/v0.6.3...v0.7.0
 [0.6.3]: https://github.com/blakazulu/findra/compare/v0.6.2...v0.6.3
 [0.6.2]: https://github.com/blakazulu/findra/compare/v0.6.1...v0.6.2
