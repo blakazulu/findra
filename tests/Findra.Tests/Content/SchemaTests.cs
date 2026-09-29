@@ -328,6 +328,34 @@ public sealed class SchemaTests : IDisposable
     }
 
     [Fact]
+    public void AnIndexFromBeforeFullPassesTookFilesOutIsWalkedOnceAndNothingIsReadAgain()
+    {
+        // An index written before a full pass took out what the drive no longer has carries every
+        // file deleted in a journal gap, and every file replaced while it waited to be read, for
+        // good. One pass finds them. Nothing about the files still there has changed, so nothing
+        // is re-queued: the pass compares timestamps and queues only what moved.
+        string path = Db();
+        using (var db = new ContentDb(path))
+        {
+            using (var tx = db.Begin())
+            {
+                db.Upsert("C", 1, @"C:\a\lease.pdf", ResultKind.Document, 1, 1, ContentDb.StateIndexed, null, [], tx);
+                db.Upsert("C", 2, @"C:\a\sunset.jpg", ResultKind.Photo, 1, 1, ContentDb.StateIndexed, null, [], tx);
+                tx.Commit();
+            }
+            db.SetUsnPosition('C', journalId: 0xABCDEF, usn: 90210);
+            db.Set("schema", "6");
+        }
+
+        using (var db = new ContentDb(path))
+        {
+            Assert.Null(db.UsnPosition('C'));
+            Assert.Equal(0, db.PendingCount());
+            Assert.Equal(ContentDb.SchemaVersion.ToString(CultureInfo.InvariantCulture), db.Get("schema"));
+        }
+    }
+
+    [Fact]
     public void AStepThatOnlyChangesWhatIsStoredLeavesThePositionAlone()
     {
         // The other half, and the one that matters more: re-walking a finished disk for a change

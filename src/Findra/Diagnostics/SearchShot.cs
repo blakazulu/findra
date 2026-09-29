@@ -21,8 +21,8 @@ public static class SearchShot
 {
     public static readonly IReadOnlyList<string> States =
     [
-        "capsule", "empty", "indexing", "contentmode", "contentwaiting", "typing", "results",
-        "noresults", "many", "adv", "opening", "openingempty", "selected", "starting",
+        "capsule", "empty", "indexing", "contentmode", "contentwaiting", "contentloading", "typing",
+        "searching", "results", "noresults", "many", "adv", "opening", "openingempty", "selected", "starting",
         "settings", "settingsopening", "settingssearches", "settingscontent", "settingsaddons",
         "settingsremove", "settingsabout",
         "updatechecking", "updateuptodate", "updateunreachable", "updateavailable", "updateavailablewinget",
@@ -483,6 +483,28 @@ public static class SearchShot
                 Clock = 0.2,
             };
 
+        // A content answer given while the query models were still opening: word matches only, and
+        // the header's right-hand slot saying which half is missing. No other state carries a note
+        // beside rows, so the note and the count sharing one line was drawn by nothing else.
+        if (state == "contentloading")
+        {
+            const string asked = "a dog on a beach";
+            List<SearchResult> words =
+            [
+                new(ResultKind.Document, "trip-notes-2025.docx", @"C:\Users\rae\Documents\Travel\trip-notes-2025.docx",
+                    0.86f, "contains the words", Excerpt: "…took the dog down to the beach before the heat, then back for breakfast…"),
+                new(ResultKind.Document, "vet-invoice-march.pdf", @"C:\Users\rae\Documents\Home\vet-invoice-march.pdf",
+                    0.85f, "contains the words", Excerpt: "…dog, 14 kg, ear drops after the beach, follow-up in six weeks…"),
+                new(ResultKind.Audio, "Voice 021.m4a", @"C:\Users\rae\Music\Voice Memos\Voice 021.m4a",
+                    0.84f, "said at 0:42", 42, Excerpt: "\u201c…the dog would not leave the beach…\u201d"),
+            ];
+            var answer = new SearchResults(asked, words, 0, 38, true, ContentBranch.StillLoading(words: true, pictures: true),
+                                           ModelsLoading: true);
+            return new SearchCardState(asked, answer, words, 0, 0, 0, false, Caret: asked.Length,
+                IndexLine: "index up to date · 12,480 files", StageDetail: "48 KB · 3 Aug 2025 21:10",
+                Clock: 0.2, Content: true);
+        }
+
         // The unfold has a Restore on each of the painter's two return paths, and an unbalanced
         // canvas is exactly what that shape produces when one is missed - so both are shot. This
         // is the short one, and the one a user actually sees: clicking the capsule opens a card
@@ -509,12 +531,17 @@ public static class SearchShot
         {
             "typing" => "sun",
             "noresults" => "zqxjkv",
-            "selected" => "sunset over water",
+            "selected" or "searching" => "sunset over water",
             _ => "sunset",
         };
+        // `searching` is the field ahead of the answer: "sunset over water" typed, a search for it
+        // running, and the rows on screen still the answer to "sunset". The header's left names
+        // the query the rows answer and its right says a newer one is running - the one state
+        // where the two halves of that line disagree with the field on purpose.
+        string answered = state == "searching" ? "sunset" : query;
 
         var fake = new List<SearchResult>();
-        if (state is "results" or "many" or "opening" or "selected")
+        if (state is "results" or "many" or "opening" or "selected" or "searching")
         {
             fake.Add(new SearchResult(ResultKind.Photo, "IMG_4471.HEIC",
                 @"D:\Photos\2025\08 Crete\IMG_4471.HEIC", 0.91f, "looks like \u201csunset over water\u201d"));
@@ -543,13 +570,13 @@ public static class SearchShot
                         $@"C:\Users\rae\Documents\notes\sunset-{i:00}.txt", 0.68f, "name"));
         }
 
-        var results = new SearchResults(query, fake, 2.4, 0, false);
+        var results = new SearchResults(answered, fake, 2.4, 0, false);
         IReadOnlyList<SearchResult> rows = SearchCardState.Filtered(results, 0);
         // `many` scrolls three rows down, so its highlight has to move with the window - at 0 the
         // one shot with enough rows to be worth looking at showed no selection at all.
         int scroll = state == "many" ? 3 : 0;
         int highlight = scroll + (state == "many" ? 1 : 0);
-        return new SearchCardState(query, results, rows, 0, highlight, scroll, state == "typing",
+        return new SearchCardState(query, results, rows, 0, highlight, scroll, state is "typing" or "searching",
             Caret: query.Length,
             // `many` carries the LONGEST index line the card can be handed: three drives, the
             // helper still reading, and a backlog left by a previous session, with the content

@@ -10,7 +10,7 @@ public enum SearchSort { Best, Newest, Largest }
 
 /// <summary>One answer to one query. Immutable, swapped in whole - the card never edits it.</summary>
 public sealed record SearchResults(string Query, IReadOnlyList<SearchResult> Rows, double NamesMs,
-    double ContentMs, bool ContentReady, string Note = "")
+    double ContentMs, bool ContentReady, string Note = "", bool ModelsLoading = false)
 {
     public static readonly SearchResults Empty = new("", Array.Empty<SearchResult>(), 0, 0, false);
 }

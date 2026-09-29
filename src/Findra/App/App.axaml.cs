@@ -855,12 +855,18 @@ internal sealed class Shell : ISettingsHost
     /// meaning - runs off the loop, so the capsule never stalls. A search during it answers by
     /// names and words and gains meaning and pictures when it finishes; nobody waits.</para>
     /// </summary>
-    private void OpenTheQueryEncodersTheIndexNowNeeds()
+    private void OpenTheQueryEncodersTheIndexNowNeeds(ContentDb db)
     {
         if (_semantic is { Text: not null, Image: not null }) return;
 
+        // The file the index names: a compaction moves the rows to a new one. A shorter file after
+        // a compaction is a change like any other, and costs one look. Read through the writer
+        // this flow owns, never the card's connection, which a card may be querying right now.
+        string vectors;
+        try { vectors = db.VectorsPath(); }
+        catch { return; }
         long length;
-        try { var f = new FileInfo(VectorStore.DefaultPath + ".kinds"); length = f.Exists ? f.Length : 0; }
+        try { var f = new FileInfo(vectors + ".kinds"); length = f.Exists ? f.Length : 0; }
         catch { return; }
         if (length == Interlocked.Read(ref _kindsSeen)) return;
         if (Interlocked.Exchange(ref _encodersOpening, 1) == 1) return;
@@ -870,7 +876,7 @@ internal sealed class Shell : ISettingsHost
         {
             try
             {
-                (bool Words, bool Pictures) held = ContentBranch.Holds(VectorStore.KindsOnDisk());
+                (bool Words, bool Pictures) held = ContentBranch.Holds(VectorStore.KindsOnDisk(vectors));
                 if (!held.Words && !held.Pictures) return;
                 CapabilitySet installed = CapabilitySet.Installed();
 
@@ -1030,7 +1036,7 @@ internal sealed class Shell : ISettingsHost
         catch (Exception ex) { Log.Warn("models", "could not finish removing model files from an earlier session :: " + ex.Message); }
         _installed = CapabilitySet.Installed();
         _semantic = Semantic.For(_installed);
-        (bool heldWords, bool heldPictures) = ContentBranch.Holds(VectorStore.KindsOnDisk());
+        (bool heldWords, bool heldPictures) = ContentBranch.Holds(VectorStore.KindsOnDisk(writer.VectorsPath()));
         _semantic?.OpenWhatIsNeeded(_installed, (heldWords, heldPictures));
         Log.Info("models", _semantic is null
             ? "no query encoder this session - content search answers with the words in your files"
@@ -1346,7 +1352,7 @@ internal sealed class Shell : ISettingsHost
         // process with no indexer child yet still has a writer connection they can only reach
         // through here.
         DrainContentWork(db);
-        OpenTheQueryEncodersTheIndexNowNeeds();
+        OpenTheQueryEncodersTheIndexNowNeeds(db);
 
         IndexerHost? host = _indexer;
         if (host is null) return;
@@ -1591,7 +1597,8 @@ internal sealed class Shell : ISettingsHost
         // Spec §7 surface 4: palette and content indexing live on the capsule so that most people
         // never open settings. Built at the moment of the click, from the config as it is then.
         capsule.MenuItems = () =>
-            CapsuleMenu.Items(_config, PaletteStore.LoadFromDisk(), Theme.WindowsIsLight(), _indexerAlive);
+            CapsuleMenu.Items(_config, PaletteStore.LoadFromDisk(), Theme.WindowsIsLight(), _indexerAlive,
+                              _hotkey?.Landed);
         capsule.MenuCommand += OnCapsuleCommand;
         capsule.Show();
         capsule.Position = at;   // Show is entitled to place a window itself; this is the last word
@@ -2008,6 +2015,10 @@ internal sealed class Shell : ISettingsHost
         switch (command)
         {
             case "content": ApplyConfig(_config with { IndexContent = !_config.IndexContent }); return;
+            case "hidecapsule":
+                ApplyConfig(_config with { ShowCapsule = false });
+                Log.Info("app", "the capsule was hidden from its own menu; the hotkey and the tray open the card");
+                return;
             case "settings": OpenSettings(); return;
             case "quit": Quit(); return;
             default:

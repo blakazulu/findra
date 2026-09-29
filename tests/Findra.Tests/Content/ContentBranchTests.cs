@@ -29,7 +29,7 @@ public sealed class ContentBranchTests : IDisposable
             "This agreement is between the parties. The deposit is returned at the end of the term.");
         Put(db, @"C:\Papers\menu.pdf", 2, ResultKind.Document, "Soup, bread and a coffee.");
 
-        SearchResults r = ContentBranch.Search(db, "deposit", 20);
+        SearchResults r = ContentBranch.Search(db, "deposit", 20, stat: Here);
 
         SearchResult row = Assert.Single(r.Rows);
         Assert.Equal(@"C:\Papers\contract.pdf", row.Path);
@@ -60,7 +60,7 @@ public sealed class ContentBranchTests : IDisposable
             "gammamarker: termination of this agreement requires ninety days of written notice " +
             "to the other party, at which point the lease ends and the deposit is returned");
 
-        SearchResults r = ContentBranch.Search(db, "lease", 20);
+        SearchResults r = ContentBranch.Search(db, "lease", 20, stat: Here);
 
         SearchResult row = Assert.Single(r.Rows);
         Assert.Contains("betamarker", row.Excerpt, StringComparison.Ordinal);
@@ -80,7 +80,7 @@ public sealed class ContentBranchTests : IDisposable
             "a note about the office move, the new desks, the parking, and one lease");
         Put(db, @"C:\Papers\Contracts\2026\lease.pdf", 2, ResultKind.Document, "lease lease lease");
 
-        SearchResults r = ContentBranch.Search(db, "lease", 20);
+        SearchResults r = ContentBranch.Search(db, "lease", 20, stat: Here);
 
         Assert.Equal(@"C:\Papers\Contracts\2026\lease.pdf", r.Rows[0].Path);
     }
@@ -96,7 +96,7 @@ public sealed class ContentBranchTests : IDisposable
         Put(db, @"C:\Papers\manual.pdf", 1, ResultKind.Document,
             "set the ext value in the pdf export dialog before you print");
 
-        SearchResults r = ContentBranch.Search(db, "ext:pdf", 20);
+        SearchResults r = ContentBranch.Search(db, "ext:pdf", 20, stat: Here);
 
         Assert.Empty(r.Rows);
         Assert.Equal(ContentBranch.NoWords, r.Note);
@@ -131,6 +131,27 @@ public sealed class ContentBranchTests : IDisposable
                      ContentBranch.Search(db, "lease", 20, SearchSort.Newest, Stat).Rows[0].Path);
     }
 
+    [Fact]
+    public void AFileThatIsNoLongerOnTheDiskIsNotOffered()
+    {
+        // The index can outlive a file: a delete the journal never reported, or one still queued.
+        // Offered anyway, it is a row with nothing to preview and nothing to open, and it takes a
+        // place a real match should have had.
+        using ContentDb db = Open();
+        Put(db, @"C:\Papers\here.txt", 1, ResultKind.Document, "the quarterly lease agreement");
+        Put(db, @"C:\Papers\gone.txt", 2, ResultKind.Document, "the quarterly lease agreement");
+
+        SearchResults r = ContentBranch.Search(db, "lease", 20,
+            stat: (p, d) => p.EndsWith("gone.txt", StringComparison.Ordinal) ? ResultMapper.Stat.Missing : Here(p, d));
+
+        Assert.Equal(@"C:\Papers\here.txt", Assert.Single(r.Rows).Path);
+    }
+
+    /// <summary>A disk where every file the index names is present. The paths above are written
+    /// out rather than created, and the real stat would report every one of them gone.</summary>
+    internal static ResultMapper.Stat Here(string path, bool _)
+        => new(100, new DateTime(2026, 1, 1), new DateTime(2026, 1, 1), new DateTime(2026, 1, 1));
+
     /// <summary>A disk described rather than had: big.txt is large and old, small.txt is small and
     /// new, so one fixture separates the size filter, the Largest chip and the Newest chip.</summary>
     private static ResultMapper.Stat Stat(string path, bool _)
@@ -147,7 +168,7 @@ public sealed class ContentBranchTests : IDisposable
         Put(db, @"C:\Papers\lease.pdf", 1, ResultKind.Document, "the quarterly lease agreement");
         Put(db, @"C:\Papers\lease.txt", 2, ResultKind.Document, "the quarterly lease agreement");
 
-        SearchResults r = ContentBranch.Search(db, "lease ext:txt", 20);
+        SearchResults r = ContentBranch.Search(db, "lease ext:txt", 20, stat: Here);
 
         Assert.Equal(@"C:\Papers\lease.txt", Assert.Single(r.Rows).Path);
     }
@@ -159,7 +180,7 @@ public sealed class ContentBranchTests : IDisposable
         // them is the user's fault. An empty index must never read as an answer.
         using ContentDb db = Open();
 
-        SearchResults r = ContentBranch.Search(db, "lease", 20);
+        SearchResults r = ContentBranch.Search(db, "lease", 20, stat: Here);
 
         Assert.Empty(r.Rows);
         Assert.Contains("nothing indexed yet", r.Note, StringComparison.OrdinalIgnoreCase);
@@ -171,7 +192,7 @@ public sealed class ContentBranchTests : IDisposable
         using ContentDb db = Open();
         Put(db, @"C:\Papers\menu.pdf", 1, ResultKind.Document, "soup, bread and a coffee");
 
-        SearchResults r = ContentBranch.Search(db, "helicopter", 20);
+        SearchResults r = ContentBranch.Search(db, "helicopter", 20, stat: Here);
 
         Assert.Empty(r.Rows);
         Assert.Equal("", r.Note);

@@ -53,7 +53,7 @@ public sealed class ContentDb : IDisposable
 
     /// <summary>The relational shape of this database. Bumped only when a change makes rows
     /// already on disk mean something different.</summary>
-    public const int SchemaVersion = 6;
+    public const int SchemaVersion = 7;
 
     /// <summary>One schema step. <c>InvalidatedKinds</c> is what that step made stale - and
     /// nothing else is re-queued. Re-indexing a finished disk because an upgrade did not look
@@ -160,6 +160,17 @@ public sealed class ContentDb : IDisposable
         new(To: 6, InvalidatedKinds: [(int)ResultKind.Video],
             Reason: "video frames were read by a decoder that stored black pictures",
             QueueReason: Indexer.Reframe, ResetAttempts: true, IncludeFailed: true),
+
+        // A full pass used to only ADD, so an index written before it also took out what the
+        // drive no longer has still holds every file deleted in a journal gap, and every file
+        // replaced while it waited to be read, under a number the drive no longer uses. Only a
+        // pass can find them: the journal never mentions a file again once it is gone.
+        //
+        // ReWalk and nothing re-queued. Nothing about the files still there changed; the pass
+        // compares timestamps and queues only what moved, and takes out what it did not see.
+        new(To: 7, InvalidatedKinds: [],
+            Reason: "files deleted or replaced while Findra was not looking are found by one full pass",
+            ReWalk: true),
     ];
 
     private readonly SqliteConnection _c;
@@ -801,6 +812,34 @@ CREATE TABLE IF NOT EXISTS opened(path TEXT PRIMARY KEY, count INTEGER NOT NULL,
         cmd.ExecuteNonQuery();
     }
 
+    /// <summary>Take a file off the queue that is gone before it was ever read. A queued delete is
+    /// left where it is: it names a file the index holds, and dropping it would strand that row.
+    /// Returns how many rows went.</summary>
+    public int ForgetQueued(string vol, ulong frn, SqliteTransaction? tx = null)
+    {
+        using var claim = Enter();
+        using var cmd = _c.CreateCommand();
+        cmd.Transaction = tx;
+        cmd.CommandText = "DELETE FROM pending WHERE vol=$v AND frn=$f AND reason<>$d";
+        cmd.Parameters.AddWithValue("$v", vol);
+        cmd.Parameters.AddWithValue("$f", unchecked((long)frn));
+        cmd.Parameters.AddWithValue("$d", ReasonDelete);
+        return cmd.ExecuteNonQuery();
+    }
+
+    /// <summary>Every file the index holds on one volume, in whatever state it was left: what a
+    /// full pass compares against to find the files the drive no longer has.</summary>
+    public List<(ulong Frn, string Path, ResultKind Kind)> ItemsOn(string vol)
+    {
+        var list = new List<(ulong, string, ResultKind)>();
+        using var cmd = _c.CreateCommand();
+        cmd.CommandText = "SELECT frn, path, kind FROM items WHERE vol=$v";
+        cmd.Parameters.AddWithValue("$v", vol);
+        using var r = cmd.ExecuteReader();
+        while (r.Read()) list.Add((unchecked((ulong)r.GetInt64(0)), r.GetString(1), (ResultKind)r.GetInt32(2)));
+        return list;
+    }
+
     public bool HasItem(string vol, ulong frn)
     {
         using var cmd = _c.CreateCommand();
@@ -1174,6 +1213,22 @@ CREATE TABLE IF NOT EXISTS opened(path TEXT PRIMARY KEY, count INTEGER NOT NULL,
         return n;
     }
 
+    /// <summary>The oldest queued removals, at most <paramref name="max"/> of them.</summary>
+    public List<Pending> QueuedDeletes(int max)
+    {
+        using var claim = Enter();
+        var list = new List<Pending>();
+        using var cmd = _c.CreateCommand();
+        cmd.CommandText = "SELECT id, vol, frn, path, kind, reason, attempts FROM pending WHERE reason=$d ORDER BY id LIMIT $n";
+        cmd.Parameters.AddWithValue("$d", ReasonDelete);
+        cmd.Parameters.AddWithValue("$n", max);
+        using var r = cmd.ExecuteReader();
+        while (r.Read())
+            list.Add(new Pending(r.GetInt64(0), r.GetString(1), unchecked((ulong)r.GetInt64(2)), r.GetString(3),
+                                 (ResultKind)r.GetInt32(4), r.GetString(5), r.GetInt32(6)));
+        return list;
+    }
+
     public void Dequeue(long id, SqliteTransaction? tx = null)
     {
         using var claim = Enter();
@@ -1437,6 +1492,80 @@ CREATE TABLE IF NOT EXISTS opened(path TEXT PRIMARY KEY, count INTEGER NOT NULL,
         while (r.Read())
             list.Add(new SegmentHit(r.GetInt64(0), r.GetString(1), (ResultKind)r.GetInt32(2), r.GetInt32(3), r.GetDouble(4), r.GetDouble(5), r.GetString(6), r.GetInt64(7)));
         return list;
+    }
+
+    /// <summary>The meta row naming the vector file the segments' <c>vec</c> numbers refer to.
+    /// Absent until the first compaction, which is <see cref="FirstVectorsFile"/>.</summary>
+    public const string VectorsKey = "index:vectors";
+
+    /// <summary>The vector file every index starts with.</summary>
+    public const string FirstVectorsFile = "vectors.bin";
+
+    /// <summary>The vector file the segments' numbers refer to NOW, beside this database. A
+    /// compaction copies the rows still in use into a file under a new name - a file another
+    /// process has mapped cannot be shrunk or replaced - and records that name in the same
+    /// transaction that renumbers the segments, so a reader that looks the name up gets a file
+    /// and a numbering that belong together.</summary>
+    public string VectorsPath()
+    {
+        string? name = Get(VectorsKey);
+        // An index held in memory - the file could not be opened - has no folder of its own, and
+        // its vectors are where they always were.
+        string dir = string.Equals(Path, ":memory:", StringComparison.Ordinal)
+            ? Paths.Index
+            : System.IO.Path.GetDirectoryName(System.IO.Path.GetFullPath(Path))!;
+        return System.IO.Path.Combine(dir, string.IsNullOrEmpty(name) ? FirstVectorsFile : name);
+    }
+
+    /// <summary>Every vector row a segment points at, lowest first. Everything else in the file is
+    /// dead: zeroed by a delete, or left with nothing pointing at it.</summary>
+    public List<long> LiveVectorRows()
+    {
+        var rows = new List<long>();
+        using var cmd = _c.CreateCommand();
+        cmd.CommandText = "SELECT DISTINCT vec FROM segments WHERE vec >= 0 ORDER BY vec";
+        using var r = cmd.ExecuteReader();
+        while (r.Read()) rows.Add(r.GetInt64(0));
+        return rows;
+    }
+
+    /// <summary>Point every segment at its row in the compacted file - row <c>live[i]</c> became
+    /// row <c>i</c> - and name that file as current, in ONE transaction. Either a reader sees the
+    /// old file with the old numbers or the new file with the new ones.</summary>
+    public void Renumber(IReadOnlyList<long> live, string file)
+    {
+        ArgumentNullException.ThrowIfNull(live);
+        using var claim = Enter();
+        using var tx = Begin();
+        using (var cmd = _c.CreateCommand())
+        {
+            cmd.Transaction = tx;
+            cmd.CommandText = "CREATE TEMP TABLE IF NOT EXISTS renumber(old INTEGER PRIMARY KEY, new INTEGER NOT NULL); DELETE FROM renumber;";
+            cmd.ExecuteNonQuery();
+        }
+        using (var cmd = _c.CreateCommand())
+        {
+            cmd.Transaction = tx;
+            cmd.CommandText = "INSERT INTO renumber(old, new) VALUES($o, $n)";
+            SqliteParameter o = cmd.Parameters.Add("$o", SqliteType.Integer), n = cmd.Parameters.Add("$n", SqliteType.Integer);
+            for (int i = 0; i < live.Count; i++)
+            {
+                o.Value = live[i];
+                n.Value = (long)i;
+                cmd.ExecuteNonQuery();
+            }
+        }
+        using (var cmd = _c.CreateCommand())
+        {
+            cmd.Transaction = tx;
+            // A row the copy did not take has nowhere to point, so it points nowhere rather than
+            // at whatever the new file holds under its old number.
+            cmd.CommandText = "UPDATE segments SET vec = COALESCE((SELECT new FROM renumber WHERE old = segments.vec), -1) WHERE vec >= 0; " +
+                              "DELETE FROM renumber;";
+            cmd.ExecuteNonQuery();
+        }
+        Set(VectorsKey, file, tx);
+        tx.Commit();
     }
 
     /// <summary>Exact-word hits from the FTS index, best first.</summary>

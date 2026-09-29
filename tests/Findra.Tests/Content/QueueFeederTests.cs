@@ -117,6 +117,25 @@ public sealed class QueueFeederTests : IDisposable
     }
 
     [Fact]
+    public void AFileDeletedBeforeItWasReadIsTakenOffTheQueue()
+    {
+        // A file saved by writing a new copy and renaming it over the old one is a create and a
+        // delete a moment apart, and behind a long queue the delete arrives while the old file is
+        // still waiting to be read. Nothing was read, so there is nothing to take out of the index
+        // - but the waiting row has to go. Its path now names the NEW file, and reading it under
+        // the old file's number left a second entry for one file that no later event could remove.
+        using ContentDb db = Open();
+        using var feeder = new QueueFeeder(db, () => Cfg);
+
+        feeder.Consume([Change(500, "logo.png", @"C:\a\logo.png", NtfsVolume.ReasonFileCreate, 1)]);
+        Assert.Equal(1, db.PendingCount());
+
+        feeder.Consume([Change(500, "logo.png", "", NtfsVolume.ReasonFileDelete, 2)]);
+
+        Assert.Equal(0, db.PendingCount());
+    }
+
+    [Fact]
     public void AnIneligibleChangeIsNotQueuedButAFileMovedIntoAnExcludedPlaceIsRemoved()
     {
         using ContentDb db = Open();
@@ -462,6 +481,92 @@ public sealed class QueueFeederTests : IDisposable
         ];
 
         Assert.Equal(3, feeder.FillFrom('C', Journal, 5000, noTimestamps));
+    }
+
+    [Fact]
+    public void AFullPassTakesOutAFileTheDriveNoLongerHas()
+    {
+        // The journal is the only thing that reports a delete, and a pass runs precisely when the
+        // journal could not be trusted - it no longer reached back to where Findra stopped, or
+        // events were dropped. A pass that only adds kept every file deleted in that gap answering
+        // searches for good, with nothing to preview and nothing to open.
+        using ContentDb db = Open();
+        using var feeder = new QueueFeeder(db, () => Cfg);
+        feeder.FillFrom('C', Journal, 4242, Disk);
+        DrainAsIndexed(db);
+
+        feeder.FillFrom('C', Journal, 5000, Disk[..2]);
+
+        ContentDb.Pending only = Assert.Single(db.PendingRows());
+        Assert.Equal(ContentDb.ReasonDelete, only.Reason);
+        Assert.Equal(103ul, only.Frn);
+    }
+
+    [Fact]
+    public void AFullPassDropsAQueuedFileTheDriveNoLongerHas()
+    {
+        // Queued, never read, and gone by the time the pass ran. Left waiting, the indexer opens
+        // whatever sits at that path now and files it under a number the drive no longer uses.
+        using ContentDb db = Open();
+        using var feeder = new QueueFeeder(db, () => Cfg);
+        feeder.FillFrom('C', Journal, 4242, Disk);
+
+        feeder.FillFrom('C', Journal, 5000, Disk[..2]);
+
+        Assert.Equal([101ul, 102ul], db.PendingRows().Select(p => p.Frn).Order());
+    }
+
+    [Fact]
+    public void AWalkThatFoundNothingAtAllTakesNothingOut()
+    {
+        // A drive that answers with no documents, photos or recordings whatsoever while the index
+        // holds thousands is a helper that could not read it, not a drive emptied of all of them.
+        using ContentDb db = Open();
+        using var feeder = new QueueFeeder(db, () => Cfg);
+        feeder.FillFrom('C', Journal, 4242, Disk);
+        DrainAsIndexed(db);
+
+        feeder.FillFrom('C', Journal, 5000, []);
+
+        Assert.Equal(0, db.PendingCount());
+    }
+
+    [Fact]
+    public void AFullPassOfOneDriveLeavesEveryOtherDriveAlone()
+    {
+        // The pass saw only its own volume. A file on D: is absent from a walk of C: because it
+        // is on D:, not because it is gone.
+        using ContentDb db = Open();
+        using var feeder = new QueueFeeder(db, () => Cfg);
+        using (var tx = db.Begin())
+        {
+            db.Upsert("D", 7, @"D:\kept.pdf", ResultKind.Document, DiskMtime, size: 0, ContentDb.StateIndexed, null, [], tx);
+            tx.Commit();
+        }
+        db.Enqueue("D", 8, @"D:\waiting.pdf", ResultKind.Document, "new");
+
+        feeder.FillFrom('C', Journal, 4242, Disk);
+
+        Assert.DoesNotContain(db.PendingRows(), p => p.Reason == ContentDb.ReasonDelete);
+        Assert.Contains(db.PendingRows(), p => p.Frn == 8);
+    }
+
+    [Fact]
+    public void AFullPassKeepsAQueuedDeleteForAFileItDidNotSee()
+    {
+        // Already on its way out. Dropping it as "not on the drive" would strand the indexed row
+        // it was going to remove.
+        using ContentDb db = Open();
+        using var feeder = new QueueFeeder(db, () => Cfg);
+        feeder.FillFrom('C', Journal, 4242, Disk);
+        DrainAsIndexed(db);
+        feeder.Consume([Change(103, "deck.pptx", "", NtfsVolume.ReasonFileDelete, 4300)]);
+
+        feeder.FillFrom('C', Journal, 5000, Disk[..2]);
+
+        ContentDb.Pending only = Assert.Single(db.PendingRows());
+        Assert.Equal(ContentDb.ReasonDelete, only.Reason);
+        Assert.Equal(103ul, only.Frn);
     }
 
     [Fact]

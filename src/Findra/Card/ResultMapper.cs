@@ -98,9 +98,15 @@ public static class ResultMapper
     /// "unknown".</para>
     ///
     /// <para>One stat per row, on whatever thread the caller is on - never the UI thread.</para>
+    ///
+    /// <para><paramref name="keepMissing"/> false drops a row the stat cannot find. The content
+    /// half asks for that: its rows come from an index that can outlive the file, and a row with
+    /// nothing to preview and nothing to open is not an answer. The name half keeps them - its
+    /// rows come from the drive as it is now.</para>
     /// </summary>
     public static List<SearchResult> Finish(IReadOnlyList<SearchResult> rows, SearchQuery parsed,
-                                            SearchSort sort, Func<string, bool, Stat>? stat = null)
+                                            SearchSort sort, Func<string, bool, Stat>? stat = null,
+                                            bool keepMissing = true)
     {
         ArgumentNullException.ThrowIfNull(rows);
         ArgumentNullException.ThrowIfNull(parsed);
@@ -109,6 +115,7 @@ public static class ResultMapper
         foreach (SearchResult r in rows)
         {
             Stat st = stat(r.Path, r.Kind == ResultKind.Folder);
+            if (!st.Found && !keepMissing) continue;
             if (parsed.NeedsStat && (!st.Found || !parsed.AllowsStat(st.Size, st.Modified, st.Created, st.Accessed)))
                 continue;
             list.Add(st.Found ? r with { Size = st.Size, Modified = st.Modified } : r);

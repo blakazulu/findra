@@ -11,6 +11,8 @@ public class CapsuleMenuTests
     private static readonly Config Pair =
         Config.Default with { DarkPalette = "Brass", LightPalette = "Blueprint" };
 
+    private const string Chord = "Alt+Space";
+
     /// <summary>Single, not FirstOrDefault: a missing entry should read as "no menu item named
     /// Blueprint" rather than as an assertion failure on a default struct with a null header.</summary>
     private static MenuEntry Find(IReadOnlyList<MenuEntry> items, string header) =>
@@ -22,7 +24,7 @@ public class CapsuleMenuTests
         // The obvious implementation ticks config.DarkPalette. On a light desktop following
         // Windows, that puts the tick next to a palette nothing is painted in - and clicking the
         // one that IS painted looks like it did nothing, because it was already selected.
-        IReadOnlyList<MenuEntry> items = CapsuleMenu.Items(Pair, Palette.BuiltIn, windowsIsLight: true, indexerAlive: false);
+        IReadOnlyList<MenuEntry> items = CapsuleMenu.Items(Pair, Palette.BuiltIn, windowsIsLight: true, indexerAlive: false, Chord);
 
         Assert.True(Find(items, "Blueprint").Checked);
         Assert.DoesNotContain(items, i => i.Header.Contains("Brass", StringComparison.Ordinal));
@@ -32,7 +34,7 @@ public class CapsuleMenuTests
     public void PinningToDarkTicksTheDarkPickWhateverWindowsIsSetTo()
     {
         IReadOnlyList<MenuEntry> items = CapsuleMenu.Items(
-            Pair with { Mode = ThemeMode.AlwaysDark }, Palette.BuiltIn, windowsIsLight: true, indexerAlive: false);
+            Pair with { Mode = ThemeMode.AlwaysDark }, Palette.BuiltIn, windowsIsLight: true, indexerAlive: false, Chord);
 
         Assert.True(Find(items, "Brass").Checked);
     }
@@ -42,7 +44,7 @@ public class CapsuleMenuTests
     {
         // Offering all six from the capsule means a click on a dark palette in a light session
         // writes DarkPalette and changes nothing visible. Changing SIDE is a settings decision.
-        IReadOnlyList<MenuEntry> items = CapsuleMenu.Items(Pair, Palette.BuiltIn, windowsIsLight: true, indexerAlive: false);
+        IReadOnlyList<MenuEntry> items = CapsuleMenu.Items(Pair, Palette.BuiltIn, windowsIsLight: true, indexerAlive: false, Chord);
         string[] offered = [.. items.Where(i => i.Command.StartsWith("palette:", StringComparison.Ordinal))
                                     .Select(i => i.Header)];
 
@@ -55,7 +57,7 @@ public class CapsuleMenuTests
         var mine = new Palette("Slate", new SkiaSharp.SKColor(0x7A, 0xA2, 0xF7),
                                new SkiaSharp.SKColor(0xE0, 0xE0, 0xE0), new SkiaSharp.SKColor(0x10, 0x14, 0x1C), false);
         IReadOnlyList<MenuEntry> items = CapsuleMenu.Items(
-            Pair with { Mode = ThemeMode.AlwaysDark }, [.. Palette.BuiltIn, mine], windowsIsLight: true, indexerAlive: false);
+            Pair with { Mode = ThemeMode.AlwaysDark }, [.. Palette.BuiltIn, mine], windowsIsLight: true, indexerAlive: false, Chord);
 
         Assert.Contains(items, i => i.Header == "Slate");
     }
@@ -63,8 +65,8 @@ public class CapsuleMenuTests
     [Fact]
     public void ContentIndexingCanBeTurnedOffWithoutOpeningSettings()
     {
-        MenuEntry on = Find(CapsuleMenu.Items(Pair with { IndexContent = true }, Palette.BuiltIn, true, true), "inside");
-        MenuEntry off = Find(CapsuleMenu.Items(Pair with { IndexContent = false }, Palette.BuiltIn, true, false), "inside");
+        MenuEntry on = Find(CapsuleMenu.Items(Pair with { IndexContent = true }, Palette.BuiltIn, true, true, Chord), "inside");
+        MenuEntry off = Find(CapsuleMenu.Items(Pair with { IndexContent = false }, Palette.BuiltIn, true, false, Chord), "inside");
 
         Assert.Equal("content", on.Command);
         Assert.True(on.Checked);
@@ -78,11 +80,43 @@ public class CapsuleMenuTests
         // rather than looking idle. The first draft threaded indexerAlive through this signature
         // and then wrote a ternary whose two arms were the same string - a parameter that could
         // not affect the output, and a test that could not tell.
-        MenuEntry running = Find(CapsuleMenu.Items(Pair with { IndexContent = true }, Palette.BuiltIn, true, indexerAlive: true), "inside");
-        MenuEntry stalled = Find(CapsuleMenu.Items(Pair with { IndexContent = true }, Palette.BuiltIn, true, indexerAlive: false), "inside");
+        MenuEntry running = Find(CapsuleMenu.Items(Pair with { IndexContent = true }, Palette.BuiltIn, true, indexerAlive: true, Chord), "inside");
+        MenuEntry stalled = Find(CapsuleMenu.Items(Pair with { IndexContent = true }, Palette.BuiltIn, true, indexerAlive: false, Chord), "inside");
 
         Assert.NotEqual(running.Header, stalled.Header);
         Assert.Contains("not running", stalled.Header, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void TheCapsuleCanBeHiddenFromItsOwnMenu()
+    {
+        // The tray and Settings could always hide it, but somebody looking at the capsule and
+        // wanting it gone right-clicks the capsule, not a tray icon that may sit in the overflow.
+        MenuEntry hide = Find(CapsuleMenu.Items(Pair, Palette.BuiltIn, true, false, Chord), "hide");
+
+        Assert.Equal("hidecapsule", hide.Command);
+        Assert.False(hide.Checked);
+    }
+
+    [Fact]
+    public void HidingTheCapsuleNamesTheHotkeyThatStillOpensSearch()
+    {
+        // The chord that LANDED, not the one configured: a fallback that registered instead is
+        // the only one that will open the card once the capsule is gone.
+        MenuEntry hide = Find(CapsuleMenu.Items(Pair, Palette.BuiltIn, true, false, "Ctrl+Alt+F"), "hide");
+
+        Assert.Contains("Ctrl+Alt+F", hide.Header, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void WithNoHotkeyHidingTheCapsulePointsAtTheTrayInstead()
+    {
+        // Every chord in the chain can fail to register. Promising a hotkey then would leave
+        // somebody with no capsule and a shortcut that does nothing.
+        MenuEntry hide = Find(CapsuleMenu.Items(Pair, Palette.BuiltIn, true, false, hotkey: null), "hide");
+
+        Assert.Contains("tray", hide.Header, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("Alt", hide.Header, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -90,7 +124,7 @@ public class CapsuleMenuTests
     {
         // Config.ShowCapsule = false is supported and so is a hidden tray area. If the capsule's
         // own menu is nothing but palettes, somebody in that state has no route to settings.
-        IReadOnlyList<MenuEntry> items = CapsuleMenu.Items(Pair, Palette.BuiltIn, true, false);
+        IReadOnlyList<MenuEntry> items = CapsuleMenu.Items(Pair, Palette.BuiltIn, true, false, Chord);
 
         Assert.Contains(items, i => i.Command == "settings");
         Assert.Contains(items, i => i.Command == "quit");
@@ -101,7 +135,7 @@ public class CapsuleMenuTests
     {
         // The shell switches on Command. Two items sharing one means the second is dead and the
         // first fires for both.
-        IReadOnlyList<MenuEntry> items = CapsuleMenu.Items(Pair, Palette.BuiltIn, true, false);
+        IReadOnlyList<MenuEntry> items = CapsuleMenu.Items(Pair, Palette.BuiltIn, true, false, Chord);
         string[] commands = [.. items.Where(i => i.Command.Length > 0).Select(i => i.Command)];
 
         Assert.Equal(commands.Length, commands.Distinct(StringComparer.Ordinal).Count());

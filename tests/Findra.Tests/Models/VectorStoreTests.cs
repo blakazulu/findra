@@ -93,6 +93,99 @@ public class VectorStoreTests : IDisposable
     }
 
     [Fact]
+    public void OnePassAnswersEachQueryWithOnlyItsOwnKinds()
+    {
+        // A content search asks two questions - one of the pictures, one of the words - and used
+        // to read the whole file once for each. One pass hands every row to the question its kind
+        // belongs to, so the answers must stay as separate as two passes kept them.
+        using (var w = new VectorStore(Store, writer: true))
+        {
+            w.Append(Axis(0), ContentDb.SegImage);
+            w.Append(Axis(0), ContentDb.SegText);
+            w.Append(Axis(1), ContentDb.SegSpeech);
+            w.Flush();
+        }
+        using var r = new VectorStore(Store);
+
+        List<VectorStore.Match>[] found = r.Search([
+            new VectorStore.Query(Axis(0), 5, [ContentDb.SegImage, ContentDb.SegFrame]),
+            new VectorStore.Query(Axis(0), 5, [ContentDb.SegText, ContentDb.SegSpeech]),
+        ]);
+
+        Assert.Equal([0L], found[0].Select(m => m.Row));
+        Assert.Equal([1L, 2L], found[1].Select(m => m.Row));
+        Assert.True(found[1][0].Score > 0.99f);
+    }
+
+    [Fact]
+    public void OnePassFindsWhatReadingEveryRowForEveryQueryFinds()
+    {
+        // Split across cores in blocks and merged: the merge is where a best match goes missing,
+        // so this spans several blocks and compares with the plainest possible answer.
+        var rng = new Random(7);
+        var rows = new List<(float[] V, byte Kind)>();
+        const int N = 3 * VectorStore.ScanBlock + 123;
+        using (var w = new VectorStore(Store, writer: true))
+        {
+            for (int i = 0; i < N; i++)
+            {
+                var v = new float[VectorStore.Dim];
+                for (int d = 0; d < v.Length; d++) v[d] = (float)(rng.NextDouble() - 0.5);
+                VectorStore.Normalise(v);
+                byte kind = (byte)rng.Next(0, 4);
+                w.Append(v, kind);
+                rows.Add((v, kind));
+            }
+            w.Tombstone(5);
+            w.Flush();
+        }
+        using var r = new VectorStore(Store);
+        float[] pictures = rows[40].V, words = rows[41].V;
+
+        List<VectorStore.Match>[] found = r.Search([
+            new VectorStore.Query(pictures, 25, [ContentDb.SegImage, ContentDb.SegFrame]),
+            new VectorStore.Query(words, 25, [ContentDb.SegText, ContentDb.SegSpeech]),
+        ]);
+
+        Assert.Equal(Plainly(rows, pictures, 25, [ContentDb.SegImage, ContentDb.SegFrame]), found[0].Select(m => m.Row));
+        Assert.Equal(Plainly(rows, words, 25, [ContentDb.SegText, ContentDb.SegSpeech]), found[1].Select(m => m.Row));
+    }
+
+    /// <summary>The answer with no cleverness at all: every live row of the wanted kinds, scored
+    /// at the precision the file holds, best first.</summary>
+    private static long[] Plainly(List<(float[] V, byte Kind)> rows, float[] q, int k, byte[] kinds)
+        => [.. rows.Select((row, i) => (Row: (long)i, row.V, row.Kind))
+                   .Where(x => x.Row != 5 && kinds.Contains(x.Kind))
+                   .Select(x => (x.Row, Score: Dot(q, x.V)))
+                   .OrderByDescending(x => x.Score).ThenBy(x => x.Row)
+                   .Take(k).Select(x => x.Row)];
+
+    private static float Dot(float[] q, float[] v)
+    {
+        float s = 0;
+        for (int d = 0; d < q.Length; d++) s += q[d] * (float)(Half)v[d];
+        return s;
+    }
+
+    [Fact]
+    public void ARowDeletedAfterTheReaderOpenedIsNotAnswered()
+    {
+        // A delete changes no row count, so a reader that re-read the kinds only when the count
+        // moved kept answering with every row deleted since it first opened the file.
+        using var w = new VectorStore(Store, writer: true);
+        w.Append(Axis(0), ContentDb.SegText);
+        w.Append(Axis(1), ContentDb.SegText);
+        w.Flush();
+        using var r = new VectorStore(Store);
+
+        w.Tombstone(1);
+        w.Flush();
+        r.Reload();
+
+        Assert.DoesNotContain(r.Search(Axis(1), 5, [ContentDb.SegText]), m => m.Row == 1);
+    }
+
+    [Fact]
     public void AStoreWrittenAtAnotherWidthIsStartedOverRatherThanRead()
     {
         // A vector file from a build whose model had a different hidden size is not this build's

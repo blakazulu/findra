@@ -173,6 +173,11 @@ public sealed class QueueFeeder : IDisposable
                     _db.Enqueue(vol, e.Frn, e.Path, FileKinds.Classify(e.Name, false), ContentDb.ReasonDelete, tx);
                     queued++;
                 }
+                // Queued and not read yet: saving by writing a new copy and renaming it over the
+                // old one deletes the old file while it waits. Its row has to go now. Left, the
+                // indexer opens its path - which names the NEW file - and files that under the
+                // dead number, a second entry for one file that no later event can ever remove.
+                else _db.ForgetQueued(vol, e.Frn, tx);
                 continue;
             }
 
@@ -303,11 +308,13 @@ public sealed class QueueFeeder : IDisposable
         // that file was last dealt with, which is what the enumerated record is compared against.
         Dictionary<(string, ulong), long> known = _db.KnownItems();
         var queued = new HashSet<ulong>();
+        var seen = new HashSet<ulong>();
 
         using ContentDb.Scope tx = _db.Begin();
 
         foreach (EnumeratedFile f in files)
         {
+            seen.Add(f.Frn);
             // Seen before is not the same as unchanged. Skipping on presence alone made this pass
             // able to see a file that was CREATED while Findra was closed and blind to one that
             // was MODIFIED - and this pass is the only fallback once the journal has wrapped, so
@@ -326,6 +333,8 @@ public sealed class QueueFeeder : IDisposable
             if (!queued.Add(f.Frn)) continue;
             _db.Enqueue(vol, f.Frn, f.Path, kind, held ? ReasonChange : ReasonNew, tx);
         }
+
+        (int gone, int dropped) = Sweep(vol, seen, tx);
 
         // All three stamps go in the SAME transaction as the enqueues. A pass that does not
         // record where it finished is a pass that happens again; a pass that does not clear the
@@ -346,8 +355,49 @@ public sealed class QueueFeeder : IDisposable
         Log.Info("index", string.Create(CultureInfo.InvariantCulture,
             $"{letter}: first pass queued {queued.Count} file(s), consumed through usn " +
             $"{throughUsn} in journal {journalId:x}"));
+        if (gone > 0 || dropped > 0)
+            Log.Info("index", string.Create(CultureInfo.InvariantCulture,
+                $"{letter}: {gone} indexed file(s) are no longer on the drive and are queued for " +
+                $"removal; {dropped} queued file(s) that were never read are gone too"));
 
         return queued.Count;
+    }
+
+    /// <summary>
+    /// The other half of a full pass: what the index holds on this volume that the walk did not
+    /// see. An indexed file is queued for removal; a queued file that was never read is dropped.
+    ///
+    /// <para>The journal is the only thing that reports a delete, and a pass runs exactly when the
+    /// journal could not be trusted - it no longer reached back to where Findra stopped, or events
+    /// were dropped. Walking only what exists kept every file deleted in that gap answering
+    /// searches for good, with nothing to preview and nothing to open.</para>
+    ///
+    /// <para>Safe because the walk is complete: <see cref="FirstPass.WalkAsync"/> only gets here
+    /// from a stream that reached its end. A queued delete is kept, as it names a file the index
+    /// holds. An empty walk sweeps nothing: a drive that answers with no files at all while the
+    /// index holds some is far likelier to be a helper that could not read it than a drive
+    /// emptied of every document, photo and recording on it.</para>
+    /// </summary>
+    private (int Gone, int Dropped) Sweep(string vol, HashSet<ulong> seen, SqliteTransaction tx)
+    {
+        if (seen.Count == 0) return (0, 0);
+
+        int gone = 0;
+        foreach ((ulong frn, string path, ResultKind kind) in _db.ItemsOn(vol))
+        {
+            if (seen.Contains(frn)) continue;
+            _db.Enqueue(vol, frn, path, kind, ContentDb.ReasonDelete, tx);
+            gone++;
+        }
+
+        int dropped = 0;
+        foreach (ContentDb.Pending p in _db.PendingRows())
+        {
+            if (p.Vol != vol || p.Reason == ContentDb.ReasonDelete || seen.Contains(p.Frn)) continue;
+            _db.Dequeue(p.Id, tx);
+            dropped++;
+        }
+        return (gone, dropped);
     }
 
     // ---- what the interface hands back to the helper -------------------------------------------

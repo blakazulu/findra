@@ -127,7 +127,11 @@ public sealed class Indexer
             // move while this process runs - the transcription limit, and which models are on
             // disk - are read through delegates rather than captured, so each of them reaches the
             // next file rather than the next launch.
-            using IDecoders decoders = Decoders.ForThisMachine(() => TranscribeMinutes(db), beat: beat,
+            //
+            // The file the index names, not a fixed name: a compaction moves the rows to a new
+            // file. Anything a compaction left behind goes first, while nothing here holds it.
+            VectorCompaction.DeleteStale(db);
+            using IDecoders decoders = Decoders.ForThisMachine(() => TranscribeMinutes(db), db.VectorsPath(), beat: beat,
                                                                off: () => AddOns.Parse(db.Get(AddOns.OffKey)));
             using var gate = new MachineGate(() => decoders.Installed, parent);
             if (Loop(db, parent, () => true, decoders, (isDelete, kind) => gate.Ask(isDelete, kind), gate.LeftOnCard))
@@ -301,6 +305,7 @@ public sealed class Indexer
                     idleFor.Restart();
                 }
                 if (idleFor.Elapsed.TotalSeconds >= KeepModelsIdleSeconds) LetModelsGo("idle");
+                MaybeCompact(gate);
                 // An empty queue numbers its next row 1 again, so the last row's id says nothing
                 // about whatever is queued next.
                 stuck = -1;
@@ -424,6 +429,32 @@ public sealed class Indexer
             Thread.Sleep(rest);
         }
         return _recycle;
+    }
+
+    /// <summary>When compaction was last asked about; not running until the first time.</summary>
+    private readonly Stopwatch _sinceCompactAsked = new();
+
+    /// <summary>Ask whether the vector file is worth compacting, at most every
+    /// <see cref="VectorCompaction.CheckEvery"/>, and only with the queue empty - between files, the
+    /// one moment no segment can change under the copy. A fullscreen program holds it like any other
+    /// disk work. Then clear away whatever old file a reader has let go of since.</summary>
+    private void MaybeCompact(Func<bool, ResultKind, GateVerdict> gate)
+    {
+        if (_sinceCompactAsked.IsRunning && _sinceCompactAsked.Elapsed < VectorCompaction.CheckEvery) return;
+        if (!gate(false, ResultKind.Document).Run) return;
+        _sinceCompactAsked.Restart();
+        try
+        {
+            _decoders.Compact(_db);
+            VectorCompaction.DeleteStale(_db);
+        }
+        catch (Exception ex)
+        {
+            // The old file and the old numbering stay exactly as they were unless the renumbering
+            // committed, and then the new file is complete: a failure here costs disk space, not
+            // answers.
+            Log.Once("index|compact|" + ex.GetType().Name, "WARN", "index", "the vector file could not be compacted :: " + ex.Message);
+        }
     }
 
     /// <summary>Why the loop is stuck on a row: what the last attempt did, the error it hit and the
@@ -582,6 +613,41 @@ public sealed class Indexer
         }
     }
 
+    /// <summary>How many queued removals go in one transaction. A full pass after a journal gap can
+    /// queue tens of thousands; one per turn, each followed by the power setting's rest, left them
+    /// answering searches for the best part of an hour.</summary>
+    public const int RemoveBatch = 200;
+
+    /// <summary>Take <paramref name="item"/> and the removals queued behind it out of the index in
+    /// one transaction. They are rows to drop, not files to read.
+    ///
+    /// <para>Delete hands back the vector rows the segments pointed at, and they are released AFTER
+    /// the transaction commits: a tombstone is destructive, and a rollback that has already zeroed
+    /// them leaves the surviving segments pointing at nothing. A photo deleted a year ago still
+    /// answering a query is what discarding them costs.</para></summary>
+    private string Remove(ContentDb.Pending item)
+    {
+        var batch = new List<ContentDb.Pending> { item };
+        foreach (ContentDb.Pending p in _db.QueuedDeletes(RemoveBatch))
+            if (p.Id != item.Id && batch.Count < RemoveBatch) batch.Add(p);
+
+        var gone = new List<long>();
+        using (var tx = _db.Begin())
+        {
+            foreach (ContentDb.Pending p in batch)
+            {
+                gone.AddRange(_db.Delete(p.Vol, p.Frn, tx));
+                _db.Dequeue(p.Id, tx);
+            }
+            tx.Commit();
+        }
+        _decoders.Release(gone);
+        if (batch.Count > 1)
+            Log.Info("index", string.Create(CultureInfo.InvariantCulture,
+                $"removed {batch.Count} file(s) from the index together, {gone.Count} vector row(s) freed"));
+        return "removed";
+    }
+
     /// <summary>Deal with one queued file and take it off the queue. Returns the word that
     /// describes what happened, which is what a drain prints beside the file name.</summary>
     private string Handle(ContentDb.Pending item)
@@ -590,22 +656,7 @@ public sealed class Indexer
         _lastError = "";
         try
         {
-            if (item.Reason == ContentDb.ReasonDelete)
-            {
-                // Delete hands back the vector rows its segments pointed at, and they are released
-                // AFTER the transaction commits: a tombstone is destructive, and a rollback that
-                // has already zeroed them leaves the surviving segments pointing at nothing. A
-                // photo deleted a year ago still answering a query is what discarding this costs.
-                List<long> gone;
-                using (var tx = _db.Begin())
-                {
-                    gone = _db.Delete(item.Vol, item.Frn, tx);
-                    _db.Dequeue(item.Id, tx);
-                    tx.Commit();
-                }
-                _decoders.Release(gone);
-                return "removed";
-            }
+            if (item.Reason == ContentDb.ReasonDelete) return Remove(item);
 
             var fi = new FileInfo(item.Path);
             if (Settle(item, fi) is { } settled) return settled;

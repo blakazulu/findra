@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.IO.MemoryMappedFiles;
 using System.Numerics.Tensors;
+using Microsoft.Win32.SafeHandles;
 
 namespace Findra;
 
@@ -43,6 +44,9 @@ public sealed class VectorStore : IDisposable
     public static string DefaultPath => Path.Combine(Paths.Index, "vectors.bin");
 
     public long Count => _count;
+
+    /// <summary>The file this store reads or writes.</summary>
+    public string FilePath => _path;
 
     public VectorStore(string? path = null, bool writer = false)
     {
@@ -133,6 +137,39 @@ public sealed class VectorStore : IDisposable
         _vecW.Flush(true);
     }
 
+    /// <summary>Write <paramref name="rows"/>, in the order given, into a new store at
+    /// <paramref name="toPath"/>: row <c>rows[i]</c> becomes row <c>i</c>, its bytes and its kind
+    /// copied exactly, nothing re-encoded. Everything is on the disk before this returns, because
+    /// the index is about to be pointed at it.</summary>
+    public void CopyRowsTo(IReadOnlyList<long> rows, string toPath)
+    {
+        ArgumentNullException.ThrowIfNull(rows);
+        if (_vecW is null || _kindW is null) throw new InvalidOperationException("read-only store");
+        Flush();
+
+        using var vec = new FileStream(toPath, FileMode.CreateNew, FileAccess.Write, FileShare.Read, 1 << 20);
+        using var kind = new FileStream(toPath + ".kinds", FileMode.CreateNew, FileAccess.Write, FileShare.Read, 1 << 16);
+        Span<byte> h = stackalloc byte[HeaderBytes];
+        BitConverter.TryWriteBytes(h, Magic);
+        BitConverter.TryWriteBytes(h[4..], Dim);
+        BitConverter.TryWriteBytes(h[8..], (long)rows.Count);
+        vec.Write(h);
+
+        var row = new byte[RowBytes];
+        foreach (long r in rows)
+        {
+            if (r < 0 || r >= _count) throw new ArgumentOutOfRangeException(nameof(rows), $"row {r} is not in a store of {_count}");
+            _vecW.Seek(HeaderBytes + r * RowBytes, SeekOrigin.Begin);
+            _vecW.ReadExactly(row);
+            vec.Write(row);
+            _kindW.Seek(r, SeekOrigin.Begin);
+            int k = _kindW.ReadByte();
+            kind.WriteByte(k < 0 ? (byte)0 : (byte)k);
+        }
+        vec.Flush(true);
+        kind.Flush(true);
+    }
+
     // ---- reading (Findra) ----
 
     /// <summary>The kind byte of every row, read straight from the file beside the vectors, with
@@ -152,7 +189,10 @@ public sealed class VectorStore : IDisposable
         catch (DirectoryNotFoundException) { return []; }
     }
 
-    /// <summary>Re-map if the indexer has appended since. Cheap when nothing changed.</summary>
+    /// <summary>Re-map if the indexer has appended since, and re-read the kind of every row
+    /// whether it has or not: a delete marks a row's kind and changes no count, so a reader that
+    /// re-read the kinds only when the count moved went on answering with every row deleted since
+    /// it first opened the file. One byte a row, a fraction of what a search then reads.</summary>
     public bool Reload()
     {
         if (_writer) return false;
@@ -168,7 +208,12 @@ public sealed class VectorStore : IDisposable
             if (BitConverter.ToInt32(h) != Magic || BitConverter.ToInt32(h[4..]) != Dim) { _count = 0; return false; }
             count = Math.Min(BitConverter.ToInt64(h[8..]), (len - HeaderBytes) / RowBytes);
         }
-        if (count == _mappedRows && _view is not null) { _count = count; return false; }
+        if (count == _mappedRows && _view is not null)
+        {
+            _kinds = ReadKinds(count);
+            _count = count;
+            return false;
+        }
 
         _view?.Dispose(); _map?.Dispose();
         _view = null; _map = null;
@@ -177,50 +222,159 @@ public sealed class VectorStore : IDisposable
             _map = MemoryMappedFile.CreateFromFile(new FileStream(_path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite),
                 null, HeaderBytes + count * RowBytes, MemoryMappedFileAccess.Read, HandleInheritability.None, leaveOpen: false);
             _view = _map.CreateViewAccessor(0, HeaderBytes + count * RowBytes, MemoryMappedFileAccess.Read);
-            try
-            {
-                using var kf = new FileStream(_kindsPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
-                _kinds = new byte[count];
-                kf.ReadExactly(_kinds, 0, (int)Math.Min(count, kf.Length));
-            }
-            catch { _kinds = new byte[count]; }
+            _kinds = ReadKinds(count);
         }
         _mappedRows = count;
         _count = count;
         return true;
     }
 
+    /// <summary>The kind of each of the first <paramref name="count"/> rows. A row the kinds file
+    /// does not reach yet reads as kind 0, as it always has.</summary>
+    private byte[] ReadKinds(long count)
+    {
+        var kinds = new byte[count];
+        try
+        {
+            using var kf = new FileStream(_kindsPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+            kf.ReadExactly(kinds, 0, (int)Math.Min(count, kf.Length));
+        }
+        catch (IOException) { }
+        catch (UnauthorizedAccessException) { }
+        return kinds;
+    }
+
     public readonly record struct Match(long Row, float Score);
 
-    /// <summary>Top-K rows by dot product with a normalised query, restricted to segment kinds in
-    /// <paramref name="kinds"/> (empty = all). One pass, blocks of rows converted to float32.</summary>
-    public List<Match> Search(ReadOnlySpan<float> query, int k, ReadOnlySpan<byte> kinds)
-    {
-        var top = new List<Match>(k + 1);
-        if (_view is null || _count == 0) return top;
-        const int Block = 256;
-        var half = new Half[Block * Dim];
-        var f = new float[Block * Dim];
-        float floor = float.NegativeInfinity;
+    /// <summary>One question put to the store: a normalised vector, how many rows to keep, and
+    /// the segment kinds that may answer it (empty = every live kind).</summary>
+    public readonly record struct Query(float[] Vector, int K, byte[] Kinds);
 
-        for (long start = 0; start < _count; start += Block)
+    /// <summary>Rows per block of the scan. The blocks are what the cores share out; each worker
+    /// keeps its own best rows, and they are merged once at the end.</summary>
+    public const int ScanBlock = 4096;
+
+    /// <summary>At most this many questions in one pass: which ones a row answers is a bit each.</summary>
+    public const int MaxQueries = 32;
+
+    /// <summary>Half the cores, never fewer than one. A search runs while somebody types, and the
+    /// indexer may be working beside it; the other half is theirs.</summary>
+    private static int Workers => Math.Max(1, Environment.ProcessorCount / 2);
+
+    /// <summary>Top-K rows by dot product with a normalised query, restricted to segment kinds in
+    /// <paramref name="kinds"/> (empty = all). One question through <see cref="Search(IReadOnlyList{Query})"/>.</summary>
+    public List<Match> Search(ReadOnlySpan<float> query, int k, ReadOnlySpan<byte> kinds)
+        => Search([new Query(query.ToArray(), k, kinds.ToArray())])[0];
+
+    /// <summary>
+    /// Every question in ONE pass over the file, best first per question.
+    ///
+    /// <para>A content search asks two - one of the pictures, one of the words - and each used to
+    /// read every row in the file, convert it to float32, and only then look at its kind. Now the
+    /// kind byte is read first and a row is touched only when some question wants its kind, and
+    /// then scored only against those questions. A deleted row, or one of a kind nobody asked
+    /// for, is never read at all, so its pages are never brought in from the disk.</para>
+    ///
+    /// <para>Rows are read in place through the mapping rather than copied out first. The blocks
+    /// are shared across <see cref="Workers"/> cores and merged at the end; ties go to the lower
+    /// row, so the answer does not depend on which core finished first.</para>
+    /// </summary>
+    public unsafe List<Match>[] Search(IReadOnlyList<Query> queries)
+    {
+        ArgumentNullException.ThrowIfNull(queries);
+        if (queries.Count > MaxQueries) throw new ArgumentException($"at most {MaxQueries} queries in one pass");
+        var answers = new List<Match>[queries.Count];
+        for (int q = 0; q < answers.Length; q++) answers[q] = new List<Match>();
+        MemoryMappedViewAccessor? view = _view;
+        if (view is null || _count == 0 || queries.Count == 0) return answers;
+
+        // Which questions each kind byte answers, a bit per question. 255 marks a deleted row and
+        // answers none of them, whatever a question asked for.
+        var wants = new int[256];
+        for (int q = 0; q < queries.Count; q++)
         {
-            int n = (int)Math.Min(Block, _count - start);
-            _view.ReadArray(HeaderBytes + start * RowBytes, half, 0, n * Dim);
-            TensorPrimitives.ConvertToSingle(half.AsSpan(0, n * Dim), f.AsSpan(0, n * Dim));
-            for (int i = 0; i < n; i++)
+            Query query = queries[q];
+            if (query.Vector.Length != Dim) throw new ArgumentException($"query has {query.Vector.Length} dims, want {Dim}");
+            if (query.K <= 0) continue;
+            if (query.Kinds.Length == 0) for (int b = 0; b < 255; b++) wants[b] |= 1 << q;
+            else foreach (byte b in query.Kinds) if (b != 255) wants[b] |= 1 << q;
+        }
+
+        byte[] kinds = _kinds;
+        long count = Math.Min(_count, kinds.Length);
+        int blocks = (int)((count + ScanBlock - 1) / ScanBlock);
+        var merge = new object();
+
+        byte* mapped = null;
+        SafeMemoryMappedViewHandle handle = view.SafeMemoryMappedViewHandle;
+        handle.AcquirePointer(ref mapped);
+        try
+        {
+            nint first = (nint)(mapped + view.PointerOffset + HeaderBytes);
+            Parallel.For(0, blocks, new ParallelOptions { MaxDegreeOfParallelism = Workers },
+                () => new Best(queries),
+                (block, _, best) =>
+                {
+                    long start = (long)block * ScanBlock, end = Math.Min(start + ScanBlock, count);
+                    for (long row = start; row < end; row++)
+                    {
+                        int mask = wants[kinds[row]];
+                        if (mask == 0) continue;
+                        best.Score(row, new ReadOnlySpan<Half>((byte*)first + row * RowBytes, Dim), mask);
+                    }
+                    return best;
+                },
+                best => { lock (merge) best.AddTo(answers); });
+        }
+        finally { handle.ReleasePointer(); }
+
+        for (int q = 0; q < answers.Length; q++)
+        {
+            answers[q].Sort(static (a, b) => b.Score.CompareTo(a.Score) is var c && c != 0 ? c : a.Row.CompareTo(b.Row));
+            if (answers[q].Count > queries[q].K) answers[q].RemoveRange(queries[q].K, answers[q].Count - queries[q].K);
+        }
+        return answers;
+    }
+
+    /// <summary>One worker's best rows so far, per question, and the buffer it converts a row into.</summary>
+    private sealed class Best
+    {
+        private readonly IReadOnlyList<Query> _queries;
+        private readonly List<Match>[] _top;
+        private readonly float[] _floor;
+        private readonly float[] _row = new float[Dim];
+
+        public Best(IReadOnlyList<Query> queries)
+        {
+            _queries = queries;
+            _top = new List<Match>[queries.Count];
+            _floor = new float[queries.Count];
+            for (int q = 0; q < queries.Count; q++)
             {
-                long row = start + i;
-                byte kind = row < _kinds.Length ? _kinds[row] : (byte)0;
-                if (kind == 255) continue;
-                if (kinds.Length > 0 && kinds.IndexOf(kind) < 0) continue;
-                float s = TensorPrimitives.Dot(query, f.AsSpan(i * Dim, Dim));
-                if (s <= floor && top.Count >= k) continue;
-                Insert(top, new Match(row, s), k);
-                if (top.Count >= k) floor = top[^1].Score;
+                _top[q] = new List<Match>(Math.Max(0, queries[q].K) + 1);
+                _floor[q] = float.NegativeInfinity;
             }
         }
-        return top;
+
+        public void Score(long row, ReadOnlySpan<Half> stored, int mask)
+        {
+            TensorPrimitives.ConvertToSingle(stored, _row);
+            while (mask != 0)
+            {
+                int q = System.Numerics.BitOperations.TrailingZeroCount(mask);
+                mask &= mask - 1;
+                int k = _queries[q].K;
+                float s = TensorPrimitives.Dot(_queries[q].Vector, _row);
+                if (s <= _floor[q] && _top[q].Count >= k) continue;
+                Insert(_top[q], new Match(row, s), k);
+                if (_top[q].Count >= k) _floor[q] = _top[q][^1].Score;
+            }
+        }
+
+        public void AddTo(List<Match>[] answers)
+        {
+            for (int q = 0; q < answers.Length; q++) answers[q].AddRange(_top[q]);
+        }
     }
 
     /// <summary>

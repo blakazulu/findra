@@ -229,6 +229,7 @@ public static class SearchIndexReport
         // as the expensive one.
         CapabilitySet installed = CapabilitySet.Installed();
         using Semantic? semantic = queries.Count > 0 ? Semantic.Open(installed) : null;
+        semantic?.Follow(db.VectorsPath());
         semantic?.Vectors.Reload();
 
         foreach (string raw in paths)
@@ -393,7 +394,7 @@ public static class SearchIndex
             // unhandled path. Queueing without draining is the honest outcome: the rows are in
             // `pending` and the child picks them up within a couple of seconds.
             IDecoders? decoders = null;
-            try { decoders = Decoders.ForThisMachine(() => Indexer.TranscribeMinutes(db)); }
+            try { decoders = Decoders.ForThisMachine(() => Indexer.TranscribeMinutes(db), db.VectorsPath()); }
             catch (IOException ex)
             {
                 Console.WriteLine($"  not draining: the indexer already has the vector store open ({ex.Message}).");

@@ -84,6 +84,11 @@ public interface IDecoders : IDisposable
     /// model where it was asked for. Speech is not moved: its runtime is chosen once per process.
     /// </summary>
     void OnProcessor(bool yes, string why) { }
+
+    /// <summary>Copy the vector rows still in use into a new file when enough of the old one is
+    /// dead, and write to the new one from then on (<see cref="VectorCompaction"/>). True when it
+    /// did. Asked only between files, with the queue empty.</summary>
+    bool Compact(ContentDb db) => false;
 }
 
 /// <summary>
@@ -180,9 +185,9 @@ public sealed class Decoders : IDecoders
     /// video whose frames were read and whose sound track was not.</summary>
     public const string TooLong = "longer than the transcription limit";
 
-    private readonly VectorStore _vectors;
+    private VectorStore _vectors;
     private readonly string? _dir;
-    private readonly bool _ownsVectors;
+    private bool _ownsVectors;
     private readonly Func<int> _transcribeMinutes;
     private readonly Func<CapabilitySet> _installed;
     private readonly Func<string, (IVideoSource? Source, string? Skip)> _videos;
@@ -235,9 +240,12 @@ public sealed class Decoders : IDecoders
     /// <para><paramref name="off"/> is the add-ons somebody turned off, read per file like the
     /// transcription limit: an add-on turned off reads nothing new from the next file on, and its
     /// model is let go the same way one that was deleted is.</para>
-    public static Decoders ForThisMachine(Func<int> transcribeMinutes, string? modelDir = null, Action? beat = null,
-                                          Func<IReadOnlyList<Capability>>? off = null)
-        => new(() => CapabilitySet.Installed(modelDir).Without(off?.Invoke() ?? []), new VectorStore(writer: true),
+    ///
+    /// <para><paramref name="vectorsPath"/> is the file the index names (<see cref="ContentDb.VectorsPath"/>):
+    /// after a compaction it is not the file the index started with.</para>
+    public static Decoders ForThisMachine(Func<int> transcribeMinutes, string vectorsPath, string? modelDir = null,
+                                          Action? beat = null, Func<IReadOnlyList<Capability>>? off = null)
+        => new(() => CapabilitySet.Installed(modelDir).Without(off?.Invoke() ?? []), new VectorStore(vectorsPath, writer: true),
                transcribeMinutes, modelDir, ownsVectors: true, beat: beat);
 
     private void Beat() => _beat();
@@ -379,6 +387,20 @@ public sealed class Decoders : IDecoders
         _vision?.Dispose(); _e5?.Dispose();
         _whisper?.Dispose(); _whisperHe?.Dispose();
         if (_ownsVectors) _vectors.Dispose();
+    }
+
+    public bool Compact(ContentDb db)
+    {
+        Flush();
+        VectorStore next = VectorCompaction.Run(db, _vectors);
+        if (ReferenceEquals(next, _vectors)) return false;
+        // The new writer is this object's whatever the old one was: it opened it. The old one is
+        // closed only if it was this object's to close, so the old file can go once readers let it.
+        if (_ownsVectors) _vectors.Dispose();
+        _vectors = next;
+        _ownsVectors = true;
+        _dirty = false;
+        return true;
     }
 
     /// <summary>Read inside one file. Only ever called for a kind <see cref="CanRead"/> said yes

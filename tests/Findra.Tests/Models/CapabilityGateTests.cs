@@ -636,9 +636,11 @@ public class CapabilityGateTests : IDisposable
         // 4. And no step may invalidate every kind there is. That is a full re-index of a finished
         //    disk, which spec §2a calls the worst thing this product can do to somebody - and it
         //    is the easy thing to write when a change touches something shared.
+        //    A step still has to DO something: re-read a kind, or ask for the whole disk to be
+        //    walked (the only way to reach files the index holds and the drive no longer has).
         foreach (ContentDb.Migration m in steps)
         {
-            Assert.NotEmpty(m.InvalidatedKinds);
+            Assert.True(m.InvalidatedKinds.Length > 0 || m.ReWalk, $"'{m.Reason}' changes nothing");
             Assert.True(m.InvalidatedKinds.Length < Enum.GetValues<ResultKind>().Length,
                         $"'{m.Reason}' re-queues every kind, which is a full re-index");
             Assert.NotEqual("", m.Reason);

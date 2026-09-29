@@ -393,6 +393,33 @@ public sealed class IndexerTests : IDisposable
     }
 
     [Fact]
+    public void QueuedRemovalsAreTakenOutTogetherRatherThanOneFilePerTurn()
+    {
+        // A full pass after a journal gap can find tens of thousands of files the drive no longer
+        // has. One per turn, each followed by the power setting's rest, kept them answering
+        // searches for the best part of an hour; they are rows to drop, not files to read.
+        using ContentDb db = Open();
+        using (var tx = db.Begin())
+        {
+            for (ulong f = 1; f <= 3; f++)
+                db.Upsert("C", f, Under($"gone{f}.txt"), ResultKind.Document, 1, 1, ContentDb.StateIndexed, null, [], tx);
+            tx.Commit();
+        }
+        for (ulong f = 1; f <= 3; f++)
+            db.Enqueue("C", f, Under($"gone{f}.txt"), ResultKind.Document, ContentDb.ReasonDelete);
+        string doc = Under("kept.txt");
+        File.WriteAllText(doc, "the quarterly lease agreement, signed and countersigned");
+        db.Enqueue("C", 9, doc, ResultKind.Document, "probe");
+
+        int passes = 0;
+        Indexer.Loop(db, parentPid: 0, decoders: Dec(), running: () => passes++ < 1);
+
+        ContentDb.Pending left = Assert.Single(db.PendingRows());
+        Assert.Equal(9ul, left.Frn);
+        Assert.DoesNotContain(db.ItemsOn("C"), i => i.Frn is >= 1 and <= 3);
+    }
+
+    [Fact]
     public void TheDeleteReasonTheInterfaceWritesIsTheOneTheIndexerAndTheQueueRead()
     {
         // One string crosses from the interface into the indexer and into TakeNext's ORDER BY.
@@ -498,6 +525,36 @@ public sealed class IndexerTests : IDisposable
         public void Flush() { }
         public void Release(IReadOnlyList<long> rows) { }
         public void Dispose() { }
+
+        public int CompactCalls;
+        public bool Compact(ContentDb db) { CompactCalls++; return false; }
+    }
+
+    [Fact]
+    public void AnEmptyQueueAsksForTheVectorFileToBeCompactedAndNotAgainForAWhile()
+    {
+        // Between files, with nothing waiting: the one moment no segment can change under the copy.
+        // Asked on every idle turn, it would read which rows are in use every two seconds.
+        using ContentDb db = Open();
+        var d = new TrackingDecoders(CapabilitySet.None);
+
+        int passes = 0;
+        Indexer.Loop(db, parentPid: 0, decoders: d, running: () => passes++ < 3);
+
+        Assert.Equal(1, d.CompactCalls);
+    }
+
+    [Fact]
+    public void NothingIsCompactedWhileAFullscreenProgramHasTheMachine()
+    {
+        using ContentDb db = Open();
+        var d = new TrackingDecoders(CapabilitySet.None);
+
+        int passes = 0;
+        Indexer.Loop(db, parentPid: 0, decoders: d, running: () => passes++ < 2,
+                     gate: (_, _) => new GateVerdict(false, IndexGate.Fullscreen, "a game"));
+
+        Assert.Equal(0, d.CompactCalls);
     }
 
     [Fact]

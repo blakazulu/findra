@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 
@@ -32,20 +33,48 @@ public sealed class Semantic : IDisposable
     private readonly object _gate = new();
     private readonly List<IDisposable> _owned;
     private volatile Func<string, float[]>? _text, _image;
+    private volatile VectorStore _vectors;
     private bool _triedWords, _triedPictures;
 
     public Semantic(VectorStore vectors, Func<string, float[]>? text, Func<string, float[]>? image,
                     params IDisposable[] owned)
     {
-        Vectors = vectors;
+        _vectors = vectors;
         _text = text;
         _image = image;
         _owned = [.. owned];
     }
 
-    public VectorStore Vectors { get; }
+    public VectorStore Vectors => _vectors;
     public Func<string, float[]>? Text => _text;
     public Func<string, float[]>? Image => _image;
+
+    /// <summary>Held for a whole vector search - following the file, re-reading it, scanning it
+    /// and reading the segments its rows name. Every card shares this session, and moving to a
+    /// new file disposes the old one, which must never happen under a scan.</summary>
+    public object SearchLock { get; } = new();
+
+    /// <summary>
+    /// Move to the vector file the index names now, when it is not the one open. A compaction
+    /// copies the rows in use into a file under a new name and renumbers the segments, and a card
+    /// holds this session for as long as it is open: asking the old file with the new numbering
+    /// would hand every match to the wrong passage. The old store goes, if this session opened it,
+    /// so that nothing here keeps the old file from being deleted. Called under
+    /// <see cref="SearchLock"/>.
+    /// </summary>
+    public void Follow(string path)
+    {
+        ArgumentNullException.ThrowIfNull(path);
+        VectorStore old = _vectors;
+        if (string.Equals(Path.GetFullPath(old.FilePath), Path.GetFullPath(path), StringComparison.OrdinalIgnoreCase)) return;
+        var next = new VectorStore(path);
+        lock (_gate)
+        {
+            _vectors = next;
+            _owned.Add(next);
+            if (_owned.Remove(old)) old.Dispose();
+        }
+    }
 
     /// <summary>Disposes only what it was HANDED to own. A store the caller opened and a store
     /// <see cref="Open"/> opened are two different lifetimes, and a type that guesses gets one of
@@ -54,6 +83,25 @@ public sealed class Semantic : IDisposable
     public void Dispose()
     {
         lock (_gate) foreach (IDisposable d in _owned) d.Dispose();
+    }
+
+    private volatile bool _loadingWords, _loadingPictures;
+
+    /// <summary>Which encoders are on their way: being opened now, which takes seconds and about a
+    /// gigabyte for meaning. A search in the meantime answers with what it has, and says so.</summary>
+    public (bool Words, bool Pictures) Loading => (_loadingWords, _loadingPictures);
+
+    /// <summary>Say an encoder is being opened. Cleared by <see cref="Supply"/> when it arrives,
+    /// or by <see cref="Done"/> when the attempt ended without one.</summary>
+    public void Expect(QueryEncoder which)
+    {
+        if (which == QueryEncoder.Words) _loadingWords = true; else _loadingPictures = true;
+    }
+
+    /// <summary>The attempt to open an encoder is over, whether or not one arrived.</summary>
+    public void Done(QueryEncoder which)
+    {
+        if (which == QueryEncoder.Words) _loadingWords = false; else _loadingPictures = false;
     }
 
     /// <summary>Fill an empty slot. False when it is already filled, and then
@@ -65,6 +113,7 @@ public sealed class Semantic : IDisposable
             if ((which == QueryEncoder.Words ? _text : _image) is not null) return false;
             _owned.Add(owner);
             if (which == QueryEncoder.Words) _text = encode; else _image = encode;
+            Done(which);
             return true;
         }
     }
@@ -99,6 +148,10 @@ public sealed class Semantic : IDisposable
             pictures = pictures && _image is null && !_triedPictures;
             _triedWords |= words;
             _triedPictures |= pictures;
+            // Both at once, before either starts: pictures open after meaning, and a search in
+            // between must not read as having everything but meaning.
+            if (words) Expect(QueryEncoder.Words);
+            if (pictures) Expect(QueryEncoder.Pictures);
         }
 
         // One try EACH, and that is the whole point of the shape. "Whatever loaded stays" is only
@@ -118,6 +171,7 @@ public sealed class Semantic : IDisposable
                 Log.Error("models", "the meaning query encoder would not load - " +
                                     "searching by meaning is off for this session", ex);
             }
+            finally { Done(QueryEncoder.Words); }
         }
         if (pictures)
         {
@@ -131,6 +185,7 @@ public sealed class Semantic : IDisposable
                 Log.Error("models", "the picture query encoder would not load - " +
                                     "searching photos is off for this session", ex);
             }
+            finally { Done(QueryEncoder.Pictures); }
         }
         return (openedWords, openedPictures);
     }
@@ -328,13 +383,20 @@ public static class ContentBranch
         // The vector branch runs first so the full-text pass can see what it found and raise it.
         // Each half is skipped in silence when its encoder is absent: a missing model is a normal
         // state, so it contributes no candidates and is never an error (spec §6).
+        // Read BEFORE the vector half looks at the encoders. An encoder that lands in between is
+        // then either used and still called loading - the card asks again, and the answer is the
+        // same - or called loading and not used; never used-by-nobody and called ready.
+        (bool Words, bool Pictures) loading = semantic?.Loading ?? default;
+
+        double vectorsMs = 0;
         if (semantic is not null)
         {
-            semantic.Vectors.Reload();
-            VectorPass(db, q, text, max, semantic.Vectors, semantic.Image, PictureKinds, PhotoFloor, PhotoScore, Offer);
-            VectorPass(db, q, text, max, semantic.Vectors, semantic.Text, WordKinds, TextFloor, TextScore, Offer);
+            long vectorsFrom = Stopwatch.GetTimestamp();
+            VectorPasses(db, q, text, max, semantic, Offer);
+            vectorsMs = Stopwatch.GetElapsedTime(vectorsFrom).TotalMilliseconds;
         }
 
+        long wordsFrom = Stopwatch.GetTimestamp();
         int rank = 0;
         foreach (ContentDb.SegmentHit h in db.Fts(text, max * 4))
         {
@@ -363,12 +425,16 @@ public static class ContentBranch
             byPath[h.Path] = ToResult(h, WordScore - rank * RankStep, text);
             rank++;
         }
+        double wordsMs = Stopwatch.GetElapsedTime(wordsFrom).TotalMilliseconds;
 
         // The same finish-and-order pass the name half runs: it is what gives these rows a size
         // and a date at all, and therefore what makes `size:`, `modified:` and the sort chips mean
         // the same thing on both sides of the pill. The store holds text, not directory entries,
         // so without this those controls would sit on the card doing nothing.
-        List<SearchResult> rows = ResultMapper.Finish([.. byPath.Values], q, sort, stat);
+        //
+        // And it drops a file the disk no longer has. The index outlives a delete the journal never
+        // reported, and such a row can neither be previewed nor opened.
+        List<SearchResult> rows = ResultMapper.Finish([.. byPath.Values], q, sort, stat, keepMissing: false);
         if (rows.Count > max) rows.RemoveRange(max, rows.Count - max);
 
         // "No matches", "nothing has been read yet" and "this needs a model you have not got" are
@@ -380,49 +446,109 @@ public static class ContentBranch
         // the diagnostics, which search an index they built themselves. Nothing is offered to
         // somebody who was never asked, so an offer needs a caller that named the set, even the
         // empty one.
+        //
+        // A query model still opening outranks all three, with rows or without: the answer is
+        // short of a whole half, it says which, and the card asks again once it has arrived.
         string note = "";
-        if (rows.Count == 0)
+        bool modelsLoading = loading.Words || loading.Pictures;
+        if (modelsLoading) note = StillLoading(loading.Words, loading.Pictures);
+        else if (rows.Count == 0)
             note = db.IndexedCount() == 0
                 ? "Nothing indexed yet - Findra is still reading what is inside your files."
                 : installed.Have is null ? "" : Capabilities.OfferFor(q, installed)?.Text ?? "";
+        // A slow query leaves a line saying where the time went, and a quick one leaves none: the
+        // card searches on every keystroke, and a line per query is a line per keystroke.
+        double total = sw.Elapsed.TotalMilliseconds;
+        if (total > SlowQueryMs)
+            Log.Info("search", string.Create(CultureInfo.InvariantCulture,
+                $"content query took {total:0} ms: meaning and pictures {vectorsMs:0} ms " +
+                $"over {semantic?.Vectors.Count ?? 0} vector row(s), words {wordsMs:0} ms, {rows.Count} row(s)"));
+
         // NamesMs: 0 is not a placeholder. This path never asked the name index anything.
-        return new SearchResults(raw, rows, NamesMs: 0, ContentMs: sw.Elapsed.TotalMilliseconds,
-                                 ContentReady: true, Note: note);
+        return new SearchResults(raw, rows, NamesMs: 0, ContentMs: total,
+                                 ContentReady: true, Note: note, ModelsLoading: modelsLoading);
     }
 
+    /// <summary>What the card's header says while query models are still opening: which half is
+    /// missing from this answer. Short enough to share the line with the count
+    /// (<c>CardHeaderTests</c> measures all three).</summary>
+    public static string StillLoading(bool words, bool pictures) => (words, pictures) switch
+    {
+        (true, true) => "meaning and pictures still loading - words only",
+        (true, false) => "meaning still loading - no matches by meaning yet",
+        (false, true) => "pictures still loading - no photos or video yet",
+        _ => "",
+    };
+
+    /// <summary>A content query slower than this says where its time went, in the log.</summary>
+    public const double SlowQueryMs = 500;
+
     /// <summary>
-    /// One vector pass: encode the query the way this half of the store was written, keep the
-    /// rows above the floor, and offer each segment they point at. A null encoder is the whole
-    /// point of the seam - the capability is not installed, so this returns having offered
-    /// nothing and having raised nothing.
+    /// The vector half: encode the query once for each half of the store that has an encoder,
+    /// ask the store both questions in ONE pass, keep the rows above each half's floor, and offer
+    /// each segment they point at. A null encoder is the whole point of the seam - the capability
+    /// is not installed, so that half asks nothing and offers nothing.
     ///
     /// <para><paramref name="max"/> * 2 rows are asked for because one file can own many
     /// segments and only its best survives the dedupe.</para>
     /// </summary>
-    private static void VectorPass(ContentDb db, SearchQuery q, string text, int max,
-                                   VectorStore vectors, Func<string, float[]>? encode,
-                                   ReadOnlySpan<byte> kinds, float floor, Func<float, float> band,
-                                   Action<SearchResult> offer)
+    private static void VectorPasses(ContentDb db, SearchQuery q, string text, int max,
+                                     Semantic semantic, Action<SearchResult> offer)
     {
-        if (encode is null) return;
-        float[] v = encode(text);
-        var rows = new List<long>();
-        var cosines = new Dictionary<long, float>();
-        foreach (VectorStore.Match m in vectors.Search(v, max * 2, kinds))
+        var queries = new List<VectorStore.Query>(2);
+        var halves = new List<(float Floor, Func<float, float> Band)>(2);
+        if (semantic.Image is { } image)
         {
-            // Below the floor is not a weak match, it is no match. Without this every photo in
-            // the library is a candidate for every query.
-            if (m.Score < floor) continue;
-            rows.Add(m.Row);
-            cosines[m.Row] = m.Score;
+            queries.Add(new VectorStore.Query(image(text), max * 2, PictureKinds));
+            halves.Add((PhotoFloor, PhotoScore));
         }
-        foreach (ContentDb.SegmentHit h in db.SegmentsByVec(rows))
+        if (semantic.Text is { } words)
         {
-            // The grammar is a filter on the FILE and it applies to every branch: `lease ext:pdf`
-            // means the pdf whichever half of the engine found it.
-            if (!q.Allows(Path.GetFileName(h.Path), h.Path, h.Kind)) continue;
-            offer(ToResult(h, band(cosines[h.Vec]), text, byMeaning: true));
+            queries.Add(new VectorStore.Query(words(text), max * 2, WordKinds));
+            halves.Add((TextFloor, TextScore));
         }
+        if (queries.Count == 0) return;
+
+        var found = new List<SearchResult>();
+        lock (semantic.SearchLock)
+        {
+            // A compaction renumbers the segments and names a new file in one transaction, and it
+            // can land between the scan and the lookup of what the scanned rows name. The name is
+            // read on both sides; a search that straddled a renumbering is asked again rather than
+            // handing its matches to whatever passages now carry those numbers.
+            for (int attempt = 0; attempt < 3; attempt++)
+            {
+                string file = db.VectorsPath();
+                semantic.Follow(file);
+                semantic.Vectors.Reload();
+                List<VectorStore.Match>[] matches = semantic.Vectors.Search(queries);
+
+                found.Clear();
+                for (int i = 0; i < queries.Count; i++)
+                {
+                    (float floor, Func<float, float> band) = halves[i];
+                    var rows = new List<long>();
+                    var cosines = new Dictionary<long, float>();
+                    foreach (VectorStore.Match m in matches[i])
+                    {
+                        // Below the floor is not a weak match, it is no match. Without this every
+                        // photo in the library is a candidate for every query.
+                        if (m.Score < floor) continue;
+                        rows.Add(m.Row);
+                        cosines[m.Row] = m.Score;
+                    }
+                    foreach (ContentDb.SegmentHit h in db.SegmentsByVec(rows))
+                    {
+                        // The grammar is a filter on the FILE and it applies to every branch:
+                        // `lease ext:pdf` means the pdf whichever half of the engine found it.
+                        if (!q.Allows(Path.GetFileName(h.Path), h.Path, h.Kind)) continue;
+                        found.Add(ToResult(h, band(cosines[h.Vec]), text, byMeaning: true));
+                    }
+                }
+                if (string.Equals(db.VectorsPath(), file, StringComparison.OrdinalIgnoreCase)) break;
+            }
+        }
+        foreach (SearchResult row in found) offer(row);
     }
 
     /// <summary>One segment hit as a card row. The kind is the ITEM's kind, already joined in by

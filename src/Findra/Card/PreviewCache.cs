@@ -25,9 +25,17 @@ public sealed class PreviewCache : IDisposable
         return null;
     }
 
-    public void Put(string path, SKImage image)
+    /// <summary>Keep <paramref name="image"/> for <paramref name="path"/> and return the image the
+    /// cache now holds for it, which is the one to draw. When a second decode of the same file
+    /// lands, the first is kept, the second is disposed, and the FIRST comes back: drawing the
+    /// argument instead would put a disposed image on the card.</summary>
+    public SKImage Put(string path, SKImage image)
     {
-        if (Get(path) is { } existing) { if (!ReferenceEquals(existing, image)) image.Dispose(); return; }
+        if (Get(path) is { } existing)
+        {
+            if (!ReferenceEquals(existing, image)) image.Dispose();
+            return existing;
+        }
         _list.AddFirst((path, image));
         while (_list.Count > _capacity)
         {
@@ -35,6 +43,7 @@ public sealed class PreviewCache : IDisposable
             _list.RemoveLast();
             last.Value.Image.Dispose();
         }
+        return image;
     }
 
     public void Dispose()

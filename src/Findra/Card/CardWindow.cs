@@ -261,6 +261,15 @@ public sealed class CardWindow : Window
                 // the caret blinks and the index line moves; nothing else here needs frames -
                 // except the unfold, which wants them faster for a quarter of a second
                 PumpContentLine();
+                // An answer given while the query models were still opening said it was short of
+                // them. Once they are in, it is asked again, so the header's "still loading" is
+                // not the last word on a search nobody retypes.
+                if (_semantic is { } semantic &&
+                    SearchCardState.AskAgain(_state, semantic.Loading.Words || semantic.Loading.Pictures))
+                {
+                    _state = _state with { Searching = true };
+                    RunSearch();
+                }
                 IndexProgress progress = Progress;
                 // The progress pill hangs UNDER the card, so whether it is drawn decides the
                 // WINDOW's height - and this tick was the one place the pill could appear with
@@ -1122,7 +1131,9 @@ public sealed class CardWindow : Window
 
                 Dispatcher.UIThread.Post(() =>
                 {
-                    if (img is not null) _previews.Put(row.Path, img);   // cached even if late: the next visit is free
+                    // Cached even if late: the next visit is free. What comes back is what to draw,
+                    // since a second decode of the same file is disposed in favour of the first.
+                    if (img is not null) img = _previews.Put(row.Path, img);
                     if (gen != _detailGen) return;
                     _state = _state with { StageDetail = detail, StageImage = img };
                     InvalidateVisual();

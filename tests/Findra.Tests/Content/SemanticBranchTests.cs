@@ -69,7 +69,7 @@ public class SemanticBranchTests : IDisposable
         using var vectors = new VectorStore(VecPath);
         var semantic = new Semantic(vectors, text: _ => Axis(3), image: null);
 
-        SearchResults r = ContentBranch.Search(db, "lease", 10, semantic: semantic,
+        SearchResults r = ContentBranch.Search(db, "lease", 10, stat: ContentBranchTests.Here, semantic: semantic,
                                                installed: Set(Capability.Meaning));
 
         Assert.Single(r.Rows);
@@ -91,7 +91,7 @@ public class SemanticBranchTests : IDisposable
         using var vectors = new VectorStore(VecPath);
         var semantic = new Semantic(vectors, text: null, image: null);
 
-        SearchResults r = ContentBranch.Search(db, "lease", 10, semantic: semantic,
+        SearchResults r = ContentBranch.Search(db, "lease", 10, stat: ContentBranchTests.Here, semantic: semantic,
                                                installed: CapabilitySet.None);
 
         Assert.Empty(r.Rows);
@@ -107,9 +107,52 @@ public class SemanticBranchTests : IDisposable
         Put(db, 1, Path.Combine(_dir, "notes.txt"), ResultKind.Document, ContentDb.SegText, -1,
             "the quarterly lease agreement and its deposit");
 
-        SearchResults r = ContentBranch.Search(db, "deposit", 10, semantic: null, installed: CapabilitySet.None);
+        SearchResults r = ContentBranch.Search(db, "deposit", 10, stat: ContentBranchTests.Here, semantic: null, installed: CapabilitySet.None);
 
         Assert.Single(r.Rows);
+    }
+
+    [Fact]
+    public void WhileTheQueryModelsAreStillLoadingTheAnswerSaysItIsWordsOnly()
+    {
+        // The first seconds after Findra starts: the models are on disk and on their way. The
+        // words still answer, and they have to say they are only words - an answer that simply
+        // lacked every match by meaning looked complete, and nothing ever asked again.
+        using ContentDb db = Open();
+        Put(db, 1, Path.Combine(_dir, "notes.txt"), ResultKind.Document, ContentDb.SegText, -1,
+            "the quarterly lease agreement and its deposit");
+        using var vectors = new VectorStore(VecPath);
+        using var semantic = new Semantic(vectors, text: null, image: null);
+        semantic.Expect(QueryEncoder.Words);
+        semantic.Expect(QueryEncoder.Pictures);
+
+        SearchResults r = ContentBranch.Search(db, "deposit", 10, stat: ContentBranchTests.Here, semantic: semantic,
+                                               installed: Set(Capability.Meaning, Capability.Photos));
+
+        Assert.Single(r.Rows);
+        Assert.Equal(ContentBranch.StillLoading(words: true, pictures: true), r.Note);
+        Assert.True(r.ModelsLoading);
+    }
+
+    [Fact]
+    public void OnceAModelArrivesItsHalfIsNoLongerSaidToBeLoading()
+    {
+        using ContentDb db = Open();
+        Put(db, 1, Path.Combine(_dir, "notes.txt"), ResultKind.Document, ContentDb.SegText, -1,
+            "the quarterly lease agreement and its deposit");
+        using var vectors = new VectorStore(VecPath);
+        using var semantic = new Semantic(vectors, text: null, image: null);
+        semantic.Expect(QueryEncoder.Words);
+        semantic.Expect(QueryEncoder.Pictures);
+
+        semantic.Supply(QueryEncoder.Words, _ => Axis(3), new MemoryStream());
+        SearchResults half = ContentBranch.Search(db, "deposit", 10, stat: ContentBranchTests.Here, semantic: semantic);
+        Assert.Equal(ContentBranch.StillLoading(words: false, pictures: true), half.Note);
+
+        semantic.Done(QueryEncoder.Pictures);   // tried, and it would not load: nothing is coming
+        SearchResults whole = ContentBranch.Search(db, "deposit", 10, stat: ContentBranchTests.Here, semantic: semantic);
+        Assert.Equal("", whole.Note);
+        Assert.False(whole.ModelsLoading);
     }
 
     [Fact]
@@ -130,7 +173,7 @@ public class SemanticBranchTests : IDisposable
         // go untested.
         var semantic = new Semantic(vectors, text: _ => Axis(1), image: null);   // no picture encoder
 
-        SearchResults r = ContentBranch.Search(db, "lease", 10, semantic: semantic,
+        SearchResults r = ContentBranch.Search(db, "lease", 10, stat: ContentBranchTests.Here, semantic: semantic,
                                                installed: Set(Capability.Meaning));
 
         Assert.Single(r.Rows);                       // the document, and no photo
@@ -157,7 +200,7 @@ public class SemanticBranchTests : IDisposable
         using var vectors = new VectorStore(VecPath);
         var semantic = new Semantic(vectors, text: null, image: _ => Axis(0));
 
-        SearchResults r = ContentBranch.Search(db, "a sunset", 10, semantic: semantic,
+        SearchResults r = ContentBranch.Search(db, "a sunset", 10, stat: ContentBranchTests.Here, semantic: semantic,
                                                installed: Set(Capability.Photos));
 
         Assert.Empty(r.Rows);
@@ -183,7 +226,7 @@ public class SemanticBranchTests : IDisposable
         using var vectors = new VectorStore(VecPath);
         var semantic = new Semantic(vectors, text: _ => Axis(3), image: null);
 
-        SearchResults r = ContentBranch.Search(db, "lease", 10, semantic: semantic,
+        SearchResults r = ContentBranch.Search(db, "lease", 10, stat: ContentBranchTests.Here, semantic: semantic,
                                                installed: Set(Capability.Meaning));
 
         Assert.Equal(2, r.Rows.Count);
@@ -200,7 +243,7 @@ public class SemanticBranchTests : IDisposable
             "the lease agreement is signed");
 
         using var vectors = new VectorStore(VecPath);
-        SearchResults r = ContentBranch.Search(db, "lease", 10,
+        SearchResults r = ContentBranch.Search(db, "lease", 10, stat: ContentBranchTests.Here,
                                                semantic: new Semantic(vectors, _ => Axis(3), null),
                                                installed: Set(Capability.Meaning));
 
@@ -224,7 +267,7 @@ public class SemanticBranchTests : IDisposable
         }
 
         using var vectors = new VectorStore(VecPath);
-        SearchResults r = ContentBranch.Search(db, "deposit", 10,
+        SearchResults r = ContentBranch.Search(db, "deposit", 10, stat: ContentBranchTests.Here,
                                                semantic: new Semantic(vectors, _ => Axis(5), null),
                                                installed: Set(Capability.Speech, Capability.Meaning));
 
@@ -256,7 +299,7 @@ public class SemanticBranchTests : IDisposable
         Put(db, 2, Path.Combine(_dir, "b.pdf"), ResultKind.Document, ContentDb.SegText, 1, "the tenant pays");
 
         using var vectors = new VectorStore(VecPath);
-        SearchResults r = ContentBranch.Search(db, "lease ext:pdf", 10,
+        SearchResults r = ContentBranch.Search(db, "lease ext:pdf", 10, stat: ContentBranchTests.Here,
                                                semantic: new Semantic(vectors, _ => Axis(3), null),
                                                installed: Set(Capability.Meaning));
 
@@ -271,7 +314,7 @@ public class SemanticBranchTests : IDisposable
         // machine; "this needs 270 MB" is about a capability. An index with nothing in it must
         // not be explained by a missing model.
         using ContentDb db = Open();
-        SearchResults r = ContentBranch.Search(db, "lease", 10, semantic: null, installed: CapabilitySet.None);
+        SearchResults r = ContentBranch.Search(db, "lease", 10, stat: ContentBranchTests.Here, semantic: null, installed: CapabilitySet.None);
 
         Assert.Empty(r.Rows);
         Assert.Contains("Nothing indexed yet", r.Note, StringComparison.Ordinal);

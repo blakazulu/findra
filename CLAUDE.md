@@ -57,7 +57,7 @@ findra.exe --searchprobe [query]      # end to end: which process answered, the 
 findra.exe --searchmodels             # models present, loading, agreeing; provider per runtime
 findra.exe --searchindex [file|folder|q:query|why:path]...   # indexed/queued; paths queue and
                                       # drain, q: queries, why:<path> explains ONE file, read-only
-findra.exe --searchshot out.png <state> [palette]   # forty-one states, listed below
+findra.exe --searchshot out.png <state> [palette]   # forty-three states, listed below
 findra.exe --searchtest               # engine self-check
 findra.exe --searchbench [out.md] [corpus]   # measured numbers, pasteable Markdown; `corpus` is
                                       # how many files it generates
@@ -65,12 +65,12 @@ findra.exe --version                  # print the version and log location, then
 ```
 
 The `--searchshot` states are `SearchShot.States`, and that list is the only definition of them.
-Fourteen draw the card, seven the settings window, eight the first-run screen and twelve the update
+Sixteen draw the card, seven the settings window, eight the first-run screen and twelve the update
 window:
 
 ```
-capsule  empty  indexing  contentmode  contentwaiting  typing  results  noresults  many  adv
-opening  openingempty  selected  starting
+capsule  empty  indexing  contentmode  contentwaiting  contentloading  typing  searching  results
+noresults  many  adv  opening  openingempty  selected  starting
 settings  settingsopening  settingssearches  settingscontent  settingsaddons  settingsremove  settingsabout
 updatechecking  updateuptodate  updateunreachable  updateavailable  updateavailablewinget  updatedownloading
 updatedownloadfailed  updateinstalling  updatedidnotrun  updatewinget  updatewingetfailed  updatereleases
@@ -80,6 +80,11 @@ firstrunfinished  firstrunready  firstrunnames  firstrunworking
 
 - `contentwaiting` is the Content pill NOT offering (reading on, nothing read yet), hovered on
   purpose: suppressing the hover fill is half of what makes a dead control read dead.
+- **The header's left says what the rows ARE** (the count and `Results.Query`, the query they
+  answer), **the right what is happening** (`searching…` over rows, a note, or the timing):
+  `SearchCardPainter.Header`. `searching` is the field ahead of its answer; `contentloading` a
+  words-only answer while `Semantic.Loading` (`ContentBranch.StillLoading`), which the card asks
+  again once the models are in (`SearchCardState.AskAgain`, on the tick).
 - Once answered, the first-run screen is the **welcome page** (`src/Findra/First/Welcome.cs`):
   where Findra lives (capsule, the hotkey that actually LANDED via `FirstRunWindow.NoteHotkey`, the
   tray), what happens now (bars, status, reading), About with two links, and "Open settings" (the
@@ -442,6 +447,29 @@ decoder never reaches the handler and `TakeNext` would return the same row. Adde
 `AddColumnIfMissing`, deliberately NOT a numbered migration (those decide staleness).
 
 **Indexing stops when the app quits** (the indexer is its child); the UI must say so.
+
+**A full pass removes as well as adds.** `QueueFeeder.FillFrom` queues a delete for every item on
+the volume the walk did not see, and drops queued rows it did not see (never a queued delete; an
+empty walk sweeps nothing). A delete event for a file only QUEUED takes its row off
+(`ForgetQueued`): the indexer reads by path, and a file replaced while it waited was being read
+under the dead number, a duplicate nothing could remove. Removals run `Indexer.RemoveBatch` at a
+time. Schema 7 is a `ReWalk` so older indexes get one sweeping pass.
+
+## The vector file
+
+**Never open `vectors.bin` by name; ask `ContentDb.VectorsPath()`.** `VectorCompaction` (run by
+the indexer between files, queue empty, every `CheckEvery`, only past `MinDeadRows` and
+`MinDeadShare`) copies the rows segments point at into `vectors-<utc>.bin`, and
+`ContentDb.Renumber` renumbers the segments AND writes `index:vectors` in one transaction: a
+mapped file cannot be shrunk or replaced. Readers call `Semantic.Follow` under
+`Semantic.SearchLock`, and `ContentBranch` re-asks a search whose file name changed between the
+scan and the segment lookup. `DeleteStale` removes old files once nothing maps them.
+
+- **`VectorStore.Search` takes every query in ONE pass**: the kind byte first, a row read only
+  when some query wants its kind, blocks split over half the cores, ties to the lower row.
+  `Reload` re-reads the kinds on every call (a delete changes no count).
+- **Content results drop files the disk no longer has** (`ResultMapper.Finish(keepMissing:
+  false)`); the name half keeps them. Content tests describe a disk with `ContentBranchTests.Here`.
 
 ## Capabilities and models
 

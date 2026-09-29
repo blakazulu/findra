@@ -348,6 +348,13 @@ public sealed record SearchCardState(
     }
 
     public static int CountOf(SearchResults r, int filter) => filter == 0 ? r.Rows.Count : Filtered(r, filter).Count;
+
+    /// <summary>Whether a content answer given while the query models were still loading should be
+    /// asked again now: they have finished, nothing is running, and the field still says what was
+    /// asked. Without it the words-only answer stayed on screen until the next keystroke.</summary>
+    public static bool AskAgain(SearchCardState s, bool stillLoading)
+        => s.Results.ModelsLoading && !stillLoading && !s.Searching && s.Content
+           && string.Equals(s.Results.Query, s.Query.Trim(), StringComparison.Ordinal);
 }
 
 /// <summary>The paint pass. Pure: state in, pixels out.</summary>
@@ -359,6 +366,38 @@ public static class SearchCardPainter
     /// ends of its own outline, and the only thing that catches that is a measurement.</summary>
     public const float PillTextSize = 12.5f;
     public const string ContentLabel = "Content";
+
+    /// <summary>The header line's two sizes: the count on the left, the note on the right.</summary>
+    public const float CountSize = 13.5f, NoteSize = 11.5f;
+
+    public const string SearchingLabel = "searching…";
+
+    /// <summary>
+    /// The header line's two halves. The left says what the rows ARE: how many, and the query
+    /// they answer - which, while a newer search runs, is the last one that landed, not the text
+    /// in the field. Labelled with the field, the old rows read as the answer to a question that
+    /// had not been answered yet, and a search still running looked finished. The right says what
+    /// is happening: a newer search is running, or the answer's own note, or how long it took.
+    /// With no rows on screen the left says the search is running instead, as it always has.
+    /// </summary>
+    public static (string Left, string Right) Header(SearchCardState s, int count)
+    {
+        string asked = s.Results.Query.Length > 0 ? s.Results.Query : s.Query.Trim();
+        string left = s.Searching && count == 0 ? SearchingLabel
+            : $"{count} result{(count == 1 ? "" : "s")} for “{asked}”";
+
+        string right;
+        if (s.Searching && count > 0) right = SearchingLabel;
+        else
+        {
+            right = s.Results.NamesMs > 0 ? $"names {s.Results.NamesMs:0.0} ms" : "";
+            if (s.Results.ContentReady && s.Results.ContentMs > 0)
+                right += (right.Length > 0 ? " · " : "") + $"content {s.Results.ContentMs:0} ms";
+            if (s.Results.Note.Length > 0) right = s.Results.Note;
+        }
+        if (s.Sort != SearchSort.Best) right = (s.Sort == SearchSort.Newest ? "newest first" : "largest first") + (right.Length > 0 ? " · " + right : "");
+        return (left, right);
+    }
 
     /// <summary>
     /// What the field says when nothing has been typed. Two of them, because the pill beside it
@@ -519,15 +558,9 @@ public static class SearchCardPainter
         }
 
         // ---- header line ----
-        string countLine = s.Searching && count == 0 ? "searching…"
-            : $"{count} result{(count == 1 ? "" : "s")} for “{s.Query.Trim()}”";
-        CardText.Draw(canvas, countLine, SearchCardLayout.Pad + 4, SearchCardLayout.HeaderTop + 12, 13.5f, face, dim);
-        string timing = s.Results.NamesMs > 0 ? $"names {s.Results.NamesMs:0.0} ms" : "";
-        if (s.Results.ContentReady && s.Results.ContentMs > 0)
-            timing += (timing.Length > 0 ? " · " : "") + $"content {s.Results.ContentMs:0} ms";
-        if (s.Results.Note.Length > 0) timing = s.Results.Note;
-        if (s.Sort != SearchSort.Best) timing = (s.Sort == SearchSort.Newest ? "newest first" : "largest first") + (timing.Length > 0 ? " · " + timing : "");
-        CardText.DrawRight(canvas, timing, SearchCardLayout.HeaderRight, SearchCardLayout.HeaderTop + 12, 11.5f, face, faint);
+        (string countLine, string timing) = Header(s, count);
+        CardText.Draw(canvas, countLine, SearchCardLayout.Pad + 4, SearchCardLayout.HeaderTop + 12, CountSize, face, dim);
+        CardText.DrawRight(canvas, timing, SearchCardLayout.HeaderRight, SearchCardLayout.HeaderTop + 12, NoteSize, face, faint);
 
         // ---- chips ----
         for (int i = 0; i < SearchCardLayout.ChipLabels.Length; i++)

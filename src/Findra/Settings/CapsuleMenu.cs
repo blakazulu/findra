@@ -4,7 +4,7 @@ namespace Findra;
 /// switches on; a separator carries an empty one.
 ///
 /// <para>There is deliberately no Enabled flag. Every line of this menu is always clickable -
-/// the palettes, the content toggle, Settings and Quit are all available in every state the
+/// the palettes, the content toggle, hiding, Settings and Quit are all available in every state the
 /// capsule can be in - so a flag would have been written true at every construction site and
 /// bound to a property that could never change. A field that cannot vary reads as live wiring
 /// and is not; if a line ever does need disabling, add it then, with the state that disables
@@ -25,7 +25,7 @@ public readonly record struct MenuEntry(string Header, string Command, bool Chec
 public static class CapsuleMenu
 {
     public static IReadOnlyList<MenuEntry> Items(
-        Config config, IReadOnlyList<Palette> palettes, bool windowsIsLight, bool indexerAlive)
+        Config config, IReadOnlyList<Palette> palettes, bool windowsIsLight, bool indexerAlive, string? hotkey)
     {
         ArgumentNullException.ThrowIfNull(config);
         ArgumentNullException.ThrowIfNull(palettes);
@@ -52,6 +52,13 @@ public static class CapsuleMenu
                 : "Look inside my files",
             "content", config.IndexContent));
         items.Add(MenuEntry.Separator);
+        // Says what still opens the card once the capsule is gone: the chord that landed, or the
+        // tray when none did, so nobody hides it believing in a shortcut that does nothing.
+        items.Add(new MenuEntry(
+            hotkey is null
+                ? "Hide the capsule (the tray icon still opens search)"
+                : $"Hide the capsule ({hotkey} still opens search)",
+            "hidecapsule", false));
         items.Add(new MenuEntry("Settings", "settings", false));
         items.Add(new MenuEntry("Quit", "quit", false));
         return items;
