@@ -5,6 +5,18 @@ All notable changes to Findra are documented here.
 The format follows [Keep a Changelog 1.1.0](https://keepachangelog.com/en/1.1.0/),
 and Findra follows [Semantic Versioning](https://semver.org/spec/v2.0.0/).
 
+## [0.7.2 - 29 September 2026](https://github.com/blakazulu/findra/releases/tag/v0.7.2)
+
+### Fixed
+
+- **The full look at every drive that an update can ask for is no longer skipped.** If an older
+  copy of Findra was still running against the same index when the update opened it, the older
+  copy could cancel the look for a drive, and files deleted or replaced while Findra was not
+  watching stayed in the index. A drive now stays marked until a look at it has finished.
+- **Running Findra's tests from source no longer writes into the installed Findra's log folder.**
+  The test run's lines were mixed into the logs used for bug reports, and the log's weekly
+  clean-up ran over that folder from inside the tests.
+
 ## [0.7.1 - 29 September 2026](https://github.com/blakazulu/findra/releases/tag/v0.7.1)
 
 ### Fixed

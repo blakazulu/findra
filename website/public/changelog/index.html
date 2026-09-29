@@ -129,7 +129,7 @@
       <span class="kicker">CHANGELOG</span>
       <h1>Every release, and what it changed for you.</h1>
       <div class="doc-meta">
-        <span class="d">Findra 0.7.1 &middot; last reviewed 2026-09-29</span>
+        <span class="d">Findra 0.7.2 &middot; last reviewed 2026-09-29</span>
         <a class="doc-chip on" href="/changelog.md">Read as Markdown</a>
         <a class="doc-chip" href="https://github.com/blakazulu/findra/blob/main/CHANGELOG.md" rel="noopener">History on GitHub</a>
       </div>
@@ -139,6 +139,15 @@
       <p>All notable changes to Findra are documented here.</p>
 
       <p>The format follows <a href="https://keepachangelog.com/en/1.1.0/">Keep a Changelog 1.1.0</a>, and Findra follows <a href="https://semver.org/spec/v2.0.0/">Semantic Versioning</a>.</p>
+
+      <h2><a href="https://github.com/blakazulu/findra/releases/tag/v0.7.2">0.7.2 - 29 September 2026</a></h2>
+
+      <h3>Fixed</h3>
+
+      <ul>
+        <li><strong>The full look at every drive that an update can ask for is no longer skipped.</strong> If an older copy of Findra was still running against the same index when the update opened it, the older copy could cancel the look for a drive, and files deleted or replaced while Findra was not watching stayed in the index. A drive now stays marked until a look at it has finished.</li>
+        <li><strong>Running Findra's tests from source no longer writes into the installed Findra's log folder.</strong> The test run's lines were mixed into the logs used for bug reports, and the log's weekly clean-up ran over that folder from inside the tests.</li>
+      </ul>
 
       <h2><a href="https://github.com/blakazulu/findra/releases/tag/v0.7.1">0.7.1 - 29 September 2026</a></h2>
 
