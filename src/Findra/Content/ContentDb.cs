@@ -331,7 +331,7 @@ CREATE TABLE IF NOT EXISTS opened(path TEXT PRIMARY KEY, count INTEGER NOT NULL,
         {
             if (m.To <= from || m.To > SchemaVersion) continue;
             _migrationsRun.Add(m.Reason);
-            if (m.ReWalk) ClearAllUsnPositions();
+            if (m.ReWalk) OweEveryVolumeAWalk();
             int forgiven = m.ResetAttempts ? ResetAttempts(m.InvalidatedKinds) : 0;
             // Indexer.Recheck, NOT the migration's prose, unless the step names its own reason.
             // RequeueKinds says it in its own note: the indexer dequeues a row untouched unless
@@ -673,6 +673,27 @@ CREATE TABLE IF NOT EXISTS opened(path TEXT PRIMARY KEY, count INTEGER NOT NULL,
     /// <summary>Discharged only by a completed full pass. Nothing else may call this.</summary>
     public void ClearWalkOwed(char volume, SqliteTransaction? tx = null)
         => Set("walk:" + char.ToUpperInvariant(volume), "0", tx);
+
+    /// <summary>
+    /// What a step that changes which files are eligible asks for: a full walk of every volume the
+    /// index knows, by a position or by a file it holds. The positions are forgotten AND the walk
+    /// is owed, because forgetting alone can be undone: anything that records a position
+    /// afterwards - an older Findra still running against the same index - puts back what was
+    /// forgotten, and that volume is never walked. The debt is a row only a completed walk clears.
+    /// </summary>
+    private void OweEveryVolumeAWalk()
+    {
+        var volumes = new SortedSet<char>(KnownVolumes());
+        using (var cmd = _c.CreateCommand())
+        {
+            cmd.CommandText = "SELECT DISTINCT vol FROM items";
+            using var r = cmd.ExecuteReader();
+            while (r.Read())
+                if (r.GetString(0) is { Length: > 0 } vol) volumes.Add(char.ToUpperInvariant(vol[0]));
+        }
+        foreach (char v in volumes) SetWalkOwed(v);
+        ClearAllUsnPositions();
+    }
 
     /// <summary>Every volume this index has ever recorded a position for.</summary>
     public IReadOnlyList<char> KnownVolumes()

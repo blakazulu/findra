@@ -456,7 +456,10 @@ the volume the walk did not see, and drops queued rows it did not see (never a q
 empty walk sweeps nothing). A delete event for a file only QUEUED takes its row off
 (`ForgetQueued`): the indexer reads by path, and a file replaced while it waited was being read
 under the dead number, a duplicate nothing could remove. Removals run `Indexer.RemoveBatch` at a
-time. Schema 7 is a `ReWalk` so older indexes get one sweeping pass.
+time. Schema 7 is a `ReWalk` so older indexes get one sweeping pass. **A `ReWalk` OWES every
+volume a walk** (`OweEveryVolumeAWalk`: positions and item volumes), not only forgets positions:
+an older build still running wrote positions back and C: and D: were never walked. Only a
+completed `FillFrom` clears the debt.
 
 ## The vector file
 
@@ -984,6 +987,10 @@ migration. The ported engine gets characterization tests only where Findra chang
 recorded sequence; `Autostart` takes an `IStore`. Ask what edit keeps the grepped string and breaks
 the behaviour (e.g. wrapping task removal in `if (!quiet)`). Text assertions only where there is no
 code to run: `installer/findra.iss` and the workflow YAML.
+
+**The test assembly never logs into `Paths.Logs`**: `TestLogFolder` (a module initializer) calls
+`Log.WriteTo(%TEMP%\findra-test-logs)`, held by `LogPlacementTests`. Test fixtures in the installed
+Findra's log made a bug-report log unreadable, and `Log.Prune` ran over it.
 
 **A subprocess is drained asynchronously and killed on a timeout.** `HelperTask.RunSchtasks` reads
 both of `schtasks`'s streams as tasks before waiting; `Register` reads the result of its own timeout.

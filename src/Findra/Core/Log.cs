@@ -55,7 +55,21 @@ public static class Log
         return $"uptime={(int)up.TotalHours}h{up.Minutes:00}m warns={Volatile.Read(ref _warns)} errors={Volatile.Read(ref _errors)}";
     }
 
-    public static string Dir => Paths.Ensure(Paths.Logs);
+    private static string? _dir;
+
+    /// <summary>Where the log goes: <see cref="Paths.Logs"/>, unless <see cref="WriteTo"/> said
+    /// otherwise.</summary>
+    public static string Dir => Paths.Ensure(_dir ?? Paths.Logs);
+
+    /// <summary>Send this process's log to <paramref name="dir"/> instead. For the test suite,
+    /// whose process is not Findra: logging into <see cref="Paths.Logs"/> mixed test fixtures into
+    /// the log of the Findra installed on the same machine, and the seven-day pruning ran over its
+    /// files. Called before the first line is written.</summary>
+    public static void WriteTo(string dir)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(dir);
+        _dir = dir;
+    }
 
     public static void Info(string cat, string msg) => Write("INFO ", cat, msg);
     public static void Warn(string cat, string msg) => Write("WARN ", cat, msg);

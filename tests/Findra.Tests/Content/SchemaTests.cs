@@ -356,6 +356,36 @@ public sealed class SchemaTests : IDisposable
     }
 
     [Fact]
+    public void AStepThatAsksForTheWholeDiskAgainCannotBeUndoneByAPositionWrittenAfterIt()
+    {
+        // Forgetting the positions is not enough on its own. Anything that records a position
+        // afterwards - an older Findra still running against the same index - puts back exactly
+        // what the step took away, and that drive is never walked. It happened once, on a machine
+        // where a newer build opened the index while the installed one kept reading the journal.
+        // The walk is OWED instead, and only a completed walk discharges that.
+        string path = Db();
+        var step = new[] { new ContentDb.Migration(2, [(int)ResultKind.Photo], "eligibility", ReWalk: true) };
+        using (var db = new ContentDb(path))
+        {
+            db.SetUsnPosition('C', journalId: 0xABCDEF, usn: 90210);
+            using (var tx = db.Begin())
+            {
+                // A drive with files in the index and no position recorded for it.
+                db.Upsert("D", 5, @"D:\a\lease.pdf", ResultKind.Document, 1, 1, ContentDb.StateIndexed, null, [], tx);
+                tx.Commit();
+            }
+            db.Set("schema", "1");
+        }
+
+        using (var db = new ContentDb(path, migrations: step))
+        {
+            db.SetUsnPosition('C', journalId: 0xABCDEF, usn: 90300);   // the older build, still running
+            Assert.True(db.WalkOwed('C'));
+            Assert.True(db.WalkOwed('D'));
+        }
+    }
+
+    [Fact]
     public void AStepThatOnlyChangesWhatIsStoredLeavesThePositionAlone()
     {
         // The other half, and the one that matters more: re-walking a finished disk for a change
