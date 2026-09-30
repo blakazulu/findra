@@ -105,11 +105,11 @@ const PAGES = [
     source: 'website/content/pages/install.html',
     twin: 'website/content/pages/install.md',
     kicker: 'Install',
-    title: 'Install Findra - winget, the installer, or from source',
+    title: 'Install Findra - Microsoft Store, winget, installer, or source',
     description:
-      'Install Findra with winget or the installer from the releases page, build it from source ' +
+      'Findra in Microsoft Store, with winget or the releases-page installer; build it from source ' +
       'with the .NET 10 SDK, and uninstall it cleanly.',
-    reviewed: '2026-09-22',
+    reviewed: '2026-09-30',
     ogType: 'website',
     markdown: 'install.md',
   },

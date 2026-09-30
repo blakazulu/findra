@@ -1,5 +1,9 @@
 # Findra
 
+[![Microsoft Store](docs/microsoft-store.svg)](https://apps.microsoft.com/detail/9p78z9kt48pr)
+
+Microsoft Store: https://apps.microsoft.com/detail/9p78z9kt48pr . Store packages receive updates through the Store, and the Store version may differ from the latest GitHub release.
+
 Desktop search for Windows. A capsule sits on your desktop; click it, or press a global
 hotkey, and it unfolds into a results card. It finds files by name the second it starts - 2.13 to 3.77 ms median across five
 measured queries, on the machine named under The numbers - and

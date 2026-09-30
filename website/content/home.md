@@ -41,6 +41,8 @@ https://findra-search.netlify.app/numbers/.
 
 ## Install
 
+Findra is listed in the [Microsoft Store](https://apps.microsoft.com/detail/9p78z9kt48pr). Store packages receive updates through the Store; the Store release can differ from the latest GitHub release.
+
 `winget install blakazulu.Findra` is the whole install. The installer on the releases page,
 https://github.com/blakazulu/findra/releases/latest, carries one for x64 and one for arm64 and has
 each new release first; the Windows Package Manager catalogue can take a few days to pick one up.
