@@ -633,10 +633,9 @@ person makes by looking; two are destructive and belong last.
 76. **Details for a bug report pastes as seven lines.** Settings > About > Copy, then paste into
     Notepad: version and install, Windows, processor and memory, every graphics adapter with the one
     Findra uses marked, add-ons, reading, and the line about `--searchmodels`.
-77. **The arm64 job is green on GitHub.** The first push after this change runs `ci.yml`'s `arm64`
-    job on `windows-11-arm`. Green, the README's "neither has an arm64 machine" can say the tests and
-    the headless diagnostics run on arm64 (processor only); red, what failed is the first arm64
-    finding.
+77. **The arm64 job is green on GitHub.** **Done on 30 September 2026**: run 36681375580, all 2303
+    tests and every headless mode passed on `windows-11-arm`, and every surface now says that is
+    all that has run on arm64 (processor only, no graphics card).
 
 ## What could not be verified in this project at all
 

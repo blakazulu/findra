@@ -145,8 +145,8 @@
         AMD and Intel processors, for AMD, Intel and NVIDIA graphics, for integrated graphics, and
         for machines with no usable accelerator at all - but only this configuration and the
         processor-only path have been measured. <b>AMD and Intel graphics have not been tested on
-        real hardware, and neither has an arm64 machine</b> - the arm64 build ships because keeping
-        it reachable costs nothing, not because it has been run. The paths Findra uses are
+        real hardware.</b> On arm64, only the test suite and the headless diagnostics have run, on
+        every push, on a GitHub runner with no graphics card; nothing here was measured there. The paths Findra uses are
         vendor-neutral by design so that they should work there; that is a decision rather than a
         measurement, and it is said here as one.
       </p>

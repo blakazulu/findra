@@ -634,8 +634,9 @@ speech              ─  whisper-turbo + [e5 pair]              550 MB (+1.04 GB
 Findra lands on AMD or Intel CPUs, NVIDIA / AMD / Intel GPUs, integrated or discrete, or none.
 **No capability may require a particular vendor**, and nothing may fail because of the silicon.
 
-**Everything has run on exactly one configuration: an x64 AMD CPU with a discrete NVIDIA card, plus
-the processor-only path on it.** No AMD or Intel GPU, integrated or discrete, and no arm64. **Say so
+**Everything has been measured on exactly one configuration: an x64 AMD CPU with a discrete NVIDIA
+card, plus the processor-only path on it.** No AMD or Intel GPU, integrated or discrete. On arm64 only
+the tests and the headless diagnostics have run (CI, no GPU, green since 30 September 2026). **Say so
 wherever a number or hardware claim is written - README, site and here.** Vendor-neutral chains are a
 design, not evidence; never report them as the same. The failures guarded against came from an AMD
 780M, so the untested hardware is the likeliest to break.
@@ -646,8 +647,9 @@ design, not evidence; never report them as the same. The failures guarded agains
   (whisper.cpp #2596). False rejection costs speed; false acceptance writes nonsense for ever.
 - **`ci.yml`'s `arm64` job runs build, tests, publish and `Check-Diagnostics.ps1` on
   `windows-11-arm`** (`WorkflowTests.TheArm64BuildIsRunOnArm64OnEveryPush`). No GPU there: it is
-  evidence for the processor path on arm64 only, and the README says "neither has an arm64
-  machine" until a green run of it exists.
+  evidence for the processor path on arm64 only, which is exactly what every surface says ("On
+  arm64, only the test suite and the headless diagnostics have run", held by `ReadmeTests` and
+  `WebsiteTests`). Nothing was measured there.
 - **Settings > About > "Details for a bug report" copies `MachineReport`** (version, install,
   Windows, CPU, RAM, every adapter with `MachineReport.Chosen` marked, add-ons). It opens no model
   and sends nothing; `--searchmodels` is still what says which chip each model runs on.

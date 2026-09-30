@@ -139,7 +139,7 @@ phone number and no postal address, deliberately - the contact page says why.
 - **First released**: 4 September 2026.
 - **Platform**: Windows 10 and 11 only, x64 and arm64. Not cross-platform.
 - **Price**: free. There is no paid tier, no trial, no licence key and nothing to buy.
-- **Version**: 0.3.0, released 22 September 2026. Installers for x64 and arm64 are on the releases
+- **Version**: 0.8.0, released 30 September 2026. Installers for x64 and arm64 are on the releases
   page, and `winget install blakazulu.Findra` installs Findra from the Windows Package Manager
   catalogue, which can trail a new release by a few days.
 - **Signing**: neither the installer nor the executables are signed. Windows warns about an
@@ -157,7 +157,8 @@ phone number and no postal address, deliberately - the contact page says why.
   an error: the capability degrades silently.
 - **Hardware**: every measurement here comes from one desktop with a discrete NVIDIA card,
   plus that machine's processor-only path. AMD and Intel graphics have not been tested on
-  real hardware, and neither has an arm64 machine. The paths are vendor-neutral by design;
+  real hardware. On arm64, only the test suite and the headless diagnostics have run, on
+  every push, on a GitHub runner with no graphics card. The paths are vendor-neutral by design;
   that is a decision rather than a measurement.
 - **Content indexing is off by default.** Filenames are searchable immediately; reading inside
   files never starts on its own.
@@ -186,8 +187,8 @@ supported configuration rather than a failure state: only the first pass through
 slower, because a query embeds one short string. When another program is working the graphics card hard, or something is running fullscreen, Findra stops reading, lets go of the models it had loaded, and carries on once the card has been free for a minute. `findra --searchmodels` prints which provider it
 chose and every one it turned down, with reasons. Everything has been measured on one desktop with
 a discrete NVIDIA card and on that machine's processor-only path; AMD and Intel graphics have not
-been tested on real hardware, and neither has an arm64 machine. The arm64 build ships because
-keeping it reachable costs nothing, not because it has been run.
+been tested on real hardware. On arm64, only the test suite and the headless diagnostics have
+run, on every push, on a GitHub runner with no graphics card.
 
 **Does it need administrator rights?** Once, for one call. A helper process opens the NTFS volume
 to read the file table, which is the only thing in Findra that needs them. Everything else runs at

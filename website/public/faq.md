@@ -64,8 +64,7 @@ passed over.
 
 No. Findra tries DirectML for the picture and meaning models and Vulkan for speech, and falls back
 to the processor when neither answers. The processor is a supported configuration rather than a
-failure state: only the first pass through your files is slower. When another program is working the graphics card hard, or something is running fullscreen, Findra stops reading, lets go of the models it had loaded, and carries on once the card has been free for a minute. Findra's published measurements come from one machine, and it has an NVIDIA card; AMD and Intel graphics have not been tested on real hardware, and
-neither has an arm64 machine.
+failure state: only the first pass through your files is slower. When another program is working the graphics card hard, or something is running fullscreen, Findra stops reading, lets go of the models it had loaded, and carries on once the card has been free for a minute. Findra's published measurements come from one machine, and it has an NVIDIA card; AMD and Intel graphics have not been tested on real hardware. On arm64, only the test suite and the headless diagnostics have run, on every push, on a GitHub runner with no graphics card.
 
 ## Does Findra need administrator rights?
 

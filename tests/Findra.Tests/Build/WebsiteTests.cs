@@ -1134,7 +1134,7 @@ public class WebsiteTests
         string text = Regex.Replace(WithoutComments(Repo.Read(path)), @"\s+", " ");
         Assert.Contains("AMD and Intel graphics have not been tested on real hardware",
                         text, StringComparison.Ordinal);
-        Assert.Contains("neither has an arm64 machine", text, StringComparison.Ordinal);
+        Assert.Contains("On arm64, only the test suite and the headless diagnostics have run", text, StringComparison.Ordinal);
 
         // Beside the numbers, not merely in the file. A disclosure a reader meets a screen after
         // the table it qualifies is one an extractor will never carry with the figures.

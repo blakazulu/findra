@@ -9,7 +9,7 @@ leaves your machine.
 - Source: https://github.com/blakazulu/findra
 - Licence: Apache-2.0
 - Platform: Windows 10 and 11, x64 and arm64
-- Version: 0.7.2
+- Version: 0.8.0
 
 ## We fixed Windows Search. You're welcome.
 
@@ -29,7 +29,8 @@ moment the results arrive.
 
 Machine: AMD Ryzen 9 9900X3D, 47.1 GB RAM, NVMe SSD, Findra 0.5.1, n=50 per query. These numbers
 are from one machine, and it has an NVIDIA card. AMD and Intel graphics have not been tested on
-real hardware, and neither has an arm64 machine. Every table is on
+real hardware. On arm64, only the test suite and the headless
+diagnostics have run, on every push, on a GitHub runner with no graphics card. Every table is on
 https://findra-search.netlify.app/numbers/.
 
 ## From a Findra user

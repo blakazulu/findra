@@ -7,6 +7,8 @@ and Findra follows [Semantic Versioning](https://semver.org/spec/v2.0.0/).
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-09-30
+
 ### Added
 
 - **USB sticks, memory cards and drives that are not NTFS are searched by name.** Before, only
@@ -34,6 +36,8 @@ and Findra follows [Semantic Versioning](https://semver.org/spec/v2.0.0/).
 - Documentation: continuous integration now builds, tests and runs the headless diagnostics on an
   arm64 Windows runner as well, so the arm64 installer is no longer shipped without ever having
   run.
+- Documentation: the README, the site and `llms.txt` now say what has run on arm64 - the tests and
+  the headless diagnostics, on a runner with no graphics card - instead of that nothing has.
 
 ### Fixed
 
@@ -1999,7 +2003,8 @@ all of it gets verified without a screen.
 - The named pipe is restricted to the current user, and the interface verifies the
   owner before trusting a connection.
 
-[Unreleased]: https://github.com/blakazulu/findra/compare/v0.7.2...HEAD
+[Unreleased]: https://github.com/blakazulu/findra/compare/v0.8.0...HEAD
+[0.8.0]: https://github.com/blakazulu/findra/compare/v0.7.2...v0.8.0
 [0.7.2]: https://github.com/blakazulu/findra/compare/v0.7.1...v0.7.2
 [0.7.1]: https://github.com/blakazulu/findra/compare/v0.7.0...v0.7.1
 [0.7.0]: https://github.com/blakazulu/findra/compare/v0.6.3...v0.7.0

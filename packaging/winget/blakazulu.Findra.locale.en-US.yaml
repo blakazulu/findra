@@ -1,6 +1,6 @@
 # yaml-language-server: $schema=https://aka.ms/winget-manifest.defaultLocale.1.6.0.schema.json
 PackageIdentifier: blakazulu.Findra
-PackageVersion: 0.7.2
+PackageVersion: 0.8.0
 PackageLocale: en-US
 Publisher: blakazulu
 PublisherUrl: https://github.com/blakazulu
@@ -13,7 +13,8 @@ Copyright: Copyright (c) 2026 blakazulu
 ShortDescription: Fast, private desktop search for Windows. A capsule on your desktop unfolds into a results card.
 Description: |-
   Findra searches your files by name in milliseconds, reading the NTFS master file table
-  directly and keeping it live from the change journal.
+  directly and keeping it live from the change journal. USB sticks, memory cards and drives in
+  other formats are searched by name too, for as long as they are plugged in.
 
   It can also search inside your files: the words in documents, what a photo shows, and what
   was said in a recording. That part is off until you turn it on, and the models it needs are

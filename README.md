@@ -199,9 +199,9 @@ discrete NVIDIA GPU, so they say what Findra does there and nothing about anywhe
 Findra is built to run on AMD and Intel processors, on AMD, Intel and NVIDIA graphics,
 on integrated graphics, and on machines with no usable accelerator at all - but of those,
 only this configuration and the processor-only path have actually been measured.
-**AMD and Intel graphics have not been tested on real hardware, and neither has an arm64
-machine** - the arm64 build ships because keeping it reachable costs nothing, not because it has
-been run. The vendor-neutral paths
+**AMD and Intel graphics have not been tested on real hardware.** On arm64, only the test suite
+and the headless diagnostics have run, on every push, on a GitHub runner with no graphics card;
+nothing on this page was measured there. The vendor-neutral paths
 are chosen precisely so that they should work there; that is a design decision, not a
 measurement, and it is written here as one. If you run Findra on one of those machines, Settings >
 About > Details for a bug report copies the processor, the graphics and which one Findra uses;

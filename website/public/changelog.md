@@ -5,6 +5,45 @@ All notable changes to Findra are documented here.
 The format follows [Keep a Changelog 1.1.0](https://keepachangelog.com/en/1.1.0/),
 and Findra follows [Semantic Versioning](https://semver.org/spec/v2.0.0/).
 
+## [0.8.0 - 30 September 2026](https://github.com/blakazulu/findra/releases/tag/v0.8.0)
+
+### Added
+
+- **USB sticks, memory cards and drives that are not NTFS are searched by name.** Before, only
+  fixed NTFS disks were, and a file on a stick simply did not come up. A stick plugged in while
+  Findra runs is listed within a few seconds, kept up to date while it stays in, and dropped from
+  results when it is pulled out. Disks formatted exFAT, FAT32 or ReFS (a Dev Drive) are included
+  too. Findra finds these files by name only and does not read inside them.
+- **What you open comes first.** Findra remembers the files you open or reveal from its search
+  window, and next time puts them ahead of results that match about as well. The empty search
+  window lists the ones you opened most recently, ready to open again. The list stays on this
+  computer and holds paths only, never what you typed. Settings > Opening it > "Put what I open
+  first" turns it off, and turning it off forgets the list.
+- **Findra works with a screen reader and the keyboard.** Every window Findra draws itself - the
+  search window, the capsule, Settings, the welcome screen and the update window - now tells
+  Narrator and other screen readers what is on it: each button, switch, choice and result, with
+  its name and state, and pressing one there does what a click does. Tab moves through Settings,
+  the welcome screen and the update window, with a ring showing where you are, and Enter or Space
+  presses what the ring is on. The search window says how many results arrived and names each
+  one as you move through them. The Advanced search panel is not described yet; its fields can be
+  typed into the search box as words, as always.
+- **Settings > About > Details for a bug report.** Copy puts a few lines on the clipboard: the
+  Findra version, Windows, the processor, memory, every graphics adapter with the one Findra uses
+  marked, and which add-ons are installed. It holds nothing about your files or searches and
+  sends nothing; paste it into an issue if you want to.
+
+### Fixed
+
+- **A copy from the Microsoft Store keeps finding file names after the Store updates it.** Each
+  Store update puts Findra in a new folder, and the task that starts the name helper still pointed
+  at the old one. Findra now notices at the first start after an update and registers the task
+  again, which asks for permission once.
+- **A copy from the Microsoft Store is updated by the Store.** It no longer asks GitHub for a newer
+  version; Check for updates says the Store keeps it up to date and opens Findra's page in the
+  Store, and Settings drops the switch for a check that never runs.
+- **"Start Findra when I sign in" works in a copy from the Microsoft Store.** It now turns on
+  Findra's entry under Settings > Apps > Startup instead of writing somewhere Windows never looks.
+
 ## [0.7.2 - 29 September 2026](https://github.com/blakazulu/findra/releases/tag/v0.7.2)
 
 ### Fixed

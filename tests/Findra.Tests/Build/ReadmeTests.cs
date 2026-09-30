@@ -233,7 +233,7 @@ public class ReadmeTests
 
         // The arm64 half, which the site is held to and this file was not - though the README is
         // the surface whose benchmark block is replaced wholesale on every regeneration.
-        Assert.Contains("neither has an arm64 machine",
+        Assert.Contains("On arm64, only the test suite and the headless diagnostics have run",
                         Regex.Replace(Readme, @"\s+", " "), StringComparison.Ordinal);
 
         // Above the fragment, not inside it. The fragment is quoted verbatim from the tool, and a
