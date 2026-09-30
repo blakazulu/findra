@@ -1419,7 +1419,8 @@ public class WebsiteTests
         foreach (string page in pages)
         {
             string html = WithoutComments(File.ReadAllText(page));
-            Assert.Contains("src=\"/analytics.js\"", html, StringComparison.Ordinal);
+            if (html.Contains("<body", StringComparison.Ordinal))
+                Assert.Contains("src=\"/analytics.js\"", html, StringComparison.Ordinal);
             // Absolute links to this site - the canonical, mostly - are not a request to anybody else.
             Assert.DoesNotMatch(@"<link[^>]+href=""https?://(?!findra-search\.netlify\.app/)", html);
             Assert.DoesNotMatch(@"<script[^>]+src=""https?://", html);

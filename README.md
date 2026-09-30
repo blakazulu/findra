@@ -294,7 +294,7 @@ Corpus for the extraction row: 10,000 generated .txt of 8 KB and 1,000 generated
 Your files, their names, their contents and your searches never leave your machine. There is
 no account, no cloud service, no analytics, no crash reporting and no telemetry.
 The marketing website has optional GA4 and Clarity analytics after explicit opt-in only;
-this does not change the desktop app. See [the privacy policy](PRIVACY.md#the-marketing-website-not-the-desktop-app).
+this does not change the desktop app. See [the privacy policy](PRIVACY.md).
 
 Findra makes exactly one request on its own, and it is written down here rather than
 buried (the other time it uses the network is a model download you asked for): an
