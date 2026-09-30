@@ -22,12 +22,12 @@ public static class SearchShot
     public static readonly IReadOnlyList<string> States =
     [
         "capsule", "empty", "indexing", "contentmode", "contentwaiting", "contentloading", "typing",
-        "searching", "results", "noresults", "many", "adv", "opening", "openingempty", "selected", "starting",
+        "searching", "results", "noresults", "many", "adv", "opening", "openingempty", "selected", "starting", "recent",
         "settings", "settingsopening", "settingssearches", "settingscontent", "settingsaddons",
         "settingsremove", "settingsabout",
         "updatechecking", "updateuptodate", "updateunreachable", "updateavailable", "updateavailablewinget",
         "updatedownloading", "updatedownloadfailed", "updateinstalling", "updatedidnotrun", "updatewinget",
-        "updatewingetfailed", "updatereleases",
+        "updatewingetfailed", "updatereleases", "updatestore",
         "firstrun", "firstruninstalled", "firstrunspeech", "firstrundownloading", "firstrunfinished",
         "firstrunready", "firstrunnames", "firstrunworking",
     ];
@@ -221,14 +221,16 @@ public static class SearchShot
         bool winget = state.Contains("winget", StringComparison.Ordinal);
         // "updatereleases" is a source build's offer: Open releases, and the words for a pull and
         // a rebuild.
-        string source = winget ? "winget" : state == "updatereleases" ? "source" : "installer";
+        // "updatestore" is a Microsoft Store copy, which the window never checks for.
+        string source = winget ? "winget" : state == "updatereleases" ? "source"
+                      : state == "updatestore" ? InstallSource.Store : "installer";
         UpdateView start = UpdateFlow.Start("1.3.0", source);
         UpdateView offer = start with { Step = UpdateStep.Available, Latest = "1.4.0", Installer = winget ? null : installer };
         UpdateView downloading = UpdateFlow.Go(offer).View with { Got = 36_000_000 };
 
         UpdateView v = state switch
         {
-            "updatechecking" => start,
+            "updatechecking" or "updatestore" => start,
             "updateuptodate" => start with { Step = UpdateStep.UpToDate, Latest = "1.3.0" },
             "updateunreachable" => start with { Step = UpdateStep.Unreachable },
             "updateavailable" or "updateavailablewinget" or "updatereleases" => offer,
@@ -388,7 +390,7 @@ public static class SearchShot
     {
         SearchCardState s = Build(state);
         int w = (int)Math.Ceiling(SearchCardLayout.WindowWidth);
-        int h = (int)Math.Ceiling(SearchCardLayout.WindowHeight(s.Rows.Count, s.HasQuery, s.AdvOpen, s.Progress.Show));
+        int h = (int)Math.Ceiling(SearchCardLayout.WindowHeight(s.Rows.Count, s.ShowsBody, s.AdvOpen, s.Progress.Show));
         var info = new SKImageInfo(w, h, SKColorType.Bgra8888, SKAlphaType.Premul);
         using SKSurface surface = SKSurface.Create(info);
         SearchCardPainter.Paint(surface.Canvas, s, d, face);
@@ -421,6 +423,32 @@ public static class SearchShot
                 Progress = IndexStatus.Pill(contentEnabled: true, nameof(ResultKind.Document),
                                             pending: 0, indexed: 12_480, alive: false),
             };
+
+        // The empty field over what was opened lately: the header names the list rather than a
+        // query, the stage says when the file was opened and carries no score. Built through the
+        // same When the card uses.
+        if (state == "recent")
+        {
+            DateTime now = new(2026, 9, 30, 12, 0, 0, DateTimeKind.Utc);
+            SearchResult Opened(ResultKind kind, string path, double daysAgo, long size) =>
+                new(kind, System.IO.Path.GetFileName(path), path, 0f, OpenedHistory.When(now.AddDays(-daysAgo), now),
+                    Size: size, Modified: new DateTime(2026, 9, 12, 19, 42, 0));
+            List<SearchResult> opened =
+            [
+                Opened(ResultKind.Document, @"C:\Users\rae\Documents\Finance\Q3-revenue-review.pdf", 0.1, 3_100_000),
+                Opened(ResultKind.Document, @"C:\Users\rae\Documents\הסכם-שכירות-2026.docx", 0.4, 88_000),
+                Opened(ResultKind.Photo, @"D:\Photos\2025\08 Crete\IMG_4471.HEIC", 1.2, 2_400_000),
+                Opened(ResultKind.File, @"F:\Talks\slides-final.pptx", 3.5, 12_800_000),
+                Opened(ResultKind.Folder, @"D:\Photos\Collections\Sunsets", 9, 0),
+            ];
+            var recent = new SearchResults("", opened, 0, 0, false);
+            return SearchCardState.Empty with
+            {
+                Results = recent, Rows = recent.Rows, Recent = true,
+                IndexLine = "index: 1.5M names · idle", Clock = 0.2,
+                StageDetail = "3.1 MB · 12 Sep 2026 19:42",
+            };
+        }
 
         // The card in content mode with nothing typed, which is two branches nothing else reached.
         //

@@ -579,14 +579,19 @@ public static class FirstRunPainter
         canvas.DrawLine(box.MidX - 1f, box.Bottom - 5f, box.Right - 4f, box.Top + 5f, stroke);
     }
 
+    /// <summary>The three switches' labels, in the order they are drawn. Named, because the
+    /// painter and <see cref="FirstRunAccess"/> both say them.</summary>
+    public static IReadOnlyList<string> SwitchLabels { get; } =
+        ["Look inside my files", "Check GitHub for a newer version", "Start Findra when I sign in"];
+
     private static void Switches(SKCanvas canvas, FirstRunState s, int rows, int limitRow,
                                  Derived d, SKTypeface face)
     {
         (string Label, bool On, FirstRunTarget Target)[] switches =
         [
-            ("Look inside my files", s.ContentOn, FirstRunTarget.Content),
-            ("Check GitHub for a newer version", s.CheckUpdates, FirstRunTarget.Updates),
-            ("Start Findra when I sign in", s.StartAtLogon, FirstRunTarget.Autostart),
+            (SwitchLabels[0], s.ContentOn, FirstRunTarget.Content),
+            (SwitchLabels[1], s.CheckUpdates, FirstRunTarget.Updates),
+            (SwitchLabels[2], s.StartAtLogon, FirstRunTarget.Autostart),
         ];
 
         for (int i = 0; i < switches.Length; i++)

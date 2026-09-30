@@ -81,13 +81,71 @@ $"""
     /// </summary>
     public static (HelperTaskState State, string Detail) Query()
     {
+        (HelperTaskState state, string detail, _) = QueryWithXml();
+        return (state, detail);
+    }
+
+    /// <summary>The program the registered task starts, or null when there is no task or it cannot
+    /// be read.</summary>
+    public static string? RecordedExe()
+    {
+        (HelperTaskState state, _, string xml) = QueryWithXml();
+        return state == HelperTaskState.Registered ? CommandIn(xml) : null;
+    }
+
+    /// <summary>
+    /// The <c>Command</c> of the task's one action, unquoted, from the XML form schtasks prints.
+    /// Null for anything that is not a task definition with one.
+    /// </summary>
+    public static string? CommandIn(string xml)
+    {
+        if (string.IsNullOrWhiteSpace(xml)) return null;
+        try
+        {
+            System.Xml.Linq.XDocument doc = System.Xml.Linq.XDocument.Parse(xml);
+            string? command = doc.Descendants().FirstOrDefault(e => e.Name.LocalName == "Command")?.Value;
+            command = command?.Trim().Trim('"').Trim();
+            return string.IsNullOrEmpty(command) ? null : command;
+        }
+        catch (System.Xml.XmlException) { return null; }
+    }
+
+    /// <summary>
+    /// Whether the registered task must be written again for the program that is running now.
+    /// A Microsoft Store update moves Findra to a new versioned folder, so inside a package any
+    /// difference means the task starts a copy that is no longer this one. Outside a package the
+    /// install folder never moves, and a different path is usually a second copy on purpose - a
+    /// build from source beside the installed one - so it is only rewritten when the program it
+    /// names is gone; rewriting it for every copy that runs would ask for permission each time
+    /// they took turns.
+    /// </summary>
+    public static bool NeedsRewriting(string? recorded, string running, bool packaged, Func<string, bool> exists)
+    {
+        ArgumentNullException.ThrowIfNull(running);
+        ArgumentNullException.ThrowIfNull(exists);
+        if (string.IsNullOrWhiteSpace(recorded) || string.IsNullOrWhiteSpace(running)) return false;
+        if (SamePath(recorded, running)) return false;
+        return packaged || !exists(recorded);
+    }
+
+    private static bool SamePath(string a, string b)
+    {
+        try { return string.Equals(Path.GetFullPath(a), Path.GetFullPath(b), StringComparison.OrdinalIgnoreCase); }
+        catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException)
+        {
+            return string.Equals(a, b, StringComparison.OrdinalIgnoreCase);
+        }
+    }
+
+    private static (HelperTaskState State, string Detail, string Xml) QueryWithXml()
+    {
         try
         {
             var psi = new ProcessStartInfo("schtasks",
                 $"/query /tn \"{TaskName}\" /xml ONE")
             { RedirectStandardOutput = true, RedirectStandardError = true, UseShellExecute = false, CreateNoWindow = true };
             using Process? p = Process.Start(psi);
-            if (p is null) return (HelperTaskState.Unknown, "schtasks could not be started");
+            if (p is null) return (HelperTaskState.Unknown, "schtasks could not be started", "");
 
             // Redirecting without draining can deadlock: the child blocks writing into a
             // full pipe buffer while we sit in WaitForExit. `/xml ONE` prints the entire
@@ -100,11 +158,12 @@ $"""
             {
                 try { p.Kill(entireProcessTree: true); } catch { }
                 Log.Warn("startup", "schtasks /query did not return within 5s");
-                return (HelperTaskState.Unknown, "schtasks did not return within 5s");
+                return (HelperTaskState.Unknown, "schtasks did not return within 5s", "");
             }
 
             Task.WaitAll([stdout, stderr], TimeSpan.FromSeconds(1));
-            if (p.ExitCode == 0) return (HelperTaskState.Registered, "");
+            if (p.ExitCode == 0)
+                return (HelperTaskState.Registered, "", stdout.IsCompletedSuccessfully ? stdout.Result : "");
 
             // A non-zero exit is almost always "no such task", but schtasks says so in the
             // user's own language, so do not try to read it - report the state and hand the
@@ -112,12 +171,12 @@ $"""
             // as parsing localized CSV headings.
             string why = stderr.IsCompletedSuccessfully ? stderr.Result.Trim() : "";
             if (why.Length > 0) Log.Warn("startup", $"schtasks /query exited {p.ExitCode}: {why}");
-            return (HelperTaskState.NotRegistered, why);
+            return (HelperTaskState.NotRegistered, why, "");
         }
         catch (Exception ex)
         {
             Log.Warn("startup", "task query failed: " + ex.Message);
-            return (HelperTaskState.Unknown, ex.Message);
+            return (HelperTaskState.Unknown, ex.Message, "");
         }
     }
 

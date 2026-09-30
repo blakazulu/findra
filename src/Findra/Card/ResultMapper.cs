@@ -71,11 +71,12 @@ public static class ResultMapper
     /// tests can describe a disk without having one; production passes <see cref="StatOf"/>.
     /// </summary>
     public static SearchResults Build(string query, IReadOnlyList<NameRow> rows, SearchQuery parsed,
-                                      SearchSort sort, double namesMs, Func<string, bool, Stat>? stat = null)
+                                      SearchSort sort, double namesMs, Func<string, bool, Stat>? stat = null,
+                                      Func<string, float>? lift = null)
     {
         var mapped = new List<SearchResult>(rows.Count);
         foreach (NameRow row in rows) mapped.Add(Map(row, Stat.Missing));
-        return new SearchResults(query, Finish(mapped, parsed, sort, stat), namesMs, 0, false);
+        return new SearchResults(query, Finish(mapped, parsed, sort, stat, lift: lift), namesMs, 0, false);
     }
 
     /// <summary>
@@ -103,10 +104,14 @@ public static class ResultMapper
     /// half asks for that: its rows come from an index that can outlive the file, and a row with
     /// nothing to preview and nothing to open is not an answer. The name half keeps them - its
     /// rows come from the drive as it is now.</para>
+    ///
+    /// <para><paramref name="lift"/> raises a row's score for ORDERING under the Best sort only -
+    /// what <see cref="OpenedHistory.Lift"/> gives a file somebody opens - and never the score the
+    /// row carries, which the card shows.</para>
     /// </summary>
     public static List<SearchResult> Finish(IReadOnlyList<SearchResult> rows, SearchQuery parsed,
                                             SearchSort sort, Func<string, bool, Stat>? stat = null,
-                                            bool keepMissing = true)
+                                            bool keepMissing = true, Func<string, float>? lift = null)
     {
         ArgumentNullException.ThrowIfNull(rows);
         ArgumentNullException.ThrowIfNull(parsed);
@@ -120,14 +125,22 @@ public static class ResultMapper
                 continue;
             list.Add(st.Found ? r with { Size = st.Size, Modified = st.Modified } : r);
         }
-        Order(list, sort);
+        Order(list, sort, lift);
         return list;
     }
 
     // A total order, not just a key: List.Sort is unstable, so equal scores would otherwise
     // shuffle between two runs of the same query and the card would appear to flicker.
-    private static void Order(List<SearchResult> rows, SearchSort sort)
+    private static void Order(List<SearchResult> rows, SearchSort sort, Func<string, float>? lift)
     {
+        if (sort == SearchSort.Best && lift is not null)
+        {
+            var key = new Dictionary<SearchResult, float>(ReferenceEqualityComparer.Instance);
+            foreach (SearchResult r in rows) key[r] = r.Score + lift(r.Path);
+            rows.Sort((a, b) => Rank.Compare(key[a], a.Path, key[b], b.Path));
+            return;
+        }
+
         switch (sort)
         {
             case SearchSort.Newest:

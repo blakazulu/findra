@@ -30,6 +30,9 @@ public interface ISettingsHost
     /// <summary>Remove an add-on's files (keeping any another add-on still needs) and, when
     /// <paramref name="forget"/>, re-read what it found so its findings are dropped.</summary>
     void RemoveAddOn(Capability addOn, bool forget);
+
+    /// <summary>Put the machine report on the clipboard.</summary>
+    void CopyReport();
 }
 
 public static class SettingsActions
@@ -56,6 +59,7 @@ public static class SettingsActions
             case SettingsAction.RecentreCapsule: host.RecentreCapsule(); return;
             case SettingsAction.StartIndexing: host.StartIndexing(); return;
             case SettingsAction.OpenLogs: host.OpenLogs(); return;
+            case SettingsAction.CopyReport: host.CopyReport(); return;
             case SettingsAction.OpenCodecStore: host.OpenCodecStore(argument); return;
 
             case SettingsAction.InstallCapability:

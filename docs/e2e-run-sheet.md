@@ -985,6 +985,18 @@ reinstall), open Settings, and open the card with a full page of results and Adv
 with the pointer, not offset from it), and text is smaller only where the screen needed it. This is
 the Store's 10.1.2.10 finding; `ScreenFitTests` holds only the arithmetic.
 
+### 6.12 (catalogue 73) A USB stick, plugged in and pulled out - eye
+
+**Do and pass:** catalogue 73, with the installed build and its helper running.
+
+### 6.13 (catalogue 74, 76) Recently opened, and the bug-report details - eye
+
+**Do and pass:** catalogue 74 and 76.
+
+### 6.14 (catalogue 75) Narrator, keyboard only - eye
+
+**Do and pass:** catalogue 75, with the mouse set aside for the whole step.
+
 ---
 
 # Phase 7 - Upgrade
@@ -1331,6 +1343,21 @@ has a greyed "Now on" line naming the release above Check for updates.
 **A failure at the download means** the host rule or the digest refused it: the window says
 which, and the log line under `update` names the host or the mismatch.
 
+### 9.11 (catalogue 71, 72) A Store copy across a Store update - Store, admin
+
+**Do:** after the Store has certified a build, install it from the Store, then let the Store
+install the next one. Start Findra after each.
+
+**Pass:** catalogue 71 and 72 as written: one permission prompt after the update and names still
+answer; the update window's Store step; the Startup apps entry follows the toggle.
+
+### 9.12 (catalogue 77) The arm64 job - eye
+
+**Do:** open the Actions tab after the first push carrying `ci.yml`'s `arm64` job.
+
+**Pass:** the job is green. Red is not a failure of this step: it is the first thing anybody has
+learned about Findra on arm64, and it goes into an issue.
+
 ---
 
 # What this run sheet cannot place
@@ -1347,8 +1374,10 @@ which, and the log line under `update` names the host or the mismatch.
   kept, the step cannot be run until one exists - a schema stamp cannot honestly be rolled back by
   hand, because that would test the migration against a database this build wrote, not one an older
   build did.
-- Nothing else in the catalogue is unplaceable. Every numbered item from 1 to 70, including 23a,
-  23b, 27a and 63 to 70, appears above exactly once, except catalogue 33, 42 and 50, which are each
+- **Step 9.11 (catalogue 71, 72)** needs a build the Store has certified and a second one it
+  delivers as an update; neither exists yet.
+- Nothing else in the catalogue is unplaceable. Every numbered item from 1 to 77, including 23a,
+  23b, 27a and 63 to 77, appears above exactly once, except catalogue 33, 42 and 50, which are each
   split across the phases where their halves become reachable.
 - **Step 6.9 is not a catalogue item.** The two dim behaviours are a rule in the specification and
   in `CLAUDE.md` that the catalogue never turned into a step, and they need two monitors to tell

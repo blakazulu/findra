@@ -230,9 +230,11 @@ public static class NameServer
             await writeLock.WaitAsync(sct).ConfigureAwait(false);
             try
             {
+                // A walked drive has no journal to resume, and nothing on it is read inside.
+                var journaled = views.Where(kv => !kv.Value.NamesOnly).ToList();
                 var answers = JournalTail.ResumeFrom(
-                    views.ToDictionary(kv => kv.Key, kv => kv.Value.JournalId),
-                    views.ToDictionary(kv => kv.Key, kv => kv.Value.NextUsn),
+                    journaled.ToDictionary(kv => kv.Key, kv => kv.Value.JournalId),
+                    journaled.ToDictionary(kv => kv.Key, kv => kv.Value.NextUsn),
                     req.From ?? []).ToList();
 
                 if (bus is null)
@@ -328,7 +330,7 @@ public static class NameServer
 
             NameIndex? ix = null;
             foreach ((char l, VolumeView v) in views)
-                if (char.ToUpperInvariant(l) == letter) { ix = v.Index; break; }
+                if (char.ToUpperInvariant(l) == letter && !v.NamesOnly) { ix = v.Index; break; }
 
             // A drive the helper does not hold, or a request that named nothing usable, still gets
             // an answer. A session that just stops replying looks exactly like a slow disk.
@@ -700,7 +702,7 @@ public static class NameServer
                 if (char.ToUpperInvariant(v) == char.ToUpperInvariant(letter)) lost += n;
 
             vols.Add(new VolumeStatus(letter, count, bytes, Live: true,
-                                      view.EnumerateMs, view.NextUsn, lost));
+                                      view.EnumerateMs, view.NextUsn, lost, view.NamesOnly));
         }
         return new StatusReply(Environment.ProcessId, vols, Environment.WorkingSet);
     }
@@ -718,7 +720,8 @@ public static class NameServer
     private static async Task RunAsync(CancellationTokenSource quitting)
     {
         CancellationToken ct = quitting.Token;
-        var views = new Dictionary<char, VolumeView>();
+        // Concurrent, because walked drives come and go while sessions read it.
+        var views = new ConcurrentDictionary<char, VolumeView>();
         var volumes = new List<NtfsVolume>();
         var tailed = new List<(NtfsVolume Volume, VolumeView View)>();
 
@@ -809,7 +812,17 @@ public static class NameServer
                 finally { vol?.Dispose(); }
             }
 
-            if (views.Count == 0) { Log.Error("names", "no volume could be read - is this running elevated?"); return; }
+            // Sticks, memory cards and disks that are not NTFS: walked, and looked for again every
+            // few seconds so one plugged in later is found too. Started before the first accept
+            // and walked in the background, so the fixed disks answer at once.
+            using var walked = new WalkedDrives(views, gate);
+            Task walking = Task.Run(() => walked.RunAsync(ct), CancellationToken.None);
+
+            if (views.IsEmpty && WalkedDrives.Candidates().Count == 0)
+            {
+                Log.Error("names", "no volume could be read - is this running elevated?");
+                return;
+            }
 
             // Building the indexes doubles every array several times and Trim copies each one
             // once more, so the pass leaves about half again the live index behind as free heap
@@ -827,6 +840,7 @@ public static class NameServer
 
             await ListenAsync(views, gate, bus, ReadGap, quitting.Cancel, ct).ConfigureAwait(false);
             try { await tail.ConfigureAwait(false); } catch (OperationCanceledException) { }
+            try { await walking.ConfigureAwait(false); } catch (OperationCanceledException) { }
 
             (bool Reachable, IReadOnlyList<JournalEvent> Events) ReadGap(char volume, ulong journalId, long fromUsn)
             {

@@ -11,11 +11,16 @@ public static class InstallSource
     /// none, which is itself the answer.</summary>
     public const string MarkerFile = "installed-by.txt";
 
+    /// <summary>A copy inside a Microsoft Store package. It has no marker file: the package itself
+    /// is the answer, and it is the one source that is known rather than recorded.</summary>
+    public const string Store = "store";
+
     private static readonly string[] Known = ["winget", "installer", "source"];
 
-    public static string Detect(string exeDir)
+    public static string Detect(string exeDir, bool packaged = false)
     {
         ArgumentNullException.ThrowIfNull(exeDir);
+        if (packaged) return Store;
         try
         {
             string path = Path.Combine(exeDir, MarkerFile);
@@ -35,10 +40,17 @@ public static class InstallSource
 
     /// <summary>What to record, given what is already recorded. Detection happens once; after that
     /// the config is the answer, because the marker file can be lost and the truth cannot change.
-    /// </summary>
-    public static string Resolve(Config config, string exeDir)
+    /// A package is the exception: it is not a guess, so a packaged copy is the Store's whatever an
+    /// earlier copy wrote down.</summary>
+    public static string Resolve(Config config, string exeDir, bool packaged = false)
     {
         ArgumentNullException.ThrowIfNull(config);
+        if (packaged) return Store;
         return string.IsNullOrWhiteSpace(config.InstallSource) ? Detect(exeDir) : config.InstallSource!;
     }
+
+    /// <summary>Whether a recorded source is the Store's, matched the way every other reader of
+    /// the source matches it.</summary>
+    public static bool IsStore(string? installSource) =>
+        string.Equals(installSource, Store, StringComparison.OrdinalIgnoreCase);
 }

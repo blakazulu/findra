@@ -18,12 +18,12 @@ public enum ControlId
 {
     None,
     Mode, DarkPalette, LightPalette, PalettesFile,
-    Hotkey, ShowCapsule, ResetCapsule, Autostart, Helper,
+    Hotkey, ShowCapsule, ResetCapsule, Autostart, RememberOpened, Helper,
     Drives, AddFolder,
     IndexContent, StartIndexing, IndexPower, Transcribe, Capability, VideoCodec,
     /// <summary>An installed add-on: Turn off / Turn on, and Remove.</summary>
     AddOn,
-    Version, Updates, CheckUpdates, CheckNow, InstalledVia, Logs, Removing,
+    Version, Updates, CheckUpdates, CheckNow, InstalledVia, Logs, Report, Removing,
 }
 
 /// <summary>
@@ -77,6 +77,10 @@ public enum SettingsAction
     /// <summary>Remove an add-on, answered in the Remove panel. The argument is the add-on's name,
     /// a bar, and "keep" or "forget" - what happens to what it already found.</summary>
     RemoveAddOn,
+
+    /// <summary>Copy a few lines about this computer's hardware for a bug report. To the
+    /// clipboard only: nothing is sent.</summary>
+    CopyReport,
 }
 
 /// <summary>What the painter draws. It switches on this and on nothing else.</summary>
@@ -194,6 +198,10 @@ public sealed record SettingsState(Config Config)
     /// never written to the configuration.</para>
     /// </summary>
     public IReadOnlySet<ControlId> Busy { get; init; } = new HashSet<ControlId>();
+
+    /// <summary>The machine report was copied in this window's session, so its button says so.
+    /// Transient, like <see cref="Busy"/>.</summary>
+    public bool ReportCopied { get; init; }
 
     /// <summary>Is this row waiting on something it started?</summary>
     public bool Waiting(ControlId id) => Busy.Contains(id);
@@ -343,6 +351,8 @@ public static class SettingsModel
         Control.Plain(ControlId.ResetCapsule, ControlKind.Button, "Bring the capsule back", "Reset its position",
             note: "For when it was dragged onto a monitor that is no longer there."),
         Control.Plain(ControlId.Autostart, ControlKind.Toggle, "Start Findra when I sign in", on: s.StartsAtLogon),
+        Control.Plain(ControlId.RememberOpened, ControlKind.Toggle, "Put what I open first", on: s.Config.RememberOpened,
+            note: "Remembers what you open from Findra, on this computer only, and lists it on the empty card. Off forgets it."),
         s.Helper == HelperTaskState.Registered
             ? Control.Plain(ControlId.Helper, ControlKind.Text, "The name helper", "registered",
                 note: "It runs while Findra does and reads file names. The only part needing administrator rights.")
@@ -382,7 +392,7 @@ public static class SettingsModel
         return
         [
             new Control(ControlId.Drives, ControlKind.Choice, "Drives", "", false, options, on,
-                        "Names come from every fixed volume whatever this says; this decides only what is read inside files.", 0),
+                        "Names come from every drive whatever this says; this decides only what is read inside files. USB sticks and memory cards are searched by name only.", 0),
             // The count is formatted invariantly, and it is the ONLY culture-sensitive format in
             // this file - which is why the culture test reads every section's Note as well as its
             // Value. Drop the Fixed argument and a German machine reads "31" as "31" but a
@@ -662,7 +672,7 @@ public static class SettingsModel
     /// <summary>What About says about updates: the last answer, in a sentence. Check now opens the
     /// update window, which is where anything is done about it.</summary>
     public static string AboutUpdateLine(string version, UpdateState state, string? latest, string? installSource) =>
-        state switch
+        InstallSource.IsStore(installSource) ? "The Microsoft Store keeps Findra up to date." : state switch
         {
             UpdateState.Available when latest is not null => UpdateCheck.Advice(installSource ?? "unknown", latest),
             UpdateState.Current when string.Equals(installSource, "winget", StringComparison.OrdinalIgnoreCase)
@@ -674,6 +684,13 @@ public static class SettingsModel
         };
 
     private static IReadOnlyList<Control> About(SettingsState s) =>
+        InstallSource.IsStore(s.Config.InstallSource)
+            ? [.. AboutRows(s).Where(c => c.Id != ControlId.CheckUpdates)]
+            : AboutRows(s);
+
+    // A Store copy has no check to switch off: the Store updates it and Findra sends nothing, so
+    // the toggle would be a control that changes nothing. Check now stays; it says so.
+    private static IReadOnlyList<Control> AboutRows(SettingsState s) =>
     [
         Control.Plain(ControlId.Version, ControlKind.Text, "Version", s.Version),
         Control.Plain(ControlId.Updates, ControlKind.Text, "Updates",
@@ -694,6 +711,10 @@ public static class SettingsModel
         // already looking for what to send somebody, and the Removing note stays last because it
         // is a closing statement rather than a control.
         Control.Plain(ControlId.Logs, ControlKind.Button, "Logs", "Open folder"),
+        // Beside Logs, because it is the other half of what a bug report needs: the log says what
+        // happened, this says on what. Findra has run on one kind of machine, so this is how the
+        // other kinds become evidence. No note: the pane is full, and the label says what it is for.
+        Control.Plain(ControlId.Report, ControlKind.Button, "Details for a bug report", s.ReportCopied ? "Copied" : "Copy"),
         Control.Plain(ControlId.Removing, ControlKind.Note, "",
             note: "Removing Findra: the uninstaller, or findra --uninstall, which also removes the scheduled task. " +
                   "It keeps your index and your models unless you ask it not to."),
@@ -814,10 +835,13 @@ public static class SettingsModel
             ControlId.VideoCodec when s.BlockedCodec is { } codec && VideoCodecStore.ProductFor(codec) is { } product =>
                 SettingsOutcome.Ask(s, SettingsAction.OpenCodecStore, product),
 
+            ControlId.RememberOpened =>
+                SettingsOutcome.Changed(s with { Config = c with { RememberOpened = !c.RememberOpened } }),
             ControlId.CheckUpdates =>
                 SettingsOutcome.Changed(s with { Config = c with { CheckForUpdates = !c.CheckForUpdates } }),
             ControlId.CheckNow => SettingsOutcome.Ask(s, SettingsAction.CheckNow),
             ControlId.Logs => SettingsOutcome.Ask(s, SettingsAction.OpenLogs),
+            ControlId.Report => SettingsOutcome.Ask(s with { ReportCopied = true }, SettingsAction.CopyReport),
 
             _ => SettingsOutcome.Nothing(s),
         };

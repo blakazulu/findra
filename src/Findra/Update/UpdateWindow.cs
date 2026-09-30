@@ -47,6 +47,10 @@ public sealed class UpdateWindow : Window
             e.Handled = true;
             Close();
         };
+        // Tab between the buttons, Enter or Space to press one. Tunnelling, so Tab is not taken
+        // by Avalonia's own focus navigation first.
+        AddHandler(KeyDownEvent, (_, e) => { if (_canvas.OnKey(e)) e.Handled = true; },
+            Avalonia.Interactivity.RoutingStrategies.Tunnel);
         // Only a person's close is refused while a hand-off runs: Alt+F4, not Findra quitting and
         // not Windows shutting down, which a refused close would hold up.
         Closing += (_, e) =>
@@ -62,6 +66,8 @@ public sealed class UpdateWindow : Window
     /// shrinks when the buttons go.</summary>
     public void ShowView(UpdateView v)
     {
+        // A new step is said out loud; a download's progress is not, or it would talk over itself.
+        if (_canvas.View.Step != v.Step) _canvas.Say(UpdateAccess.Announcement(v));
         _canvas.View = v;
         Fit();
         _canvas.InvalidateVisual();
@@ -82,7 +88,7 @@ public sealed class UpdateWindow : Window
     }
 
     // Fully qualified: a bare `Control` in this namespace binds to the settings model's record.
-    private sealed class UpdateCanvas : Avalonia.Controls.Control
+    private sealed class UpdateCanvas : Avalonia.Controls.Control, IAccessibleSurface
     {
         private readonly UpdateSession _session;
         private readonly Derived _derived;
@@ -129,6 +135,7 @@ public sealed class UpdateWindow : Window
         protected override void OnPointerPressed(PointerPressedEventArgs e)
         {
             Focus();
+            _ring = false;
             Point p = At(e);
             switch (UpdatePrompt.Press((float)p.X, (float)p.Y, UpdatePainter.Surface(View, Parts.Face),
                                        UpdatePrompt.Buttons(View), e.ClickCount))
@@ -146,8 +153,55 @@ public sealed class UpdateWindow : Window
             }
         }
 
-        public override void Render(DrawingContext context) =>
+        // ---- what a screen reader and the keyboard see ----
+
+        private string? _focusKey;
+        private bool _ring;
+        private AccessiblePeer? _peer;
+
+        public string AccessName => UpdateAccess.Name;
+        public IReadOnlyList<AccessNode> AccessNodes() => UpdateAccess.Nodes(View, Parts.Face);
+        public double AccessScale => Fit;
+        public string? FocusedKey => _focusKey;
+
+        public void AccessInvoke(AccessNode node)
+        {
+            switch (node.Key)
+            {
+                case "close": _session.PressClose(); return;
+                case "go": _session.PressGo(); return;
+            }
+        }
+
+        public void Say(string text) => _peer?.Say(text);
+
+        public bool OnKey(KeyEventArgs e)
+        {
+            if (e.Key == Key.Tab)
+            {
+                IReadOnlyList<AccessNode> nodes = AccessNodes();
+                _focusKey = AccessFocus.Next(nodes, _focusKey, back: e.KeyModifiers.HasFlag(KeyModifiers.Shift));
+                _ring = _focusKey is not null;
+                if (AccessFocus.Find(nodes, _focusKey) is { } node) _peer?.Say(node.Spoken);
+                InvalidateVisual();
+                return true;
+            }
+            if (e.Key is Key.Enter or Key.Space && AccessFocus.Find(AccessNodes(), _focusKey) is { } focused)
+            {
+                AccessInvoke(focused);
+                return true;
+            }
+            return false;
+        }
+
+        protected override Avalonia.Automation.Peers.AutomationPeer OnCreateAutomationPeer() =>
+            _peer = new AccessiblePeer(this, this);
+
+        public override void Render(DrawingContext context)
+        {
+            _peer?.Refresh();
             context.Custom(new DrawOp(new Rect(Bounds.Size), this));
+        }
 
         private sealed class DrawOp(Rect bounds, UpdateCanvas c) : ICustomDrawOperation
         {
@@ -164,6 +218,8 @@ public sealed class UpdateWindow : Window
                 canvas.Save();
                 canvas.Scale((float)c.Fit);
                 UpdatePainter.Paint(canvas, c.View, c._hover, c._derived, Parts.Face);
+                if (c._ring && AccessFocus.Find(c.AccessNodes(), c._focusKey) is { } focused)
+                    AccessRing.Draw(canvas, focused.Bounds, c._derived);
                 canvas.Restore();
             }
         }

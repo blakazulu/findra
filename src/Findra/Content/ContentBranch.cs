@@ -347,7 +347,8 @@ public static class ContentBranch
                                        SearchSort sort = SearchSort.Best,
                                        Func<string, bool, ResultMapper.Stat>? stat = null,
                                        Semantic? semantic = null,
-                                       CapabilitySet installed = default)
+                                       CapabilitySet installed = default,
+                                       Func<string, float>? lift = null)
     {
         ArgumentNullException.ThrowIfNull(db);
         var sw = Stopwatch.StartNew();
@@ -434,7 +435,7 @@ public static class ContentBranch
         //
         // And it drops a file the disk no longer has. The index outlives a delete the journal never
         // reported, and such a row can neither be previewed nor opened.
-        List<SearchResult> rows = ResultMapper.Finish([.. byPath.Values], q, sort, stat, keepMissing: false);
+        List<SearchResult> rows = ResultMapper.Finish([.. byPath.Values], q, sort, stat, keepMissing: false, lift: lift);
         if (rows.Count > max) rows.RemoveRange(max, rows.Count - max);
 
         // "No matches", "nothing has been read yet" and "this needs a model you have not got" are

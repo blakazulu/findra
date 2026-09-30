@@ -5,13 +5,15 @@ public enum UpdateStep
 {
     Checking, UpToDate, Unreachable, Available, Downloading, DownloadFailed,
     Installing, InstallerDidNotRun, Winget, WingetFailed,
+    /// <summary>A Microsoft Store copy: the Store updates it, so nothing is asked of GitHub.</summary>
+    Store,
 }
 
 /// <summary>What Update now does for this copy, by how it was installed.</summary>
 public enum UpdateRoute { Installer, Winget, Releases }
 
 /// <summary>The work a move asks the session to start.</summary>
-public enum UpdateAction { None, Check, Download, CancelDownload, RunInstaller, RunWinget, OpenReleases, Close }
+public enum UpdateAction { None, Check, Download, CancelDownload, RunInstaller, RunWinget, OpenReleases, OpenStore, Close }
 
 /// <summary>Everything the window shows, and everything the next move needs.</summary>
 public sealed record UpdateView(UpdateStep Step, string Version, string? InstallSource)
@@ -33,8 +35,16 @@ public readonly record struct UpdateMove(UpdateView View, UpdateAction Action);
 /// </summary>
 public static class UpdateFlow
 {
+    /// <summary>Where the window opens: checking, or for a Store copy the Store's own answer.</summary>
     public static UpdateView Start(string version, string? installSource) =>
-        new(UpdateStep.Checking, version, installSource);
+        new(Startup.InstallSource.IsStore(installSource) ? UpdateStep.Store : UpdateStep.Checking, version, installSource);
+
+    /// <summary>The first move: a check, unless there is nothing Findra may ask.</summary>
+    public static UpdateMove Begin(UpdateView v)
+    {
+        ArgumentNullException.ThrowIfNull(v);
+        return new(v, v.Step == UpdateStep.Checking ? UpdateAction.Check : UpdateAction.None);
+    }
 
     /// <summary>winget for a winget copy; the releases page for a source build, and for any copy
     /// whose release has no installer this machine can check; the installer for everything else,
@@ -74,7 +84,7 @@ public static class UpdateFlow
         {
             UpdateStep.Downloading => new(v with { Step = UpdateStep.Available, Got = 0 }, UpdateAction.CancelDownload),
             UpdateStep.UpToDate or UpdateStep.Unreachable or UpdateStep.Available or UpdateStep.DownloadFailed
-                or UpdateStep.InstallerDidNotRun or UpdateStep.WingetFailed => new(v, UpdateAction.Close),
+                or UpdateStep.InstallerDidNotRun or UpdateStep.WingetFailed or UpdateStep.Store => new(v, UpdateAction.Close),
             UpdateStep.Checking or UpdateStep.Installing or UpdateStep.Winget => new(v, UpdateAction.None),
             _ => throw new ArgumentOutOfRangeException(nameof(v), v.Step, "no close move for this step"),
         };
@@ -94,6 +104,7 @@ public static class UpdateFlow
                 _ => throw new ArgumentOutOfRangeException(nameof(v), Route(v), "no move for this route"),
             },
             UpdateStep.Unreachable => new(Start(v.Version, v.InstallSource), UpdateAction.Check),
+            UpdateStep.Store => new(v, UpdateAction.OpenStore),
             UpdateStep.DownloadFailed or UpdateStep.InstallerDidNotRun => Download(v),
             UpdateStep.Checking or UpdateStep.UpToDate or UpdateStep.Downloading or UpdateStep.Installing
                 or UpdateStep.Winget or UpdateStep.WingetFailed => new(v, UpdateAction.None),

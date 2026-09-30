@@ -37,6 +37,7 @@ public static class UpdatePrompt
             UpdateStep.InstallerDidNotRun => "The installer did not run",
             UpdateStep.Winget => $"Updating Findra to {Clean(v.Latest)}",
             UpdateStep.WingetFailed => "winget did not update Findra",
+            UpdateStep.Store => "The Microsoft Store updates Findra",
             _ => throw new ArgumentOutOfRangeException(nameof(v), v.Step, "no title for this step"),
         };
     }
@@ -72,6 +73,9 @@ public static class UpdatePrompt
             UpdateStep.Winget => "winget is installing it. Findra will close while it installs and open again when it is done.",
             UpdateStep.DownloadFailed or UpdateStep.InstallerDidNotRun or UpdateStep.WingetFailed =>
                 v.Problem ?? "Something went wrong. Nothing was installed.",
+            UpdateStep.Store =>
+                $"You have {v.Version}. This copy came from the Microsoft Store, which installs its updates. " +
+                "Open Store shows whether one is waiting.",
             _ => throw new ArgumentOutOfRangeException(nameof(v), v.Step, "no body for this step"),
         };
     }
@@ -85,7 +89,7 @@ public static class UpdatePrompt
             UpdateStep.Available => "Not now",
             UpdateStep.Downloading => "Cancel",
             UpdateStep.UpToDate or UpdateStep.Unreachable or UpdateStep.DownloadFailed
-                or UpdateStep.InstallerDidNotRun or UpdateStep.WingetFailed => "Close",
+                or UpdateStep.InstallerDidNotRun or UpdateStep.WingetFailed or UpdateStep.Store => "Close",
             UpdateStep.Checking or UpdateStep.Installing or UpdateStep.Winget => "",
             _ => throw new ArgumentOutOfRangeException(nameof(v), v.Step, "no close label for this step"),
         };
@@ -99,6 +103,7 @@ public static class UpdatePrompt
         {
             UpdateStep.Available => UpdateFlow.Route(v) == UpdateRoute.Releases ? "Open releases" : "Update now",
             UpdateStep.Unreachable or UpdateStep.DownloadFailed or UpdateStep.InstallerDidNotRun => "Try again",
+            UpdateStep.Store => "Open Store",
             UpdateStep.Checking or UpdateStep.UpToDate or UpdateStep.Downloading or UpdateStep.Installing
                 or UpdateStep.Winget or UpdateStep.WingetFailed => "",
             _ => throw new ArgumentOutOfRangeException(nameof(v), v.Step, "no go label for this step"),
@@ -110,7 +115,8 @@ public static class UpdatePrompt
         ArgumentNullException.ThrowIfNull(v);
         return v.Step switch
         {
-            UpdateStep.Available or UpdateStep.Unreachable or UpdateStep.DownloadFailed or UpdateStep.InstallerDidNotRun => 2,
+            UpdateStep.Available or UpdateStep.Unreachable or UpdateStep.DownloadFailed or UpdateStep.InstallerDidNotRun
+                or UpdateStep.Store => 2,
             UpdateStep.UpToDate or UpdateStep.Downloading or UpdateStep.WingetFailed => 1,
             UpdateStep.Checking or UpdateStep.Installing or UpdateStep.Winget => 0,
             _ => throw new ArgumentOutOfRangeException(nameof(v), v.Step, "no button count for this step"),

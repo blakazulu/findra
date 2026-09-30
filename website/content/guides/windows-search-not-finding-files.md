@@ -26,8 +26,9 @@ else is found slowly or not at all. Settings > Privacy & security > Searching Wi
 files offers Enhanced, which indexes the whole PC, and Customize search locations adds a single
 folder.
 
-Findra has no list of places to include. Every name on every NTFS volume is searchable from the
-start. When you ask it to read inside files it reads every drive except the folders on its
+Findra has no list of places to include. Every name on every drive, USB sticks and memory cards
+included, is searchable from the start. When you ask it to read inside files it reads every fixed
+drive except the folders on its
 exclusion list, which starts with build and package folders such as `node_modules`, `.git`, `bin`
 and `obj`, and which you can read and change in Settings.
 

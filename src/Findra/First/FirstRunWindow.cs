@@ -65,6 +65,10 @@ public sealed class FirstRunWindow : Window
 
         _canvas = new FirstRunCanvas(state, palette, this);
         Content = _canvas;
+        // Tab walks the page, Enter and Space press what it is on. Tunnelling, so Tab reaches the
+        // page before Avalonia's own focus navigation: every control on it is drawn.
+        AddHandler(KeyDownEvent, (_, e) => { if (_canvas.OnKey(e)) e.Handled = true; },
+            Avalonia.Interactivity.RoutingStrategies.Tunnel);
 
         Title = "Welcome to Findra";
         WindowDecorations = Avalonia.Controls.WindowDecorations.None;
@@ -150,7 +154,7 @@ public sealed class FirstRunWindow : Window
     // `Findra.Control`, and a type in this file's own namespace beats one arriving through a using
     // directive - so a bare `Control` here binds to a sealed record. CardWindow and CapsuleWindow
     // are written the same way.
-    private sealed class FirstRunCanvas : Avalonia.Controls.Control
+    private sealed class FirstRunCanvas : Avalonia.Controls.Control, IAccessibleSurface
     {
         private readonly FirstRunWindow _owner;
 
@@ -336,14 +340,23 @@ public sealed class FirstRunWindow : Window
         protected override void OnPointerPressed(PointerPressedEventArgs e)
         {
             Focus();
+            _ring = false;          // the pointer is in use; the keyboard's ring steps aside
+            PressAt(At(e), e);
+        }
+
+        /// <summary>A press at a point in layout units: the pointer's, or the centre of an element
+        /// pressed from the keyboard or by a screen reader. <paramref name="e"/> is null for those,
+        /// and only the title strip's drag needs it.</summary>
+        private void PressAt(Point p, PointerPressedEventArgs? e)
+        {
             // Nothing answers while the work card is up - not the page, not the title strip.
             if (_state.Work is not null) return;
-            Point p = At(e);
             FirstRunHit hit = HitAt(p);
 
             // The title strip is the only place a borderless window can be picked up by.
             if (hit.Target == FirstRunTarget.None && p.Y < FirstRunLayout.TileTop)
             {
+                if (e is null) return;
                 try { _owner.BeginMoveDrag(e); }
                 catch (Exception ex) { Log.Warn("firstrun", "the window would not move: " + ex.Message); }
                 return;
@@ -425,8 +438,50 @@ public sealed class FirstRunWindow : Window
             catch (Exception ex) { Log.Warn("firstrun", $"could not open {url}: {ex.Message}"); }
         }
 
+        // ---- what a screen reader and the keyboard see ----
+
+        private string? _focusKey;
+        private bool _ring;
+        private AccessiblePeer? _peer;
+
+        public string AccessName => FirstRunAccess.Name;
+        public IReadOnlyList<AccessNode> AccessNodes() => FirstRunAccess.Nodes(_state);
+        public double AccessScale => Fit;
+        public string? FocusedKey => _focusKey;
+
+        public void AccessInvoke(AccessNode node)
+        {
+            PressAt(new Point(node.Bounds.MidX, node.Bounds.MidY), null);
+            if (AccessFocus.Find(AccessNodes(), node.Key) is { } after) _peer?.Say(after.Spoken);
+        }
+
+        public bool OnKey(KeyEventArgs e)
+        {
+            if (e.Key == Key.Tab)
+            {
+                IReadOnlyList<AccessNode> nodes = AccessNodes();
+                _focusKey = AccessFocus.Next(nodes, _focusKey, back: e.KeyModifiers.HasFlag(KeyModifiers.Shift));
+                _ring = _focusKey is not null;
+                if (AccessFocus.Find(nodes, _focusKey) is { } node) _peer?.Say(node.Spoken);
+                InvalidateVisual();
+                return true;
+            }
+            if (e.Key is Key.Enter or Key.Space && AccessFocus.Find(AccessNodes(), _focusKey) is { } focused)
+            {
+                AccessInvoke(focused);
+                return true;
+            }
+            return false;
+        }
+
+        protected override Avalonia.Automation.Peers.AutomationPeer OnCreateAutomationPeer() =>
+            _peer = new AccessiblePeer(this, this);
+
         public override void Render(DrawingContext context)
-            => context.Custom(new DrawOp(new Rect(Bounds.Size), this));
+        {
+            _peer?.Refresh();
+            context.Custom(new DrawOp(new Rect(Bounds.Size), this));
+        }
 
         private sealed class DrawOp : ICustomDrawOperation
         {
@@ -445,6 +500,8 @@ public sealed class FirstRunWindow : Window
                 canvas.Save();
                 canvas.Scale((float)_c.Fit);
                 FirstRunPainter.Paint(canvas, _c._state, _c._derived, _c._face);
+                if (_c._ring && AccessFocus.Find(_c.AccessNodes(), _c._focusKey) is { } focused)
+                    AccessRing.Draw(canvas, focused.Bounds, _c._derived);
                 canvas.Restore();
             }
         }

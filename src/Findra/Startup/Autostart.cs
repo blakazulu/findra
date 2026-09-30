@@ -36,8 +36,13 @@ public static class Autostart
         void Remove();
     }
 
-    /// <summary>The only implementation anything but a test uses.</summary>
-    public static IStore RunKey { get; } = new CurrentUserRunKey();
+    /// <summary>The TaskId of the <c>windows.startupTask</c> in packaging/store/Package.appxmanifest.</summary>
+    public const string PackageTaskId = "FindraStartup";
+
+    /// <summary>The only implementation anything but a test uses: the Run key, or inside a Store
+    /// package - where a Run-key write is redirected into the package and reaches nobody - the
+    /// package's own sign-in entry, which Settings > Apps > Startup lists.</summary>
+    public static IStore RunKey { get; } = Packaged.IsPackaged ? new PackageStartupTask() : new CurrentUserRunKey();
 
     /// <summary>Quoted, always. An unquoted path with a space in it makes Windows run the first
     /// word and pass the rest as arguments, at every sign-in, with no error anywhere.</summary>
@@ -68,7 +73,9 @@ public static class Autostart
     /// writes a mark beside it whose first byte is odd (01 or 03, then the time it was switched
     /// off); 02 or no mark at all means on.
     /// </summary>
-    public static bool StartsAtSignIn() => StartsAtSignIn(RunKey, ReadApproval);
+    public static bool StartsAtSignIn() =>
+        // A package's entry already says whether Startup apps switched it off; there is no mark.
+        StartsAtSignIn(RunKey, Packaged.IsPackaged ? () => null : ReadApproval);
 
     public static bool StartsAtSignIn(IStore store, Func<byte[]?> approval)
     {
@@ -121,6 +128,35 @@ public static class Autostart
             Log.Info("startup", "the autostart entry was removed");
         }
         catch (Exception ex) { Log.Warn("startup", "could not remove the autostart entry: " + ex.Message); }
+    }
+
+    /// <summary>
+    /// The <c>windows.startupTask</c> the package manifest declares. Its state is the whole answer:
+    /// Read names it only when Windows will start Findra, so an entry switched off under Startup
+    /// apps reads as off, as the Run key's mark does. Turning it back on from inside Findra after
+    /// the person switched it off there is refused by Windows, and the switch then reads off
+    /// again - the log says where to turn it on.
+    /// </summary>
+    [System.Runtime.Versioning.SupportedOSPlatform("windows10.0.19041.0")]
+    private sealed class PackageStartupTask : IStore
+    {
+        private static Windows.ApplicationModel.StartupTask Task() =>
+            Windows.ApplicationModel.StartupTask.GetAsync(PackageTaskId).AsTask().GetAwaiter().GetResult();
+
+        public string? Read() =>
+            Task().State is Windows.ApplicationModel.StartupTaskState.Enabled
+                         or Windows.ApplicationModel.StartupTaskState.EnabledByPolicy
+                ? PackageTaskId : null;
+
+        public void Write(string value)
+        {
+            Windows.ApplicationModel.StartupTaskState state = Task().RequestEnableAsync().AsTask().GetAwaiter().GetResult();
+            if (state is not (Windows.ApplicationModel.StartupTaskState.Enabled or Windows.ApplicationModel.StartupTaskState.EnabledByPolicy))
+                throw new InvalidOperationException(
+                    $"Windows kept the sign-in entry {state}; it can be turned on in Settings > Apps > Startup");
+        }
+
+        public void Remove() => Task().Disable();
     }
 
     private sealed class CurrentUserRunKey : IStore

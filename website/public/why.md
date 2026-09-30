@@ -27,7 +27,7 @@ answered, and no web results are mixed in among your own files.
 - **The index had not got to it.** You saved the file. The indexer runs at 3 AM. Findra: names are
   live, always.
 - **That folder was not included.** There is a settings page listing which of your own drives
-  Windows is willing to look at. Findra: every NTFS volume.
+  Windows is willing to look at. Findra: every drive, USB sticks included.
 - **You only remembered the sentence.** Not what you called the file. Findra: inside documents too.
 - **It sent the question upstream.** You typed a private filename into a box on your own computer
   and something went over the wire about it. Findra: nothing leaves.

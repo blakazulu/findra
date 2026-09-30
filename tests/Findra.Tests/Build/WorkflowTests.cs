@@ -418,6 +418,24 @@ public class WorkflowTests
     }
 
     [Fact]
+    public void TheArm64BuildIsRunOnArm64OnEveryPush()
+    {
+        // The arm64 installer ships in every release and an x64 runner cannot execute it, so
+        // before this job nothing had ever run that build. The job must be on an arm64 runner, and
+        // it must test, publish the arm64 build and run its diagnostics - building alone proves
+        // only that it compiles.
+        string yaml = Ci;
+        int job = yaml.IndexOf("runs-on: windows-11-arm", StringComparison.Ordinal);
+        Assert.True(job >= 0, "no CI job runs on an arm64 runner");
+        string rest = yaml[job..];
+        int next = Regex.Match(rest, @"\r?\n  [A-Za-z0-9_-]+:\s*\r?\n").Index;
+        string block = next > 0 ? rest[..next] : rest;
+        Assert.Contains("dotnet test", block, StringComparison.Ordinal);
+        Assert.Contains("Publish.ps1 -Rid win-arm64", block, StringComparison.Ordinal);
+        Assert.Contains("Check-Diagnostics.ps1 -Exe publish/win-arm64/findra.exe", block, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void TheDiagnosticsCheckCoversEveryModeTheProgramAdvertises()
     {
         // Extracted from Program.Main's own switch, so adding a mode without adding it here fails

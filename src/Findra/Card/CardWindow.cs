@@ -55,10 +55,11 @@ public sealed class CardWindow : Window
     /// model has. <paramref name="installed"/> is read once when the shell starts, never per
     /// keystroke, and only decides what an empty answer may offer.</para></summary>
     public CardWindow(Palette palette, double scale, ContentDb? content = null,
-                      Semantic? semantic = null, CapabilitySet installed = default)
+                      Semantic? semantic = null, CapabilitySet installed = default,
+                      OpenedHistory? opened = null)
     {
         Derived derived = Derived.From(palette);
-        _canvas = new CardCanvas(derived, scale, content, semantic, installed);
+        _canvas = new CardCanvas(derived, scale, content, semantic, installed, opened);
         Content = _canvas;
 
         Title = "Findra";
@@ -144,7 +145,7 @@ public sealed class CardWindow : Window
     // this file's own namespace beats one arriving through a using directive - so a bare `Control`
     // here binds to a sealed record. A using alias cannot fix it: inside the namespace it collides
     // with the member, and outside it loses to the member.
-    private sealed class CardCanvas : Avalonia.Controls.Control
+    private sealed class CardCanvas : Avalonia.Controls.Control, IAccessibleSurface
     {
         private readonly Derived _derived;
         private readonly SKTypeface _face;
@@ -237,11 +238,16 @@ public sealed class CardWindow : Window
         public event Action<bool>? ReadingRequested;
 
         public double CardWidth => SearchCardLayout.WindowWidth * _scale;
-        public double CardHeight => SearchCardLayout.WindowHeight(_state.Rows.Count, _state.HasQuery, _state.AdvOpen, _state.Progress.Show) * _scale;
+        public double CardHeight => SearchCardLayout.WindowHeight(_state.Rows.Count, _state.ShowsBody, _state.AdvOpen, _state.Progress.Show) * _scale;
+
+        /// <summary>What was opened from the card; null when Settings says not to remember.</summary>
+        private readonly OpenedHistory? _opened;
 
         public CardCanvas(Derived derived, double scale, ContentDb? db,
-                          Semantic? semantic = null, CapabilitySet installed = default)
+                          Semantic? semantic = null, CapabilitySet installed = default,
+                          OpenedHistory? opened = null)
         {
+            _opened = opened;
             _db = db;
             _semantic = semantic;
             _installed = installed;
@@ -573,19 +579,25 @@ public sealed class CardWindow : Window
 
         private void SetQuery(string q, int caret = -1)
         {
-            bool had = _state.HasQuery;
+            bool had = _state.ShowsBody;
             if (caret < 0) caret = q.Length;
             _state = _state with { Query = q, Caret = Math.Clamp(caret, 0, q.Length), CaretSlot = -1, Anchor = -1,
                 Searching = q.Trim().Length > 0, QueryAdv = SearchQuery.IsAdvanced(q) };
+            // The recently opened rows answer nothing typed; the first keystroke takes them away
+            // rather than letting them stand under "results for" the new text until it is answered.
+            if (q.Trim().Length > 0 && _state.Recent)
+                _state = _state with { Results = SearchResults.Empty, Rows = Array.Empty<SearchResult>(), Highlight = 0, Scroll = 0,
+                                       StageImage = null, StageDetail = "", Recent = false };
             if (q.Trim().Length == 0)
             {
                 // Nothing is written, so the wire's gate can never see this: the abandoned
                 // generation is what stops an answer to the old text painting over an empty card,
                 // and it is checked on the UI thread, where the post lands.
                 _gate.Abandon();
-                _state = _state with { Results = SearchResults.Empty, Rows = Array.Empty<SearchResult>(), Highlight = 0, Scroll = 0, Searching = false, StageImage = null, StageDetail = "" };
+                _state = _state with { Results = SearchResults.Empty, Rows = Array.Empty<SearchResult>(), Highlight = 0, Scroll = 0, Searching = false, StageImage = null, StageDetail = "", Recent = false };
+                ShowRecent();
             }
-            if (had != _state.HasQuery) CardResized?.Invoke();
+            if (had != _state.ShowsBody) CardResized?.Invoke();
             InvalidateVisual();
             _debounce.Stop();
             _debounce.Start();
@@ -917,7 +929,7 @@ public sealed class CardWindow : Window
                     // MaxRows * 8: the card shows eight rows and scrolls through the rest.
                     lock (_dbGate)
                         r = ContentBranch.Search(db, raw, SearchCardLayout.MaxRows * 8, sort,
-                                                 semantic: _semantic, installed: _installed);
+                                                 semantic: _semantic, installed: _installed, lift: Lift);
                 }
             }
             catch (Exception ex)
@@ -981,7 +993,7 @@ public sealed class CardWindow : Window
                 // visible hitch if it lands on the UI thread. `size:` and `modified:` are applied
                 // in there too - the helper holds names, not directory entries, and answers those
                 // filters unfiltered by design.
-                r = ResultMapper.Build(raw, reply!.Rows, new SearchQuery(raw), sort, ms);
+                r = ResultMapper.Build(raw, reply!.Rows, new SearchQuery(raw), sort, ms, lift: Lift);
             }
             catch (ObjectDisposedException) when (_life.IsCancellationRequested)
             {
@@ -1026,6 +1038,7 @@ public sealed class CardWindow : Window
                 _state = _state with { Results = r, Rows = rows, Highlight = 0, Scroll = 0, Searching = false };
                 if (rows.Count != before) CardResized?.Invoke();
                 HighlightChanged();
+                _peer?.Say(CardAccess.Arrived(_state));
                 InvalidateVisual();
             });
         }
@@ -1047,7 +1060,51 @@ public sealed class CardWindow : Window
 
         /// <summary>The card is up. Ask the helper once what it holds; the timer only ever reads
         /// the line this leaves behind.</summary>
-        public void OnOpened() => _ = Task.Run(() => RefreshIndexLineAsync(_life.Token));
+        public void OnOpened()
+        {
+            _ = Task.Run(() => RefreshIndexLineAsync(_life.Token));
+            ShowRecent();
+        }
+
+        /// <summary>
+        /// On an empty field, the files opened most lately, as rows the card already knows how to
+        /// draw, open, reveal and drag. Built off the interface thread - each row is a stat, and a
+        /// file since deleted or on a drive since pulled out is left off - and dropped if anything
+        /// has been typed by the time it lands.
+        /// </summary>
+        private void ShowRecent()
+        {
+            if (_opened is null || _opened.Count == 0) return;
+            OpenedHistory opened = _opened;
+            _ = Task.Run(() =>
+            {
+                DateTime now = DateTime.UtcNow;
+                var rows = new List<SearchResult>();
+                foreach (OpenedHistory.Entry e in opened.Recent(SearchCardLayout.MaxRows * 2))
+                {
+                    if (rows.Count == SearchCardLayout.MaxRows) break;
+                    bool dir = Directory.Exists(e.Path);
+                    ResultMapper.Stat st = ResultMapper.StatOf(e.Path, dir);
+                    if (!st.Found) continue;
+                    string name = Path.GetFileName(e.Path.TrimEnd('\\'));
+                    rows.Add(new SearchResult(FileKinds.Classify(name, dir), name, e.Path, 0f,
+                        OpenedHistory.When(e.LastUtc, now), Size: st.Size, Modified: st.Modified));
+                }
+                if (rows.Count == 0) return;
+                var recent = new SearchResults("", rows, 0, 0, false);
+                Dispatcher.UIThread.Post(() =>
+                {
+                    if (_state.HasQuery || _life.IsCancellationRequested) return;
+                    bool had = _state.ShowsBody;
+                    _state = _state with { Results = recent, Rows = SearchCardState.Filtered(recent, _state.Filter),
+                                           Highlight = 0, Scroll = 0, Recent = true };
+                    if (had != _state.ShowsBody) CardResized?.Invoke();
+                    _peer?.Say(CardAccess.Arrived(_state));
+                    HighlightChanged();
+                    InvalidateVisual();
+                });
+            });
+        }
 
         private async Task RefreshIndexLineAsync(CancellationToken ct)
         {
@@ -1089,6 +1146,7 @@ public sealed class CardWindow : Window
             if (h >= scroll + SearchCardLayout.MaxRows) scroll = h - SearchCardLayout.MaxRows + 1;
             _state = _state with { Highlight = h, Scroll = SearchCardLayout.ClampScroll(scroll, n) };
             HighlightChanged();
+            _peer?.Say($"{_state.Rows[h].Name}, {CardAccess.Describe(_state.Rows[h])}");
             InvalidateVisual();
         }
 
@@ -1181,9 +1239,12 @@ public sealed class CardWindow : Window
             CloseRequested?.Invoke();
         }
 
-        // Recency ranking lands with the content store; until then, opening a result changes
-        // nothing about how future results are scored.
-        private static void NoteOpened(string path) { }
+        // What is opened or revealed from here is what OpenedHistory remembers - never what was
+        // typed to find it.
+        private void NoteOpened(string path) => _opened?.Note(path);
+
+        /// <summary>The ordering lift for both halves of a search, or none when nothing is remembered.</summary>
+        private Func<string, float>? Lift => _opened is null ? null : _opened.Lift;
 
         private void CopyPath(int index)
         {
@@ -1224,7 +1285,7 @@ public sealed class CardWindow : Window
         // The card is drawn Overhang down the window, under the close button's band.
         private SearchHit HitAt(Point p)
             => SearchCardLayout.HitTest((float)(p.X / _scale), (float)(p.Y / _scale) - SearchCardLayout.Overhang,
-                _state.Rows.Count, _state.Scroll, _state.HasQuery, _state.AdvOpen);
+                _state.Rows.Count, _state.Scroll, _state.ShowsBody, _state.AdvOpen);
 
         /// <summary>The caret position under the pointer, in the same window of the text the
         /// painter drew. Off either end of the field it is the first or last position, so a drag
@@ -1398,10 +1459,68 @@ public sealed class CardWindow : Window
             catch (Exception ex) { Log.Warn("search", "drag failed: " + ex.Message); }
         }
 
+        // ---- what a screen reader sees ----
+
+        private AccessiblePeer? _peer;
+
+        public string AccessName => CardAccess.Name;
+
+        // The card is drawn Overhang down its window, under the close button's band.
+        public IReadOnlyList<AccessNode> AccessNodes() =>
+            [.. CardAccess.Nodes(_state).Select(n => n with { Bounds = SKRect.Create(n.Bounds.Left,
+                n.Bounds.Top + SearchCardLayout.Overhang, n.Bounds.Width, n.Bounds.Height) })];
+
+        public double AccessScale => _scale;
+
+        // The field has the keyboard whenever the card is up; nothing else on the card takes it.
+        public string? FocusedKey => "field";
+
+        public void AccessSetValue(AccessNode node, string value)
+        {
+            if (node.Key == "field") SetQuery(value);
+        }
+
+        public void AccessInvoke(AccessNode node)
+        {
+            string key = node.Key;
+            if (key == "content") ToggleContent();
+            else if (key == "advanced") SetAdvOpen(!_state.AdvOpen);
+            else if (key == "settings") OpenSettings(Section.Look);
+            else if (key == "reading") PressReading();
+            else if (key == "close") CloseRequested?.Invoke();
+            else if (key.StartsWith("chip:", StringComparison.Ordinal)) SetFilter(int.Parse(key[5..], System.Globalization.CultureInfo.InvariantCulture));
+            else if (key.StartsWith("action:", StringComparison.Ordinal))
+            {
+                switch (key[7..])
+                {
+                    case "0": Open(_state.Highlight); break;
+                    case "1": Reveal(_state.Highlight); break;
+                    default: CopyPath(_state.Highlight); break;
+                }
+            }
+            else if (key.StartsWith("row:", StringComparison.Ordinal))
+            {
+                // Selecting a row highlights it; invoking the highlighted one opens it, as a
+                // second click does.
+                int i = _state.Rows.ToList().FindIndex(r => "row:" + r.Path == key);
+                if (i < 0) return;
+                if (i == _state.Highlight) { Open(i); return; }
+                _state = _state with { Highlight = i };
+                HighlightChanged();
+            }
+            InvalidateVisual();
+        }
+
+        protected override Avalonia.Automation.Peers.AutomationPeer OnCreateAutomationPeer() =>
+            _peer = new AccessiblePeer(this, this);
+
         // ---- paint ----
 
         public override void Render(DrawingContext context)
-            => context.Custom(new DrawOp(new Rect(Bounds.Size), this));
+        {
+            _peer?.Refresh();
+            context.Custom(new DrawOp(new Rect(Bounds.Size), this));
+        }
 
         private sealed class DrawOp : ICustomDrawOperation
         {

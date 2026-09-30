@@ -604,6 +604,40 @@ person makes by looking; two are destructive and belong last.
     `updated from 0.0.1`. From the release after 0.6.0, Findra also starts again by itself once
     the installer is done.
 
+## From the five improvements
+
+71. **A Store copy keeps its names across a Store update.** Install the Store build, let the Store
+    update it, start Findra. One permission prompt appears; the log says `the names helper task
+    starts ..._<old version>_..., which is not this copy` and then `now starts this copy`;
+    `findra --searchprobe` answers from the helper. Declining the prompt: the next start asks again.
+72. **A Store copy is updated by the Store, and starts at sign-in through the Store's entry.**
+    Check for updates opens "The Microsoft Store updates Findra" with Open Store, and nothing in the
+    log mentions GitHub; Settings > About has no check-for-updates switch. "Start Findra when I sign
+    in" turns Findra on under Settings > Apps > Startup; switched off there, the toggle reads off.
+73. **A USB stick is searched by name while it is in.** With the installed helper running, plug in
+    a FAT32 or exFAT stick: within about five seconds its files come up by name and
+    `findra --searchprobe` lists its letter as `walked: names only`. Rename a folder on it: the new
+    path comes up within a few seconds. Pull it out: its results are gone and the log says so.
+    **The walker ran on 30 September 2026** against a FAT32 stick on F: from a test harness (15
+    names, Hebrew included; create, rename, folder rename and delete all followed); never inside the
+    installed elevated helper.
+74. **What is opened comes first and is listed on the empty card.** Open three files from the card,
+    reopen it with nothing typed: "Recently opened" lists them newest first. Settings > Opening it >
+    "Put what I open first" off: `%LOCALAPPDATA%\Findra\opened.json` is gone and the empty card is
+    back to its hint.
+75. **With Narrator on, Findra can be used without a mouse.** From a clean first run: Tab through
+    the welcome screen, tick and untick rows with Space, press Get these; open the card with the
+    hotkey, type, hear the count, arrow through results and hear each; open Settings, Tab through a
+    section and flip a switch. **The tree, bounds, Invoke and real Tab and Space ran on 30 September
+    2026** through the UI Automation client against the welcome screen; Narrator's own speech has not.
+76. **Details for a bug report pastes as seven lines.** Settings > About > Copy, then paste into
+    Notepad: version and install, Windows, processor and memory, every graphics adapter with the one
+    Findra uses marked, add-ons, reading, and the line about `--searchmodels`.
+77. **The arm64 job is green on GitHub.** The first push after this change runs `ci.yml`'s `arm64`
+    job on `windows-11-arm`. Green, the README's "neither has an arm64 machine" can say the tests and
+    the headless diagnostics run on arm64 (processor only); red, what failed is the first arm64
+    finding.
+
 ## What could not be verified in this project at all
 
 Written down so they are known gaps rather than assumed passes. Every one of them is a step above.

@@ -215,6 +215,14 @@ public class RailTests
         int[] notes = [2, 2];
         Assert.True(RailLayout.ListRect().Top >= RailLayout.NoteRect(1, notes).Bottom,
             $"the list starts at {RailLayout.ListRect().Top} and the note above it ends at {RailLayout.NoteRect(1, notes).Bottom}");
+
+        // And against the section as it is really built, in the shipped face: a hard-coded pair
+        // above let a third row in and the list was drawn straight over it.
+        var searches = new SettingsState(Config.Default) { Section = Section.Searches };
+        IReadOnlyList<int> real = SettingsModel.NoteLines(searches, Parts.Face);
+        Assert.True(RailLayout.ListRect().Top >= RailLayout.NoteRect(real.Count - 1, real).Bottom,
+            $"{real.Count} rows sit above the list and the last one's note ends at " +
+            $"{RailLayout.NoteRect(real.Count - 1, real).Bottom}, under the list's top at {RailLayout.ListRect().Top}");
         Assert.True(RailLayout.ListRowsThatFit >= 8,
             $"only {RailLayout.ListRowsThatFit} exclusions are visible at once; the default list has 30");
     }

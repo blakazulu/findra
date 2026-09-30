@@ -187,24 +187,30 @@ If review refuses anyway: the packaged build can ship with name search disabled 
 search (which needs no elevation) intact, and the Store listing would say so. That is a code
 change, a smaller product, and the reason the attempt order is: submit as-is first.
 
-## Known behavioural differences inside a package
+## Behaviour inside a package
 
-These are the honest list of things a packaged Findra does differently today. None blocks a
-first submission; the first is the one most worth fixing.
+A packaged Findra does three things differently, each decided by `Packaged.IsPackaged`
+(`GetCurrentPackageFullName`), and each tested in `StoreCopyTests`:
 
-1. **The scheduled task points at a versioned path.** A packaged exe lives under
-   `C:\Program Files\WindowsApps\<package>_<version>_...`, which moves on every update. The
-   helper task keeps the old path until the app is run once after an update and re-registers
-   it. The fix is a startup check that re-registers when the recorded path no longer matches
-   the running exe - a code change, queued.
-2. **The update check would send Store users to GitHub.** InstallSource knows winget,
-   installer and source; a package has no marker file, and the check's sentence would point at
-   the wrong shelf. Store apps are updated by the Store, so a packaged build should report
-   "updated through the Microsoft Store" and skip the check. A code change, queued.
-3. **The Run-key autostart is virtualised.** `Autostart.cs` writes HKCU Run, which a package
-   redirects. The manifest declares `windows.startupTask` instead, so the Settings > Apps >
-   Startup entry works; the in-app toggle should drive the StartupTask API when packaged.
-   A code change, queued.
+1. **The scheduled task follows the versioned folder.** A packaged exe lives under
+   `C:\Program Files\WindowsApps\<package>_<version>_...`, which moves on every update. At every
+   start `HelperTask.RecordedExe` reads the task's command back from its XML, and
+   `HelperTask.NeedsRewriting` re-registers it when it names another copy: inside a package any
+   difference (the old folder may linger), outside one only a program that is gone (so a source
+   build beside the installed copy never takes the task over). Re-registering is one UAC
+   prompt at the first start after an update; declined, the next start asks again.
+2. **The Store updates a Store copy.** `InstallSource` records `store` for any packaged copy,
+   whatever an earlier copy wrote down. `UpdateCheck.CheckAsync` sends nothing for it, manual or
+   not; the update window opens on its own step ("The Microsoft Store updates Findra", with
+   Open Store: `StoreListing.PageUri`); About says the Store keeps it up to date and drops the
+   check-for-updates switch, which would change nothing.
+3. **Autostart is the package's startup task.** `Autostart.RunKey` is the `windows.startupTask`
+   (`Autostart.PackageTaskId`, `FindraStartup` in the manifest) through the StartupTask API. An
+   entry the person switched off under Startup apps cannot be turned back on from inside Findra;
+   Windows refuses, the switch reads off again, and the log says where to turn it on.
+
+Still untested on a real package: all three run only inside an installed MSIX, which the
+end-to-end checklist covers once the Store has certified a build.
 
 ## Store listing text
 

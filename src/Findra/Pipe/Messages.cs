@@ -29,9 +29,13 @@ public sealed record StatusRequest();
 /// message round-trip test among them - keeps compiling and keeps meaning what it meant. A zero
 /// there reads as "not measured", which is exactly what a caller that never had the numbers is
 /// saying. <see cref="NameServer"/> always fills all three from the volume's view.
+///
+/// <c>NamesOnly</c> is a walked drive - a stick, a memory card, a disk not formatted NTFS - whose
+/// names are searched and nothing on which is read inside.
 /// </summary>
 public sealed record VolumeStatus(char Letter, int Count, long ResidentBytes, bool Live,
-                                  double EnumerateMs = 0, long NextUsn = 0, long Dropped = 0);
+                                  double EnumerateMs = 0, long NextUsn = 0, long Dropped = 0,
+                                  bool NamesOnly = false);
 
 /// <summary><c>WorkingSetBytes</c> is the helper's whole process, read by the helper itself: nothing
 /// at normal integrity can read an elevated process's memory. Zero means not measured.</summary>

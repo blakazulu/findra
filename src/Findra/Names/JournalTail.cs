@@ -11,7 +11,11 @@ namespace Findra;
 /// have no route into a session without this. The helper builds one per volume as it enumerates:
 /// it already holds the <see cref="NtfsVolume"/>, and it already measures the walk.
 /// </summary>
-public sealed record VolumeView(NameIndex Index, ulong JournalId, long NextUsn, double EnumerateMs);
+/// <param name="NamesOnly">A drive that is walked rather than read from its file table
+/// (<see cref="WalkedVolume"/>): it answers name queries and nothing else - no journal, no first
+/// pass, nothing read inside.</param>
+public sealed record VolumeView(NameIndex Index, ulong JournalId, long NextUsn, double EnumerateMs,
+                                bool NamesOnly = false);
 
 /// <summary>
 /// One reader/writer lock PER VOLUME around the name indexes. Every session reads them

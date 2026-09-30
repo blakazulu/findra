@@ -24,6 +24,8 @@ described below.
 - It never blocks anything. A failure is a line in the log, not a dialog.
 - It is disclosed on the first-run screen and can be switched off. Off stops the daily check;
   pressing Check now still asks, once, because you asked.
+- A copy installed from the Microsoft Store never makes it. The Store updates that copy, and
+  Check for updates only opens Findra's page in the Store.
 
 Findra downloads and installs an update only when you press Update now. It downloads the
 installer from the release page on GitHub and checks it against the checksum GitHub publishes
@@ -43,6 +45,7 @@ and send nothing about you. If you never choose a capability, they never happen.
 | `%LOCALAPPDATA%\Findra\index\` | The search index. See below, because this one matters. |
 | `%LOCALAPPDATA%\Findra\models\` | Model files you chose to download. Nothing personal. |
 | `%LOCALAPPDATA%\Findra\logs\` | Daily log files. See below. |
+| `%LOCALAPPDATA%\Findra\opened.json` | The files you opened from Findra, and how often. See below. |
 
 One more file sits in Findra's own program folder rather than in either of those. The installer
 writes a single word there - `winget` or `installer` - so that when a newer version exists the
@@ -64,6 +67,14 @@ this; anyone who shares a computer should know it before turning content indexin
 
 Content indexing is off until you turn it on, for this reason among others.
 
+### What Findra remembers about what you open
+
+So that the files you use come first, Findra keeps a list of the last 200 files you opened or
+revealed from its search window, with how many times and when. The empty search window shows
+the most recent of them. It is the paths and nothing else: never what you typed to find them.
+It stays in that one file on your machine. Settings > Opening it > "Put what I open first"
+turns it off, and turning it off deletes the file.
+
 ### What the logs contain
 
 The logs record what Findra did, so that a problem can be diagnosed. They include the names
@@ -73,6 +84,10 @@ they do not contain your search queries.
 
 Logs stay on your machine. Findra never uploads them. If you send one to report a problem,
 you are choosing to share whatever it contains, so it is worth reading first.
+
+Settings > About > Details for a bug report copies a few lines to your clipboard: the Findra
+version, Windows, the processor, memory, graphics and which add-ons are installed. Nothing
+about your files or searches, and it goes nowhere unless you paste it somewhere.
 
 ## Deleting it
 

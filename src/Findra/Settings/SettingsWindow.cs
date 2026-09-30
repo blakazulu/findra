@@ -71,7 +71,10 @@ public sealed class SettingsWindow : Window
         // meant to survive a trip to Explorer and back.
         WindowStartupLocation = WindowStartupLocation.CenterScreen;
 
-        KeyDown += (_, e) => { if (_canvas.OnKey(e)) e.Handled = true; };
+        // Tunnelling, so Tab reaches the pane before Avalonia's own focus navigation: the pane is
+        // the one focusable control, and every control on it is drawn.
+        AddHandler(KeyDownEvent, (_, e) => { if (_canvas.OnKey(e)) e.Handled = true; },
+            Avalonia.Interactivity.RoutingStrategies.Tunnel);
         // Fitted again once it is on a screen of its own rather than the primary one.
         Opened += (_, _) => { FitToScreen(); Open = this; Activate(); _canvas.Focus(); };
         Closed += (_, _) => { if (ReferenceEquals(Open, this)) Open = null; };
@@ -184,7 +187,7 @@ public sealed class SettingsWindow : Window
     // here binds to a sealed record. A using alias cannot fix it: inside the namespace it collides
     // with the member, and outside it loses to the member. `CardWindow` and `CapsuleWindow` are
     // written the same way for the same reason.
-    private sealed class SettingsCanvas : Avalonia.Controls.Control
+    private sealed class SettingsCanvas : Avalonia.Controls.Control, IAccessibleSurface
     {
         private readonly ISettingsHost _host;
         private readonly Func<string, bool> _registerHotkey;
@@ -327,7 +330,16 @@ public sealed class SettingsWindow : Window
         protected override void OnPointerPressed(PointerPressedEventArgs e)
         {
             Focus();
-            Point p = At(e);
+            _ring = false;          // the pointer is in use; the keyboard's ring steps aside
+            PressAt(At(e), e);
+        }
+
+        /// <summary>A press at a point in layout units: the pointer's, or the centre of an element
+        /// pressed from the keyboard or by a screen reader, which is how those can do nothing a
+        /// click could not. <paramref name="e"/> is null for those, and only the title strip's
+        /// drag needs it.</summary>
+        private void PressAt(Point p, PointerPressedEventArgs? e)
+        {
 
             // The Remove question first, and nothing else while it is up - including the window's
             // own close cross and the title strip. A question is answered before the window it is
@@ -353,6 +365,7 @@ public sealed class SettingsWindow : Window
             // open beside Explorer is not a small thing.
             if (hit.Target == PanelTarget.None && p.Y < RailLayout.TitleH)
             {
+                if (e is null) return;
                 try { _owner.BeginMoveDrag(e); }
                 catch (Exception ex) { Log.Warn("settings", "the window would not move: " + ex.Message); }
                 return;
@@ -398,6 +411,13 @@ public sealed class SettingsWindow : Window
         {
             if (!_state.Capturing)
             {
+                // Tab walks every control in reading order, Enter and Space press the one it is on.
+                if (e.Key == Key.Tab) { MoveFocus(back: e.KeyModifiers.HasFlag(KeyModifiers.Shift)); return true; }
+                if (e.Key is Key.Enter or Key.Space && _focusKey is not null)
+                {
+                    if (AccessFocus.Find(AccessNodes(), _focusKey) is { } node) AccessInvoke(node);
+                    return true;
+                }
                 if (e.Key != Key.Escape) return false;
                 // Escape answers the question in front of it before it closes the window behind.
                 if (_state.Removing is not null)
@@ -440,10 +460,43 @@ public sealed class SettingsWindow : Window
             return true;
         }
 
+        // ---- what a screen reader and the keyboard see ----
+
+        private string? _focusKey;
+        private bool _ring;
+        private AccessiblePeer? _peer;
+
+        public string AccessName => SettingsAccess.Name;
+        public IReadOnlyList<AccessNode> AccessNodes() => SettingsAccess.Nodes(_state, _face);
+        public double AccessScale => Fit;
+        public string? FocusedKey => _focusKey;
+
+        public void AccessInvoke(AccessNode node)
+        {
+            PressAt(new Point(node.Bounds.MidX, node.Bounds.MidY), null);
+            // Say what it is now: a toggle that flipped, a tab that opened another section.
+            if (AccessFocus.Find(AccessNodes(), node.Key) is { } after) _peer?.Say(after.Spoken);
+        }
+
+        private void MoveFocus(bool back)
+        {
+            IReadOnlyList<AccessNode> nodes = AccessNodes();
+            _focusKey = AccessFocus.Next(nodes, _focusKey, back);
+            _ring = _focusKey is not null;
+            if (AccessFocus.Find(nodes, _focusKey) is { } node) _peer?.Say(node.Spoken);
+            InvalidateVisual();
+        }
+
+        protected override Avalonia.Automation.Peers.AutomationPeer OnCreateAutomationPeer() =>
+            _peer = new AccessiblePeer(this, this);
+
         // ---- paint ----
 
         public override void Render(DrawingContext context)
-            => context.Custom(new DrawOp(new Rect(Bounds.Size), this));
+        {
+            _peer?.Refresh();
+            context.Custom(new DrawOp(new Rect(Bounds.Size), this));
+        }
 
         private sealed class DrawOp : ICustomDrawOperation
         {
@@ -465,6 +518,8 @@ public sealed class SettingsWindow : Window
                 canvas.Save();
                 canvas.Scale((float)_c.Fit);
                 SettingsPainter.Paint(canvas, _c._state, _c._derived, _c._face);
+                if (_c._ring && AccessFocus.Find(_c.AccessNodes(), _c._focusKey) is { } focused)
+                    AccessRing.Draw(canvas, focused.Bounds, _c._derived);
                 canvas.Restore();
             }
         }

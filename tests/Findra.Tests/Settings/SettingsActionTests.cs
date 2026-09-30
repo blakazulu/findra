@@ -24,6 +24,7 @@ public class SettingsActionTests
         public void RecentreCapsule() => Calls.Add("recentre");
         public void StartIndexing() => Calls.Add("start");
         public void OpenLogs() => Calls.Add("logs");
+        public void CopyReport() => Calls.Add("report");
         public void OpenCodecStore(string productId) => Calls.Add("codec:" + productId);
         public void RemoveAddOn(Capability c, bool forget) => Calls.Add($"remove:{c}:{(forget ? "forget" : "keep")}");
     }
@@ -51,6 +52,7 @@ public class SettingsActionTests
             [SettingsAction.RecentreCapsule] = "recentre",
             [SettingsAction.StartIndexing] = "start",
             [SettingsAction.OpenLogs] = "logs",
+            [SettingsAction.CopyReport] = "report",
             [SettingsAction.OpenCodecStore] = "codec:9NMZLZ57R3T7",
             [SettingsAction.RemoveAddOn] = "remove:Speech:forget",
         };

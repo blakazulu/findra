@@ -81,6 +81,7 @@ public static class UpdateCheck
     {
         "winget" => $"Findra {version} is available. Check now updates it with winget upgrade blakazulu.Findra.",
         "source" => $"Findra {version} is available. See https://github.com/blakazulu/findra/releases for the release notes.",
+        "store" => $"Findra {version} is available. The Microsoft Store installs it.",
         _ => $"Findra {version} is available. Check now downloads and installs it.",
     };
 
@@ -97,6 +98,11 @@ public static class UpdateCheck
         Config config, Func<CancellationToken, Task<LatestRelease?>> fetch, DateTime utcNow, CancellationToken ct,
         bool manual = false)
     {
+        // The Store updates a Store copy, and asking GitHub would only tell somebody about a
+        // version their Store has not certified yet. Nothing is sent, whoever asks.
+        if (Startup.InstallSource.IsStore(config.InstallSource))
+            return new UpdateResult(UpdateState.Disabled, null, null, config);
+
         // A manual check is somebody pressing Check now. Off stops the daily check and nothing
         // else: refusing to answer a person who asked is the silence the update window replaces.
         if (!manual && !config.CheckForUpdates)

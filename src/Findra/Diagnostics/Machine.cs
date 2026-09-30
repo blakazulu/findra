@@ -48,6 +48,15 @@ public static class Machine
     public static string AcceleratorLine(string? onnx, string? whisper)
         => $"ONNX: {onnx ?? NotLoaded} · Whisper: {whisper ?? NotLoaded}";
 
+    /// <summary>The processor's name, or <see cref="Unknown"/>. Opens nothing but the registry.</summary>
+    public static string CpuName() => Try(Cpu);
+
+    /// <summary>The edition and the four-part build, or <see cref="Unknown"/>.</summary>
+    public static string WindowsVersion() => Try(WindowsBuild);
+
+    /// <summary>Installed physical memory; 0 when it could not be read.</summary>
+    public static long InstalledMemory() => TotalPhysicalBytes();
+
     // The speech runtime is reached through Media, which is annotated for the build this project
     // targets; the rest of this type asks for nothing newer than "windows".
     [SupportedOSPlatform("windows10.0.19041.0")]

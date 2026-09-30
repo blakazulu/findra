@@ -20,6 +20,9 @@ public static class Paths
     /// <summary>Where an update's installer is downloaded to. Emptied at every start.</summary>
     public static string Updates => Path.Combine(Local, "updates");
 
+    /// <summary>What was opened from the card, for ranking. Local: paths belong to this machine.</summary>
+    public static string OpenedFile => Path.Combine(Local, "opened.json");
+
     public static string ConfigFile   => Path.Combine(Roaming, "config.json");
     public static string PalettesFile => Path.Combine(Roaming, "palettes.json");
 

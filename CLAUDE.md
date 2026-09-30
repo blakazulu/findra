@@ -57,7 +57,7 @@ findra.exe --searchprobe [query]      # end to end: which process answered, the 
 findra.exe --searchmodels             # models present, loading, agreeing; provider per runtime
 findra.exe --searchindex [file|folder|q:query|why:path]...   # indexed/queued; paths queue and
                                       # drain, q: queries, why:<path> explains ONE file, read-only
-findra.exe --searchshot out.png <state> [palette]   # forty-three states, listed below
+findra.exe --searchshot out.png <state> [palette]   # forty-five states, listed below
 findra.exe --searchtest               # engine self-check
 findra.exe --searchbench [out.md] [corpus]   # measured numbers, pasteable Markdown; `corpus` is
                                       # how many files it generates
@@ -65,15 +65,16 @@ findra.exe --version                  # print the version and log location, then
 ```
 
 The `--searchshot` states are `SearchShot.States`, and that list is the only definition of them.
-Sixteen draw the card, seven the settings window, eight the first-run screen and twelve the update
-window:
+Seventeen draw the card, seven the settings window, eight the first-run screen and thirteen the
+update window:
 
 ```
 capsule  empty  indexing  contentmode  contentwaiting  contentloading  typing  searching  results
-noresults  many  adv  opening  openingempty  selected  starting
+noresults  many  adv  opening  openingempty  selected  starting  recent
 settings  settingsopening  settingssearches  settingscontent  settingsaddons  settingsremove  settingsabout
 updatechecking  updateuptodate  updateunreachable  updateavailable  updateavailablewinget  updatedownloading
 updatedownloadfailed  updateinstalling  updatedidnotrun  updatewinget  updatewingetfailed  updatereleases
+updatestore
 firstrun  firstruninstalled  firstrunspeech  firstrundownloading
 firstrunfinished  firstrunready  firstrunnames  firstrunworking
 ```
@@ -238,6 +239,13 @@ both halves through `ApplyConfig` and `ISettingsHost.StartIndexing`).
 - **The stage's picture gives way to its text** (`SearchCardLayout.StagePicture`): beside six rows
   or fewer the stage is only `StageMinH`, and the picture shrinks so every line about the file sits
   above the buttons. `CardStageTests` reads the pixels just above Open.
+- **The empty field shows what was opened lately** (`OpenedHistory`, `%LOCALAPPDATA%\Findra\opened.json`,
+  200 paths, never a query): `SearchCardState.Recent`, and **every layout call takes `ShowsBody`,
+  never `HasQuery`** (which decides only the placeholder). The first keystroke drops the recent
+  rows. The stage says "opened" and shows no score. `--searchshot recent` draws it.
+- **Opening lifts a file's ORDERING score, never its shown score**: `ResultMapper.Finish(lift:)`
+  under the Best sort only, at most `OpenedHistory.MaxLift` (0.1), so it reorders neighbours and
+  never lifts a poor match over a good one. `Config.RememberOpened` off deletes the file.
 - **`ContentPill.Decide` owns what pressing Content means**, not `CardWindow`. Release: search
   again. Files read and reading off: turn reading back on in place. Nothing read: open Settings at
   Content. A count nothing has read yet: search.
@@ -287,6 +295,28 @@ files left out and failed, the first-run hold); `IndexStatus.Sentence` is the Se
 files moves. `default(IndexExtra)` carries null strings - read them with `IsNullOrEmpty`.
 `IndexerHost.RestartIn` replaces "Findra is closed" during a crash backoff; a child that ran
 `HealthyMinutes` resets the backoff.
+
+## Screen readers and the keyboard
+
+**Every drawn surface publishes its elements to UI Automation** (`src/Findra/Look/Access.cs`):
+`CardAccess`, `SettingsAccess`, `FirstRunAccess`, `UpdateAccess` and the capsule's one button are
+PURE lists of `AccessNode`s (role, name, state, bounds in layout units) built from the same state
+and layout the painter and the hit test read. `AccessiblePeer` turns them into automation children.
+
+- **Invoking an element presses its centre through the surface's own press path** (`PressAt`,
+  shared with the pointer), so a screen reader can do nothing a click cannot. `AccessTests` holds
+  every actionable element's centre to its own hit-test target, per section and state. **A new
+  control needs its node, or it is invisible to Narrator.**
+- **Element peers derive from `ControlAutomationPeer` over the canvas** only because that is the
+  one peer Windows can put on the screen (`ToScreenCore` is `private protected`), and they are
+  POOLED by kind and position: each subscribes to the canvas for its life.
+- **Drawn elements cannot take Windows focus**: focus stays on the canvas, `FocusedKey` names the
+  element, and a polite live-region node (`AccessiblePeer.Say`) speaks each move. Tab/Shift+Tab,
+  Enter and Space in Settings, first-run and update (tunnelling `KeyDown`, or Avalonia's own
+  navigation takes Tab first); `AccessRing` shows only after the keyboard is used. The card keeps
+  its own keys (typing, arrows, Enter, Tab through chips) and speaks counts and the highlight.
+- **Not covered**: the Advanced popup's fields. Verified with the UI Automation client (tree,
+  bounds, Invoke, real Tab/Space); never with Narrator's speech itself.
 
 ## The progress pill
 
@@ -432,6 +462,23 @@ what to enqueue):
   **Depth only breaks ties**; it never beats a better score. `NameIndex.Depth` remembers answers
   in `_depthOf`, thrown away when a folder moves or is deleted. The cost is per match: a query
   matching most names reads the whole index instead of stopping at the cap.
+
+**Drives without a readable file table are WALKED, names only** (`src/Findra/Names/WalkedVolume.cs`):
+removable media in any format, fixed disks not NTFS (exFAT, FAT32, ReFS Dev Drives); never network
+or optical (`WalkedVolume.Walks`). `WalkedDrives` looks every five seconds, walks a new drive into
+the helper's (now concurrent) volume table, follows it with a `FileSystemWatcher`, drops it when
+pulled out and re-walks a letter that now names another drive.
+
+- **A record's number is a hash of its path relative to the root, and the root is 5** (NTFS's
+  own), so `PathOf`, `Depth` and root system names work unchanged. `IdOf` never yields low 48
+  bits of 5 or 0, nor all ones (the map's tombstone).
+- **A file change is applied on the spot; anything done to a FOLDER re-walks the drive** (a
+  folder moved in brings its tree, and a rename renumbers everything under it), settled for two
+  seconds; `Reconcile` writes in batches, each under the write lock, then sweeps what was not seen.
+- **`VolumeView.NamesOnly` / `VolumeStatus.NamesOnly`: never offered to the content index.**
+  Subscribe leaves them out, enumerate answers empty, and the interface keeps them out of
+  `_drives` and `ChosenDrives`. A drive that comes and goes would requeue its files every time.
+- A walked listing is names from a directory listing; the elevated helper still opens no file.
 
 **The helper's memory is `NameIndex.ResidentBytes`, never `BufferBytes`** (the names alone, about a
 third). Building doubles every array and `Trim` copies each once more, so `RunAsync` runs one
@@ -597,6 +644,13 @@ design, not evidence; never report them as the same. The failures guarded agains
   tone through `WhisperFactory.FromPath` before accepting the accelerated rung; `WhatIsWrongWith`
   judges the SHAPE (finite, ordered, in-range timestamps, no control characters), never the words
   (whisper.cpp #2596). False rejection costs speed; false acceptance writes nonsense for ever.
+- **`ci.yml`'s `arm64` job runs build, tests, publish and `Check-Diagnostics.ps1` on
+  `windows-11-arm`** (`WorkflowTests.TheArm64BuildIsRunOnArm64OnEveryPush`). No GPU there: it is
+  evidence for the processor path on arm64 only, and the README says "neither has an arm64
+  machine" until a green run of it exists.
+- **Settings > About > "Details for a bug report" copies `MachineReport`** (version, install,
+  Windows, CPU, RAM, every adapter with `MachineReport.Chosen` marked, add-ons). It opens no model
+  and sends nothing; `--searchmodels` is still what says which chip each model runs on.
 - **Detect at runtime.** ONNX (SigLIP-2, e5) is **DirectML → CPU**; Whisper is **Vulkan → CPU**.
 - **No vendor-locked providers** (no CUDA, no ROCm).
 - **CPU is supported, not a failure state**; the UI says the first index is slower.
@@ -867,13 +921,14 @@ replacement.
   `build/Make-Icon.mjs`** - never hand-edit them; `StorePackagingTests` checks each is at its named
   size and that the script draws them. The four listing screenshots are `docs/shots` renders centred
   on the plate at 1366x768 (the Store's floor), unscaled.
-- **Known gaps inside a package, queued as code changes** (none blocks a first submission):
-  1. The helper task stores the `WindowsApps\<package>_<version>` path, which moves on every update;
-     it needs a startup check that re-registers when the recorded path is not the running exe.
-  2. `InstallSource` has no Store value, so the update check would send Store users to GitHub; a
-     packaged build should say "updated through the Microsoft Store" and skip the check.
-  3. `Autostart`'s HKCU Run write is virtualised in a package; the toggle should drive the
-     StartupTask API when packaged.
+- **Inside a package three things change, all keyed on `Packaged.IsPackaged`** (`docs/store.md`
+  "Behaviour inside a package", `StoreCopyTests`):
+  1. **The helper task follows the versioned folder**: `HelperTask.NeedsRewriting` at every start
+     re-registers when the task names another copy - inside a package any difference, outside one
+     only a program that is gone (a source build beside the installed copy must not take it over).
+  2. **`InstallSource` is `store`, known rather than recorded**; `UpdateCheck.CheckAsync` sends
+     nothing, the update window opens on `UpdateStep.Store` (Open Store), About drops the switch.
+  3. **`Autostart.RunKey` is the package's `windows.startupTask`** (`Autostart.PackageTaskId`).
 - **If review refuses `allowElevation`**, the fallback is a Store build with name search disabled
   and content search intact, said in the listing - decided only after an actual refusal.
 
@@ -897,6 +952,7 @@ folder.
 | `%LOCALAPPDATA%\Findra\models\` | the seven model files |
 | `%LOCALAPPDATA%\Findra\index\` | SQLite name, FTS5 and vector stores |
 | `%LOCALAPPDATA%\Findra\logs\` | `findra-YYYYMMDD.log` |
+| `%LOCALAPPDATA%\Findra\opened.json` | what was opened from the card (`OpenedHistory`) |
 
 ## Versions and updates
 

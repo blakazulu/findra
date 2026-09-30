@@ -673,7 +673,9 @@ The README states the same in plain language above the fold.
 2. *The pipe boundary* changes name search from synchronous to asynchronous everywhere. It
    must be async from the first commit.
 3. *Hand-drawn settings* forfeits keyboard and screen-reader support. Accepted, mitigated,
-   and worth revisiting if Findra gets real adoption.
+   and worth revisiting if Findra gets real adoption. Revisited: every drawn surface now
+   publishes its elements to UI Automation and settings, the first screen and the update window
+   take Tab, Enter and Space (`src/Findra/Look/Access.cs`).
 4. *Scheduled-task registration* is the one thing that can fail on a stranger's machine in a
    way Findra cannot fix; it needs a clear, non-fatal failure path that still leaves
    names working on whatever it can read unelevated.

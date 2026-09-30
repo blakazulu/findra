@@ -17,6 +17,7 @@ public sealed class UpdateSession
     private readonly Action _close;
     private readonly Action<Action> _post;
     private readonly Action<string> _note;
+    private readonly Action _openStore;
     private readonly CancellationTokenSource _gone = new();
     private CancellationTokenSource? _downloading;
     private Task? _lastDownload;
@@ -30,7 +31,7 @@ public sealed class UpdateSession
                          Func<string, ReleaseAsset, CancellationToken, Task<Handoff>> runInstaller,
                          Func<CancellationToken, Task<Handoff>> runWinget,
                          Action openReleases, Action<UpdateView> show, Action close, Action<Action> post,
-                         Action<string>? note = null)
+                         Action<string>? note = null, Action? openStore = null)
     {
         View = first ?? throw new ArgumentNullException(nameof(first));
         _check = check ?? throw new ArgumentNullException(nameof(check));
@@ -42,9 +43,10 @@ public sealed class UpdateSession
         _close = close ?? throw new ArgumentNullException(nameof(close));
         _post = post ?? throw new ArgumentNullException(nameof(post));
         _note = note ?? (line => Log.Info("update", line));
+        _openStore = openStore ?? (() => { });
     }
 
-    public void Begin() => Apply(new UpdateMove(View, UpdateAction.Check));
+    public void Begin() => Apply(UpdateFlow.Begin(View));
 
     public void PressClose() => Apply(UpdateFlow.Close(View));
 
@@ -89,6 +91,7 @@ public sealed class UpdateSession
                 _ = HandOffAsync(_runWinget, HandoffOutcome.WingetFailed);
                 return;
             case UpdateAction.OpenReleases: _openReleases(); _close(); return;
+            case UpdateAction.OpenStore: _openStore(); _close(); return;
             case UpdateAction.Close: _close(); return;
             default: throw new ArgumentOutOfRangeException(nameof(m), m.Action, "no work for this action");
         }

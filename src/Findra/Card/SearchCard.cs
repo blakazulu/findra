@@ -339,7 +339,11 @@ public sealed record SearchCardState(
     IndexProgress Progress = default,
 
     /// <summary>What the reading pill says, from <c>ReadingPill.Shown</c>.</summary>
-    ReadingShown Reading = ReadingShown.Start)
+    ReadingShown Reading = ReadingShown.Start,
+
+    /// <summary>The rows are what was opened lately (<see cref="OpenedHistory"/>), shown on an
+    /// empty field, rather than an answer to a query.</summary>
+    bool Recent = false)
 {
     public static readonly SearchCardState Empty =
         new("", SearchResults.Empty, Array.Empty<SearchResult>(), 0, 0, 0, false);
@@ -347,6 +351,11 @@ public sealed record SearchCardState(
     // The popup's rules are a DRAFT: Apply composes them into the field and empties them, so the
     // field is always the whole query. Only the field decides whether there is one.
     public bool HasQuery => Query.Trim().Length > 0;
+
+    /// <summary>Whether the card has a body of rows under the field: an answer to a query, or on an
+    /// empty field the recently opened list. Every layout call takes this, never
+    /// <see cref="HasQuery"/>, which decides only what the field itself shows.</summary>
+    public bool ShowsBody => HasQuery || (Recent && Results.Rows.Count > 0);
 
     /// <summary>The field as <c>FieldEdit</c> edits it.</summary>
     public FieldEdit.Text Field => new(Query, Caret, Anchor);
@@ -405,8 +414,13 @@ public static class SearchCardPainter
     /// is happening: a newer search is running, or the answer's own note, or how long it took.
     /// With no rows on screen the left says the search is running instead, as it always has.
     /// </summary>
+    public const string RecentLabel = "Recently opened";
+
     public static (string Left, string Right) Header(SearchCardState s, int count)
     {
+        // The left says what the rows are, and these are not an answer to anything typed.
+        if (s.Recent && !s.HasQuery) return (RecentLabel, "");
+
         string asked = s.Results.Query.Length > 0 ? s.Results.Query : s.Query.Trim();
         string left = s.Searching && count == 0 ? SearchingLabel
             : $"{count} result{(count == 1 ? "" : "s")} for “{asked}”";
@@ -493,7 +507,7 @@ public static class SearchCardPainter
         // rather than a rectangle punched into it.
         SKColor cardBg = d.Ground.WithAlpha(246);
 
-        bool hasQuery = s.HasQuery;
+        bool hasQuery = s.ShowsBody;
         int count = s.Rows.Count;
         // h is the CARD's height and total the window's: the progress pill hangs under the card in
         // the gap between the two, and the card's own shape must end where Height says it does.
@@ -528,7 +542,7 @@ public static class SearchCardPainter
         // ---- the field: the same capsule shape the desktop capsule shows at rest, now with a caret in it ----
         var f = SearchCardLayout.FieldRect();
         DrawCapsule(canvas, f, accent, text, d, s.Query, s.Caret,
-            hasQuery ? "" : s.Content ? ContentPlaceholder : NamePlaceholder,
+            s.HasQuery ? "" : s.Content ? ContentPlaceholder : NamePlaceholder,
             face, caret: true, clock: s.Clock, focused: true, caretSlot: s.CaretSlot, anchor: s.Anchor);
 
         // ---- the pills: Content (what question the query asks) and Advanced (the popup).
@@ -816,7 +830,9 @@ public static class SearchCardPainter
         string file = s.StageDetail.Length > 0 ? s.StageDetail
             : row.Modified != default ? (row.Size > 0 ? Human(row.Size) + " · " : "") + row.Modified.ToString("d MMM yyyy HH:mm")
             : "";
-        int lines = file.Length > 0 ? 4 : 3;
+        // A recently opened row answers no query: it says when it was opened, and has no score.
+        bool recent = s.Recent && !s.HasQuery;
+        int lines = (file.Length > 0 ? 4 : 3) - (recent ? 1 : 0);
 
         // the picture: square for photos and files, 16:9 for video
         bool wide = row.Kind == ResultKind.Video;
@@ -879,9 +895,9 @@ public static class SearchCardPainter
             y2 += SearchCardLayout.StageLineH;
         }
         Kv("where", Folder(row.Path));
-        Kv("match", row.Why);
+        Kv(recent ? "opened" : "match", recent ? row.Why.Replace("opened ", "", StringComparison.Ordinal) : row.Why);
         if (file.Length > 0) Kv("file", file);
-        Kv("score", $"{row.Score * 100:0}%");
+        if (!recent) Kv("score", $"{row.Score * 100:0}%");
 
         // the three actions
         string[] labels = { "Open", "Reveal", "Copy path" };

@@ -35,16 +35,18 @@ reproduced in `assets/fonts/OFL.txt`. It is not covered by Findra's own licence.
 
 | What you can search for | Needs a model | On by default |
 |---|---|---|
-| Names of files and folders, across every NTFS volume | no | yes, from the moment Findra starts |
+| Names of files and folders, on every drive, USB sticks and memory cards included | no | yes, from the moment Findra starts |
 | Words in documents, and the text inside pictures | no | no, until you turn content indexing on |
 | Photos and video, by what is in the frame | yes | no |
 | Documents by what they mean, not only the words they use | yes | no |
 | Speech in recordings, including a second pass for Hebrew | yes | no |
 
 Names are free because a name index costs seconds to build and about 73 MB of RAM for a
-million and a half files. Reading inside files walks every drive and can run for hours, so it
-never starts on its own. `findra --content on` starts it and `findra --content off` stops it
-without throwing away anything already read.
+million and a half files. Fixed NTFS disks are read from their file table; a USB stick, a memory
+card or a disk in another format is listed folder by folder when it appears, followed while it
+stays plugged in, and searched by name only. Reading inside files walks every fixed drive and
+can run for hours, so it never starts on its own. `findra --content on` starts it and
+`findra --content off` stops it without throwing away anything already read.
 
 Everything Findra can install is 3.7 GB of model files, and that is the number if you take
 all of them. Take none and Findra still searches every name on the machine. Take one and you
@@ -168,7 +170,7 @@ these, and every image above was drawn by the same painter the window uses.
     findra --content on               start reading inside files
     findra --uninstall --dry-run      what removing Findra would do, without doing it
 
-`findra --searchshot` draws forty-three surfaces in any of the six palettes, which is how the
+`findra --searchshot` draws forty-five surfaces in any of the six palettes, which is how the
 images on this page are made and how they are regenerated. The command under each image is
 the whole recipe.
 
@@ -201,7 +203,10 @@ only this configuration and the processor-only path have actually been measured.
 machine** - the arm64 build ships because keeping it reachable costs nothing, not because it has
 been run. The vendor-neutral paths
 are chosen precisely so that they should work there; that is a design decision, not a
-measurement, and it is written here as one.
+measurement, and it is written here as one. If you run Findra on one of those machines, Settings >
+About > Details for a bug report copies the processor, the graphics and which one Findra uses;
+pasted into an issue with the output of `findra --searchmodels`, it is exactly the evidence this
+page is missing. Nothing is sent unless you paste it.
 
 Two things to read honestly. The full-text table was measured against this machine's own
 content index - 5,284 files and 74,333 text segments, read from a real disk - so its slowest

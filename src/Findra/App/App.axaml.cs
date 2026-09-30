@@ -344,11 +344,13 @@ internal sealed class Shell : ISettingsHost
 
             // Once, and then never again (spec §9b). The marker file can be lost - an antivirus
             // quarantine, a repair - and the truth about how this copy arrived cannot change, so a
-            // recorded answer always wins over a fresh look.
-            if (string.IsNullOrWhiteSpace(_config.InstallSource))
+            // recorded answer always wins over a fresh look - except a Store package, which is
+            // known rather than guessed.
+            string source = InstallSource.Resolve(_config, Path.GetDirectoryName(Environment.ProcessPath ?? "") ?? "",
+                                                  Packaged.IsPackaged);
+            if (source != _config.InstallSource)
             {
-                string dir = Path.GetDirectoryName(Environment.ProcessPath ?? "") ?? "";
-                _config = _config with { InstallSource = InstallSource.Detect(dir) };
+                _config = _config with { InstallSource = source };
                 _config.Save();
                 Log.Info("startup", $"install source recorded as {_config.InstallSource}");
             }
@@ -403,6 +405,30 @@ internal sealed class Shell : ISettingsHost
     }
 
     /// <summary>
+    /// The task records an absolute path to findra.exe, and a Store update moves it: until the task
+    /// is written again it starts the copy that was replaced, or nothing. Writing it asks for
+    /// permission once, which is the same prompt the welcome screen raised. Off the interface
+    /// thread, because the query shells out and the prompt waits for a person.
+    /// </summary>
+    private static void RewriteAStaleHelperTask()
+    {
+        try
+        {
+            string running = Environment.ProcessPath ?? "";
+            string? recorded = HelperTask.RecordedExe();
+            if (!HelperTask.NeedsRewriting(recorded, running, Packaged.IsPackaged, File.Exists)) return;
+
+            Log.Info("startup", $"the names helper task starts {recorded}, which is not this copy ({running}); registering it again");
+            // A helper still running from the old folder holds it open; it is asked to stop first.
+            HelperTask.Stop();
+            Log.Info("startup", HelperTask.Register(running)
+                ? "the names helper task now starts this copy"
+                : "the names helper task could not be registered again; the next start asks again");
+        }
+        catch (Exception ex) { Log.Warn("startup", "could not check where the names helper task points: " + ex.Message); }
+    }
+
+    /// <summary>
     /// One stage. The default arm THROWS rather than returning quietly: a step added to
     /// <see cref="StartupStep"/> and forgotten here is a stage that silently stops happening, and
     /// on this list that is the tray icon, the hotkey or the content index simply not existing.
@@ -424,6 +450,7 @@ internal sealed class Shell : ISettingsHost
             case StartupStep.NamesHelper:
                 Stage("names helper", () => _ = Task.Run(() =>
                 {
+                    RewriteAStaleHelperTask();
                     bool up = HelperTask.EnsureRunning();
                     Log.Info("startup", up
                         ? "the names helper is answering"
@@ -1187,8 +1214,9 @@ internal sealed class Shell : ISettingsHost
         StatusReply status = await client.StatusAsync(ct).ConfigureAwait(false);
         // Every volume the helper reports, not the subset this config chose: the settings window's
         // Drives row offers all of them and ticks the ones that are chosen, so a letter left out
-        // here is a disk nobody can turn back on.
-        _drives = [.. status.Volumes.Select(v => char.ToUpperInvariant(v.Letter).ToString())];
+        // here is a disk nobody can turn back on. Walked drives are left out: they are searched by
+        // name and never read inside, so there is nothing for the row to turn on.
+        _drives = [.. status.Volumes.Where(v => !v.NamesOnly).Select(v => char.ToUpperInvariant(v.Letter).ToString())];
         IReadOnlyList<char> drives = ChosenDrives(_config, status);
         if (drives.Count == 0)
         {
@@ -1318,7 +1346,8 @@ internal sealed class Shell : ISettingsHost
     private static IReadOnlyList<char> ChosenDrives(Config config, StatusReply status)
     {
         var live = new List<char>();
-        foreach (VolumeStatus v in status.Volumes) live.Add(char.ToUpperInvariant(v.Letter));
+        foreach (VolumeStatus v in status.Volumes)
+            if (!v.NamesOnly) live.Add(char.ToUpperInvariant(v.Letter));
         if (config.IndexDrives.Length == 0) return live;
 
         var wanted = new List<char>();
@@ -1618,7 +1647,7 @@ internal sealed class Shell : ISettingsHost
     {
         // The card BORROWS the read-only store and never disposes it: the store outlives every
         // card, and null is a supported state the card already answers with a sentence.
-        var card = new CardWindow(_palette, zoom, _cardStore, _semantic, _installed);
+        var card = new CardWindow(_palette, zoom, _cardStore, _semantic, _installed, Opened);
         card.SettingsRequested += OpenSettings;
         // The card cannot write a setting - it reads the index through a read-only connection -
         // so this is where "turn reading back on" from the Content pill actually lands. Through
@@ -1937,7 +1966,21 @@ internal sealed class Shell : ISettingsHost
 
         if (c.ShowCapsule && _capsule is null) Stage("capsule", CreateCapsule);
         else if (!c.ShowCapsule && _capsule is not null) CloseCapsule();
+
+        // Off means forgotten, on disk too, not merely unused.
+        if (was.RememberOpened && !c.RememberOpened)
+        {
+            (_opened ?? new OpenedHistory(Paths.OpenedFile)).Forget();
+            _opened = null;
+            Log.Info("search", "remembering opened files is off; the list is deleted");
+        }
     }
+
+    private OpenedHistory? _opened;
+
+    /// <summary>What was opened from the card, read from disk the first time a card needs it, or
+    /// null when Settings says not to remember.</summary>
+    private OpenedHistory? Opened => _config.RememberOpened ? _opened ??= new OpenedHistory(Paths.OpenedFile) : null;
 
     /// <summary>An add-on turned off records when it went away; one turned back on re-reads what
     /// was read while it was off. On the flow that owns the writer, like every re-queue.</summary>
@@ -2224,6 +2267,31 @@ internal sealed class Shell : ISettingsHost
         catch (Exception ex) { Log.Warn("settings", "could not open the log folder: " + ex.Message); }
     }
 
+    /// <summary>
+    /// The machine report, to the clipboard through the settings window it was pressed in. Read
+    /// off the interface thread: listing the graphics adapters and the model files is quick, but it
+    /// is disk and driver work, and none of it belongs on the thread that paints.
+    /// </summary>
+    void ISettingsHost.CopyReport()
+    {
+        Config config = _config;
+        SettingsWindow? window = SettingsWindow.Open;
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                string text = Diagnostics.MachineReport.Compose(Diagnostics.MachineReport.Gather(config));
+                var clip = await Dispatcher.UIThread.InvokeAsync(() => window is null ? null : TopLevel.GetTopLevel(window)?.Clipboard);
+                if (clip is null) { Log.Warn("settings", "the machine report could not be copied: no clipboard"); return; }
+                var data = new Avalonia.Input.DataTransfer();
+                data.Add(Avalonia.Input.DataTransferItem.Create(Avalonia.Input.DataFormat.Text, text));
+                await clip.SetDataAsync(data);
+                Log.Info("settings", "copied the machine report");
+            }
+            catch (Exception ex) { Log.Warn("settings", "the machine report could not be copied: " + ex.Message); }
+        });
+    }
+
     void ISettingsHost.OpenCodecStore(string productId)
     {
         // The Store app first, because that is where the install happens; the web listing when it
@@ -2462,12 +2530,24 @@ internal sealed class Shell : ISettingsHost
                 openReleases: OpenReleasesPage,
                 show: v => window?.ShowView(v),
                 close: () => window?.Close(),
-                post: a => Dispatcher.UIThread.Post(a));
+                post: a => Dispatcher.UIThread.Post(a),
+                openStore: OpenStorePage);
             window = new UpdateWindow(session, _palette);
             window.Show();
             session.Begin();
         }
         catch (Exception ex) { Log.Error("app", "the update window could not open", ex); }
+    }
+
+    /// <summary>Findra's own page in the Store app, which carries the Update button when the Store
+    /// has one waiting.</summary>
+    private static void OpenStorePage()
+    {
+        try
+        {
+            Process.Start(new ProcessStartInfo(StoreListing.PageUri) { UseShellExecute = true });
+        }
+        catch (Exception ex) { Log.Warn("update", "could not open the Store page: " + ex.Message); }
     }
 
     private static void OpenReleasesPage()

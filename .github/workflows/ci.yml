@@ -58,3 +58,28 @@ jobs:
 
       - name: the headless diagnostics
         run: pwsh -File build/Check-Diagnostics.ps1 -Exe publish/win-x64/findra.exe
+
+  # Every release ships an arm64 installer, and until this job nothing had ever run it: an x64
+  # runner cannot execute arm64 code. This runner is Windows on arm64, so the tests, the published
+  # build and the headless diagnostics run on the architecture that installer installs. It says
+  # nothing about graphics - the runner has no GPU, so everything here takes the processor path.
+  arm64:
+    runs-on: windows-11-arm
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: build
+        run: dotnet build --configuration Release -warnaserror
+
+      - name: test
+        run: dotnet test --configuration Release --no-build --verbosity normal
+
+      - name: publish
+        run: pwsh -File build/Publish.ps1 -Rid win-arm64
+
+      - name: the headless diagnostics
+        run: pwsh -File build/Check-Diagnostics.ps1 -Exe publish/win-arm64/findra.exe

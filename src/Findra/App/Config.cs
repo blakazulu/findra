@@ -32,6 +32,11 @@ public sealed record Config
     public int? CapsuleX { get; init; }
     public int? CapsuleY { get; init; }
     public bool ShowCapsule { get; init; } = true;
+
+    /// <summary>Whether Findra remembers which results were opened from it, to put them first
+    /// next time and list them on the empty card. On by default; the list stays on this machine
+    /// (<see cref="OpenedHistory"/>), and turning this off deletes it.</summary>
+    public bool RememberOpened { get; init; } = true;
     public bool CheckForUpdates { get; init; } = true;
     public DateTime? LastUpdateCheck { get; init; }
 
@@ -102,6 +107,7 @@ public sealed record Config
         && Mode == other.Mode && Hotkey == other.Hotkey
         && CapsuleX == other.CapsuleX && CapsuleY == other.CapsuleY
         && ShowCapsule == other.ShowCapsule && CheckForUpdates == other.CheckForUpdates
+        && RememberOpened == other.RememberOpened
         && LastUpdateCheck == other.LastUpdateCheck
         && LatestKnownVersion == other.LatestKnownVersion
         && InstallSource == other.InstallSource
@@ -117,7 +123,7 @@ public sealed record Config
     {
         var h = new HashCode();
         h.Add(DarkPalette); h.Add(LightPalette); h.Add(Mode); h.Add(Hotkey);
-        h.Add(CapsuleX); h.Add(CapsuleY); h.Add(ShowCapsule); h.Add(CheckForUpdates);
+        h.Add(CapsuleX); h.Add(CapsuleY); h.Add(ShowCapsule); h.Add(CheckForUpdates); h.Add(RememberOpened);
         h.Add(LastUpdateCheck); h.Add(LatestKnownVersion); h.Add(InstallSource); h.Add(LastRunVersion);
         h.Add(IndexContent); h.Add(IndexPower); h.Add(TranscribeMinutes); h.Add(FirstRunDone);
         foreach (string s in SearchExclusions) h.Add(s);

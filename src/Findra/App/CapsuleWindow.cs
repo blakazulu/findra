@@ -290,7 +290,7 @@ public sealed class CapsuleWindow : Window
     // Fully qualified, because the settings model's row type is `Findra.Control` and a type in
     // this file's own namespace beats one arriving through a using directive - so a bare `Control`
     // here binds to a sealed record.
-    private sealed class CapsuleCanvas : Avalonia.Controls.Control
+    private sealed class CapsuleCanvas : Avalonia.Controls.Control, IAccessibleSurface
     {
         private readonly Derived _derived;
         private readonly SKTypeface _face;
@@ -369,6 +369,26 @@ public sealed class CapsuleWindow : Window
             }
             Clicked?.Invoke();
         }
+
+        // ---- what a screen reader sees: one button, the whole capsule ----
+
+        public string AccessName => "Findra";
+
+        public IReadOnlyList<AccessNode> AccessNodes() =>
+        [
+            new("capsule", AccessRole.Button, "Findra search",
+                SKRect.Create(0, 0, (float)(Bounds.Width / _scale), (float)(Bounds.Height / _scale)))
+            {
+                Help = Progress.Show ? $"{Progress.Label} {Progress.Count}" : "Opens the search card",
+            },
+        ];
+
+        public double AccessScale => _scale;
+        public string? FocusedKey => null;
+        public void AccessInvoke(AccessNode node) => Clicked?.Invoke();
+
+        protected override Avalonia.Automation.Peers.AutomationPeer OnCreateAutomationPeer() =>
+            new AccessiblePeer(this, this);
 
         public override void Render(DrawingContext context)
             => context.Custom(new DrawOp(new Rect(Bounds.Size), this));
