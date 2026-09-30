@@ -7,10 +7,10 @@ function run(choice, hostname='findra-search.netlify.app') {
   const added=[]; const commands=[];
   const element=()=>({setAttribute(){},addEventListener(){},querySelector(){return {focus(){}}},dataset:{}});
   const document={head:{appendChild:x=>added.push(x)},body:{appendChild:x=>added.push(x)},createElement:element,querySelectorAll:()=>[],referrer:'',cookie:''};
-  const window={addEventListener(){}};
+  const window={addEventListener(){},'ga-disable-G-909686JLLS':true};
   const ctx={window,document,location:{hostname,origin:`https://${hostname}`,pathname:'/',search:''},localStorage:{getItem:()=>choice,setItem(){}},URL,URLSearchParams,Set,MutationObserver:class {observe(){}},gtag:(...args)=>commands.push(args),clarity:(...args)=>commands.push(args)};
   vm.runInNewContext(source,ctx);
-  return {scripts:added.filter(x=>x.src).map(x=>x.src),banner:added.find(x=>x.className==='findra-consent'),commands};
+  return {disabled:window['ga-disable-G-909686JLLS'],scripts:added.filter(x=>x.src).map(x=>x.src),banner:added.find(x=>x.className==='findra-consent'),commands};
 }
 for(const choice of [null,'denied','invalid']) {
  const result=run(choice);assert.deepEqual(result.scripts,[]);assert.equal(result.commands.length,0);
@@ -19,6 +19,7 @@ for(const choice of [null,'denied','invalid']) {
 const granted=run('granted');
 assert.deepEqual(granted.scripts,['https://www.googletagmanager.com/gtag/js?id=G-909686JLLS','https://www.clarity.ms/tag/yqly8fd2cl']);
 assert.equal(granted.banner.hidden,true);
+assert.equal(granted.disabled,false);
 const config=granted.commands.find(x=>x[0]==='config');
 assert.equal(config[2].allow_google_signals,false);assert.equal(config[2].allow_ad_personalization_signals,false);
 assert.equal(granted.commands.find(x=>x[0]==='consent')[2].ad_storage,'denied');

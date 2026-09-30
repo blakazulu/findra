@@ -9,6 +9,7 @@
   function start() {
     if (started) return;
     started = true;
+    window['ga-disable-G-909686JLLS'] = false;
     document.querySelectorAll('input,textarea,select,[contenteditable],form').forEach(function (el) { el.setAttribute('data-clarity-mask', 'true'); });
     var mask = new MutationObserver(function () { document.querySelectorAll('input,textarea,select,[contenteditable],form').forEach(function (el) { if (!el.hasAttribute('data-clarity-mask')) el.setAttribute('data-clarity-mask','true'); }); });
     mask.observe(document.body,{childList:true,subtree:true});
