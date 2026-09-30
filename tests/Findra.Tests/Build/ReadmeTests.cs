@@ -58,10 +58,17 @@ public class ReadmeTests
         string[] lines = Readme.Replace("\r\n", "\n", StringComparison.Ordinal).Split('\n');
         for (int i = 0; i < lines.Length; i++)
         {
-            if (!Regex.IsMatch(lines[i], @"!\[[^\]]*\]\([^)\s]+\)")) continue;
+            if (!Regex.IsMatch(lines[i], @"!\[[^\]]*\]\((docs/shots/[^)\s]+)\)")) continue;
             string window = string.Join("\n", lines.Skip(Math.Max(0, i - 2)).Take(6));
             Assert.Contains("--searchshot", window, StringComparison.Ordinal);
         }
+    }
+
+    [Fact]
+    public void TheStoreBadgePointsToFindrasVerifiedListing()
+    {
+        Assert.Contains("[![Microsoft Store](docs/microsoft-store.svg)](https://apps.microsoft.com/detail/9p78z9kt48pr)", Readme, StringComparison.Ordinal);
+        Assert.True(Repo.Exists("docs/microsoft-store.svg"));
     }
 
     [Fact]
