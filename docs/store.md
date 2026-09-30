@@ -153,8 +153,8 @@ set up. The welcome page and the fully grown card overflowed from 150%. Fixed in
 window shrinks as a whole to fit the screen it opens on (`ScreenFit`), held by `ScreenFitTests` at
 100-175% on 1080p.
 
-Resubmission: upload `findra_0.8.0.0.msixbundle` on the Packages page (replacing 0.3.1), set
-"What's new in this version" from the 0.8.0, 0.7.2, 0.7.1, 0.7.0, 0.6.3, 0.6.2, 0.6.1, 0.6.0, 0.5.1, 0.5.0, 0.4.3, 0.4.2, 0.4.1 and 0.4.0 CHANGELOG sections, and add to the notes for
+Resubmission: upload `findra_0.9.0.0.msixbundle` on the Packages page (replacing 0.3.1), set
+"What's new in this version" from the 0.9.0, 0.8.0, 0.7.2, 0.7.1, 0.7.0, 0.6.3, 0.6.2, 0.6.1, 0.6.0, 0.5.1, 0.5.0, 0.4.3, 0.4.2, 0.4.1 and 0.4.0 CHANGELOG sections, and add to the notes for
 certification: "Fixed 10.1.2.10: every window now shrinks to fit the display at 125% scaling and
 above on 1920x1080, including the first-run screen whose buttons were below the screen edge."
 
@@ -225,8 +225,9 @@ end-to-end checklist covers once the Store has certified a build.
 > formats are searched by name too, for as long as they are plugged in. A capsule sits on your desktop; a global hotkey
 > brings it up from anywhere and it unfolds into a card of results.
 >
-> It can also search inside your files: the words in documents, what a photo shows, and what
-> was said in a recording. That part is off until you turn it on, and the models it needs are
+> It can also search inside your files: the words in documents (scanned PDFs included), what a
+> photo shows, and what was said in a recording, and find the files that look or read like one
+> you pick. That part is off until you turn it on, and the models it needs are
 > optional downloads you choose from a screen inside the app - none of them required.
 >
 > Nothing about your files, your searches or your machine leaves it. There is one exception,

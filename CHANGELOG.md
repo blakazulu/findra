@@ -7,6 +7,8 @@ and Findra follows [Semantic Versioning](https://semver.org/spec/v2.0.0/).
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-09-30
+
 ### Added
 
 - **Scanned PDFs are searched by what they say.** A PDF whose pages are pictures of pages - a scan,
@@ -28,9 +30,9 @@ and Findra follows [Semantic Versioning](https://semver.org/spec/v2.0.0/).
 - **More like this.** Highlight a photo, video, document or recording and press More like this
   above Open (or Ctrl+L): Findra lists the files that look or read like it, judged by what it read
   inside them rather than by their names, and a video or recording says at which moment. It works
-  by writing `like:"<the file's path>"` into the search box, so the kind chips, sorting and
-  filters typed beside it (`type:video`, `in:Crete`, `-draft`, `size:`, `modified:`) all apply,
-  and Escape clears it like any other search. It needs Photos or Meaning, and the button waits,
+  by writing `like:` and the file's path into the search box, so the kind chips, sorting and any
+  filter typed beside it, such as `type:video` or `in:Crete`, all apply, and Escape clears it like
+  any other search. It needs Photos or Meaning, and the button waits,
   greyed out, until Findra has read that file. How alike two files must be to count was measured
   on one machine's real pictures and documents.
 
@@ -40,8 +42,8 @@ and Findra follows [Semantic Versioning](https://semver.org/spec/v2.0.0/).
   Findra had skipped as having no text or as a format it could not read are read again, so the
   scans, RTF and OpenDocument files already on your disk become searchable. Nothing that was
   already read is read a second time.
-- Asking `findra --searchindex` a question (`q:` or `why:`, with no file to queue) now opens the
-  index read-only, and `q:like:"<path>"` asks it the More like this question.
+- Asking `findra --searchindex` a `q:` or `why:` question, with no file to queue, now opens the
+  index read-only, and `q:like:` followed by a path asks it the More like this question.
 
 ### Fixed
 
@@ -2053,7 +2055,8 @@ all of it gets verified without a screen.
 - The named pipe is restricted to the current user, and the interface verifies the
   owner before trusting a connection.
 
-[Unreleased]: https://github.com/blakazulu/findra/compare/v0.8.0...HEAD
+[Unreleased]: https://github.com/blakazulu/findra/compare/v0.9.0...HEAD
+[0.9.0]: https://github.com/blakazulu/findra/compare/v0.8.0...v0.9.0
 [0.8.0]: https://github.com/blakazulu/findra/compare/v0.7.2...v0.8.0
 [0.7.2]: https://github.com/blakazulu/findra/compare/v0.7.1...v0.7.2
 [0.7.1]: https://github.com/blakazulu/findra/compare/v0.7.0...v0.7.1

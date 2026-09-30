@@ -1,6 +1,6 @@
 # yaml-language-server: $schema=https://aka.ms/winget-manifest.defaultLocale.1.6.0.schema.json
 PackageIdentifier: blakazulu.Findra
-PackageVersion: 0.8.0
+PackageVersion: 0.9.0
 PackageLocale: en-US
 Publisher: blakazulu
 PublisherUrl: https://github.com/blakazulu
@@ -16,8 +16,9 @@ Description: |-
   directly and keeping it live from the change journal. USB sticks, memory cards and drives in
   other formats are searched by name too, for as long as they are plugged in.
 
-  It can also search inside your files: the words in documents, what a photo shows, and what
-  was said in a recording. That part is off until you turn it on, and the models it needs are
+  It can also search inside your files: the words in documents (scanned PDFs included), what a
+  photo shows, and what was said in a recording, and find the files that look or read like one
+  you pick. That part is off until you turn it on, and the models it needs are
   optional downloads you choose from a screen inside the app - up to 3.7 GB if you take all of
   them, and none at all if you do not.
 

@@ -5,6 +5,55 @@ All notable changes to Findra are documented here.
 The format follows [Keep a Changelog 1.1.0](https://keepachangelog.com/en/1.1.0/),
 and Findra follows [Semantic Versioning](https://semver.org/spec/v2.0.0/).
 
+## [0.9.0 - 30 September 2026](https://github.com/blakazulu/findra/releases/tag/v0.9.0)
+
+### Added
+
+- **Scanned PDFs are searched by what they say.** A PDF whose pages are pictures of pages - a scan,
+  a fax, a phone photo saved as a PDF - used to be passed over as having no text. Findra now reads
+  the words on those pages with the text recognition built into Windows, in English and Hebrew
+  wherever those are installed, and keeps them in page order beside any pages that have text of
+  their own. Up to the first 100 scanned pages of each file are read. There is nothing to
+  download: this is part of reading documents.
+- **RTF and OpenDocument files are read inside.** Rich Text files (.rtf), Hebrew ones included,
+  and OpenDocument text, spreadsheets and presentations (.odt, .ods and .odp) are now found by
+  the words in them, not only by their names. The older Word, Excel and PowerPoint formats (.doc,
+  .xls and .ppt) are still found by name only.
+- **The Advanced search panel works with a screen reader and the keyboard.** Narrator now reads
+  each of its fields with what is typed in it and an example of what it takes, both checks, the
+  six kinds and the three buttons. Tab moves through all of them in the order they are drawn,
+  Space ticks a check, picks a kind or presses a button, and Enter presses a button or applies the
+  panel from anywhere else, with a ring showing where you are. Clicking in the search box while
+  the panel is open now puts the panel away and places the cursor there.
+- **More like this.** Highlight a photo, video, document or recording and press More like this
+  above Open (or Ctrl+L): Findra lists the files that look or read like it, judged by what it read
+  inside them rather than by their names, and a video or recording says at which moment. It works
+  by writing `like:` and the file's path into the search box, so the kind chips, sorting and any
+  filter typed beside it, such as `type:video` or `in:Crete`, all apply, and Escape clears it like
+  any other search. It needs Photos or Meaning, and the button waits,
+  greyed out, until Findra has read that file. How alike two files must be to count was measured
+  on one machine's real pictures and documents.
+
+### Changed
+
+- **Documents that were passed over are read again, once.** After this update, the documents
+  Findra had skipped as having no text or as a format it could not read are read again, so the
+  scans, RTF and OpenDocument files already on your disk become searchable. Nothing that was
+  already read is read a second time.
+- Asking `findra --searchindex` a `q:` or `why:` question, with no file to queue, now opens the
+  index read-only, and `q:like:` followed by a path asks it the More like this question.
+
+### Fixed
+
+- **Findra no longer says the words inside pictures come free.** They are read as a picture is
+  looked at, and Findra looks at pictures only with the Photos and video add-on. The first screen,
+  Settings, `findra --models`, `findra --searchmodels` and the README now say that the words in a
+  picture come with that add-on.
+- **A document built to decompress to an enormous size can no longer hold up reading.** Word,
+  Excel, PowerPoint, EPUB and OpenDocument files are zip archives, and a small one can unpack to
+  gigabytes. Findra now stops reading such a file after 256 MB of unpacked content and keeps the
+  words it had already read.
+
 ## [0.8.0 - 30 September 2026](https://github.com/blakazulu/findra/releases/tag/v0.8.0)
 
 ### Added
