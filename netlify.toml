@@ -11,14 +11,12 @@
   publish = "website/public"
   command = ""
 
-# A page that sells "nothing leaves your machine" should not itself be reaching out.
-# The policy below permits this origin and nothing else - the fonts are served from /fonts/,
-# so there is no analytics, no beacon, no third-party script or stylesheet, and no way for one
-# to be added by accident.
+# Fonts and other site assets stay local. GA4 and Clarity are optional and loaded only
+# after explicit website consent; this configuration has no effect on the desktop app.
 [[headers]]
   for = "/*"
   [headers.values]
-    Content-Security-Policy = "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'none'; frame-ancestors 'none'; base-uri 'self'; form-action 'none'"
+    Content-Security-Policy = "default-src 'self'; script-src 'self' https://www.googletagmanager.com https://*.clarity.ms; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data: https://*.google-analytics.com https://*.clarity.ms; connect-src 'self' https://*.google-analytics.com https://*.analytics.google.com https://*.clarity.ms; frame-ancestors 'none'; base-uri 'self'; form-action 'none'"
     Referrer-Policy = "strict-origin-when-cross-origin"
     X-Content-Type-Options = "nosniff"
     X-Frame-Options = "DENY"

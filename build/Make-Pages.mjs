@@ -118,11 +118,11 @@ const PAGES = [
     source: 'PRIVACY.md',
     kicker: 'Privacy',
     headline: 'Nothing leaves your machine, except one request.',
-    title: 'Findra privacy policy - nothing leaves your machine',
+    title: 'Findra privacy policy - app privacy and optional website analytics',
     description:
-      'What Findra stores, where it stores it, and the single anonymous request it makes on ' +
-      'its own. No account, no cloud, no analytics, no telemetry.',
-    reviewed: '2026-09-05',
+      'The desktop app keeps your files and searches local with no telemetry. ' +
+      'The separate marketing website uses Google Analytics and Clarity only with consent.',
+    reviewed: '2026-10-01',
     // The Markdown twin is published beside the page so an agent asking for text/markdown, and a
     // person who would rather read the file, both get the real thing rather than a rewrite.
     ogType: 'website',
@@ -505,8 +505,8 @@ function shell(page, content) {
 <link rel="apple-touch-icon" href="/apple-touch-icon.png">
 <link rel="alternate" type="text/markdown" href="/${page.markdown}" title="${escape(page.title)} as Markdown">
 <link rel="alternate" type="text/markdown" href="/llms.txt" title="Findra for language models">
-<!-- The two faces are served from this site, so the page makes no request to anybody else - which
-     is the promise it exists to make. Quicksand is preloaded because it sets the headline, and a
+<!-- The two faces are served from this site. Optional analytics load only after consent.
+     Quicksand is preloaded because it sets the headline, and a
      font the browser only discovers inside styles.css is a font it starts fetching late. -->
 <link rel="preload" href="/fonts/Quicksand-wght.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="/styles.css">
@@ -554,6 +554,7 @@ ${content.split('\n').map((l) => (l ? '      ' + l : l)).join('\n')}
 ${FOOTER}
 
 <script src="/app.js" defer></script>
+<script src="/analytics.js" defer></script>
 </body>
 </html>
 `;

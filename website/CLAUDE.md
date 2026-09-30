@@ -53,10 +53,12 @@ Rules for `website/`, `build/Make-Pages.mjs`, `build/Ping-IndexNow.mjs`, `netlif
 
 ## Promises
 
-- **CSP permits this origin only** (`font-src 'self'`, `script-src 'self'`, `connect-src 'none'`,
-  `img-src 'self' data:`). No analytics, beacons, third-party script, CDN, **or Google Fonts**.
-  Quicksand and JetBrains Mono are upstream variable fonts, unmodified, rewrapped as WOFF2 with
-  licences beside them, **never subset**. A new origin is a decision for somebody, not a detail.
+- **Optional website analytics only**: GA4 and Clarity load from `analytics.js` only after
+  explicit opt-in. Ads remain denied and Google signals off. Inputs/forms are masked, and
+  withdrawal clears this site's analytics cookies and reloads. The English consent banner
+  and privacy preferences appear on every HTML page. The desktop app stays telemetry-free.
+  CSP permits the required analytics origins; fonts stay local. `PRIVACY.md` separates the
+  app policy from the website policy. Regenerate after editing the shared shell or policy.
 - **IndexNow is not the page reaching out.** `Ping-IndexNow.mjs` submits sitemap URLs to Bing and
   Yandex; `site.yml` runs it after a successful release, **waiting until the live page names the new
   version**; otherwise by hand, after the deploy is live. **`--send` is required. The key exists only

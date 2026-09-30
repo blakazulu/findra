@@ -24,8 +24,8 @@
 <link rel="apple-touch-icon" href="/apple-touch-icon.png">
 <link rel="alternate" type="text/markdown" href="/contact.md" title="Contact Findra - bugs, security reports and questions as Markdown">
 <link rel="alternate" type="text/markdown" href="/llms.txt" title="Findra for language models">
-<!-- The two faces are served from this site, so the page makes no request to anybody else - which
-     is the promise it exists to make. Quicksand is preloaded because it sets the headline, and a
+<!-- The two faces are served from this site. Optional analytics load only after consent.
+     Quicksand is preloaded because it sets the headline, and a
      font the browser only discovers inside styles.css is a font it starts fetching late. -->
 <link rel="preload" href="/fonts/Quicksand-wght.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="/styles.css">
@@ -215,5 +215,6 @@
 </footer>
 
 <script src="/app.js" defer></script>
+<script src="/analytics.js" defer></script>
 </body>
 </html>

@@ -1398,21 +1398,20 @@ public class WebsiteTests
         Assert.Equal($"google-site-verification: {found[0]}", Repo.Read($"website/public/{found[0]}").Trim());
     }
 
-    /// <summary>
-    /// The site fetches nothing from anybody else, fonts included.
-    ///
-    /// <para>The page's whole argument is that nothing leaves your machine, and it used to load its
-    /// two typefaces from Google Fonts - a request to a third party on every first visit, made by the
-    /// page that says there are none. Both faces are now served from <c>/fonts/</c>, and the content
-    /// security policy names no origin but this one. Anything that brings a third-party origin back
-    /// is a decision to put to somebody, and this is where it fails first.</para>
-    /// </summary>
+    /// <summary>Local fonts and scripts; optional trackers load through the consent gate.</summary>
     [Fact]
-    public void TheSiteFetchesNothingFromAnotherOrigin()
+    public void TheSiteOnlyPermitsConsentGatedAnalyticsOrigins()
     {
         string csp = Regex.Match(Netlify, @"Content-Security-Policy = ""([^""]+)""").Groups[1].Value;
         Assert.False(string.IsNullOrEmpty(csp), "netlify.toml sets no content security policy");
-        Assert.DoesNotContain("https://", csp, StringComparison.Ordinal);
+        Assert.Contains("https://www.googletagmanager.com", csp, StringComparison.Ordinal);
+        Assert.Contains("https://*.clarity.ms", csp, StringComparison.Ordinal);
+        string consent = Repo.Read("website/public/analytics.js");
+        Assert.Contains("if (choice === 'granted') start()", consent, StringComparison.Ordinal);
+        Assert.Contains("allow_google_signals:false", consent, StringComparison.Ordinal);
+        Assert.Contains("ad_storage:'denied'", consent, StringComparison.Ordinal);
+        Assert.Contains("data-clarity-mask", consent, StringComparison.Ordinal);
+        Assert.Contains("clearCookies(); if (started) location.reload()", consent, StringComparison.Ordinal);
         Assert.Contains("font-src 'self'", csp, StringComparison.Ordinal);
 
         string[] pages = Directory.GetFiles(Repo.Path_("website/public"), "*.html", SearchOption.AllDirectories);
@@ -1420,6 +1419,7 @@ public class WebsiteTests
         foreach (string page in pages)
         {
             string html = WithoutComments(File.ReadAllText(page));
+            Assert.Contains("src=\"/analytics.js\"", html, StringComparison.Ordinal);
             // Absolute links to this site - the canonical, mostly - are not a request to anybody else.
             Assert.DoesNotMatch(@"<link[^>]+href=""https?://(?!findra-search\.netlify\.app/)", html);
             Assert.DoesNotMatch(@"<script[^>]+src=""https?://", html);

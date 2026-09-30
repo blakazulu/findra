@@ -1,5 +1,4 @@
-/* Findra site. No dependencies, no analytics, nothing that phones anywhere -
-   which would be an odd thing for this page of all pages to do. */
+/* Local website interactions. Optional analytics live separately in analytics.js. */
 
 (function () {
   'use strict';

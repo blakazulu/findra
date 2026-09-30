@@ -4,8 +4,8 @@ Findra is a search tool that runs on your computer. Your files, their names, the
 and your searches stay on that computer. There is no account, no cloud service, no
 analytics, no crash reporting and no telemetry of any kind.
 
-This page says exactly what Findra stores, where it stores it, and the single thing it
-sends anywhere.
+This page says exactly what the desktop app stores, where it stores it, and the single thing it
+sends anywhere. The separate marketing website has optional analytics, described below.
 
 ## The one request Findra makes on its own
 
@@ -109,6 +109,38 @@ remove those, or use the uninstaller. Nothing else on your machine is touched.
 
 Findra is a general-purpose tool and is not directed at children. It collects nothing about
 anybody.
+
+## The marketing website, not the desktop app
+
+The rules above describe the Findra desktop app. The website at
+https://findra-search.netlify.app is separate. Installing or using Findra does not enable
+website analytics, and this website setup adds no analytics or telemetry to the app.
+
+No Google Analytics or Microsoft Clarity script loads until you choose
+"Allow analytics and recordings" in the website banner. Rejecting optional analytics leaves
+both tools off. Your choice is stored in your browser's local storage on this website.
+
+If you opt in, Google Analytics 4 measures page visits, traffic sources, device and browser
+information, approximate location, time on pages and scrolling. Microsoft Clarity collects
+website interactions, including clicks, scrolling and session recordings, to help improve
+this website. These services process technical information such as IP addresses and can
+set analytics cookies, including `_ga`, `_clck` and `_clsk`. We do not use Google signals,
+ad personalization or advertising consent. Inputs, forms and editable fields are masked
+for Clarity. URL query parameters are excluded from the Google page URL except campaign
+attribution parameters. Do not enter private information into this website's URLs.
+
+Google and Microsoft process the information on their services, potentially outside your
+country. Their policies explain their handling of this information:
+[Google privacy policy](https://policies.google.com/privacy) and
+[Microsoft privacy statement](https://privacy.microsoft.com/privacystatement).
+Recordings describe your use of this website, never your desktop files or Findra searches.
+
+Open "Privacy preferences" on any website page to change your choice. Choosing
+"Reject optional analytics" withdraws consent, removes the Google Analytics and Clarity
+cookies accessible to this website and reloads the page to stop the loaded tools. It does
+not erase information already sent to Google or Microsoft, or cookies on other domains.
+You can also clear this website's storage in your browser. Rejecting analytics does not
+limit access to this website or to Findra.
 
 ## Changes to this page
 
