@@ -1,11 +1,11 @@
 # Publishing Findra to the Microsoft Store
 
-> **Status: submission 1 complete, not submitted.** "Findra" is reserved on the existing
-> developer account (step 3 done), all three identity values are final in
-> `packaging/store/Package.appxmanifest`, and the `store` workflow can produce the bundle.
-> On 22 September 2026 submission 1 (id `1152921505701952194`) was filled in Partner Center,
-> the bundle uploaded, and every section shows Complete. Nothing has been sent to Microsoft
-> for review; the owner clicks Submit after a final read-through.
+> **Status: published.** Findra is listed at https://apps.microsoft.com/detail/9p78z9kt48pr
+> (Store ID `9P78Z9KT48PR`, publisher Liraz Shaka Amir), with a release date of 30 September 2026,
+> 11:53 UTC, after submission 1 failed certification on scaling (5b) and was resubmitted.
+> `allowElevation` was accepted. The README, the front page and the install page link the
+> listing. From here each release reaches the Store through the routine in "Updating the Store
+> copy" below; the listing can trail the releases page.
 
 ## The decision
 
@@ -158,6 +158,11 @@ Resubmission: upload `findra_0.9.0.0.msixbundle` on the Packages page (replacing
 certification: "Fixed 10.1.2.10: every window now shrinks to fit the display at 125% scaling and
 above on 1920x1080, including the first-run screen whose buttons were below the screen edge."
 
+### 5c. Published (30 September 2026)
+
+The resubmission passed certification, `allowElevation` included, and the listing went live
+with a release date of 30 September 2026, 11:53 UTC. The fallback below was not needed.
+
 ### 6. Certification
 
 Certification reads the restricted-capability justification and can take longer for it. If
@@ -210,7 +215,8 @@ A packaged Findra does three things differently, each decided by `Packaged.IsPac
    Windows refuses, the switch reads off again, and the log says where to turn it on.
 
 Still untested on a real package: all three run only inside an installed MSIX, which the
-end-to-end checklist covers once the Store has certified a build.
+end-to-end checklist covers; the Store has now certified a build, so they can be checked on a copy
+installed from the listing.
 
 ## Store listing text
 

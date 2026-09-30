@@ -7,6 +7,18 @@ and Findra follows [Semantic Versioning](https://semver.org/spec/v2.0.0/).
 
 ## [Unreleased]
 
+### Added
+
+- **Findra is in the Microsoft Store.** It is listed at
+  https://apps.microsoft.com/detail/9p78z9kt48pr, and the README, the front page and the install
+  page now link it. A copy installed from the Store is updated by the Store, which can be a little
+  behind the releases page.
+
+### Changed
+
+- Documentation: the notes for working on Findra's code are split by folder, so each part of the
+  program carries its own rules beside it, and the Microsoft Store record says the listing is live.
+
 ## [0.9.0] - 2026-09-30
 
 ### Added
