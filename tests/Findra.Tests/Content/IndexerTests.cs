@@ -242,17 +242,12 @@ public sealed class IndexerTests : IDisposable
     [InlineData("doc")]
     [InlineData("xls")]
     [InlineData("ppt")]
-    [InlineData("rtf")]
-    [InlineData("odt")]
-    [InlineData("odp")]
-    [InlineData("ods")]
     public void AFormatWithNoReaderIsSkippedRatherThanReadAsRawBytes(string ext)
     {
         // These are documents by classification and unreadable by this build: the legacy binary
-        // Office formats and the OpenDocument zips. Reading their bytes as text indexes
-        // structure words and mojibake and then records the file as indexed, which is worse
-        // than a gap - a gap is visible in --searchindex and a later reader can re-queue
-        // exactly these rows.
+        // Office formats. Reading their bytes as text indexes mojibake and then records the file
+        // as indexed, which is worse than a gap - a gap is visible in --searchindex and a later
+        // reader can re-queue exactly these rows.
         string f = Under("contract." + ext);
         File.WriteAllText(f, "the quarterly lease agreement was signed on the fourteenth of March");
 
@@ -266,34 +261,50 @@ public sealed class IndexerTests : IDisposable
     }
 
     [Fact]
-    public void TheWordsInsideAnOpenDocumentZipAreNotFoundByReadingItsBytes()
+    public void TheWordsInsideAnOpenDocumentZipAreFoundByReadingItsContent()
     {
-        // Why the format gate is not merely tidy: an .odt read as text indexes the zip's
-        // structure and never its words, because they are deflate-compressed. Recorded as
-        // indexed it becomes a file the index claims to hold and no search can ever return.
+        // An .odt's words are deflate-compressed, so reading its bytes as text would find zip
+        // structure and never the document. Read through its own reader they are ordinary words.
         string odt = Under("contract.odt");
         using (FileStream fs = File.Create(odt))
         using (var zip = new System.IO.Compression.ZipArchive(fs, System.IO.Compression.ZipArchiveMode.Create))
         using (var w = new StreamWriter(zip.CreateEntry("content.xml").Open()))
-            w.Write("<office><text>"
-                    + string.Concat(Enumerable.Repeat("the quarterly lease agreement was signed. ", 400))
-                    + "</text></office>");
+            w.Write("<office:document-content xmlns:office=\"urn:oasis:names:tc:opendocument:xmlns:office:1.0\" "
+                    + "xmlns:text=\"urn:oasis:names:tc:opendocument:xmlns:text:1.0\"><office:body><office:text>"
+                    + string.Concat(Enumerable.Repeat("<text:p>the quarterly lease agreement was signed.</text:p>", 40))
+                    + "</office:text></office:body></office:document-content>");
 
         using ContentDb db = Open();
         db.Enqueue("C", 1, odt, ResultKind.Document, "probe");
         Indexer.DrainOnce(db, _ => { }, Dec());
 
-        Assert.Equal(0, db.IndexedCount());
-        Assert.Equal(1, db.Counts().Skipped);
-        Assert.Empty(db.Fts("lease", 10));
+        Assert.Equal(1, db.IndexedCount());
+        Assert.NotEmpty(db.Fts("lease", 10));
+    }
+
+    [Fact]
+    public void AnRtfFileIsIndexedByItsWordsAndNotItsControlWords()
+    {
+        string rtf = Under("contract.rtf");
+        File.WriteAllText(rtf, @"{\rtf1\ansi\deff0{\fonttbl{\f0\froman Times New Roman;}}\pard "
+                               + string.Concat(Enumerable.Repeat(@"the quarterly lease agreement was signed.\par ", 20)) + "}");
+
+        using ContentDb db = Open();
+        db.Enqueue("C", 1, rtf, ResultKind.Document, "probe");
+        Indexer.DrainOnce(db, _ => { }, Dec());
+
+        Assert.Equal(1, db.IndexedCount());
+        Assert.NotEmpty(db.Fts("lease", 10));
+        Assert.Empty(db.Fts("fonttbl", 10));
+        Assert.Empty(db.Fts("Roman", 10));
     }
 
     [Fact]
     public void CanExtractKnowsWhichFormatsThisBuildCanReadInside()
     {
-        foreach (string ext in new[] { "pdf", "docx", "pptx", "xlsx", "epub", "html", "htm", "txt", "md", "csv" })
+        foreach (string ext in new[] { "pdf", "docx", "pptx", "xlsx", "epub", "html", "htm", "txt", "md", "csv", "rtf", "odt", "ods", "odp" })
             Assert.True(DocText.CanExtract("b." + ext), ext + " has a reader in this build");
-        foreach (string ext in new[] { "doc", "xls", "ppt", "rtf", "odt", "odp", "ods" })
+        foreach (string ext in new[] { "doc", "xls", "ppt" })
         {
             Assert.False(DocText.CanExtract("b." + ext), ext + " has no reader in this build");
             Assert.False(DocText.CanExtract("B." + ext.ToUpperInvariant()), ext + " must match whatever the case");

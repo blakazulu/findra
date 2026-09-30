@@ -447,4 +447,42 @@ public sealed class SchemaTests : IDisposable
             Assert.Equal(0, resumed.Attempts);
         }
     }
+
+    [Fact]
+    public void Schema8ReadsAgainOnlyTheDocumentsSkippedForNoTextOrNoReader()
+    {
+        // Scanned PDFs were recorded as having no text, RTF and OpenDocument files as having no
+        // reader. Those rows are what the new readers are for, and nothing else is touched: a
+        // document already read, one too large to open, and a photo waiting for its add-on all
+        // stay exactly as they were.
+        string path = Db();
+        using (var db = new ContentDb(path))
+        {
+            using (var tx = db.Begin())
+            {
+                db.Upsert("C", 1, @"C:\a\scan.pdf", ResultKind.Document, 1, 1, ContentDb.StateSkipped, Decoders.NoText, [], tx);
+                db.Upsert("C", 2, @"C:\a\letter.rtf", ResultKind.Document, 1, 1, ContentDb.StateSkipped, Decoders.NoFormatReader, [], tx);
+                db.Upsert("C", 3, @"C:\a\minutes.odt", ResultKind.Document, 1, 1, ContentDb.StateSkipped, Decoders.NoFormatReader, [], tx);
+                db.Upsert("C", 4, @"C:\a\lease.pdf", ResultKind.Document, 1, 1, ContentDb.StateIndexed, null, [], tx);
+                db.Upsert("C", 5, @"C:\a\dump.txt", ResultKind.Document, 1, 1, ContentDb.StateSkipped, Decoders.TooLarge, [], tx);
+                db.Upsert("C", 6, @"C:\a\sunset.jpg", ResultKind.Photo, 1, 1, ContentDb.StateSkipped, Decoders.NoModel, [], tx);
+                tx.Commit();
+            }
+            db.SetUsnPosition('C', journalId: 0xABCDEF, usn: 90210);
+            db.Set("schema", "7");
+        }
+
+        using (var db = new ContentDb(path))
+        {
+            Assert.Equal(7, db.OpenedFromSchema);
+            Assert.Equal(3, db.PendingCount());
+            foreach (string queued in new[] { @"C:\a\scan.pdf", @"C:\a\letter.rtf", @"C:\a\minutes.odt" })
+                Assert.Equal(Indexer.Recheck, db.QueuedAs(queued)!.Value.Reason);
+            Assert.Null(db.QueuedAs(@"C:\a\lease.pdf"));
+            Assert.Null(db.QueuedAs(@"C:\a\dump.txt"));
+            Assert.Null(db.QueuedAs(@"C:\a\sunset.jpg"));
+            // every one of these files already has a row, so no drive is walked for them
+            Assert.Equal((0xABCDEFUL, 90210L), db.UsnPosition('C'));
+        }
+    }
 }

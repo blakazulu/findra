@@ -13,19 +13,22 @@ namespace Findra;
 //   sunset                 contains "sunset" in the name (and, once indexed, in the contents)
 //   *.jpg  IMG_2024*  ?.md  a glob over the name: * anything, ? one character
 //   "quarterly revenue"    the words together, in a name or in a document
-//   -draft  !draft  -in:node_modules   must not contain / must not be under (! = -, Everything's)
+//   -draft  !draft  -in:node_modules   must not contain / must not be under (! is the same as -)
 //   report | invoice       OR: each side is its own full query, results unioned (top-level only -
 //                          "a b | c" is (a AND b) OR c; distribute by hand for anything deeper)
 //   ext:jpg,png  type:photo|video|doc|audio|folder|file
 //   in:Downloads  in:C:\Code    under a folder (a name anywhere in the path, or a full prefix)
-//   size:>10mb  size:1mb..100mb  size:huge   by size (b/kb/mb/gb, a..b range, or Everything's
-//                          constants: tiny/small/medium/large/huge/gigantic)
+//   size:>10mb  size:1mb..100mb  size:huge   by size (b/kb/mb/gb, a..b range, or a named
+//                          band: tiny/small/medium/large/huge/gigantic)
 //   modified:today|week|month|year|2025|2025-08|2026-01-01..2026-03-15   by last-write date
 //   created:…  dc:…  accessed:…  da:…        same forms, by creation / last-access date
 //   case:Word              the word must match with this exact casing
 //   ww:word                whole word: not part of a longer run of letters
 //   regex:pat.*ern         a .NET regex over the name (quote it to keep spaces); slower - it
 //                          walks every name instead of scanning
+//   like:"C:\a.jpg"       files that look or read like that one (quote a path with spaces).
+//                          Answered from what was read inside files, never from names; the
+//                          filters still apply, and other words beside it are not searched
 public sealed class SearchQuery
 {
     public string Raw { get; }
@@ -56,6 +59,13 @@ public sealed class SearchQuery
     /// <summary>A `regex:` pattern, compiled; null when none or invalid (invalid logs once).</summary>
     public System.Text.RegularExpressions.Regex? Rx { get; private set; }
     public string PathNeedle { get; private set; } = "";
+
+    /// <summary>The file a `like:` query compares everything with, or empty. A query that names
+    /// one asks what is inside files and nothing else: see <c>ContentBranch</c>.</summary>
+    public string Like { get; private set; } = "";
+
+    /// <summary>Is this a "more like this" query?</summary>
+    public bool IsLike => Like.Length > 0;
 
     public bool HasFilters => Exts.Count > 0 || Kinds.Count > 0 || Under.Count > 0 || NotUnder.Count > 0
                               || MinBytes >= 0 || MaxBytes >= 0 || ModifiedAfter is not null || ModifiedBefore is not null
@@ -189,6 +199,14 @@ public sealed class SearchQuery
                 Words.Add(w);
                 return true;
             }
+            case "like":
+            {
+                // The path as written, quotes off. A second like: replaces the first: one file is
+                // compared with at a time.
+                string path = val.Trim('"').Trim();
+                if (path.Length > 0) Like = path;
+                return true;
+            }
             case "regex":
             case "re":
             {
@@ -210,7 +228,7 @@ public sealed class SearchQuery
 
     private void ParseSize(string v)
     {
-        // Everything's named buckets, then ranges (`1mb..100mb`), then the single-ended forms
+        // The named bands, then ranges (`1mb..100mb`), then the single-ended forms
         switch (v.ToLowerInvariant())
         {
             case "tiny": MinBytes = 0; MaxBytes = 10L << 10; return;
@@ -320,6 +338,31 @@ public sealed class SearchQuery
         if (OrParts(raw).Count > 1) return true;
         var q = new SearchQuery(raw);
         return q.HasFilters || q.Rx is not null || q.CaseWords.Count > 0 || q.WholeWords.Count > 0;
+    }
+
+    /// <summary>The path a raw query's `like:` names, or empty - what <see cref="Like"/> would be,
+    /// without the rest of the parse (the card's header asks it on every paint, and a `regex:`
+    /// beside it would otherwise be compiled each time).</summary>
+    public static string LikeOf(string raw)
+    {
+        ArgumentNullException.ThrowIfNull(raw);
+        string like = "";
+        foreach (string tok in Tokenize(raw))
+        {
+            string t = (tok.StartsWith('-') || tok.StartsWith('!')) && tok.Length > 1 ? tok[1..] : tok;
+            if (t.Length <= 5 || !t.StartsWith("like:", StringComparison.OrdinalIgnoreCase)) continue;
+            string path = t[5..].Trim('"').Trim();
+            if (path.Length > 0) like = path;
+        }
+        return like;
+    }
+
+    /// <summary>The query "More like this" writes into the field for one file: its full path,
+    /// always quoted, so a path with spaces in it stays one term.</summary>
+    public static string LikeQuery(string path)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(path);
+        return "like:\"" + path + "\"";
     }
 
     /// <summary>Split on spaces, keeping quoted runs together (the quotes stay on).</summary>

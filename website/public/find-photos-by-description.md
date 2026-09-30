@@ -26,8 +26,8 @@ supported configuration rather than a failure: only that first pass is slower.
 - Photos: JPEG, PNG, HEIC and HEIF, WebP, AVIF, GIF, BMP, TIFF, and the raw files most cameras
   write (.cr2, .cr3, .nef, .arw, .dng, .orf, .rw2 and .raf)
 - Videos: frames taken through the film, so a clip can be found by a scene in the middle of it
-- The words in a picture as well, such as a sign, a screenshot or a receipt, which are read without
-  any download
+- The words in a picture as well, such as a sign, a screenshot or a receipt, read by the text
+  recognition built into Windows as each picture is looked at
 
 A video Windows cannot decode because a codec is missing is still found by name, and Findra's
 settings say which codec it needs. Findra installs nothing itself.

@@ -23,6 +23,7 @@ public static class SearchShot
     [
         "capsule", "empty", "indexing", "contentmode", "contentwaiting", "contentloading", "typing",
         "searching", "results", "noresults", "many", "adv", "opening", "openingempty", "selected", "starting", "recent",
+        "similar",
         "settings", "settingsopening", "settingssearches", "settingscontent", "settingsaddons",
         "settingsremove", "settingsabout",
         "updatechecking", "updateuptodate", "updateunreachable", "updateavailable", "updateavailablewinget",
@@ -410,7 +411,9 @@ public static class SearchShot
         "1.5M names on C:, D:, E: (helper pid 12345) (still reading the drive) · " +
         "1,234,567 waiting - indexing is paused while Findra is closed";
 
-    private static SearchCardState Build(string state)
+    /// <summary>The card as a card state draws it, for a card state in <see cref="States"/>: what
+    /// the shot paints, and what a test holds the automation tree and the hit test to.</summary>
+    public static SearchCardState Build(string state)
     {
         if (state == "empty")
             // No pill, which is what an ordinary card shows once a first pass is done - and what
@@ -555,6 +558,33 @@ public static class SearchShot
                 HoverTarget = SearchTarget.AdvButton, HoverIndex = 1,
             };
 
+        // "More like this" just pressed on the photo `results` highlights: its path is the query,
+        // the header names the file, and every row says what it looks like. The pointer is still
+        // on the button, so its hover is drawn - and `many` draws it not offering, beside a
+        // document that has nothing read yet.
+        if (state == "similar")
+        {
+            const string source = @"D:\Photos\2025\08 Crete\IMG_4471.HEIC";
+            string Looks(string what) => what + " IMG_4471.HEIC";
+            List<SearchResult> like =
+            [
+                new(ResultKind.Photo, "DSC_0981.jpg", @"D:\Photos\2024\Eilat\DSC_0981.jpg", 0.79f, Looks("looks like")),
+                new(ResultKind.Photo, "IMG_4468.HEIC", @"D:\Photos\2025\08 Crete\IMG_4468.HEIC", 0.74f, Looks("looks like")),
+                new(ResultKind.Photo, "IMG_4475.HEIC", @"D:\Photos\2025\08 Crete\IMG_4475.HEIC", 0.71f, Looks("looks like")),
+                new(ResultKind.Video, "GX010233.MP4", @"D:\Video\GoPro\GX010233.MP4", 0.63f, Looks("a moment at 1:40 looks like"), 100),
+                new(ResultKind.Photo, "sunset-wallpaper.png", @"C:\Users\rae\Pictures\Wallpapers\sunset-wallpaper.png", 0.58f, Looks("looks like")),
+                new(ResultKind.Photo, "IMG_2210.jpg", @"D:\Photos\2023\06 Haifa\IMG_2210.jpg", 0.52f, Looks("looks like")),
+                new(ResultKind.Video, "GX010198.MP4", @"D:\Video\GoPro\GX010198.MP4", 0.47f, Looks("a moment at 0:20 looks like"), 20),
+                new(ResultKind.Photo, "beach-evening.jpg", @"D:\Photos\2022\Dahab\beach-evening.jpg", 0.41f, Looks("looks like")),
+            ];
+            string asked = SearchQuery.LikeQuery(source);
+            var answer = new SearchResults(asked, like, 0, 3.1, true);
+            return new SearchCardState(asked, answer, SearchCardState.Filtered(answer, 0), 0, 0, 0, false,
+                Caret: asked.Length, IndexLine: "index: 1.5M names · idle",
+                StageDetail: "2.4 MB · 3 May 2024 19:58", StageImage: SunsetOverWater(), Clock: 0.2,
+                HoverTarget: SearchTarget.Similar, SimilarReady: true);
+        }
+
         string query = state switch
         {
             "typing" => "sun",
@@ -632,7 +662,10 @@ public static class SearchShot
             // `opening` catches the card mid-unfold with a full list, a third of the way through
             // the 220 ms: the painter takes its SaveLayer + ClipRect branch and has to balance the
             // canvas on the long return path. `openingempty` above covers the early one.
-            OpenedAt: state == "opening" ? 0.13 : -1);
+            OpenedAt: state == "opening" ? 0.13 : -1,
+            // "More like this" can compare the photo the other states highlight; `many` highlights
+            // a document with nothing read yet, so the button is drawn not offering there.
+            SimilarReady: state != "many");
     }
 
     /// <summary>The demo photograph: a sunset over water, DRAWN rather than photographed.

@@ -36,8 +36,8 @@ reproduced in `assets/fonts/OFL.txt`. It is not covered by Findra's own licence.
 | What you can search for | Needs a model | On by default |
 |---|---|---|
 | Names of files and folders, on every drive, USB sticks and memory cards included | no | yes, from the moment Findra starts |
-| Words in documents, and the text inside pictures | no | no, until you turn content indexing on |
-| Photos and video, by what is in the frame | yes | no |
+| Words in documents, scanned PDF pages included | no | no, until you turn content indexing on |
+| Photos and video, by what is in the frame, and the words written in a picture | yes | no |
 | Documents by what they mean, not only the words they use | yes | no |
 | Speech in recordings, including a second pass for Hebrew | yes | no |
 
@@ -52,6 +52,12 @@ Everything Findra can install is 3.7 GB of model files, and that is the number i
 all of them. Take none and Findra still searches every name on the machine. Take one and you
 pay for one. `findra --models` prints what each capability would add given what is already
 there, which is the question that matters once some of them are.
+
+A photo, video, document or recording Findra has read has a More like this button beside it,
+and Ctrl+L does the same: it lists the files that look or read like that one, compared by what
+was read inside them rather than by name. It writes `like:"<the file's path>"` into the search
+box, so the filters and sorting work on its answer too, and
+`findra --searchindex q:like:"<path>"` asks the same question from a terminal.
 
 Typing has a grammar, and there is a form for the parts of it nobody remembers.
 
@@ -170,7 +176,7 @@ these, and every image above was drawn by the same painter the window uses.
     findra --content on               start reading inside files
     findra --uninstall --dry-run      what removing Findra would do, without doing it
 
-`findra --searchshot` draws forty-five surfaces in any of the six palettes, which is how the
+`findra --searchshot` draws forty-six surfaces in any of the six palettes, which is how the
 images on this page are made and how they are regenerated. The command under each image is
 the whole recipe.
 

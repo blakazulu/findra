@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Runtime.Versioning;
 using System.Threading.Tasks;
@@ -14,11 +14,12 @@ namespace Findra;
 /// remembers, so the text goes into the full-text index and is embedded like a chunk of a
 /// document.</para>
 ///
-/// <para>This costs no download and has no model file, which is why it is not one of the
-/// capabilities and has nothing to offer to install. It runs whenever a picture is being opened
-/// anyway, and when a language's recogniser is not on the machine it contributes nothing and says
-/// nothing: a recogniser that is not installed is an ordinary state of an ordinary machine, not a
-/// failure to report.</para>
+/// <para>This has no model file of its own and nothing to offer to install. It runs where
+/// something is already being opened: a photo, which is read only once the Photos add-on is
+/// installed, and a page of a PDF that has no text of its own (<see cref="ScannedPdf"/>), which
+/// is part of reading documents. When a language's recogniser is not on the machine it
+/// contributes nothing and says nothing: a recogniser that is not installed is an ordinary state
+/// of an ordinary machine, not a failure to report.</para>
 ///
 /// <para>Two engines run when both are present. English and Hebrew are separate recognisers and a
 /// single screenshot is routinely both, so each is given the whole image; the one reading a script
@@ -57,13 +58,30 @@ public static class ImageText
         }
     }
 
+    /// <summary>Whether any recogniser is on this machine at all. Asked before somebody renders
+    /// a page only to have nothing read it.</summary>
+    public static bool Ready
+    {
+        get
+        {
+            Init();
+            return _en is not null || _he is not null;
+        }
+    }
+
     /// <summary>The readable text in an image, or "" when there is none (or no recogniser is
     /// installed).</summary>
-    public static string Read(string path)
+    public static string Read(string path) => Guarded(() => ReadFileAsync(path));
+
+    /// <summary>The same, for an image already in memory - a page of a scanned PDF, rendered.
+    /// </summary>
+    public static string Read(Windows.Storage.Streams.IRandomAccessStream image) => Guarded(() => ReadAsync(image));
+
+    private static string Guarded(Func<Task<string>> read)
     {
         Init();
         if (_en is null && _he is null) return "";
-        try { return ReadAsync(path).GetAwaiter().GetResult(); }
+        try { return read().GetAwaiter().GetResult(); }
         catch (Exception ex)
         {
             Log.Once($"index|ocr|{ex.GetType().Name}", "WARN", "index", $"ocr failed :: {ex.GetType().Name}: {ex.Message}");
@@ -71,10 +89,15 @@ public static class ImageText
         }
     }
 
-    private static async Task<string> ReadAsync(string path)
+    private static async Task<string> ReadFileAsync(string path)
     {
         var file = await Windows.Storage.StorageFile.GetFileFromPathAsync(path);
         using var stream = await file.OpenAsync(Windows.Storage.FileAccessMode.Read);
+        return await ReadAsync(stream);
+    }
+
+    private static async Task<string> ReadAsync(Windows.Storage.Streams.IRandomAccessStream stream)
+    {
         var decoder = await Windows.Graphics.Imaging.BitmapDecoder.CreateAsync(stream);
 
         // the engine's hard cap is OcrEngine.MaxImageDimension (2600): larger images are scaled
@@ -94,7 +117,11 @@ public static class ImageText
             transform,
             Windows.Graphics.Imaging.ExifOrientationMode.RespectExifOrientation,
             Windows.Graphics.Imaging.ColorManagementMode.DoNotColorManage);
+        return await RecogniseAsync(bmp);
+    }
 
+    private static async Task<string> RecogniseAsync(Windows.Graphics.Imaging.SoftwareBitmap bmp)
+    {
         string english = "", hebrew = "";
         if (_en is not null)
         {

@@ -53,7 +53,7 @@ public sealed class ContentDb : IDisposable
 
     /// <summary>The relational shape of this database. Bumped only when a change makes rows
     /// already on disk mean something different.</summary>
-    public const int SchemaVersion = 7;
+    public const int SchemaVersion = 8;
 
     /// <summary>One schema step. <c>InvalidatedKinds</c> is what that step made stale - and
     /// nothing else is re-queued. Re-indexing a finished disk because an upgrade did not look
@@ -71,9 +71,12 @@ public sealed class ContentDb : IDisposable
     /// <param name="IncludeFailed">Also queue the FAILED rows of these kinds. A file the old
     /// decoder could not read at all has not changed because a schema step ran, but a new decoder
     /// is exactly what such a file is waiting for.</param>
+    /// <param name="OnlyBecause">Re-queue only the rows of these kinds recorded with one of these
+    /// reasons (<see cref="RequeueKinds"/>'s narrow filter). For a step that teaches a decoder to
+    /// read what it used to skip, where every file it already read is still right.</param>
     public readonly record struct Migration(int To, int[] InvalidatedKinds, string Reason, bool ReWalk = false,
                                             string? QueueReason = null, bool ResetAttempts = false,
-                                            bool IncludeFailed = false);
+                                            bool IncludeFailed = false, string[]? OnlyBecause = null);
 
     /// <summary>
     /// A schema change appends the step that invalidates whatever it invalidated, and NOTHING
@@ -171,6 +174,18 @@ public sealed class ContentDb : IDisposable
         new(To: 7, InvalidatedKinds: [],
             Reason: "files deleted or replaced while Findra was not looking are found by one full pass",
             ReWalk: true),
+
+        // Documents gained three readers: the pages of a PDF that are pictures of pages are read by
+        // OCR, and RTF and OpenDocument are read inside. Every file that could benefit was
+        // recorded with one of two reasons - a scan as having no text, an RTF or OpenDocument file
+        // as having no reader - so exactly those rows are read again, and nothing a build already
+        // read is touched. The legacy Office formats still carry "no reader" and come back skipped
+        // again, which costs a look at the name and nothing more.
+        //
+        // No ReWalk: these files were always documents, so every one of them already has a row.
+        new(To: 8, InvalidatedKinds: [(int)ResultKind.Document],
+            Reason: "scanned PDFs, RTF and OpenDocument files are read inside",
+            OnlyBecause: [Decoders.NoText, Decoders.NoFormatReader]),
     ];
 
     private readonly SqliteConnection _c;
@@ -240,6 +255,7 @@ CREATE TABLE IF NOT EXISTS items(
     state INTEGER NOT NULL DEFAULT 0, error TEXT, indexed_at INTEGER NOT NULL DEFAULT 0,
     UNIQUE(vol, frn));
 CREATE INDEX IF NOT EXISTS items_path ON items(path);
+CREATE INDEX IF NOT EXISTS items_path_nocase ON items(path COLLATE NOCASE);
 CREATE INDEX IF NOT EXISTS items_state ON items(state);
 CREATE TABLE IF NOT EXISTS pending(
     id INTEGER PRIMARY KEY, vol TEXT NOT NULL, frn INTEGER NOT NULL, path TEXT NOT NULL,
@@ -341,7 +357,7 @@ CREATE TABLE IF NOT EXISTS opened(path TEXT PRIMARY KEY, count INTEGER NOT NULL,
             // point of a migration that changes how a kind is read, each came back "current" the
             // moment they were taken. The pill counted them down, the log said "re-queued", and
             // the index was exactly as it had been.
-            int n = RequeueKinds(m.InvalidatedKinds, m.QueueReason ?? Indexer.Recheck);
+            int n = RequeueKinds(m.InvalidatedKinds, m.QueueReason ?? Indexer.Recheck, onlyBecause: m.OnlyBecause);
             if (m.IncludeFailed) n += RequeueFailed(m.InvalidatedKinds, Indexer.Recheck);
             // The forgiven count is its own clause, not folded into "re-queued": it is the
             // difference between a file the new decoder gets its own three tries at and one
@@ -1600,6 +1616,9 @@ CREATE TABLE IF NOT EXISTS opened(path TEXT PRIMARY KEY, count INTEGER NOT NULL,
     /// </summary>
     public ItemRow? ItemByPath(string path)
     {
+        // Paths are case-insensitive on Windows, so the lookup is too. `items_path_nocase` is what
+        // lets it seek rather than read every row: "More like this" asks this for every file the
+        // card highlights, and the binary-collated `items_path` cannot answer a NOCASE comparison.
         using var cmd = _c.CreateCommand();
         cmd.CommandText = "SELECT vol, frn, path, kind, mtime, size, state, COALESCE(error,''), indexed_at, id " +
                           "FROM items WHERE path = $p COLLATE NOCASE LIMIT 1";
@@ -1609,6 +1628,18 @@ CREATE TABLE IF NOT EXISTS opened(path TEXT PRIMARY KEY, count INTEGER NOT NULL,
         return new ItemRow(r.GetString(0), unchecked((ulong)r.GetInt64(1)), r.GetString(2),
                            (ResultKind)r.GetInt32(3), r.GetInt64(4), r.GetInt64(5), r.GetInt32(6),
                            r.GetString(7), r.GetInt64(8), r.GetInt64(9));
+    }
+
+    /// <summary>Whether the index holds any vector for this file - what "More like this" needs to
+    /// have something to compare. Two seeks: the path's item, then its first segment with a row.
+    /// </summary>
+    public bool HasVectors(string path)
+    {
+        if (ItemByPath(path) is not { } item) return false;
+        using var cmd = _c.CreateCommand();
+        cmd.CommandText = "SELECT 1 FROM segments WHERE item = $i AND vec >= 0 LIMIT 1";
+        cmd.Parameters.AddWithValue("$i", item.Id);
+        return cmd.ExecuteScalar() is not null;
     }
 
     public readonly record struct ItemRow(string Vol, ulong Frn, string Path, ResultKind Kind,

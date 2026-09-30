@@ -997,6 +997,10 @@ the Store's 10.1.2.10 finding; `ScreenFitTests` holds only the arithmetic.
 
 **Do and pass:** catalogue 75, with the mouse set aside for the whole step.
 
+### 6.15 (catalogue 78) More like this - eye
+
+**Do and pass:** catalogue 78, on the installed build with Photos and Meaning read.
+
 ---
 
 # Phase 7 - Upgrade

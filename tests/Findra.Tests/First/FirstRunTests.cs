@@ -200,6 +200,30 @@ public class FirstRunTests
     }
 
     [Fact]
+    public void EveryRowsTitleAndNoteAreDrawnWholeInTheRoomTheRowHasForThem()
+    {
+        // The painter ellipsises rather than overflowing, so a note that grew past its row would
+        // lose its end quietly - and the end of a note is often the half that matters ("Uses the
+        // document models too"). If one is ever tight, shorten the note.
+        IReadOnlyList<FirstRunRow> rows = FirstRun.Rows(State());
+        for (int i = 0; i < rows.Count; i++)
+        {
+            (float left, float right) = FirstRunPainter.RowText(FirstRunLayout.RowRect(i), rows[i].Indented);
+            Assert.Equal(rows[i].Note, CardText.Ellipsize(rows[i].Note, Parts.Face, Parts.NoteSize, right - left));
+            Assert.Equal(rows[i].Title, CardText.Ellipsize(rows[i].Title, Parts.Face, Parts.LabelSize, right - left));
+        }
+    }
+
+    [Fact]
+    public void ThePhotosRowSaysItAlsoReadsTheWordsInPictures()
+    {
+        // A picture is opened only for Photos, and the words in it are read as it is opened - so
+        // this is the row that brings them, and the free row above it does not.
+        Assert.Contains("written", RowFor(State(), Capability.Photos).Note, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("picture", FirstRun.Rows(State()).Single(r => r.Free).Note, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
     public void ARowsSizeIsTheSameNumberWhateverElseIsTicked()
     {
         // The number beside a row is that row's download, and it does not move. A marginal figure

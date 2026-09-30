@@ -9,7 +9,7 @@ namespace Findra;
 // result large. The layout is a PURE FUNCTION of the state's shape, called by the painter and by
 // the hit test, so there is no stored rect list for a pointer event to race against. Do not add one.
 
-public enum SearchTarget { None, Field, Chip, Row, Open, Reveal, Copy, Stage, Content, Adv, Settings, AdvField, AdvCheck, AdvKind, AdvButton, Reading, Close }
+public enum SearchTarget { None, Field, Chip, Row, Open, Reveal, Copy, Stage, Content, Adv, Settings, AdvField, AdvCheck, AdvKind, AdvButton, Reading, Close, Similar }
 
 public readonly record struct SearchHit(SearchTarget Target, int Index)
 {
@@ -186,7 +186,9 @@ public static class SearchCardLayout
         float pw = st.Width - 16;
         float whole = wide ? pw * 9 / 16 : Math.Min(pw, 190);
         float text = StageNameGap + StageFirstLineGap + Math.Max(0, lines - 1) * StageLineH;
-        float room = ActionRect(count, hasQuery, 0).Top - StageActionsAir - text - (st.Top + 8);
+        // Measured to the top of the wide button, which is the stage's top button whether or not
+        // it is drawn: the picture does not jump as the highlight moves from a photo to a folder.
+        float room = SimilarRect(count, hasQuery).Top - StageActionsAir - text - (st.Top + 8);
         float ph = Math.Clamp(room, 0, whole);
         return new SKRect(st.Left + 8, st.Top + 8, st.Left + 8 + pw, st.Top + 8 + ph);
     }
@@ -200,6 +202,20 @@ public static class SearchCardLayout
         return new SKRect(x, st.Bottom - h - 8, x + w, st.Bottom - 8);
     }
 
+    /// <summary>The wide button's height, and the air between it and the three under it.</summary>
+    public const float SimilarH = 30f, SimilarGap = 8f;
+
+    /// <summary>
+    /// "More like this": one button as wide as the three under it, directly above them. Its room
+    /// is kept on the stage for every row, drawn or not, so the picture above it stays where it is
+    /// while the highlight moves.
+    /// </summary>
+    public static SKRect SimilarRect(int count, bool hasQuery)
+    {
+        SKRect first = ActionRect(count, hasQuery, 0), last = ActionRect(count, hasQuery, 2);
+        return new SKRect(first.Left, first.Top - SimilarGap - SimilarH, last.Right, first.Top - SimilarGap);
+    }
+
     // ---- the footer's one row, shared by two strings -------------------------------------------
 
     /// <summary>The size both halves of the footer are drawn at.</summary>
@@ -208,7 +224,7 @@ public static class SearchCardLayout
     /// <summary>The keys the footer teaches. A constant rather than a literal at the draw site,
     /// because the layout below has to measure exactly what is painted.</summary>
     public const string FooterHint =
-        "Enter opens · right-click reveals · drag a row into any app · Ctrl+1/2/3 best / newest / largest";
+        "Enter opens · right-click reveals · Ctrl+L more like this · drag a row into any app · Ctrl+1/2/3 best / newest / largest";
 
     /// <summary>Clear air between the two halves, so they read as two things and not one run-on.</summary>
     private const float FooterGap = 18f;
@@ -244,17 +260,22 @@ public static class SearchCardLayout
 
     /// <summary>What is under a point in the CARD's coordinates - the window's, less
     /// <see cref="Overhang"/> from the top. The close button answers first, and is the one target
-    /// outside the card's own shape.</summary>
-    public static SearchHit HitTest(float x, float y, int count, int scroll, bool hasQuery, bool advOpen = false)
+    /// outside the card's own shape. <c>similar</c> is whether "More like this" is drawn over the
+    /// highlighted row (<see cref="SearchCardState.OffersSimilar"/>); where it is not, its room is
+    /// the stage.</summary>
+    public static SearchHit HitTest(float x, float y, int count, int scroll, bool hasQuery, bool advOpen = false,
+                                    bool similar = false)
     {
         var close = CloseRect();
         float dx = x - close.MidX, dy = y - close.MidY;
         if (dx * dx + dy * dy <= CloseR * CloseR) return new SearchHit(SearchTarget.Close, -1);
         if (x < 0 || x > Width || y < 0 || y > Height(count, hasQuery, advOpen)) return SearchHit.None;
         // the open popup overlays the card: it answers first, and a miss outside it carries the
-        // "close me" marker (Index -2) - except the three pills, which keep working
+        // "close me" marker (Index -2) - except the three pills and the field, which keep working
+        // (a press in the field puts the popup away and the caret where it landed)
         if (advOpen)
         {
+            if (FieldRect().Contains(x, y)) return new SearchHit(SearchTarget.Field, -1);
             var ab0 = AdvRect(); ab0.Inflate(2, 4);
             if (ab0.Contains(x, y)) return new SearchHit(SearchTarget.Adv, -1);
             var cb0 = ContentRect(); cb0.Inflate(2, 4);
@@ -288,6 +309,7 @@ public static class SearchCardLayout
             for (int a = 0; a < 3; a++)
                 if (ActionRect(count, hasQuery, a).Contains(x, y))
                     return new SearchHit(a == 0 ? SearchTarget.Open : a == 1 ? SearchTarget.Reveal : SearchTarget.Copy, -1);
+            if (similar && SimilarRect(count, hasQuery).Contains(x, y)) return new SearchHit(SearchTarget.Similar, -1);
             if (StageRect(count, hasQuery).Contains(x, y)) return new SearchHit(SearchTarget.Stage, -1);
         }
         if (x < Pad || x > Pad + ListW) return SearchHit.None;
@@ -326,6 +348,11 @@ public sealed record SearchCardState(
     int AdvFocus = 0,
     bool QueryAdv = false,
 
+    /// <summary>What kind of stop in the open popup has the keyboard: a field (then
+    /// <see cref="AdvFocus"/> is which one, and typing lands in it), a check, a kind chip or a
+    /// button (then <see cref="AdvFocus"/> is that one's index, and typing goes nowhere).</summary>
+    SearchTarget AdvFocusOn = SearchTarget.AdvField,
+
     /// <summary>Is the Content pill offering anything? False only while Findra is reading and has
     /// not finished a file yet - see <c>ContentPill.Offers</c>, which is where it comes from and
     /// the only place it is decided. The painter fades it, the pointer drops to the plain arrow,
@@ -343,7 +370,13 @@ public sealed record SearchCardState(
 
     /// <summary>The rows are what was opened lately (<see cref="OpenedHistory"/>), shown on an
     /// empty field, rather than an answer to a query.</summary>
-    bool Recent = false)
+    bool Recent = false,
+
+    /// <summary>Whether "More like this" can compare the highlighted file: there is a vector store
+    /// and the file has vectors in it. Decided off the interface thread with the rest of the
+    /// stage's detail, never in the painter; false until then, which draws the button as not
+    /// offering.</summary>
+    bool SimilarReady = false)
 {
     public static readonly SearchCardState Empty =
         new("", SearchResults.Empty, Array.Empty<SearchResult>(), 0, 0, 0, false);
@@ -360,6 +393,14 @@ public sealed record SearchCardState(
     /// <summary>The field as <c>FieldEdit</c> edits it.</summary>
     public FieldEdit.Text Field => new(Query, Caret, Anchor);
     public SearchAdvanced Adv => AdvRules ?? SearchAdvanced.Empty;
+
+    /// <summary>Is "More like this" drawn: the highlighted row is a file whose inside Findra reads.
+    /// Whether it can be pressed is <see cref="SimilarReady"/>.</summary>
+    public bool OffersSimilar => ShowsBody && Highlight >= 0 && Highlight < Rows.Count
+                                 && FileKinds.HasContent(Rows[Highlight].Kind);
+
+    /// <summary>The popup stop the keyboard is on.</summary>
+    public SearchHit AdvStop => new(AdvFocusOn, AdvFocus);
 
     public static IReadOnlyList<SearchResult> Filtered(SearchResults r, int filter)
     {
@@ -422,7 +463,10 @@ public static class SearchCardPainter
         if (s.Recent && !s.HasQuery) return (RecentLabel, "");
 
         string asked = s.Results.Query.Length > 0 ? s.Results.Query : s.Query.Trim();
+        // "More like this" names the file the rows resemble, not the path it wrote in the field.
+        string like = SearchQuery.LikeOf(asked);
         string left = s.Searching && count == 0 ? SearchingLabel
+            : like.Length > 0 ? $"{count} like “{LikeName(like)}”"
             : $"{count} result{(count == 1 ? "" : "s")} for “{asked}”";
 
         string right;
@@ -457,6 +501,28 @@ public static class SearchCardPainter
     public const string ContentPlaceholder = "Describe a photo, or words in a document…";
     public const string AdvancedLabel = "Advanced";
     public const string SettingsLabel = "Settings";
+
+    /// <summary>The stage's buttons: the three under it, left to right, and the wide one above
+    /// them. Constants because the painter, the hit test's callers and the automation tree all name
+    /// them, and because they are drawn centred and never cut - <c>CardSimilarTests</c> measures each
+    /// against its own button.</summary>
+    public static IReadOnlyList<string> ActionLabels { get; } = ["Open", "Reveal", "Copy path"];
+
+    public const string SimilarLabel = "More like this";
+
+    /// <summary>The size every stage button is lettered at.</summary>
+    public const float ActionTextSize = 12.5f;
+
+    /// <summary>The lens drawn before "More like this", and the air after it.</summary>
+    public const float SimilarIcon = 16f, SimilarIconGap = 7f;
+
+    /// <summary>The file name a "More like this" header shows for the path in the query.</summary>
+    public static string LikeName(string path)
+    {
+        string trimmed = path.TrimEnd('\\', '/');
+        int cut = trimmed.LastIndexOfAny(['\\', '/']);
+        return cut >= 0 ? trimmed[(cut + 1)..] : trimmed;
+    }
 
     /// <summary>The grammar line under the field on a card with nothing typed into it, in each
     /// of its two moods. Named, because it is the longest line on that card and it now shares
@@ -633,7 +699,8 @@ public static class SearchCardPainter
             CardText.Draw(canvas, why, SearchCardLayout.Pad + 8, SearchCardLayout.BodyTop + 34, 15f, face, dim);
             string hint = s.Searching ? ""
                 : s.Content && !s.Results.ContentReady ? "Content search (photos, documents, speech) is still being built."
-                : s.Content ? "" : "Press Content to search what is inside files instead of their names.";
+                : s.Content || SearchQuery.LikeOf(s.Results.Query).Length > 0 ? ""
+                : "Press Content to search what is inside files instead of their names.";
             if (hint.Length > 0)
                 CardText.Draw(canvas, hint, SearchCardLayout.Pad + 8, SearchCardLayout.BodyTop + 58, 12.5f, face, faint);
         }
@@ -899,9 +966,11 @@ public static class SearchCardPainter
         if (file.Length > 0) Kv("file", file);
         if (!recent) Kv("score", $"{row.Score * 100:0}%");
 
+        if (s.OffersSimilar) DrawSimilar(canvas, SearchCardLayout.SimilarRect(count, true), s, d, face);
+
         // the three actions
-        string[] labels = { "Open", "Reveal", "Copy path" };
-        for (int a = 0; a < 3; a++)
+        IReadOnlyList<string> labels = ActionLabels;
+        for (int a = 0; a < labels.Count; a++)
         {
             var ar = SearchCardLayout.ActionRect(count, true, a);
             var target = a == 0 ? SearchTarget.Open : a == 1 ? SearchTarget.Reveal : SearchTarget.Copy;
@@ -912,8 +981,46 @@ public static class SearchCardPainter
                 using (var p = new SKPaint { Color = primary ? d.RowSelected : d.RowHover, IsAntialias = true }) canvas.DrawRoundRect(rr, p);
             using (var p = new SKPaint { Color = primary ? accent : d.Fade(hover ? (byte)140 : (byte)70), IsAntialias = true, Style = SKPaintStyle.Stroke, StrokeWidth = 1.2f })
                 canvas.DrawRoundRect(rr, p);
-            CardText.DrawCentred(canvas, labels[a], ar.MidX, ar.MidY + 4.5f, 12.5f, face, primary ? accent : hover ? text : dim);
+            CardText.DrawCentred(canvas, labels[a], ar.MidX, ar.MidY + 4.5f, ActionTextSize, face, primary ? accent : hover ? text : dim);
         }
+    }
+
+    /// <summary>
+    /// "More like this": the loudest thing on the card, on purpose - solid accent, the palette's
+    /// own ink-on-accent for the lens and the words. Not offering (the file has nothing to compare
+    /// yet) it steps all the way down to a resting surface with secondary ink, so it cannot be
+    /// mistaken for a press that will work.
+    /// </summary>
+    private static void DrawSimilar(SKCanvas canvas, SKRect r, SearchCardState s, Derived d, SKTypeface face)
+    {
+        var rr = new SKRoundRect(r, r.Height / 2);
+        bool ready = s.SimilarReady;
+        SKColor ink = ready ? d.OnAccent : d.Dim;
+        if (ready)
+        {
+            // Hover is a halo rather than a second fill: the words keep the one pair the
+            // legibility checks hold them to.
+            if (s.HoverTarget == SearchTarget.Similar)
+            {
+                var halo = new SKRoundRect(SKRect.Inflate(r, 2.5f, 2.5f), r.Height / 2 + 2.5f);
+                using var hp = new SKPaint { Color = d.AccentGlow, IsAntialias = true, Style = SKPaintStyle.Stroke, StrokeWidth = 4 };
+                canvas.DrawRoundRect(halo, hp);
+            }
+            using var fill = new SKPaint { Color = d.Accent, IsAntialias = true };
+            canvas.DrawRoundRect(rr, fill);
+        }
+        else
+        {
+            using (var fill = new SKPaint { Color = d.Row, IsAntialias = true }) canvas.DrawRoundRect(rr, fill);
+            using (var edge = new SKPaint { Color = d.Fade(56), IsAntialias = true, Style = SKPaintStyle.Stroke, StrokeWidth = 1.2f })
+                canvas.DrawRoundRect(rr, edge);
+        }
+
+        // The lens and the words, centred together as one group.
+        float w = CardText.Measure(SimilarLabel, face, ActionTextSize);
+        float left = r.MidX - (SimilarIcon + SimilarIconGap + w) / 2;
+        TrayIconFactory.DrawMark(canvas, SKRect.Create(left, r.MidY - SimilarIcon / 2, SimilarIcon, SimilarIcon), ink, small: true);
+        CardText.Draw(canvas, SimilarLabel, left + SimilarIcon + SimilarIconGap, r.MidY + 4.5f, ActionTextSize, face, ink);
     }
 
     // A kind glyph on a tint hashed from the name: the no-picture state is the COMMON one for

@@ -403,6 +403,24 @@ public sealed class VectorStore : IDisposable
         return (TensorPrimitives.Dot(query, f), kind, true);
     }
 
+    /// <summary>
+    /// One stored row as a unit vector, to ask the store with: what "More like this" compares
+    /// every other file against. Null for a row that is not there or was deleted - a deleted row
+    /// is zeros, and a query of zeros would score everything alike.
+    /// </summary>
+    public float[]? VectorOf(long row)
+    {
+        if (_view is null || row < 0 || row >= _count) return null;
+        if (row < _kinds.Length && _kinds[row] == 255) return null;
+        var half = new Half[Dim];
+        var f = new float[Dim];
+        _view.ReadArray(HeaderBytes + row * RowBytes, half, 0, Dim);
+        TensorPrimitives.ConvertToSingle(half, f);
+        if (TensorPrimitives.Dot(f, f) < 1e-6f) return null;
+        Normalise(f);
+        return f;
+    }
+
     private static void Insert(List<Match> top, Match m, int k)
     {
         int at = top.Count;

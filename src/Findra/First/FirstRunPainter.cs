@@ -505,6 +505,15 @@ public static class FirstRunPainter
         }
     }
 
+    /// <summary>Where a row's title and note may be drawn: after its tick, and short of the size
+    /// column, which is reserved whatever is drawn in it so a long size never moves the title.
+    /// </summary>
+    public static (float Left, float Right) RowText(SKRect row, bool indented)
+    {
+        float x = row.Left + 6 + (indented ? FirstRunLayout.RowIndent : 0f);
+        return (x + FirstRunLayout.TickBox + 12f, row.Right - SizeW - 16f);
+    }
+
     private static void Row(SKCanvas canvas, FirstRunRow row, int i, FirstRunState s,
                             Derived d, SKTypeface face, int limitRow)
     {
@@ -518,10 +527,7 @@ public static class FirstRunPainter
         Tick(canvas, new SKRect(x, r.Top + 4, x + FirstRunLayout.TickBox, r.Top + 4 + FirstRunLayout.TickBox),
              row.Ticked, row.Free, d);
 
-        float textLeft = x + FirstRunLayout.TickBox + 12f;
-        // The size column is reserved whatever is drawn in it, so a long size never moves the
-        // title.
-        float textRight = r.Right - SizeW - 16f;
+        (float textLeft, float textRight) = RowText(r, row.Indented);
         CardText.Draw(canvas, CardText.Ellipsize(row.Title, face, Parts.LabelSize, textRight - textLeft),
                       textLeft, r.Top + 17, Parts.LabelSize, face, d.Ink);
         CardText.Draw(canvas, CardText.Ellipsize(row.Note, face, Parts.NoteSize, textRight - textLeft),

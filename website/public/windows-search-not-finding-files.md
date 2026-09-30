@@ -38,16 +38,16 @@ Windows reads inside a file only when its location is indexed with contents and 
 file type is installed. A PDF, a scanned receipt or a voice memo can easily fall outside all of
 that.
 
-Findra reads PDF, Word, Excel, PowerPoint, EPUB, plain text, Markdown, CSV and HTML files itself,
-and the text inside pictures, with nothing extra to install. Reading inside files is off until you
-turn it on:
+Findra reads PDF (scanned pages included), Word, Excel, PowerPoint, OpenDocument, RTF, EPUB, plain
+text, Markdown, CSV and HTML files itself, with nothing extra to install. Reading inside files is
+off until you turn it on:
 
 ```
 findra --content on
 ```
 
-Findra can also find a photo by what it shows and a recording by what was said in it, each an
-optional download that runs on your own machine. See
+Findra can also find a photo by what it shows or the words written in it, and a recording by what
+was said in it, each an optional download that runs on your own machine. See
 [finding photos by description](https://findra-search.netlify.app/find-photos-by-description/)
 and [searching recordings by what was said](https://findra-search.netlify.app/search-recordings-by-speech/).
 

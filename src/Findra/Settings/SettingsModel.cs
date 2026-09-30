@@ -551,7 +551,7 @@ public static class SettingsModel
     /// <summary>What an add-on does for somebody, in one line.</summary>
     public static string Describe(Capability c) => c switch
     {
-        Capability.Photos => "Find photos and video by what is in them.",
+        Capability.Photos => "Find photos and video by what is in them, and pictures by their words.",
         Capability.Meaning => "Find documents by what they mean, not only their exact words.",
         Capability.Speech => "Find recordings and videos by what is said in them.",
         Capability.Hebrew => "Better transcripts for Hebrew recordings.",

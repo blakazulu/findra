@@ -180,6 +180,12 @@ public class SearchModelsReportTests
         string text = ModelsReport.Render(Sample(anyPresent: false));
         Assert.Contains("words in documents", text, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("free", text, StringComparison.OrdinalIgnoreCase);
+
+        // ...and only that one: the words inside a picture are read as it is opened, which only
+        // Photos does, so they are said on the Photos row and never among the free ones.
+        string free = text[text.IndexOf("free", StringComparison.Ordinal)..text.IndexOf("capabilities:", StringComparison.Ordinal)];
+        Assert.DoesNotContain("pictures", free, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("words inside pictures", text, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]

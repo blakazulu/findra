@@ -353,6 +353,9 @@ public static class ContentBranch
         ArgumentNullException.ThrowIfNull(db);
         var sw = Stopwatch.StartNew();
         var q = new SearchQuery(raw);
+        // "More like this" is a different question with the same finish: no words to look for,
+        // one file's own vectors to compare with, and the grammar's filters over what comes back.
+        if (q.IsLike) return Like(db, raw, q, max, sort, stat, semantic, lift, sw);
         string text = q.ContentText;
 
         // A query of filters alone - `ext:pdf`, or `-draft`, or a bare glob - has no ContentText.
@@ -550,6 +553,183 @@ public static class ContentBranch
             }
         }
         foreach (SearchResult row in found) offer(row);
+    }
+
+    // ---- more like this -------------------------------------------------------------------------
+
+    /// <summary>
+    /// Where one PICTURE stops looking like another. Not <see cref="PhotoFloor"/>: that one is
+    /// for a sentence against a picture, whose cosines sit near 0.1; two pictures in the same
+    /// model's space sit far higher, and 0.09 would let every picture in.
+    ///
+    /// <para>Measured on one machine (the development PC) with Findra's own vision encoder and
+    /// preprocessing over 675 real pictures - 375 family photographs from 15 events, 120 stock
+    /// photographs, 120 screenshots, 40 interface icons and 10 pictures kept twice. A picture
+    /// against a copy of itself: 1.000. Photographs of the same event: median 0.718, 90th
+    /// percentile 0.845. Photographs of different events: median 0.610, 90th percentile 0.721.
+    /// A photograph against a screenshot, an icon or a stock photograph: 99th percentile 0.60 to
+    /// 0.64. Stock photographs judged by eye: an office desk's neighbours were offices and desks
+    /// down to 0.72 and a pile of banknotes at 0.698; a keyboard's were keyboards down to 0.67,
+    /// with a mixing desk at 0.665; a city at dusk had nothing above 0.63 in the sample.</para>
+    ///
+    /// <para>So there is no empty band, as there was for a typed query; 0.70 is where what comes
+    /// back stops being mostly the same kind of picture, and it keeps a screenshot away from a
+    /// photograph. The span ends at 1.0, a copy, which is this scale's best real match: a
+    /// photograph of the same event lands around half-way.</para>
+    /// </summary>
+    public const float PictureLikeFloor = 0.70f, PictureLikeSpan = 0.30f;
+
+    /// <summary>
+    /// Where one passage stops reading like another, e5 against e5. Not <see cref="TextFloor"/>:
+    /// a query is a few words against a passage, and two passages share far more - the typical
+    /// unrelated file already scores above it.
+    ///
+    /// <para>Measured on one machine over the real index: 72,046 embedded passages from 4,600
+    /// documents, Findra's own encoder, each source compared the way this branch compares it
+    /// (sixteen passages at most, the best pair per file). Per source, the median unrelated file
+    /// scores 0.84 (0.76 to 0.86 across sources), the 99th percentile 0.905, the best file that is
+    /// not a copy 0.955 (0.899 to 0.993), and a copy 1.000. Judged by path and topic across 55
+    /// sources: files at 0.92 and above were the same subject or family of documents; at 0.91
+    /// about two in three were; at 0.90 fewer than half; at 0.89 hardly any.</para>
+    ///
+    /// <para>The span ends at 1.0 for the same reason as the pictures': a copy is the best real
+    /// match, and a close sibling lands around half-way.</para>
+    /// </summary>
+    public const float PassageLikeFloor = 0.91f, PassageLikeSpan = 0.09f;
+
+    /// <summary>How many of a file's own vectors are compared at most: its frames or passages,
+    /// taken evenly through it. Sixteen questions in one pass over the store.</summary>
+    public const int LikeSamples = 16;
+
+    public static float PictureLikeScore(float cosine)
+        => Math.Clamp((cosine - PictureLikeFloor) / PictureLikeSpan, 0f, 1f) * PhotoCeiling;
+
+    public static float PassageLikeScore(float cosine)
+        => Math.Clamp((cosine - PassageLikeFloor) / PassageLikeSpan, 0f, 1f) * TextCeiling;
+
+    /// <summary>What the card says when there is no vector store at all: nothing installed that
+    /// reads pictures or meaning.</summary>
+    public const string LikeNothingToCompare = "nothing to compare - needs Photos or Meaning";
+
+    /// <summary>What the card says when the file named has no vector to compare yet.</summary>
+    public const string LikeNotReadYet = "this file has not been read yet";
+
+    /// <summary>What the card says when nothing clears the floor.</summary>
+    public static string LikeNothingElse(bool pictures)
+        => pictures ? "nothing else looks like it" : "nothing else reads like it";
+
+    /// <summary>
+    /// "More like this": the named file's own vectors are the question. A picture or a video's
+    /// frames ask the pictures (a photo and a frame live in one space); a document's passages or a
+    /// recording's transcript ask the passages. Each candidate file keeps its best score, the file
+    /// itself is left out, and the rest go through the same finish every content answer does.
+    ///
+    /// <para>No encoder is needed - the vectors are already in the store - so this works while
+    /// the query models are still opening.</para>
+    /// </summary>
+    private static SearchResults Like(ContentDb db, string raw, SearchQuery q, int max, SearchSort sort,
+                                      Func<string, bool, ResultMapper.Stat>? stat, Semantic? semantic,
+                                      Func<string, float>? lift, Stopwatch sw)
+    {
+        SearchResults Answer(List<SearchResult> rows, string note)
+            => new(raw, rows, NamesMs: 0, ContentMs: sw.Elapsed.TotalMilliseconds, ContentReady: true, Note: note);
+
+        if (semantic is null) return Answer([], LikeNothingToCompare);
+
+        var found = new List<SearchResult>();
+        bool asked = false, pictures = false;
+        lock (semantic.SearchLock)
+        {
+            // Segment rows and vector rows are read under the same retry VectorPasses uses: a
+            // compaction renumbers the rows, and a question built from the old numbering asked of
+            // the new file compares a different passage.
+            for (int attempt = 0; attempt < 3; attempt++)
+            {
+                string file = db.VectorsPath();
+                semantic.Follow(file);
+                semantic.Vectors.Reload();
+                found.Clear();
+                (asked, pictures) = LikeOnce(db, q, max, semantic.Vectors, found);
+                if (string.Equals(db.VectorsPath(), file, StringComparison.OrdinalIgnoreCase)) break;
+            }
+        }
+        if (!asked) return Answer([], LikeNotReadYet);
+
+        var byPath = new Dictionary<string, SearchResult>(StringComparer.OrdinalIgnoreCase);
+        foreach (SearchResult row in found)
+            if (!byPath.TryGetValue(row.Path, out SearchResult? had) || had.Score < row.Score)
+                byPath[row.Path] = row;
+        List<SearchResult> rows = ResultMapper.Finish([.. byPath.Values], q, sort, stat, keepMissing: false, lift: lift);
+        if (rows.Count > max) rows.RemoveRange(max, rows.Count - max);
+        return Answer(rows, rows.Count == 0 ? LikeNothingElse(pictures) : "");
+    }
+
+    /// <summary>One attempt at <see cref="Like"/>, inside the search lock. Returns whether there
+    /// was anything to ask with, and which space was asked.</summary>
+    private static (bool Asked, bool Pictures) LikeOnce(ContentDb db, SearchQuery q, int max, VectorStore vectors,
+                                                        List<SearchResult> found)
+    {
+        if (db.ItemByPath(q.Like) is not { } item) return (false, false);
+        List<ContentDb.SegmentHit> segs = db.SegmentsOf(item.Id).Where(s => s.Vec >= 0).ToList();
+        var pics = segs.Where(s => s.SegKind is ContentDb.SegImage or ContentDb.SegFrame).ToList();
+        var words = segs.Where(s => s.SegKind is ContentDb.SegText or ContentDb.SegSpeech).ToList();
+        // A photo or a video is asked about by what it shows; anything else by what it says. A
+        // video with no frames read (sound only) still has what was said in it.
+        bool pictures = item.Kind is ResultKind.Photo or ResultKind.Video ? pics.Count > 0 : words.Count == 0;
+        List<ContentDb.SegmentHit> from = pictures ? pics : words;
+
+        // The file's own rows would take the first places of every question, so each asks for
+        // that many more.
+        int k = max * 4 + segs.Count;
+        byte[] kinds = pictures ? PictureKinds : WordKinds;
+        var queries = new List<VectorStore.Query>(LikeSamples);
+        foreach (ContentDb.SegmentHit s in Evenly(from, LikeSamples))
+            if (vectors.VectorOf(s.Vec) is { } v) queries.Add(new VectorStore.Query(v, k, kinds));
+        if (queries.Count == 0) return (false, pictures);
+
+        var best = new Dictionary<long, float>();
+        foreach (List<VectorStore.Match> answer in vectors.Search(queries))
+            foreach (VectorStore.Match m in answer)
+                if (!best.TryGetValue(m.Row, out float had) || had < m.Score) best[m.Row] = m.Score;
+
+        float floor = pictures ? PictureLikeFloor : PassageLikeFloor;
+        var rows = best.Where(kv => kv.Value >= floor).Select(kv => kv.Key).ToList();
+        string name = Path.GetFileName(item.Path.TrimEnd('\\'));
+        foreach (ContentDb.SegmentHit h in db.SegmentsByVec(rows))
+        {
+            if (string.Equals(h.Path, item.Path, StringComparison.OrdinalIgnoreCase)) continue;
+            if (!q.Allows(Path.GetFileName(h.Path), h.Path, h.Kind)) continue;
+            float c = best[h.Vec];
+            found.Add(ToLike(h, pictures ? PictureLikeScore(c) : PassageLikeScore(c), name));
+        }
+        return (true, pictures);
+    }
+
+    /// <summary>At most <paramref name="n"/> of <paramref name="all"/>, spread evenly from first
+    /// to last: a long recording is asked about by its whole length, not its opening minutes.</summary>
+    public static List<T> Evenly<T>(IReadOnlyList<T> all, int n)
+    {
+        ArgumentNullException.ThrowIfNull(all);
+        if (all.Count <= n) return [.. all];
+        var list = new List<T>(n);
+        for (int i = 0; i < n; i++) list.Add(all[(int)((long)i * all.Count / n)]);
+        return list;
+    }
+
+    /// <summary>One segment found by "More like this", as a card row: what it looks or reads like,
+    /// and for a recording or a video the moment that does.</summary>
+    public static SearchResult ToLike(ContentDb.SegmentHit hit, float score, string source)
+    {
+        string why = hit.SegKind switch
+        {
+            ContentDb.SegImage => $"looks like {source}",
+            ContentDb.SegFrame => $"a moment at {Clock(hit.T0)} looks like {source}",
+            ContentDb.SegSpeech => $"said around {Clock(hit.T0)}, reads like {source}",
+            _ => $"reads like {source}",
+        };
+        bool moment = hit.SegKind is ContentDb.SegSpeech or ContentDb.SegFrame;
+        return new SearchResult(hit.Kind, Path.GetFileName(hit.Path), hit.Path, score, why,
+            MomentSeconds: moment ? hit.T0 : -1, Excerpt: Excerpt(hit.Text, ""));
     }
 
     /// <summary>One segment hit as a card row. The kind is the ITEM's kind, already joined in by

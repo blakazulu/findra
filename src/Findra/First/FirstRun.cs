@@ -589,7 +589,9 @@ public static class FirstRun
 
     private static string Note(Capability c) => c switch
     {
-        Capability.Photos => "Find a picture by what is in it, and a video by what a frame looks like.",
+        // The words written in a picture are read as it is opened, and only this add-on opens
+        // one, so this is the row that says so.
+        Capability.Photos => "Find a picture by what is in it or written on it, and a video by its frames.",
         Capability.Meaning => "Find a document by what it means, not only by the words it uses.",
         // "recordings" alone is what left somebody asking whether video was included, with a row
         // directly above called "Photos and video" making video look like somebody else's

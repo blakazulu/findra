@@ -4,14 +4,14 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Search inside PDFs and documents on Windows - Findra</title>
-<meta name="description" content="How to search inside PDF, Word, Excel, PowerPoint, EPUB and text files on Windows 10 and 11, offline: what Findra reads, what it costs and what it skips.">
+<meta name="description" content="How to search inside PDF (scanned ones too), Word, Excel, PowerPoint, OpenDocument, RTF, EPUB and text files on Windows 10 and 11, offline: what Findra reads, costs and skips.">
 <link rel="canonical" href="https://findra-search.netlify.app/search-inside-pdfs/">
 <meta property="og:type" content="article">
 <meta property="og:site_name" content="Findra">
 <meta property="og:locale" content="en_US">
 <meta property="og:url" content="https://findra-search.netlify.app/search-inside-pdfs/">
 <meta property="og:title" content="Search inside PDFs and documents on Windows - Findra">
-<meta property="og:description" content="How to search inside PDF, Word, Excel, PowerPoint, EPUB and text files on Windows 10 and 11, offline: what Findra reads, what it costs and what it skips.">
+<meta property="og:description" content="How to search inside PDF (scanned ones too), Word, Excel, PowerPoint, OpenDocument, RTF, EPUB and text files on Windows 10 and 11, offline: what Findra reads, costs and skips.">
 <meta property="og:image" content="https://findra-search.netlify.app/share/card.png">
 <meta property="og:image:type" content="image/png">
 <meta property="og:image:width" content="1200">
@@ -38,9 +38,9 @@
       "@id": "https://findra-search.netlify.app/search-inside-pdfs/#page",
       "url": "https://findra-search.netlify.app/search-inside-pdfs/",
       "name": "Search inside PDFs and documents on Windows - Findra",
-      "description": "How to search inside PDF, Word, Excel, PowerPoint, EPUB and text files on Windows 10 and 11, offline: what Findra reads, what it costs and what it skips.",
+      "description": "How to search inside PDF (scanned ones too), Word, Excel, PowerPoint, OpenDocument, RTF, EPUB and text files on Windows 10 and 11, offline: what Findra reads, costs and skips.",
       "inLanguage": "en",
-      "dateModified": "2026-09-21",
+      "dateModified": "2026-09-30",
       "isPartOf": {
         "@id": "https://findra-search.netlify.app/#site"
       },
@@ -129,7 +129,7 @@
       <span class="kicker">GUIDE</span>
       <h1>Search the words inside your PDFs and documents, with nothing else to install.</h1>
       <div class="doc-meta">
-        <span class="d">Findra 0.8.0 &middot; last reviewed 2026-09-21</span>
+        <span class="d">Findra 0.8.0 &middot; last reviewed 2026-09-30</span>
         <a class="doc-chip on" href="/search-inside-pdfs.md">Read as Markdown</a>
         <a class="doc-chip" href="https://github.com/blakazulu/findra/blob/main/website/content/guides/search-inside-pdfs.md" rel="noopener">History on GitHub</a>
       </div>
@@ -145,21 +145,24 @@
       <h2>What it reads</h2>
 
       <ul>
-        <li>PDF</li>
+        <li>PDF, scanned ones included</li>
         <li>Word (.docx), Excel (.xlsx) and PowerPoint (.pptx)</li>
+        <li>OpenDocument text, spreadsheets and presentations (.odt, .ods and .odp)</li>
+        <li>RTF</li>
         <li>EPUB</li>
         <li>Plain text, Markdown and CSV</li>
         <li>HTML</li>
-        <li>The text inside pictures, such as a screenshot or a photographed receipt</li>
       </ul>
 
-      <p>The older binary formats - .doc, .xls and .ppt - and RTF and the OpenDocument formats are found by name but not read inside yet. Code, JSON and logs are deliberately left to name search, because a search over the inside of every package file on a disk helps nobody.</p>
+      <p>A page of a PDF that is a picture of a page - a scan, a fax, a phone photo saved as a PDF - has no words for a reader to take, so Findra reads it with the text recognition built into Windows, in English and Hebrew wherever those recognisers are installed. Up to the first 100 such pages of each file are read.</p>
+
+      <p>The older binary formats - .doc, .xls and .ppt - are found by name but not read inside. Code, JSON and logs are deliberately left to name search, because a search over the inside of every package file on a disk helps nobody. The words in a screenshot or a photographed receipt are read along with the <a href="https://findra-search.netlify.app/find-photos-by-description/">photos capability</a>, because that is what opens a picture.</p>
 
       <h2>What it costs</h2>
 
-      <p>Nothing to download. Searching the words in a document uses a full-text index on your own disk and no model at all.</p>
+      <p>Nothing to download. Searching the words in a document uses a full-text index on your own disk and no model at all, and a scanned page is read by the recognisers Windows already has.</p>
 
-      <p>What it costs is time, once. The first pass walks every drive and can run for hours on a large disk, which is why it never starts on its own. It reads only while Findra is open, it shows its progress under the card, and it steps aside while a game is fullscreen or another program is working the graphics card. After the first pass, a new or changed file is read as soon as it is saved.</p>
+      <p>What it costs is time, once. The first pass walks every drive and can run for hours on a large disk, which is why it never starts on its own. A scanned page takes a second or two where a typed one takes a moment. It reads only while Findra is open, it shows its progress under the card, and it steps aside while a game is fullscreen or another program is working the graphics card. After the first pass, a new or changed file is read as soon as it is saved.</p>
 
       <h2>Searching by meaning, not only by the words</h2>
 

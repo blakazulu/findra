@@ -56,8 +56,22 @@ public class ModelsCommandTests
 
         Assert.Contains("words in documents", text, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("free", text, StringComparison.OrdinalIgnoreCase);
-        // Reading words inside pictures needs no model either, and it is not a capability.
-        Assert.Contains("words inside pictures", text, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void TheWordsInsidePicturesAreListedWithPhotosBecauseAPictureIsOpenedOnlyForPhotos()
+    {
+        // The recognisers are Windows' own and cost nothing, but they read a picture as it is
+        // opened, and nothing opens a picture without Photos. Listing them as free told somebody
+        // with nothing installed that their screenshots were being read.
+        string text = ModelsCommand.RenderList(CapabilitySet.None, hebrewOffered: false);
+        string free = text[..text.IndexOf("capabilities", StringComparison.Ordinal)];
+        string photos = text[text.IndexOf("Photos and video", StringComparison.Ordinal)..];
+
+        Assert.DoesNotContain("pictures", free, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("scanned", free, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("words inside pictures", photos[..photos.IndexOf("Meaning", StringComparison.OrdinalIgnoreCase)],
+                        StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]

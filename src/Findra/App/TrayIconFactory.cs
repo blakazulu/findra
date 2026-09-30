@@ -159,7 +159,38 @@ public static class TrayIconFactory
         canvas.Scale((Size - pad * 2f) / Bounds.Width);
         canvas.Translate(-Bounds.Left, -Bounds.Top);
 
-        using var accent = new SKPaint { Color = palette.Accent, IsAntialias = true };
+        Glyph(canvas, palette.Accent, small: false);
+
+        canvas.Flush();
+        using SKImage image = surface.Snapshot();
+        return image.Encode(SKEncodedImageFormat.Png, 100);
+    }
+
+    /// <summary>
+    /// The mark in one colour, fitted into <paramref name="box"/>: the tray's own drawing, for a
+    /// surface that wants the logo as a glyph (the card's "More like this" button draws it before
+    /// its words). <paramref name="small"/> is the mark's small-size form, the one the icon
+    /// generator draws at 16 px: no slot, a slightly fuller lens and a heavier handle, because
+    /// at that size the slot is a grey smear across the lens rather than a hole.
+    /// </summary>
+    public static void DrawMark(SKCanvas canvas, SKRect box, SKColor colour, bool small)
+    {
+        ArgumentNullException.ThrowIfNull(canvas);
+        float scale = Math.Min(box.Width / Bounds.Width, box.Height / Bounds.Height);
+        canvas.Save();
+        canvas.Translate(box.MidX - Bounds.MidX * scale, box.MidY - Bounds.MidY * scale);
+        canvas.Scale(scale);
+        Glyph(canvas, colour, small);
+        canvas.Restore();
+    }
+
+    // The hinted numbers for the small form, from build/Make-Icon.mjs's HINTS[16].
+    public const float SmallDiscR = 66f, SmallHandW = 36f;
+
+    /// <summary>The mark in design units, onto whatever transform the caller set.</summary>
+    private static void Glyph(SKCanvas canvas, SKColor colour, bool small)
+    {
+        using var accent = new SKPaint { Color = colour, IsAntialias = true };
 
         // The lens, with the capsule's own search field cut out of it. Even-odd rather than a
         // second paint in the ground colour: the hole has to be a HOLE. Windows composites this
@@ -167,19 +198,15 @@ public static class TrayIconFactory
         // dark smudge sitting on a light taskbar.
         using (var lens = new SKPath { FillType = SKPathFillType.EvenOdd })
         {
-            lens.AddCircle(110f, 108f, 64f);
-            lens.AddRoundRect(new SKRoundRect(new SKRect(76f, 94f, 144f, 122f), 14f));
+            lens.AddCircle(110f, 108f, small ? SmallDiscR : 64f);
+            if (!small) lens.AddRoundRect(new SKRoundRect(new SKRect(76f, 94f, 144f, 122f), 14f));
             canvas.DrawPath(lens, accent);
         }
 
         using (var handle = new SKPaint
         {
-            Color = palette.Accent, IsAntialias = true, Style = SKPaintStyle.Stroke,
-            StrokeWidth = 30f, StrokeCap = SKStrokeCap.Round,
+            Color = colour, IsAntialias = true, Style = SKPaintStyle.Stroke,
+            StrokeWidth = small ? SmallHandW : 30f, StrokeCap = SKStrokeCap.Round,
         }) canvas.DrawLine(158f, 156f, 200f, 198f, handle);
-
-        canvas.Flush();
-        using SKImage image = surface.Snapshot();
-        return image.Encode(SKEncodedImageFormat.Png, 100);
     }
 }

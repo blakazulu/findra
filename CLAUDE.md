@@ -56,8 +56,9 @@ findra.exe --searchprobe [query]      # end to end: which process answered, the 
                                       # counter, what the content indexer is doing
 findra.exe --searchmodels             # models present, loading, agreeing; provider per runtime
 findra.exe --searchindex [file|folder|q:query|why:path]...   # indexed/queued; paths queue and
-                                      # drain, q: queries, why:<path> explains ONE file, read-only
-findra.exe --searchshot out.png <state> [palette]   # forty-five states, listed below
+                                      # drain, q: queries, why:<path> explains ONE file; without a
+                                      # path it opens the index read-only
+findra.exe --searchshot out.png <state> [palette]   # forty-six states, listed below
 findra.exe --searchtest               # engine self-check
 findra.exe --searchbench [out.md] [corpus]   # measured numbers, pasteable Markdown; `corpus` is
                                       # how many files it generates
@@ -65,12 +66,12 @@ findra.exe --version                  # print the version and log location, then
 ```
 
 The `--searchshot` states are `SearchShot.States`, and that list is the only definition of them.
-Seventeen draw the card, seven the settings window, eight the first-run screen and thirteen the
+Eighteen draw the card, seven the settings window, eight the first-run screen and thirteen the
 update window:
 
 ```
 capsule  empty  indexing  contentmode  contentwaiting  contentloading  typing  searching  results
-noresults  many  adv  opening  openingempty  selected  starting  recent
+noresults  many  adv  opening  openingempty  selected  starting  recent  similar
 settings  settingsopening  settingssearches  settingscontent  settingsaddons  settingsremove  settingsabout
 updatechecking  updateuptodate  updateunreachable  updateavailable  updateavailablewinget  updatedownloading
 updatedownloadfailed  updateinstalling  updatedidnotrun  updatewinget  updatewingetfailed  updatereleases
@@ -249,6 +250,23 @@ both halves through `ApplyConfig` and `ISettingsHost.StartIndexing`).
 - **`ContentPill.Decide` owns what pressing Content means**, not `CardWindow`. Release: search
   again. Files read and reading off: turn reading back on in place. Nothing read: open Settings at
   Content. A count nothing has read yet: search.
+- **"More like this" is a query, not a mode.** The wide solid-accent button above Open (and
+  Ctrl+L) writes `like:"<full path>"` (`SearchQuery.LikeQuery`) into the field and searches, so
+  chips, sort, Esc, the generation counter and filters beside it work unchanged. A `like:` query is
+  CONTENT-ONLY and runs whatever the Content pill says (`CardWindow.RunSearch`); the header reads
+  `8 like "name"` (`SearchQuery.LikeOf`, never a full parse per paint).
+- **Drawn for a content kind, pressable once `SimilarReady`**: `SearchCardState.OffersSimilar` is the
+  row's kind; `SimilarReady` (a vector store AND `ContentDb.HasVectors`) is decided off the
+  interface thread in `HighlightChanged`, never in the painter. Not ready: a resting row with
+  `Dim` ink, unavailable to UI Automation, the plain arrow. `SearchCardLayout.SimilarRect` keeps
+  its room on the stage for EVERY row, so the picture does not jump; `HitTest(similar:)` answers
+  `Similar` only where it is drawn. Its lens is the mark's 16 px form
+  (`TrayIconFactory.DrawMark(small:)`, HINTS[16]).
+- **`ContentBranch.Like` asks with the file's own vectors, no encoder**: a photo or video's
+  picture rows (frames sampled evenly to `LikeSamples`) ask picture kinds, anything else its
+  passage or speech rows ask word kinds; best score per file, the file itself left out, every read
+  inside the `SearchLock`/`Follow`/`VectorsPath` retry. No store: `LikeNothingToCompare`; no
+  vectors: `LikeNotReadYet`. `items_path_nocase` is what lets `ItemByPath` seek.
 
 **`src/Findra/Look/Pointers.cs` is the only place a cursor shape is decided**, mapped from each
 surface's own hit-test answer.
@@ -315,8 +333,18 @@ and layout the painter and the hit test read. `AccessiblePeer` turns them into a
   Enter and Space in Settings, first-run and update (tunnelling `KeyDown`, or Avalonia's own
   navigation takes Tab first); `AccessRing` shows only after the keyboard is used. The card keeps
   its own keys (typing, arrows, Enter, Tab through chips) and speaks counts and the highlight.
-- **Not covered**: the Advanced popup's fields. Verified with the UI Automation client (tree,
-  bounds, Invoke, real Tab/Space); never with Narrator's speech itself.
+- **The card presses through `CardWindow.PressAt`** (a `SearchHit` in, the action out), shared by
+  the pointer and `AccessInvoke`, which hit-tests the node's centre.
+- **The Advanced popup is listed INSTEAD of what it covers** (reading pill, header, chips, rows,
+  stage buttons): `adv:field:0..9` (Edit, `SearchAdvancedLayout.FieldName`, placeholder as help),
+  `adv:check:0/1`, `adv:kind:0..5` (Option), `adv:button:0..2`, in `SearchAdvancedLayout.Stops`
+  order beside field, three pills and close. Its keyboard is `SearchCardState.AdvFocusOn` +
+  `AdvFocus`: Tab/Shift+Tab walk every stop (`CardAccess.NextStop`), Space presses a check, chip or
+  button (its character is swallowed), Enter presses a button or applies, Esc closes it; typing
+  lands only in a focused field. The field answers `Field` while it is open (a press there puts
+  the popup away). `AccessTests` holds target AND index for every node, open and closed.
+- Verified with the UI Automation client (tree, bounds, Invoke, real Tab/Space) on the welcome
+  screen; never with Narrator's speech itself. The popup's keyboard has only unit tests.
 
 ## The progress pill
 
@@ -506,7 +534,8 @@ under the dead number, a duplicate nothing could remove. Removals run `Indexer.R
 time. Schema 7 is a `ReWalk` so older indexes get one sweeping pass. **A `ReWalk` OWES every
 volume a walk** (`OweEveryVolumeAWalk`: positions and item volumes), not only forgets positions:
 an older build still running wrote positions back and C: and D: were never walked. Only a
-completed `FillFrom` clears the debt.
+completed `FillFrom` clears the debt. Schema 8 re-queues only Documents skipped for `NoText` or
+`NoFormatReader` (`Migration.OnlyBecause`, passed to `RequeueKinds(onlyBecause:)`), no `ReWalk`.
 
 ## The vector file
 
@@ -609,6 +638,17 @@ speech              ─  whisper-turbo + [e5 pair]              550 MB (+1.04 GB
 - **A migration that changes WHICH FILES are eligible sets `ReWalk`** (forgets journal positions;
   `JournalTail.ResumeFrom` owes a full pass). `RequeueKinds` only moves existing rows. Opt-in per
   step (spec §2a).
+- **Scanned PDF pages are read by OCR, as part of Documents** (`ScannedPdf`): a page whose text
+  layer has under `MinWords` (10) words is rendered by `Windows.Data.Pdf` and read by `ImageText`,
+  in page order, at most `MaxPages` (100) a file, one beat each. Pages with text are never rendered.
+  **The words inside PICTURES are not free**: `ImageText` runs in `Decoders.Photo`, after the vision
+  encoder, so they come with Photos. Never list them beside words in documents.
+- **Every zip-based format reads through `DocText.Archive`, one `ArchiveBudget` per file**: 256 MB
+  decompressed (counted on the stream, never the sizes the zip claims) and 10,000 parts. Spent means
+  stop and KEEP what was read, never fail the file; `SpentException` is an `IOException` so
+  `XmlReader` passes it on. `Extract(archiveBytes:)` is the test seam.
+- **RTF (`RtfText`) and OpenDocument (`content.xml`, matched by namespace) have their own readers**;
+  `.doc`, `.xls` and `.ppt` stay in `DocText.NoReader`. Neither reader throws on garbage.
 - **`IndexPowerLevels` is the one list of duty-cycle levels**, like `TranscribeLimit.ShortName`: one
   table, every level inside `Config.Load`'s clamp, and the row writes the NUMBER, never the index.
 - **"Start now" sits beside the toggle**: it writes the configuration AND asks the shell.
@@ -628,6 +668,11 @@ speech              ─  whisper-turbo + [e5 pair]              550 MB (+1.04 GB
 - **`TextFloor` is 0.81 and `TextSpan` 0.06** (unrelated text averages 0.780, best answers
   0.838-0.868). **Each scale must end just past its own best real match** so the two are comparable.
   `ScoreScaleTests` carries the numbers. **The ceilings were deliberately left alone** (0.90 vs 0.92).
+- **A file against a file has its own two scales**, because the typed floors admit nearly
+  everything: `PictureLikeFloor` 0.70 span 0.30 and `PassageLikeFloor` 0.91 span 0.09, both ending
+  at a copy (1.0). Measured on this machine only (675 real pictures; 72,046 real passages), with
+  no empty band between noise and matches as the typed scales had; the numbers and the method are
+  on the constants and in `ScoreScaleTests`.
 
 ## Hardware portability
 
@@ -834,8 +879,8 @@ and the tiles from the README, so a new run is: paste it, then change every figu
   `/search-inside-pdfs/`, `/find-photos-by-description/`, `/search-recordings-by-speech/`, from
   `website/content/guides/`, linked in every footer, the 404 map, `llms.txt`, sitemap and edge
   function. First sentence is the answer; **say only what the code does today** (formats `DocText`
-  reads, not `FileKinds`' list: `.doc`, `.xls`, `.ppt`, RTF and OpenDocument are found by name
-  only). A new guide is a `PAGES` entry plus a `Guides` entry in
+  reads, not `FileKinds`' list: `.doc`, `.xls` and `.ppt` are found by name only). A new guide is a
+  `PAGES` entry plus a `Guides` entry in
   `WebsiteTests`.
 - **The generator's Markdown vocabulary is the union of what its sources use** (unsupported syntax
   renders with its marker, e.g. a literal `>`); `WebsiteTests.Strip` learns each new construction.

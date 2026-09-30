@@ -342,7 +342,7 @@ public static class SearchIndex
         var explain = new List<string>();
         foreach (string a in args.Skip(1))
         {
-            if (a.StartsWith("q:", StringComparison.OrdinalIgnoreCase)) { queries.Add(a[2..]); continue; }
+            if (a.StartsWith("q:", StringComparison.OrdinalIgnoreCase)) { queries.Add(Query(a[2..])); continue; }
             // `why:<path>` asks about ONE file rather than queueing it: what the index holds, what
             // state it is in, what came out of it, and - with a q: beside it - what each of its
             // vectors scores against that query and whether it cleared the floor. It reads and
@@ -353,7 +353,12 @@ public static class SearchIndex
             else Console.WriteLine($"no such file: {a}");
         }
 
-        using ContentDb db = ContentDb.OpenOrRebuild();
+        // Only a run that queues files writes. A report, a `q:` or a `why:` reads, so it opens the
+        // index the way the card does, read-only, when there is one to read: the writer's open
+        // also creates what is missing from the schema, and a question is not a reason to.
+        using ContentDb db = files.Count == 0 && File.Exists(ContentDb.DefaultPath)
+            ? new ContentDb(ContentDb.DefaultPath, readOnly: true)
+            : ContentDb.OpenOrRebuild();
         IReadOnlyList<string> exclusions = Config.LoadFromDisk().SearchExclusions;
 
         if (files.Count > 0)
@@ -452,6 +457,17 @@ public static class SearchIndex
     /// main loop above does anyway, read-only and side-effect free - it exists only to decide
     /// whether re-pointing the speech runtime at the card is worth a process restart at all.
     /// </summary>
+    /// <summary>A `q:` as the shell handed it over. A shell takes the quotes off
+    /// <c>q:like:"C:\My Photos\a.jpg"</c> and leaves a path with a space in it, which the grammar
+    /// would read as two terms; a `like:` with no quotes left is the whole rest of the argument.</summary>
+    public static string Query(string q)
+    {
+        ArgumentNullException.ThrowIfNull(q);
+        return q.StartsWith("like:", StringComparison.OrdinalIgnoreCase) && q.Length > 5 && !q.Contains('"')
+            ? SearchQuery.LikeQuery(q[5..].Trim())
+            : q;
+    }
+
     private static bool HasPathsToDrain(string[] args) => args.Skip(1).Any(a =>
         !a.StartsWith("q:", StringComparison.OrdinalIgnoreCase) &&
         !a.StartsWith("why:", StringComparison.OrdinalIgnoreCase) &&

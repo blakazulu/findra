@@ -210,7 +210,7 @@ const PAGES = [
     description:
       'The four reasons Windows Search misses a file you know is there, how to fix each one ' +
       'inside Windows, and where Findra takes a different route.',
-    reviewed: '2026-09-21',
+    reviewed: '2026-09-30',
     ogType: 'article',
     markdown: 'windows-search-not-finding-files.md',
   },
@@ -221,9 +221,9 @@ const PAGES = [
     headline: 'Search the words inside your PDFs and documents, with nothing else to install.',
     title: 'Search inside PDFs and documents on Windows - Findra',
     description:
-      'How to search inside PDF, Word, Excel, PowerPoint, EPUB and text files on Windows 10 and ' +
-      '11, offline: what Findra reads, what it costs and what it skips.',
-    reviewed: '2026-09-21',
+      'How to search inside PDF (scanned ones too), Word, Excel, PowerPoint, OpenDocument, RTF, ' +
+      'EPUB and text files on Windows 10 and 11, offline: what Findra reads, costs and skips.',
+    reviewed: '2026-09-30',
     ogType: 'article',
     markdown: 'search-inside-pdfs.md',
   },
@@ -236,7 +236,7 @@ const PAGES = [
     description:
       'Search your photos and videos on Windows by what they show, with a 629 MB model that runs ' +
       'on your own machine. No uploads, no account, no cloud.',
-    reviewed: '2026-09-21',
+    reviewed: '2026-09-30',
     ogType: 'article',
     markdown: 'find-photos-by-description.md',
   },

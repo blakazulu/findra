@@ -9,10 +9,12 @@ using System.Xml;
 
 namespace Findra;
 
-// Text out of documents, for the indexer child. PDF through PdfPig; docx/pptx/xlsx/epub are zip
-// archives of XML and need no library - every text node of the right parts, in order, joined with
-// spaces; everything else is read as text. Nothing here formats: the output is words for the
-// full-text index, and a table cell sitting next to its neighbour is exactly what that wants.
+// Text out of documents, for the indexer child. PDF through PdfPig, with the pages that carry no
+// text (a scan) read by the recognisers Windows ships; docx/pptx/xlsx/epub and the OpenDocument
+// formats are zip archives of XML and need no library - every text node of the right parts, in
+// order, joined with spaces; RTF has its own small reader; everything else is read as text.
+// Nothing here formats: the output is words for the full-text index, and a table cell sitting
+// next to its neighbour is exactly what that wants.
 //
 // This runs over arbitrary files found on someone's disk, which is why it lives in the indexer at
 // normal integrity and never in the elevated helper (spec §3).
@@ -24,19 +26,15 @@ public static class DocText
     /// counted and what is chunked: nothing here has a vocabulary to measure in.</summary>
     public const int MaxChars = 400_000;
 
-    /// <summary>Formats Findra classifies as documents and cannot yet read INSIDE: the legacy
-    /// binary Office files and the OpenDocument zips. An .odt's words are deflate-compressed, so
-    /// reading its bytes as text finds zip structure and never the document; a .doc yields
-    /// mojibake. Either way the file would be recorded as indexed and never found, which is worse
-    /// than a gap - a gap is visible and a later reader can re-queue exactly those rows.</summary>
+    /// <summary>Formats Findra classifies as documents and cannot read INSIDE: the legacy binary
+    /// Office files. Reading a .doc's bytes as text yields mojibake, and the file would be
+    /// recorded as indexed and never found, which is worse than a gap - a gap is visible and a
+    /// later reader can re-queue exactly those rows.</summary>
     private static readonly HashSet<string> NoReader = new(StringComparer.OrdinalIgnoreCase)
-        { "doc", "xls", "ppt", "rtf", "odt", "odp", "ods" };
+        { "doc", "xls", "ppt" };
 
     /// <summary>Can this build read the words inside that file, or would <see cref="Extract"/>
-    /// fall through to reading its bytes as text? RTF is on the no list deliberately: it is ASCII,
-    /// so a raw read does yield some real words - alongside \fonttbl, \pard and colour tables,
-    /// indexed as words in their own right. A half-good index is harder to reason about than an
-    /// honest gap, and stripping RTF control words is writing a reader.</summary>
+    /// fall through to reading its bytes as text?</summary>
     public static bool CanExtract(string path) => !NoReader.Contains(Path.GetExtension(path).TrimStart('.'));
 
     /// <summary><paramref name="beat"/> is called once per page, sheet, slide or chapter - the
@@ -44,17 +42,23 @@ public static class DocText
     /// document still being read apart from a decoder that has stopped moving (see
     /// <see cref="IndexerWatch"/>). HTML and plain text have no such loop: <c>Extract</c> reads the
     /// whole file in one call for either, and there is nowhere inside that call to beat from.
+    ///
+    /// <para><paramref name="archiveBytes"/> is how much a zip-based file may decompress to
+    /// (<see cref="ArchiveBudget"/>); it is a parameter so a test can reach the limit without a
+    /// quarter-gigabyte fixture.</para>
     /// </summary>
-    public static string Extract(string path, Action? beat = null)
+    public static string Extract(string path, Action? beat = null, long archiveBytes = ArchiveBudget.MaxBytes)
     {
         string ext = Path.GetExtension(path).TrimStart('.').ToLowerInvariant();
         string text = ext switch
         {
             "pdf" => Pdf(path, beat),
-            "docx" => Ooxml(path, beat, "word/document.xml", "word/footnotes.xml", "word/endnotes.xml"),
-            "pptx" => OoxmlAll(path, beat, "ppt/slides/slide", "ppt/notesSlides/notesSlide"),
-            "xlsx" => Xlsx(path, beat),
-            "epub" => Epub(path, beat),
+            "docx" => Ooxml(path, beat, archiveBytes, "word/document.xml", "word/footnotes.xml", "word/endnotes.xml"),
+            "pptx" => OoxmlAll(path, beat, archiveBytes, "ppt/slides/slide", "ppt/notesSlides/notesSlide"),
+            "xlsx" => Xlsx(path, beat, archiveBytes),
+            "epub" => Epub(path, beat, archiveBytes),
+            "odt" or "ods" or "odp" => Odf(path, beat, archiveBytes),
+            "rtf" => RtfText.Read(path, beat),
             "html" or "htm" => StripTags(File.ReadAllText(path)),
             _ => File.ReadAllText(path),
         };
@@ -63,33 +67,60 @@ public static class DocText
 
     private static string Pdf(string path, Action? beat)
     {
-        var sb = new StringBuilder();
-        using var doc = UglyToad.PdfPig.PdfDocument.Open(path);
-        foreach (var page in doc.GetPages())
+        var pages = new List<string>();
+        var wordsOn = new List<int>();
+        int total = 0;
+        using (var doc = UglyToad.PdfPig.PdfDocument.Open(path))
         {
-            // words in reading order, grouped into lines by their baseline: page.Text is the
-            // content stream's order, which for a Hebrew PDF is the VISUAL order (the glyphs were
-            // laid down left to right) and reads backwards
-            var words = page.GetWords().ToList();
-            var line = new List<UglyToad.PdfPig.Content.Word>();
-            double? baseline = null;
-            foreach (var w in words)
+            foreach (var page in doc.GetPages())
             {
-                double y = w.BoundingBox.Bottom;
-                if (baseline is double b && Math.Abs(y - b) > w.BoundingBox.Height * 0.6)
+                // words in reading order, grouped into lines by their baseline: page.Text is the
+                // content stream's order, which for a Hebrew PDF is the VISUAL order (the glyphs
+                // were laid down left to right) and reads backwards
+                var sb = new StringBuilder();
+                var words = page.GetWords().ToList();
+                var line = new List<UglyToad.PdfPig.Content.Word>();
+                double? baseline = null;
+                foreach (var w in words)
                 {
-                    sb.Append(LineText(line)).Append('\n');
-                    line.Clear();
+                    double y = w.BoundingBox.Bottom;
+                    if (baseline is double b && Math.Abs(y - b) > w.BoundingBox.Height * 0.6)
+                    {
+                        sb.Append(LineText(line)).Append('\n');
+                        line.Clear();
+                    }
+                    line.Add(w);
+                    baseline = y;
                 }
-                line.Add(w);
-                baseline = y;
+                if (line.Count > 0) sb.Append(LineText(line)).Append('\n');
+                pages.Add(sb.ToString());
+                wordsOn.Add(words.Count);
+                total += sb.Length + 1;
+                beat?.Invoke();
+                if (total > MaxChars) break;
             }
-            if (line.Count > 0) sb.Append(LineText(line)).Append('\n');
-            sb.Append('\n');
-            beat?.Invoke();
-            if (sb.Length > MaxChars) break;
         }
-        return sb.ToString();
+
+        // The pages with no text of their own are pictures of pages - a scan, a fax, a phone
+        // photo saved as a PDF - and their words are read by OCR, in page order beside the rest.
+        // PdfPig's handle is closed first: rendering opens the file again, and nothing here needs
+        // two readers on somebody's document at once.
+        IReadOnlySet<int> scanned = ScannedPdf.PagesToRead(wordsOn);
+        var text = new StringBuilder();
+        using var ocr = scanned.Count > 0 ? new ScannedPdf(path, wordsOn.Count(n => n < ScannedPdf.MinWords)) : null;
+        for (int i = 0; i < pages.Count; i++)
+        {
+            text.Append(pages[i]);
+            if (ocr is not null && scanned.Contains(i) && text.Length <= MaxChars)
+            {
+                string read = ocr.Read(i);
+                if (read.Length > 0) text.Append(read).Append('\n');
+                beat?.Invoke();
+            }
+            text.Append('\n');
+            if (text.Length > MaxChars) break;
+        }
+        return text.ToString();
     }
 
     // A line of a Hebrew PDF arrives as visual order: the words right-to-left across the page and
@@ -119,124 +150,204 @@ public static class DocText
 
     private static bool IsLtr(char c) => char.IsAsciiLetterOrDigit(c);
 
-    // word/document.xml, footnotes.xml and endnotes.xml: a fixed three parts, not one per page -
-    // Word does not record page boundaries in the XML at all, so a part is the finest unit this
-    // format has to beat on.
-    private static string Ooxml(string path, Action? beat, params string[] parts)
+    // Every zip-based format reads through here: one budget for the whole file, and when it runs
+    // out, what was read before it is what the file is indexed with.
+    private static string Archive(string path, long maxBytes, Action<ZipArchive, ArchiveBudget, StringBuilder> read)
     {
         var sb = new StringBuilder();
         using var zip = ZipFile.OpenRead(path);
-        foreach (var part in parts)
+        try { read(zip, new ArchiveBudget(maxBytes), sb); }
+        catch (ArchiveBudget.SpentException ex)
         {
-            var e = zip.GetEntry(part);
-            if (e is null) continue;
-            using var s = e.Open();
-            XmlText(s, sb, beat);
-            beat?.Invoke();
+            // Once a process: a file that inflates past the limit is rare and the line is the
+            // same for every one of them, so the first names the case and the rest add nothing.
+            Log.Once("index|zip|limit", "INFO", "index",
+                     $"stopped reading {Path.GetFileName(path)} part way ({ex.Message}); the words read before that are kept");
         }
         return sb.ToString();
     }
 
-    // slides and notes are numbered parts; take them in order
-    private static string OoxmlAll(string path, Action? beat, params string[] prefixes)
-    {
-        var sb = new StringBuilder();
-        using var zip = ZipFile.OpenRead(path);
-        var entries = new List<ZipArchiveEntry>();
-        foreach (var e in zip.Entries)
-            foreach (var p in prefixes)
-                if (e.FullName.StartsWith(p, StringComparison.OrdinalIgnoreCase) && e.FullName.EndsWith(".xml", StringComparison.OrdinalIgnoreCase))
-                    entries.Add(e);
-        entries.Sort((a, b) => string.CompareOrdinal(Pad(a.FullName), Pad(b.FullName)));
-        foreach (var e in entries)
+    // word/document.xml, footnotes.xml and endnotes.xml: a fixed three parts, not one per page -
+    // Word does not record page boundaries in the XML at all, so a part is the finest unit this
+    // format has to beat on.
+    private static string Ooxml(string path, Action? beat, long maxBytes, params string[] parts)
+        => Archive(path, maxBytes, (zip, budget, sb) =>
         {
-            using var s = e.Open();
-            XmlText(s, sb, beat);
-            beat?.Invoke();
-            if (sb.Length > MaxChars) break;
-        }
-        return sb.ToString();
-    }
+            foreach (var part in parts)
+            {
+                var e = zip.GetEntry(part);
+                if (e is null) continue;
+                using var s = budget.Open(e);
+                XmlText(s, sb, beat);
+                beat?.Invoke();
+            }
+        });
+
+    // slides and notes are numbered parts; take them in order
+    private static string OoxmlAll(string path, Action? beat, long maxBytes, params string[] prefixes)
+        => Archive(path, maxBytes, (zip, budget, sb) =>
+        {
+            var entries = new List<ZipArchiveEntry>();
+            foreach (var e in zip.Entries)
+                foreach (var p in prefixes)
+                    if (e.FullName.StartsWith(p, StringComparison.OrdinalIgnoreCase) && e.FullName.EndsWith(".xml", StringComparison.OrdinalIgnoreCase))
+                        entries.Add(e);
+            entries.Sort((a, b) => string.CompareOrdinal(Pad(a.FullName), Pad(b.FullName)));
+            foreach (var e in entries)
+            {
+                using var s = budget.Open(e);
+                XmlText(s, sb, beat);
+                beat?.Invoke();
+                if (sb.Length > MaxChars) break;
+            }
+        });
 
     private static string Pad(string name) => Regex.Replace(name, @"\d+", m => m.Value.PadLeft(6, '0'));
 
     // cells reference a shared-strings table; inline strings and numbers sit in the sheet
-    private static string Xlsx(string path, Action? beat)
-    {
-        var sb = new StringBuilder();
-        using var zip = ZipFile.OpenRead(path);
-        var shared = new List<string>();
-        if (zip.GetEntry("xl/sharedStrings.xml") is { } ss)
+    private static string Xlsx(string path, Action? beat, long maxBytes)
+        => Archive(path, maxBytes, (zip, budget, sb) =>
         {
-            using var s = ss.Open();
-            using var r = XmlReader.Create(s, new XmlReaderSettings { DtdProcessing = DtdProcessing.Ignore });
-            var cur = new StringBuilder();
-            while (r.Read())
+            var shared = new List<string>();
+            if (zip.GetEntry("xl/sharedStrings.xml") is { } ss)
             {
-                if (r.NodeType == XmlNodeType.Element && r.Name == "si") cur.Clear();
-                else if (r.NodeType == XmlNodeType.Text) cur.Append(r.Value);
-                else if (r.NodeType == XmlNodeType.EndElement && r.Name == "si")
+                using var s = budget.Open(ss);
+                using var r = XmlReader.Create(s, new XmlReaderSettings { DtdProcessing = DtdProcessing.Ignore });
+                var cur = new StringBuilder();
+                while (r.Read())
                 {
-                    shared.Add(cur.ToString());
-                    // Every repeated string in the workbook lives here, parsed before any
-                    // worksheet - a real workbook can spend a long, genuinely-progressing stretch
-                    // in this loop alone with nothing else in Extract to beat from. Beat.Throttled
-                    // upstream already rate-limits the write this drives, so beating per entry
-                    // costs nothing extra.
-                    beat?.Invoke();
+                    if (r.NodeType == XmlNodeType.Element && r.Name == "si") cur.Clear();
+                    else if (r.NodeType == XmlNodeType.Text) cur.Append(r.Value);
+                    else if (r.NodeType == XmlNodeType.EndElement && r.Name == "si")
+                    {
+                        shared.Add(cur.ToString());
+                        // Every repeated string in the workbook lives here, parsed before any
+                        // worksheet - a real workbook can spend a long, genuinely-progressing
+                        // stretch in this loop alone with nothing else in Extract to beat from.
+                        // Beat.Throttled upstream already rate-limits the write this drives, so
+                        // beating per entry costs nothing extra.
+                        beat?.Invoke();
+                    }
                 }
             }
-        }
-        foreach (var e in zip.Entries)
-        {
-            if (!e.FullName.StartsWith("xl/worksheets/sheet", StringComparison.OrdinalIgnoreCase)) continue;
-            using var s = e.Open();
-            using var r = XmlReader.Create(s, new XmlReaderSettings { DtdProcessing = DtdProcessing.Ignore });
-            string? type = null;
-            while (r.Read())
+            foreach (var e in zip.Entries)
             {
-                if (r.NodeType == XmlNodeType.Element && r.Name == "c") type = r.GetAttribute("t");
-                else if (r.NodeType == XmlNodeType.Element && r.Name == "v")
+                if (!e.FullName.StartsWith("xl/worksheets/sheet", StringComparison.OrdinalIgnoreCase)) continue;
+                using var s = budget.Open(e);
+                using var r = XmlReader.Create(s, new XmlReaderSettings { DtdProcessing = DtdProcessing.Ignore });
+                string? type = null;
+                while (r.Read())
                 {
-                    string v = r.ReadElementContentAsString();
-                    if (type == "s" && int.TryParse(v, out int idx) && idx < shared.Count) sb.Append(shared[idx]);
-                    else sb.Append(v);
-                    sb.Append(' ');
+                    if (r.NodeType == XmlNodeType.Element && r.Name == "c") type = r.GetAttribute("t");
+                    else if (r.NodeType == XmlNodeType.Element && r.Name == "v")
+                    {
+                        string v = r.ReadElementContentAsString();
+                        if (type == "s" && int.TryParse(v, out int idx) && idx < shared.Count) sb.Append(shared[idx]);
+                        else sb.Append(v);
+                        sb.Append(' ');
+                    }
+                    else if (r.NodeType == XmlNodeType.Element && r.Name == "t") { sb.Append(r.ReadElementContentAsString()).Append(' '); }
+                    else if (r.NodeType == XmlNodeType.EndElement && r.Name == "row")
+                    {
+                        sb.Append('\n');
+                        // A row is this format's own progress unit, the same as a paragraph in a
+                        // docx part: one huge sheet with nothing in the shared-strings table used
+                        // to beat only once, after the whole sheet had already been read.
+                        beat?.Invoke();
+                    }
                 }
-                else if (r.NodeType == XmlNodeType.Element && r.Name == "t") { sb.Append(r.ReadElementContentAsString()).Append(' '); }
-                else if (r.NodeType == XmlNodeType.EndElement && r.Name == "row")
-                {
-                    sb.Append('\n');
-                    // A row is this format's own progress unit, the same as a paragraph in a docx
-                    // part: one huge sheet with nothing in the shared-strings table used to beat
-                    // only once, after the whole sheet had already been read.
-                    beat?.Invoke();
-                }
+                if (sb.Length > MaxChars) break;
             }
-            if (sb.Length > MaxChars) break;
-        }
-        return sb.ToString();
-    }
+        });
 
-    private static string Epub(string path, Action? beat)
-    {
-        var sb = new StringBuilder();
-        using var zip = ZipFile.OpenRead(path);
-        var entries = new List<ZipArchiveEntry>();
-        foreach (var e in zip.Entries)
-            if (e.FullName.EndsWith(".xhtml", StringComparison.OrdinalIgnoreCase) || e.FullName.EndsWith(".html", StringComparison.OrdinalIgnoreCase)
-                || e.FullName.EndsWith(".htm", StringComparison.OrdinalIgnoreCase))
-                entries.Add(e);
-        entries.Sort((a, b) => string.CompareOrdinal(Pad(a.FullName), Pad(b.FullName)));
-        foreach (var e in entries)
+    private static string Epub(string path, Action? beat, long maxBytes)
+        => Archive(path, maxBytes, (zip, budget, sb) =>
         {
-            using var s = e.Open();
-            using var rd = new StreamReader(s);
-            sb.Append(StripTags(rd.ReadToEnd())).Append('\n');
-            beat?.Invoke();
-            if (sb.Length > MaxChars) break;
+            var entries = new List<ZipArchiveEntry>();
+            foreach (var e in zip.Entries)
+                if (e.FullName.EndsWith(".xhtml", StringComparison.OrdinalIgnoreCase) || e.FullName.EndsWith(".html", StringComparison.OrdinalIgnoreCase)
+                    || e.FullName.EndsWith(".htm", StringComparison.OrdinalIgnoreCase))
+                    entries.Add(e);
+            entries.Sort((a, b) => string.CompareOrdinal(Pad(a.FullName), Pad(b.FullName)));
+            foreach (var e in entries)
+            {
+                using var s = budget.Open(e);
+                using var rd = new StreamReader(s);
+                sb.Append(StripTags(rd.ReadToEnd())).Append('\n');
+                beat?.Invoke();
+                if (sb.Length > MaxChars) break;
+            }
+        });
+
+    // OpenDocument (.odt, .ods, .odp): everything a person wrote is in content.xml, under
+    // office:body - paragraphs and headings, table cells, list items, and the frames a
+    // presentation's slides and notes are made of all hold their words in text:p and text:h.
+    private static string Odf(string path, Action? beat, long maxBytes)
+        => Archive(path, maxBytes, (zip, budget, sb) =>
+        {
+            if (zip.GetEntry("content.xml") is not { } e) return;
+            using var s = budget.Open(e);
+            ReadOdf(s, sb, beat);
+        });
+
+    private const string OdfOffice = "urn:oasis:names:tc:opendocument:xmlns:office:1.0";
+    private const string OdfText = "urn:oasis:names:tc:opendocument:xmlns:text:1.0";
+    private const string OdfTable = "urn:oasis:names:tc:opendocument:xmlns:table:1.0";
+    private const string OdfDraw = "urn:oasis:names:tc:opendocument:xmlns:drawing:1.0";
+    private const string DublinCore = "http://purl.org/dc/elements/1.1/";
+
+    // Matched by namespace rather than by prefix: "text:" is what every writer uses, and nothing
+    // in the format obliges it to. Spaces are markup here - runs of them are text:s, a tab is
+    // text:tab - and the whitespace between two spans is a real space between two words.
+    private static void ReadOdf(Stream s, StringBuilder sb, Action? beat)
+    {
+        using var r = XmlReader.Create(s, new XmlReaderSettings { DtdProcessing = DtdProcessing.Ignore });
+        bool body = false;
+        int skipping = -1;      // the depth of an element whose contents are not the document's text
+        while (r.Read())
+        {
+            if (skipping >= 0)
+            {
+                if (r.NodeType == XmlNodeType.EndElement && r.Depth == skipping) skipping = -1;
+                continue;
+            }
+            switch (r.NodeType)
+            {
+                case XmlNodeType.Element:
+                    if (r.NamespaceURI == OdfOffice && r.LocalName == "body") { body = !r.IsEmptyElement; break; }
+                    if (!body) break;
+                    // deleted text kept for change tracking, and who wrote a comment and when
+                    if ((r.NamespaceURI == OdfText && r.LocalName == "tracked-changes") || r.NamespaceURI == DublinCore)
+                    {
+                        if (!r.IsEmptyElement) skipping = r.Depth;
+                        break;
+                    }
+                    if (r.NamespaceURI != OdfText) break;
+                    if (r.LocalName == "s") sb.Append(' ');
+                    else if (r.LocalName == "tab") sb.Append('\t');
+                    else if (r.LocalName == "line-break") sb.Append('\n');
+                    else if (r.IsEmptyElement && r.LocalName is "p" or "h") sb.Append('\n');
+                    break;
+                case XmlNodeType.Text or XmlNodeType.CDATA:
+                    if (body) sb.Append(r.Value);
+                    break;
+                case XmlNodeType.Whitespace or XmlNodeType.SignificantWhitespace:
+                    if (body) sb.Append(' ');
+                    break;
+                case XmlNodeType.EndElement:
+                    if (r.NamespaceURI == OdfText && r.LocalName is "p" or "h")
+                    {
+                        sb.Append('\n');
+                        beat?.Invoke();
+                    }
+                    else if (r.NamespaceURI == OdfTable && r.LocalName == "table-row") sb.Append('\n');
+                    else if (r.NamespaceURI == OdfTable && r.LocalName == "table-cell") sb.Append(' ');
+                    else if (r.NamespaceURI == OdfDraw && r.LocalName is "page" or "frame") sb.Append('\n');
+                    else if (r.NamespaceURI == OdfOffice && r.LocalName == "body") body = false;
+                    break;
+            }
+            if (sb.Length > MaxChars) return;
         }
-        return sb.ToString();
     }
 
     // A part is not the finest unit worth beating on: docx has only three, and in practice nearly

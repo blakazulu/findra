@@ -13,24 +13,33 @@ card has a Start now button of its own.
 
 ## What it reads
 
-- PDF
+- PDF, scanned ones included
 - Word (.docx), Excel (.xlsx) and PowerPoint (.pptx)
+- OpenDocument text, spreadsheets and presentations (.odt, .ods and .odp)
+- RTF
 - EPUB
 - Plain text, Markdown and CSV
 - HTML
-- The text inside pictures, such as a screenshot or a photographed receipt
 
-The older binary formats - .doc, .xls and .ppt - and RTF and the OpenDocument formats are found by
-name but not read inside yet. Code, JSON and logs are deliberately left to name search, because a
-search over the inside of every package file on a disk helps nobody.
+A page of a PDF that is a picture of a page - a scan, a fax, a phone photo saved as a PDF - has no
+words for a reader to take, so Findra reads it with the text recognition built into Windows, in
+English and Hebrew wherever those recognisers are installed. Up to the first 100 such pages of each
+file are read.
+
+The older binary formats - .doc, .xls and .ppt - are found by name but not read inside. Code, JSON
+and logs are deliberately left to name search, because a search over the inside of every package
+file on a disk helps nobody. The words in a screenshot or a photographed receipt are read along
+with the [photos capability](https://findra-search.netlify.app/find-photos-by-description/), because
+that is what opens a picture.
 
 ## What it costs
 
 Nothing to download. Searching the words in a document uses a full-text index on your own disk and
-no model at all.
+no model at all, and a scanned page is read by the recognisers Windows already has.
 
 What it costs is time, once. The first pass walks every drive and can run for hours on a large
-disk, which is why it never starts on its own. It reads only while Findra is open, it shows its
+disk, which is why it never starts on its own. A scanned page takes a second or two where a typed
+one takes a moment. It reads only while Findra is open, it shows its
 progress under the card, and it steps aside while a game is fullscreen or another program is
 working the graphics card. After the first pass, a new or changed file is read as soon as it is
 saved.

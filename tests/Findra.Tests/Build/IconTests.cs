@@ -323,6 +323,33 @@ public class IconTests
         Assert.Equal(0, Tray(110f, 108f).Alpha);
     }
 
+    [Fact]
+    public void TheCardsSmallMarkIsTheGeneratorsSixteenPixelMark()
+    {
+        // "More like this" draws the mark before its words at about sixteen pixels, so it takes
+        // the generator's own small form - the numbers from the same HINTS row the .ico uses.
+        System.Text.RegularExpressions.Match hint = System.Text.RegularExpressions.Regex.Match(
+            Repo.Read("build/Make-Icon.mjs"), @"16:\s*\{\s*slot:\s*false,\s*handW:\s*(\d+),\s*discR:\s*(\d+)\s*\}");
+        Assert.True(hint.Success, "the 16 px row of HINTS is not where it was");
+        Assert.Equal(TrayIconFactory.SmallHandW, float.Parse(hint.Groups[1].Value, System.Globalization.CultureInfo.InvariantCulture));
+        Assert.Equal(TrayIconFactory.SmallDiscR, float.Parse(hint.Groups[2].Value, System.Globalization.CultureInfo.InvariantCulture));
+
+        // And it is drawn that way: one colour, the lens solid where the large mark has its slot.
+        SKColor ink = new(20, 20, 30);
+        using var bmp = new SKBitmap(new SKImageInfo(64, 64, SKColorType.Bgra8888, SKAlphaType.Premul));
+        using (var canvas = new SKCanvas(bmp))
+        {
+            canvas.Clear(SKColors.Transparent);
+            TrayIconFactory.DrawMark(canvas, SKRect.Create(0, 0, 64, 64), ink, small: true);
+        }
+        float k = 64f / TrayIconFactory.Bounds.Width;
+        SKColor Mark(float x, float y) => bmp.GetPixel((int)((x - TrayIconFactory.Bounds.MidX) * k + 32),
+                                                       (int)((y - TrayIconFactory.Bounds.MidY) * k + 32));
+        Assert.Equal(ink, Mark(110f, 108f));     // where the slot would be
+        Assert.Equal(ink, Mark(110f, 72f));      // the lens above it
+        Assert.Equal(0, bmp.GetPixel(63, 0).Alpha);
+    }
+
     // ---------------------------------------------------------------- the share card
 
     /// <summary>The mark on the share card, in the card's own pixels.</summary>

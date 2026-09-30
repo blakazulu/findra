@@ -422,13 +422,19 @@ public sealed class CardWindow : Window
 
         public void Type(string text)
         {
+            // The space that pressed a check, a chip or a button in the popup arrives here as
+            // text too; it was a press, not a character, and it goes nowhere.
+            if (_spaceWasAPress) { _spaceWasAPress = false; if (text == " ") return; }
             // control characters never belong in a query; a pasted newline closes up
             var clean = new System.Text.StringBuilder();
             foreach (char c in text) if (!char.IsControl(c)) clean.Append(c);
             if (clean.Length == 0) return;
             if (_state.AdvOpen)
             {
-                // the popup's fields are append-only; typing lands in the focused one
+                // the popup's fields are append-only; typing lands in the focused one, and
+                // nowhere while the keyboard is on a check, a kind chip or a button (Space
+                // presses those, and its character must not follow it into a field)
+                if (_state.AdvFocusOn != SearchTarget.AdvField) return;
                 string v = _state.Adv.Field(_state.AdvFocus) + clean;
                 if (v.Length > 120) v = v[..120];
                 _state = _state with { AdvRules = _state.Adv.WithField(_state.AdvFocus, v) };
@@ -469,24 +475,41 @@ public sealed class CardWindow : Window
         private void MoveCaret(int to, bool extend)
             => Select(extend ? FieldEdit.Extend(_state.Field, to) : new FieldEdit.Text(_state.Query, to));
 
+        // Set when Space pressed a stop in the popup, so its character is not typed after it.
+        private bool _spaceWasAPress;
+
         public bool OnKey(KeyEventArgs e)
         {
-            // the open popup takes the keyboard: Tab cycles its fields, Enter applies, Esc closes
-            // it (never the card), Backspace edits the focused field
+            _spaceWasAPress = false;
+            // the open popup takes the keyboard: Tab walks every stop in it in the order they are
+            // drawn, Space presses a check, a kind chip or a button, Enter presses a button or
+            // applies from anywhere else, Esc closes it (never the card), Backspace edits the
+            // focused field
             if (_state.AdvOpen)
             {
+                bool onField = _state.AdvFocusOn == SearchTarget.AdvField;
                 switch (e.Key)
                 {
                     case Key.Escape: SetAdvOpen(false); return true;
+                    case Key.Enter when _state.AdvFocusOn == SearchTarget.AdvButton:
+                        PressStop(_state.AdvStop);
+                        return true;
                     case Key.Enter: ApplyAdv(); return true;
+                    case Key.Space when !onField:
+                        _spaceWasAPress = true;
+                        PressStop(_state.AdvStop);
+                        return true;
                     case Key.Tab:
                     {
-                        int n = SearchAdvanced.FieldCount;
-                        int f = (_state.AdvFocus + (e.KeyModifiers.HasFlag(KeyModifiers.Shift) ? n - 1 : 1)) % n;
-                        _state = _state with { AdvFocus = f };
+                        SearchHit next = CardAccess.NextStop(_state, back: e.KeyModifiers.HasFlag(KeyModifiers.Shift));
+                        _state = _state with { AdvFocusOn = next.Target, AdvFocus = next.Index };
+                        _ring = true;
+                        SayFocused();
                         InvalidateVisual();
                         return true;
                     }
+                    case Key.Back when !onField:
+                        return true;
                     case Key.Back:
                     {
                         string v = _state.Adv.Field(_state.AdvFocus);
@@ -499,7 +522,7 @@ public sealed class CardWindow : Window
                         return true;
                     }
                     case Key.V when e.KeyModifiers.HasFlag(KeyModifiers.Control):
-                        _ = Paste();
+                        if (onField) _ = Paste();
                         return true;
                     default:
                         return false;   // TextInput carries the typed characters into the field
@@ -557,6 +580,9 @@ public sealed class CardWindow : Window
                     if (FieldEdit.HasSelection(_state.Field)) CopyText(FieldEdit.Selected(_state.Field), "the selected text");
                     else CopyPath(_state.Highlight);
                     return true;
+                case Key.L when ctrl:
+                    MoreLikeThis();
+                    return true;
                 case Key.D1 when e.KeyModifiers.HasFlag(KeyModifiers.Control): SetSort(SearchSort.Best); return true;
                 case Key.D2 when e.KeyModifiers.HasFlag(KeyModifiers.Control): SetSort(SearchSort.Newest); return true;
                 case Key.D3 when e.KeyModifiers.HasFlag(KeyModifiers.Control): SetSort(SearchSort.Largest); return true;
@@ -609,8 +635,27 @@ public sealed class CardWindow : Window
         {
             if (_state.AdvOpen == open) return;
             _state = _state with { AdvOpen = open };
+            if (!open) _ring = false;
             CardResized?.Invoke();   // the card grows to hold the popup
+            // Opened: say where the keyboard landed, as a Tab would.
+            if (open) SayFocused();
             InvalidateVisual();
+        }
+
+        /// <summary>Press a stop in the open popup from the keyboard: through the same press path
+        /// a click takes, then say what it is now (a check that turned on, a kind chosen).</summary>
+        private void PressStop(SearchHit stop)
+        {
+            PressAt(stop, default, null);
+            if (_state.AdvOpen) SayFocused();
+            InvalidateVisual();
+        }
+
+        /// <summary>Say the element the keyboard is on, by its automation node.</summary>
+        private void SayFocused()
+        {
+            if (AccessFocus.Find(CardAccess.Nodes(_state), CardAccess.FocusedKey(_state)) is { } node)
+                _peer?.Say(node.Spoken);
         }
 
         /// <summary>Apply: the rules COMPOSE INTO THE FIELD - visible grammar, editable like
@@ -621,7 +666,8 @@ public sealed class CardWindow : Window
         {
             string composed = _state.Adv.Compose(_state.Query.Trim());
             bool content = _state.Content || _state.Adv.WantsContent;
-            _state = _state with { AdvOpen = false, Content = content, AdvRules = SearchAdvanced.Empty, AdvFocus = 0 };
+            _state = _state with { AdvOpen = false, Content = content, AdvRules = SearchAdvanced.Empty, AdvFocus = 0, AdvFocusOn = SearchTarget.AdvField };
+            _ring = false;
             Log.Info("search", $"advanced rules applied: {(composed.Length > 0 ? composed : "none")}");
             CardResized?.Invoke();
             SetQuery(composed);
@@ -630,7 +676,9 @@ public sealed class CardWindow : Window
         /// <summary>Clear: every rule in the form at once. The popup stays open.</summary>
         private void ClearAdv()
         {
-            _state = _state with { AdvRules = SearchAdvanced.Empty, AdvFocus = 0 };
+            // The keyboard stays where it was: Clear was pressed from somewhere, and the next Tab
+            // goes on from there rather than from the top.
+            _state = _state with { AdvRules = SearchAdvanced.Empty };
             Log.Info("search", "advanced rules cleared");
             InvalidateVisual();
         }
@@ -870,7 +918,9 @@ public sealed class CardWindow : Window
             // Read HERE, on the UI thread, in the same breath as the generation - never inside the
             // task. The pill can be pressed between scheduling the work and the pool thread
             // reading _state, and the answer would then come back from the wrong half of the card.
-            bool content = _state.Content;
+            // A `like:` query is answered from inside files whatever the pill says: the name half
+            // has nothing to compare.
+            bool content = _state.Content || SearchQuery.LikeOf(q).Length > 0;
 
             // Queued HERE, on the UI thread, in the same breath as the generation above - that
             // adjacency is the whole fix. The card numbers its searches locally, the pipe client
@@ -1155,15 +1205,28 @@ public sealed class CardWindow : Window
         private void HighlightChanged()
         {
             int h = _state.Highlight;
-            if (h < 0 || h >= _state.Rows.Count) { _state = _state with { StageImage = null, StageDetail = "" }; return; }
+            if (h < 0 || h >= _state.Rows.Count) { _state = _state with { StageImage = null, StageDetail = "", SimilarReady = false }; return; }
             var row = _state.Rows[h];
             int gen = Interlocked.Increment(ref _detailGen);
 
             var cached = _previews.Get(row.Path);
-            _state = _state with { StageImage = cached, StageDetail = "" };
+            _state = _state with { StageImage = cached, StageDetail = "", SimilarReady = false };
 
             _ = Task.Run(() =>
             {
+                // Whether "More like this" has anything to compare: asked here, off the interface
+                // thread, never by the painter. No vector store means nothing can be compared.
+                bool similar = false;
+                if (FileKinds.HasContent(row.Kind) && _semantic is not null && _db is { } db)
+                {
+                    try { lock (_dbGate) similar = db.HasVectors(row.Path); }
+                    catch (Exception ex)
+                    {
+                        Log.Once("card|similar|" + ex.GetType().Name, "WARN", "card",
+                            "could not ask whether a file can be compared :: " + ex.Message);
+                    }
+                }
+
                 string detail = "";
                 try
                 {
@@ -1193,7 +1256,7 @@ public sealed class CardWindow : Window
                     // since a second decode of the same file is disposed in favour of the first.
                     if (img is not null) img = _previews.Put(row.Path, img);
                     if (gen != _detailGen) return;
-                    _state = _state with { StageDetail = detail, StageImage = img };
+                    _state = _state with { StageDetail = detail, StageImage = img, SimilarReady = similar };
                     InvalidateVisual();
                 });
             });
@@ -1229,6 +1292,20 @@ public sealed class CardWindow : Window
             NoteOpened(row.Path);
             CardActions.Open(row);
             CloseRequested?.Invoke();
+        }
+
+        /// <summary>
+        /// "More like this": the highlighted file's path goes into the field as a `like:` query and
+        /// is searched, so everything a query has - the chips, the sort, Escape, the generation
+        /// counter, and filters typed beside it - works on the answer unchanged.
+        /// </summary>
+        private void MoreLikeThis()
+        {
+            if (!_state.OffersSimilar || !_state.SimilarReady) return;
+            SearchResult row = _state.Rows[_state.Highlight];
+            // The kind, never the path: what somebody looks at stays off the disk.
+            Log.Info("search", $"more like this, from a {FileKinds.Label(row.Kind).ToLowerInvariant()}");
+            SetQuery(SearchQuery.LikeQuery(row.Path));
         }
 
         private void Reveal(int index)
@@ -1285,7 +1362,7 @@ public sealed class CardWindow : Window
         // The card is drawn Overhang down the window, under the close button's band.
         private SearchHit HitAt(Point p)
             => SearchCardLayout.HitTest((float)(p.X / _scale), (float)(p.Y / _scale) - SearchCardLayout.Overhang,
-                _state.Rows.Count, _state.Scroll, _state.ShowsBody, _state.AdvOpen);
+                _state.Rows.Count, _state.Scroll, _state.ShowsBody, _state.AdvOpen, _state.OffersSimilar);
 
         /// <summary>The caret position under the pointer, in the same window of the text the
         /// painter drew. Off either end of the field it is the first or last position, so a drag
@@ -1323,6 +1400,7 @@ public sealed class CardWindow : Window
             Cursor = PointerCursor.Of(Pointers.ForCard(
                 hit.Target == SearchTarget.Content && !_contentOffered ? SearchTarget.None
                 : hit.Target == SearchTarget.Reading && !ReadingPill.Offers(_state.Reading) ? SearchTarget.None
+                : hit.Target == SearchTarget.Similar && !_state.SimilarReady ? SearchTarget.None
                 : hit.Target));
             InvalidateVisual();
         }
@@ -1337,6 +1415,7 @@ public sealed class CardWindow : Window
         protected override void OnPointerPressed(PointerPressedEventArgs e)
         {
             Focus();
+            _ring = false;          // the pointer is in use; the keyboard's ring steps aside
             var p = e.GetPosition(this);
             var hit = HitAt(p);
             var props = e.GetCurrentPoint(this).Properties;
@@ -1347,10 +1426,31 @@ public sealed class CardWindow : Window
                 e.Handled = true;
                 return;
             }
+            PressAt(hit, p, e);
+            InvalidateVisual();
+            e.Handled = true;
+        }
+
+        /// <summary>
+        /// What pressing a target does: the pointer's press, and the one a screen reader or the
+        /// keyboard makes at an element's centre, so neither can do anything a click could not.
+        /// <paramref name="e"/> is null for those two; only a pointer places the caret where it
+        /// landed and arms a drag.
+        /// </summary>
+        private void PressAt(SearchHit hit, Point p, PointerPressedEventArgs? e)
+        {
             switch (hit.Target)
             {
+                case SearchTarget.Field when e is null:
+                    // The field has the keyboard already; pressing it from outside only puts the
+                    // popup away when that is up.
+                    SetAdvOpen(false);
+                    break;
                 case SearchTarget.Field:
                 {
+                    // A press in the field while the popup is up puts the popup away, and the
+                    // caret goes where it landed, as it would with nothing open.
+                    SetAdvOpen(false);
                     // the same window the painter drew, so the click lands on the glyph it is over
                     FieldCaret.Position at = CaretUnder(p);
                     if (e.ClickCount >= 3)
@@ -1378,7 +1478,7 @@ public sealed class CardWindow : Window
                 case SearchTarget.Adv: SetAdvOpen(!_state.AdvOpen); break;
                 case SearchTarget.Settings: OpenSettings(Section.Look); break;
                 case SearchTarget.AdvField:
-                    _state = _state with { AdvFocus = hit.Index };
+                    _state = _state with { AdvFocus = hit.Index, AdvFocusOn = SearchTarget.AdvField };
                     break;
                 case SearchTarget.AdvCheck:
                     _state = _state with { AdvRules = hit.Index == 0
@@ -1402,17 +1502,16 @@ public sealed class CardWindow : Window
                     if (_state.Highlight == hit.Index && !_dragArmed) { Open(hit.Index); break; }
                     _state = _state with { Highlight = hit.Index };
                     HighlightChanged();
-                    _pressAt = p; _pressRow = hit.Index; _dragArmed = true; _pressArgs = e;
+                    if (e is not null) { _pressAt = p; _pressRow = hit.Index; _dragArmed = true; _pressArgs = e; }
                     break;
                 case SearchTarget.Open: Open(_state.Highlight); break;
                 case SearchTarget.Reveal: Reveal(_state.Highlight); break;
                 case SearchTarget.Copy: CopyPath(_state.Highlight); break;
+                case SearchTarget.Similar: MoreLikeThis(); break;
                 case SearchTarget.Stage:
-                    _pressAt = p; _pressRow = _state.Highlight; _dragArmed = true; _pressArgs = e;
+                    if (e is not null) { _pressAt = p; _pressRow = _state.Highlight; _dragArmed = true; _pressArgs = e; }
                     break;
             }
-            InvalidateVisual();
-            e.Handled = true;
         }
 
         protected override void OnPointerReleased(PointerReleasedEventArgs e)
@@ -1472,44 +1571,43 @@ public sealed class CardWindow : Window
 
         public double AccessScale => _scale;
 
-        // The field has the keyboard whenever the card is up; nothing else on the card takes it.
-        public string? FocusedKey => "field";
+        // The field has the keyboard whenever the card is up, and the popup's stop while that is.
+        public string? FocusedKey => CardAccess.FocusedKey(_state);
 
         public void AccessSetValue(AccessNode node, string value)
         {
-            if (node.Key == "field") SetQuery(value);
+            if (node.Key == "field") { SetQuery(value); return; }
+            if (!_state.AdvOpen) return;
+            for (int i = 0; i < SearchAdvanced.FieldCount; i++)
+            {
+                if (node.Key != CardAccess.PopupKey(new SearchHit(SearchTarget.AdvField, i))) continue;
+                string clean = new(value.Where(c => !char.IsControl(c)).ToArray());
+                if (clean.Length > 120) clean = clean[..120];
+                _state = _state with { AdvRules = _state.Adv.WithField(i, clean), AdvFocusOn = SearchTarget.AdvField, AdvFocus = i };
+                InvalidateVisual();
+                return;
+            }
         }
 
+        /// <summary>A press at the element's centre, through <see cref="PressAt"/>: whatever the
+        /// hit test says is there is what gets pressed, exactly as a click would. A row pressed
+        /// this way is highlighted, and pressed again once highlighted, opened - the two clicks.</summary>
         public void AccessInvoke(AccessNode node)
         {
-            string key = node.Key;
-            if (key == "content") ToggleContent();
-            else if (key == "advanced") SetAdvOpen(!_state.AdvOpen);
-            else if (key == "settings") OpenSettings(Section.Look);
-            else if (key == "reading") PressReading();
-            else if (key == "close") CloseRequested?.Invoke();
-            else if (key.StartsWith("chip:", StringComparison.Ordinal)) SetFilter(int.Parse(key[5..], System.Globalization.CultureInfo.InvariantCulture));
-            else if (key.StartsWith("action:", StringComparison.Ordinal))
-            {
-                switch (key[7..])
-                {
-                    case "0": Open(_state.Highlight); break;
-                    case "1": Reveal(_state.Highlight); break;
-                    default: CopyPath(_state.Highlight); break;
-                }
-            }
-            else if (key.StartsWith("row:", StringComparison.Ordinal))
-            {
-                // Selecting a row highlights it; invoking the highlighted one opens it, as a
-                // second click does.
-                int i = _state.Rows.ToList().FindIndex(r => "row:" + r.Path == key);
-                if (i < 0) return;
-                if (i == _state.Highlight) { Open(i); return; }
-                _state = _state with { Highlight = i };
-                HighlightChanged();
-            }
+            // AccessNodes moved every element down by the band the close button hangs into.
+            SearchHit hit = SearchCardLayout.HitTest(node.Bounds.MidX, node.Bounds.MidY - SearchCardLayout.Overhang,
+                _state.Rows.Count, _state.Scroll, _state.ShowsBody, _state.AdvOpen, _state.OffersSimilar);
+            PressAt(hit, default, null);
+            // Say what it is now: a check that turned on, a kind chosen, a pill that flipped.
+            if ((node.Key.StartsWith("adv:", StringComparison.Ordinal) || node.Key == "content")
+                && AccessFocus.Find(CardAccess.Nodes(_state), node.Key) is { } after)
+                _peer?.Say(after.Spoken);
             InvalidateVisual();
         }
+
+        // Whether the keyboard has been used in the popup since the pointer last was: the ring
+        // round a focused check, chip or button is drawn only then.
+        private bool _ring;
 
         protected override Avalonia.Automation.Peers.AutomationPeer OnCreateAutomationPeer() =>
             _peer = new AccessiblePeer(this, this);
@@ -1544,6 +1642,11 @@ public sealed class CardWindow : Window
                 canvas.Save();
                 canvas.Scale((float)_c._scale);
                 SearchCardPainter.Paint(canvas, st, _c._derived, _c._face);
+                // A focused field shows it with its own border; a check, chip or button needs the
+                // ring, and only once the keyboard has brought it there.
+                if (_c._ring && st.AdvOpen && st.AdvFocusOn != SearchTarget.AdvField
+                    && AccessFocus.Find(_c.AccessNodes(), CardAccess.FocusedKey(st)) is { } focused)
+                    AccessRing.Draw(canvas, focused.Bounds, _c._derived);
                 canvas.Restore();
                 if (SearchCardPainter.Unfolding(st))
                     Dispatcher.UIThread.Post(_c.InvalidateVisual, DispatcherPriority.Render);

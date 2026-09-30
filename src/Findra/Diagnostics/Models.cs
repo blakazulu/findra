@@ -125,13 +125,15 @@ public static class ModelsCommand
         Line($"  models   : {ModelStore.Dir}");
         Line();
 
-        Line("  free (no model, nothing to download - they run once content indexing is on):");
-        Line("    words in documents          every word of every document that can be read");
-        Line("    words inside pictures       the text Windows reads out of a photo, as it is opened anyway");
+        Line("  free (no model, nothing to download - it runs once content indexing is on):");
+        Line("    words in documents          every word of every document that can be read, scanned pages too");
         Line();
 
         Line("  capabilities (what each would add, given what is already here):");
         Line($"    {Capabilities.Title(Capability.Photos),-26}{Cost(Capability.Photos),-12}findra --models install photos");
+        // The words inside a picture are read as the picture is opened, and a picture is opened
+        // only for this capability - so they come with it, not with the free row above.
+        Line("      and the words inside pictures");
         Line($"    {Capabilities.Title(Capability.Meaning),-26}{Cost(Capability.Meaning),-12}findra --models install meaning");
         Line($"    {Capabilities.Title(Capability.Speech),-26}{Cost(Capability.Speech),-12}findra --models install speech");
         if (hebrewOffered)

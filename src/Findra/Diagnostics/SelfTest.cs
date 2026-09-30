@@ -91,6 +91,11 @@ public static class SelfTest
                 if (dim < 4.5) return $"{p.Name}: dim text on the ground is {dim:F2}:1, needs 4.5";
                 if (Derived.Contrast(d.OnAccent, d.Accent) < 4.5)
                     return $"{p.Name}: text on the accent is unreadable";
+                // "More like this" in both of its looks: the accent fill it is drawn in when it can
+                // be pressed (the pair above), and a resting row with secondary ink when it cannot.
+                double unavailable = Derived.Contrast(d.Dim, d.Row);
+                if (unavailable < 4.5)
+                    return $"{p.Name}: More like this, not offering, is {unavailable:F2}:1 on its row, needs 4.5";
             }
             return null;
         });

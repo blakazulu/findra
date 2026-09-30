@@ -627,15 +627,26 @@ person makes by looking; two are destructive and belong last.
     back to its hint.
 75. **With Narrator on, Findra can be used without a mouse.** From a clean first run: Tab through
     the welcome screen, tick and untick rows with Space, press Get these; open the card with the
-    hotkey, type, hear the count, arrow through results and hear each; open Settings, Tab through a
-    section and flip a switch. **The tree, bounds, Invoke and real Tab and Space ran on 30 September
-    2026** through the UI Automation client against the welcome screen; Narrator's own speech has not.
+    hotkey, type, hear the count, arrow through results and hear each; open Advanced from
+    Narrator's list of the card's elements, Tab through every field, check, kind and button (the
+    ring shows on a check, a kind or a button), tick Match case with Space, pick Photos, type into
+    "All these words" and press Apply with Enter; open Settings, Tab through a section and flip a
+    switch. **The tree, bounds, Invoke and real Tab and Space ran on 30 September 2026** through the
+    UI Automation client against the welcome screen; Narrator's own speech has not, and the
+    Advanced panel has been checked by unit tests only.
 76. **Details for a bug report pastes as seven lines.** Settings > About > Copy, then paste into
     Notepad: version and install, Windows, processor and memory, every graphics adapter with the one
     Findra uses marked, add-ons, reading, and the line about `--searchmodels`.
 77. **The arm64 job is green on GitHub.** **Done on 30 September 2026**: run 36681375580, all 2303
     tests and every headless mode passed on `windows-11-arm`, and every surface now says that is
     all that has run on arm64 (processor only, no graphics card).
+78. **More like this finds real neighbours.** With Photos and Meaning installed and reading done,
+    search a photo, highlight it and press More like this (then Ctrl+L on a document): the field
+    reads `like:"<path>"`, the header `N like "<name>"`, the rows are pictures (or documents) of the
+    same kind of thing, a video row opens at its moment, `type:video` typed after it narrows the
+    answer, and the button is greyed out on a file Findra has not read yet. The floors behind it
+    were measured on the development machine's own pictures and passages with the shipped
+    encoders, outside the product; the card has never run it over a real index with vectors.
 
 ## What could not be verified in this project at all
 

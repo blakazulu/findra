@@ -4,8 +4,9 @@ using Xunit;
 
 /// <summary>
 /// The stage beside a short list is only as tall as the list's minimum, and it holds a picture,
-/// the name, up to four lines about the file and three buttons. The picture gives way: the text
-/// and the buttons are the parts that have to be read and pressed.
+/// the name, up to four lines about the file, the wide "More like this" button and the three
+/// under it. The picture gives way: the text and the buttons are the parts that have to be read
+/// and pressed.
 /// </summary>
 public class CardStageTests
 {
@@ -30,6 +31,8 @@ public class CardStageTests
     [InlineData(6, ResultKind.Document)]
     [InlineData(3, ResultKind.Video)]
     [InlineData(8, ResultKind.Document)]
+    [InlineData(3, ResultKind.File)]
+    [InlineData(8, ResultKind.Photo)]
     public void NoLineAboutTheFileRunsIntoTheButtons(int rows, ResultKind kind)
     {
         // Rendered, because the defect was a painter placing text by one sum and the buttons by
@@ -42,9 +45,11 @@ public class CardStageTests
         using (var canvas = new SKCanvas(bmp))
             SearchCardPainter.Paint(canvas, s, Derived.From(Palette.Mond), Parts.Face);
 
-        SKRect open = SearchCardLayout.ActionRect(rows, true, 0);
+        // The top button is "More like this", and its room is kept whether or not the row gets
+        // one (a plain file does not), so the band above it is bare either way.
+        SKRect topButton = SearchCardLayout.SimilarRect(rows, true);
         SKRect stage = SearchCardLayout.StageRect(rows, true);
-        int top = (int)(open.Top + SearchCardLayout.Overhang);
+        int top = (int)(topButton.Top + SearchCardLayout.Overhang);
         SKColor ground = bmp.GetPixel((int)stage.Right - 4, top - 3);
         // Up to two pixels short of the button: its outline is stroked on its edge and
         // anti-aliased, so the row just above it carries the button's own ink.

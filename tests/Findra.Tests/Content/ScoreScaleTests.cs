@@ -98,4 +98,65 @@ public class ScoreScaleTests
         Assert.InRange(ContentBranch.TextFloor, UnrelatedTextMax, RealTextMin);
         Assert.InRange(ContentBranch.PhotoFloor, UnrelatedPhotoMax - 0.01f, RealPhotoMin);
     }
+
+    // ---- "More like this": a file against a file, measured 30 September 2026 ----------------
+    //
+    // One machine. Pictures: Findra's own vision encoder and preprocessing over 675 real pictures
+    // (375 family photographs from 15 events, 120 stock photographs, 120 screenshots, 40 interface
+    // icons, 10 pictures kept twice). Passages: the real index's 72,046 embedded passages from
+    // 4,600 documents, each source compared the way ContentBranch compares it - sixteen passages
+    // at most, the best pair per file - over 90 sampled sources, 55 of them judged by eye.
+
+    private const float CopyLike = 1.000f;                 // a picture or a document kept twice
+    private const float SameEventPhotoMedian = 0.718f;     // photographs of one event
+    private const float OtherEventPhotoMedian = 0.610f;    // photographs of different events
+    private const float PhotoVsScreenshotP99 = 0.644f;     // a photograph against a screenshot
+    private const float UnrelatedStockSeen = 0.698f;       // banknotes beside an office desk
+    private const float RelatedStockSeen = 0.719f;         // an office chair beside an office desk
+
+    private const float UnrelatedPassageMedian = 0.841f;   // the median file, per source
+    private const float UnrelatedPassageP99 = 0.905f;      // the 99th percentile file, per source
+    private const float MostlyRelatedPassage = 0.92f;      // where nearly every file judged was on topic
+    private const float BestSiblingPassage = 0.955f;       // median best file that is not a copy
+
+    [Fact]
+    public void AFileAgainstAFileIsNotHeldToTheTypedQueryFloors()
+    {
+        // The typed-query floors would let nearly everything in: two passages share far more than
+        // a query and a passage do, and two pictures sit far higher than a sentence and a picture.
+        Assert.True(ContentBranch.TextFloor < UnrelatedPassageMedian);
+        Assert.True(ContentBranch.PhotoFloor < PhotoVsScreenshotP99);
+        Assert.True(ContentBranch.PassageLikeFloor > UnrelatedPassageMedian);
+        Assert.True(ContentBranch.PictureLikeFloor > OtherEventPhotoMedian);
+    }
+
+    [Fact]
+    public void ThePictureFloorKeepsScreenshotsAwayFromPhotographsAndKeepsTheSameScene()
+    {
+        Assert.Equal(0f, ContentBranch.PictureLikeScore(PhotoVsScreenshotP99));
+        Assert.Equal(0f, ContentBranch.PictureLikeScore(OtherEventPhotoMedian));
+        Assert.Equal(0f, ContentBranch.PictureLikeScore(UnrelatedStockSeen));
+        Assert.True(ContentBranch.PictureLikeScore(RelatedStockSeen) > 0f);
+        Assert.True(ContentBranch.PictureLikeScore(SameEventPhotoMedian) > 0f);
+    }
+
+    [Fact]
+    public void ThePassageFloorSitsAboveTheNoiseAndBelowWhatWasOnTopic()
+    {
+        Assert.Equal(0f, ContentBranch.PassageLikeScore(UnrelatedPassageMedian));
+        Assert.InRange(ContentBranch.PassageLikeFloor, UnrelatedPassageP99, MostlyRelatedPassage);
+        Assert.True(ContentBranch.PassageLikeScore(BestSiblingPassage) > 0.3f);
+    }
+
+    [Fact]
+    public void BothLikeScalesEndAtACopyTheirBestRealMatch()
+    {
+        // A copy is the best real match a file can have, so each scale ends there, and a close
+        // sibling lands near the middle on both.
+        Assert.Equal(CopyLike, ContentBranch.PictureLikeFloor + ContentBranch.PictureLikeSpan, 3);
+        Assert.Equal(CopyLike, ContentBranch.PassageLikeFloor + ContentBranch.PassageLikeSpan, 3);
+        Assert.Equal(ContentBranch.PhotoCeiling, ContentBranch.PictureLikeScore(CopyLike), 3);
+        Assert.Equal(ContentBranch.TextCeiling, ContentBranch.PassageLikeScore(CopyLike), 3);
+        Assert.InRange(ContentBranch.PassageLikeScore(BestSiblingPassage), 0.3f, 0.6f);
+    }
 }

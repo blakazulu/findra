@@ -42,6 +42,20 @@ public class DerivedTests
         Assert.True(Derived.Contrast(d.OnAccent, d.Accent) >= 4.5, $"{name}: text on an accent fill");
     }
 
+    [Theory, MemberData(nameof(AllPalettes))]
+    public void MoreLikeThisIsReadableBothWhenItCanBePressedAndWhenItCannot(string name)
+    {
+        // The loudest thing on the card is a solid accent fill, lettered in whatever the palette
+        // derives to sit on its accent - dark on the dark palettes' bright accents, light on the
+        // light palettes' deep ones. Not offering, it steps down to a resting row with secondary
+        // ink, which is muted but still has to be read: it says what the button would do.
+        Derived d = Of(name);
+        Assert.True(Derived.Contrast(d.OnAccent, d.Accent) >= 4.5, $"{name}: More like this on its accent fill");
+        Assert.True(Derived.Contrast(d.Dim, d.Row) >= 4.5, $"{name}: More like this, not offering, on a resting row");
+        // And the two looks are nothing alike: the fill a press will work on stands off the card.
+        Assert.True(Derived.Contrast(d.Accent, d.Ground) >= 3.0, $"{name}: the accent fill against the card");
+    }
+
     [Fact]
     public void InkIsReadableOnTheTileNowThatTheSettingsWindowPaintsIt()
     {

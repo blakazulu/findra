@@ -1,4 +1,5 @@
 using Findra;
+using Findra.Diagnostics;
 using SkiaSharp;
 using Xunit;
 
@@ -194,7 +195,7 @@ public class AccessTests
         KeysAreUnique(nodes);
         foreach (AccessNode n in nodes.Where(n => n.Role is not AccessRole.Text))
         {
-            SearchHit hit = SearchCardLayout.HitTest(n.Bounds.MidX, n.Bounds.MidY, s.Rows.Count, s.Scroll, s.ShowsBody, s.AdvOpen);
+            SearchHit hit = SearchCardLayout.HitTest(n.Bounds.MidX, n.Bounds.MidY, s.Rows.Count, s.Scroll, s.ShowsBody, s.AdvOpen, s.OffersSimilar);
             SearchTarget want = n.Key.Split(':')[0] switch
             {
                 "field" => SearchTarget.Field,
@@ -206,6 +207,7 @@ public class AccessTests
                 "row" => SearchTarget.Row,
                 "action" => n.Key == "action:0" ? SearchTarget.Open : n.Key == "action:1" ? SearchTarget.Reveal : SearchTarget.Copy,
                 "close" => SearchTarget.Close,
+                "similar" => SearchTarget.Similar,
                 _ => SearchTarget.None,
             };
             Assert.True(hit.Target == want, $"'{n.Name}' is pressed at its centre as {hit.Target}, not {want}");
@@ -222,6 +224,160 @@ public class AccessTests
         AccessNode selected = Assert.Single(rows, r => r.On);
         Assert.Equal("report-4.pdf", selected.Name);
         Assert.Contains(@"in C:\Docs", selected.Help, StringComparison.Ordinal);
+    }
+
+    // ---- the Advanced popup --------------------------------------------------------------------
+
+    public static IEnumerable<object[]> PopupStates()
+    {
+        yield return [SearchCardState.Empty with { AdvOpen = true }];
+        yield return [Results() with { AdvOpen = true }];
+        yield return [SearchShot.Build("adv")];
+        yield return [Results() with { AdvOpen = true, AdvFocusOn = SearchTarget.AdvKind, AdvFocus = 3,
+            AdvRules = new SearchAdvanced(MatchCase: true, Kind: 3, SizeTo: "10mb") }];
+    }
+
+    /// <summary>What a key names, as the hit test answers it: the stricter form, target AND index,
+    /// the one the first-run screen is held to.</summary>
+    private static SearchHit Expected(AccessNode n, SearchCardState s)
+    {
+        string[] parts = n.Key.Split(':');
+        int Index(int at) => int.Parse(parts[at], System.Globalization.CultureInfo.InvariantCulture);
+        return parts[0] switch
+        {
+            "field" => new SearchHit(SearchTarget.Field, -1),
+            "content" => new SearchHit(SearchTarget.Content, -1),
+            "advanced" => new SearchHit(SearchTarget.Adv, -1),
+            "settings" => new SearchHit(SearchTarget.Settings, -1),
+            "reading" => new SearchHit(SearchTarget.Reading, -1),
+            "close" => new SearchHit(SearchTarget.Close, -1),
+            "similar" => new SearchHit(SearchTarget.Similar, -1),
+            "chip" => new SearchHit(SearchTarget.Chip, Index(1)),
+            "row" => new SearchHit(SearchTarget.Row, s.Rows.ToList().FindIndex(r => "row:" + r.Path == n.Key)),
+            "action" => new SearchHit(Index(1) switch { 0 => SearchTarget.Open, 1 => SearchTarget.Reveal, _ => SearchTarget.Copy }, -1),
+            "adv" => new SearchHit(parts[1] switch
+            {
+                "field" => SearchTarget.AdvField,
+                "check" => SearchTarget.AdvCheck,
+                "kind" => SearchTarget.AdvKind,
+                "button" => SearchTarget.AdvButton,
+                _ => SearchTarget.None,
+            }, Index(2)),
+            _ => SearchHit.None,
+        };
+    }
+
+    [Theory]
+    [MemberData(nameof(PopupStates))]
+    public void EveryElementOfTheOpenPopupIsPressedWhereItIsDrawn(SearchCardState s)
+    {
+        IReadOnlyList<AccessNode> nodes = CardAccess.Nodes(s);
+        KeysAreUnique(nodes);
+        foreach (AccessNode n in nodes.Where(n => n.Actionable))
+        {
+            SearchHit hit = SearchCardLayout.HitTest(n.Bounds.MidX, n.Bounds.MidY, s.Rows.Count, s.Scroll, s.ShowsBody, s.AdvOpen, s.OffersSimilar);
+            Assert.False(hit.Target == SearchTarget.None, $"'{n.Name}' is pressed at its centre as nothing (index {hit.Index})");
+            Assert.True(hit == Expected(n, s), $"'{n.Name}' is pressed at its centre as {hit}, not {Expected(n, s)}");
+        }
+    }
+
+    [Fact]
+    public void EveryCardElementIsPressedAsItselfAndNotItsNeighbour()
+    {
+        SearchCardState s = Results();
+        foreach (AccessNode n in CardAccess.Nodes(s).Where(n => n.Actionable))
+            Assert.Equal(Expected(n, s), SearchCardLayout.HitTest(n.Bounds.MidX, n.Bounds.MidY, s.Rows.Count, s.Scroll, s.ShowsBody, s.AdvOpen, s.OffersSimilar));
+    }
+
+    [Fact]
+    public void ThePopupIsListedWhileItIsOpenInsteadOfWhatItCovers()
+    {
+        IReadOnlyList<AccessNode> closed = CardAccess.Nodes(Results());
+        Assert.DoesNotContain(closed, n => n.Key.StartsWith("adv:", StringComparison.Ordinal));
+
+        IReadOnlyList<AccessNode> open = CardAccess.Nodes(Results() with { AdvOpen = true });
+        string[] kept = ["field", "content", "advanced", "settings", "close"];
+        Assert.Equal(kept, open.Where(n => !n.Key.StartsWith("adv:", StringComparison.Ordinal)).Select(n => n.Key));
+        Assert.True(open.Single(n => n.Key == "advanced").On);
+        Assert.Equal(SearchAdvancedLayout.Stops.Count, open.Count(n => n.Key.StartsWith("adv:", StringComparison.Ordinal)));
+        // In the order they are drawn, which is the order Tab walks.
+        Assert.Equal(SearchAdvancedLayout.Stops.Select(CardAccess.PopupKey),
+                     open.Where(n => n.Key.StartsWith("adv:", StringComparison.Ordinal)).Select(n => n.Key));
+    }
+
+    [Fact]
+    public void TabWalksEveryStopInThePopupInTheOrderTheyAreDrawn()
+    {
+        string[] order =
+        [
+            "adv:field:0", "adv:field:1", "adv:field:2", "adv:field:3", "adv:check:0", "adv:check:1",
+            "adv:field:4", "adv:field:5", "adv:kind:0", "adv:kind:1", "adv:kind:2", "adv:kind:3",
+            "adv:kind:4", "adv:kind:5", "adv:field:6", "adv:field:7", "adv:field:8", "adv:field:9",
+            "adv:button:0", "adv:button:1", "adv:button:2",
+        ];
+        SearchCardState s = SearchCardState.Empty with { AdvOpen = true };
+        var forward = new List<string> { CardAccess.FocusedKey(s) };
+        for (int i = 0; i < order.Length; i++)
+        {
+            SearchHit next = CardAccess.NextStop(s, back: false);
+            s = s with { AdvFocusOn = next.Target, AdvFocus = next.Index };
+            forward.Add(CardAccess.FocusedKey(s));
+        }
+        Assert.Equal([.. order, order[0]], forward);
+
+        SearchHit back = CardAccess.NextStop(SearchCardState.Empty with { AdvOpen = true }, back: true);
+        Assert.Equal("adv:button:2", CardAccess.PopupKey(back));
+        back = CardAccess.NextStop(SearchCardState.Empty with { AdvOpen = true, AdvFocusOn = back.Target, AdvFocus = back.Index }, back: true);
+        Assert.Equal("adv:button:1", CardAccess.PopupKey(back));
+    }
+
+    [Fact]
+    public void TheFocusedKeyFollowsThePopupAndIsTheFieldOtherwise()
+    {
+        Assert.Equal("field", CardAccess.FocusedKey(Results()));
+        Assert.Equal("adv:field:0", CardAccess.FocusedKey(Results() with { AdvOpen = true }));
+        Assert.Equal("adv:check:1", CardAccess.FocusedKey(Results() with { AdvOpen = true, AdvFocusOn = SearchTarget.AdvCheck, AdvFocus = 1 }));
+        // The key names a node that exists, so a screen reader is told focus is on something real.
+        SearchCardState s = Results() with { AdvOpen = true, AdvFocusOn = SearchTarget.AdvButton, AdvFocus = 2 };
+        Assert.NotNull(AccessFocus.Find(CardAccess.Nodes(s), CardAccess.FocusedKey(s)));
+    }
+
+    [Fact]
+    public void ThePopupSaysWhatItHoldsAsTheShotDrawsIt()
+    {
+        SearchCardState s = SearchShot.Build("adv");
+        IReadOnlyList<AccessNode> nodes = CardAccess.Nodes(s);
+        AccessNode Node(string key) => nodes.Single(n => n.Key == key);
+
+        AccessNode all = Node("adv:field:0");
+        Assert.Equal(AccessRole.Edit, all.Role);
+        Assert.Equal("All these words", all.Name);
+        Assert.Equal("lake cabin", all.Value);
+        Assert.Equal(SearchAdvancedLayout.Placeholders[0], all.Help);
+        Assert.Equal("draft", Node("adv:field:3").Value);
+        Assert.Equal("2026-01-01", Node("adv:field:6").Value);
+        Assert.Equal("Modified to", Node("adv:field:7").Name);
+        Assert.Equal("", Node("adv:field:7").Value);
+        Assert.Equal("1mb", Node("adv:field:8").Value);
+        Assert.Equal("Size to", Node("adv:field:9").Name);
+
+        Assert.Equal(AccessRole.Toggle, Node("adv:check:0").Role);
+        Assert.Equal("Match case", Node("adv:check:0").Name);
+        Assert.False(Node("adv:check:0").On);
+        Assert.Equal("Whole words", Node("adv:check:1").Name);
+
+        // Kind 1 is chosen in the shot, and that is the one option said to be selected.
+        AccessNode kind = Assert.Single(nodes, n => n.Key.StartsWith("adv:kind:", StringComparison.Ordinal) && n.On);
+        Assert.Equal("Kind: Photos", kind.Name);
+        Assert.Equal(AccessRole.Option, kind.Role);
+
+        Assert.Equal(["Clear", "Close", "Apply"], nodes.Where(n => n.Key.StartsWith("adv:button:", StringComparison.Ordinal)).Select(n => n.Name));
+        // Apply says what it would search for: the composed line drawn beside the buttons.
+        Assert.Equal(s.Adv.Compose(s.Query.Trim()), Node("adv:button:2").Help);
+        Assert.Contains("type:photo", Node("adv:button:2").Help, StringComparison.Ordinal);
+
+        Assert.Equal("Match case, on", (CardAccess.Nodes(s with { AdvRules = s.Adv with { MatchCase = true } })
+            .Single(n => n.Key == "adv:check:0")).Spoken);
     }
 
     [Fact]

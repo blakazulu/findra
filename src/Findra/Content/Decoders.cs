@@ -477,8 +477,8 @@ public sealed class Decoders : IDecoders
         var segs = new List<ContentDb.Segment> { new(ContentDb.SegImage, -1, -1, row, "") };
 
         // The words INSIDE the picture: most of a real image library is screenshots, and the words
-        // are what anybody remembers of a screenshot. Reading them needs no model at all, so it
-        // runs whenever a photo is being opened anyway.
+        // are what anybody remembers of a screenshot. Reading them needs no model of its own, so
+        // it runs whenever a photo is being opened anyway - which is only ever with Photos.
         //
         // THE WORDS ONLY, and never a meaning vector. Recognised text is not prose: it is UI
         // chrome, timestamps, phone numbers, half of a menu, and whatever the recogniser made of a

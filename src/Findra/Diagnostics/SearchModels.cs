@@ -107,10 +107,9 @@ public static class ModelsReport
 
         // Named beside the paid rows so a machine with nothing installed reads as a machine with
         // no MODELS, not a machine with no search (spec §6). "free" here means free of charge, not
-        // free of consent - both still wait for content indexing to be turned on.
+        // free of consent - it still waits for content indexing to be turned on.
         Line("  free (no model, no download - once content indexing is turned on):");
-        Line("    words in documents");
-        Line("    words inside pictures (OCR)");
+        Line("    words in documents, scanned pages read by OCR");
         Line();
 
         Line("  capabilities:");
@@ -121,6 +120,8 @@ public static class ModelsReport
                 Line($"    {title} : ready");
             else
                 Line($"    {title} : off - have {c.Have} of {c.Needs} file(s), {Sizes.Human(c.MarginalBytes)} to turn on");
+            // a picture is opened only for Photos, so the words inside it come with that row
+            if (c.Capability == Capability.Photos) Line("      and the words inside pictures, by OCR");
         }
         Line($"    everything installed would be {Sizes.Human(ModelStore.TotalBytes(ModelStore.All))}");
         Line();

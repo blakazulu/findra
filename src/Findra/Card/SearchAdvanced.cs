@@ -190,6 +190,58 @@ public static class SearchAdvancedLayout
         { "All these words", "This exact phrase", "Any of these words", "None of these words",
           "Words in the file", "Located in", "Modified", "", "Size", "" };
 
+    /// <summary>What each field is called to a screen reader: its label, and for the second half
+    /// of a pair (drawn with only "to" beside it) the pair's label and "to".</summary>
+    public static string FieldName(int i)
+        => i < 0 || i >= FieldLabels.Length ? ""
+           : FieldLabels[i].Length > 0 ? FieldLabels[i]
+           : i > 0 ? FieldLabels[i - 1] + " to" : "";
+
+    /// <summary>What an empty field shows, and what a screen reader reads after its name. They
+    /// are the one place the popup teaches the query grammar, so the painter and the automation
+    /// tree read the same strings.</summary>
+    public static readonly string[] Placeholders =
+        { "blue lake photo", "summer holiday", "jpg heic raw", "draft copy",
+          "switches Content on", @"Downloads or C:\Users\you\Pictures",
+          "2026-01-01 · week · 2025", "2026-03-15", "1mb · huge", "100mb" };
+
+    /// <summary>The two checks, left to right.</summary>
+    public static readonly string[] CheckLabels = { "Match case", "Whole words" };
+
+    /// <summary>The three buttons, left to right: <see cref="ButtonRect"/>'s order.</summary>
+    public static readonly string[] ButtonLabels = { "Clear", "Close", "Apply" };
+
+    /// <summary>
+    /// The popup's stops in the order they are drawn, top to bottom and left to right: the four
+    /// word fields, the two checks, the two fields under them, the kind chips, the four date and
+    /// size fields, then the buttons. Tab walks this list, and the automation tree lists the
+    /// popup in this order.
+    /// </summary>
+    public static IReadOnlyList<SearchHit> Stops { get; } = BuildStops();
+
+    private static List<SearchHit> BuildStops()
+    {
+        var stops = new List<SearchHit>();
+        for (int i = 0; i < 4; i++) stops.Add(new SearchHit(SearchTarget.AdvField, i));
+        for (int i = 0; i < CheckLabels.Length; i++) stops.Add(new SearchHit(SearchTarget.AdvCheck, i));
+        stops.Add(new SearchHit(SearchTarget.AdvField, 4));
+        stops.Add(new SearchHit(SearchTarget.AdvField, 5));
+        for (int i = 0; i < SearchAdvanced.KindLabels.Length; i++) stops.Add(new SearchHit(SearchTarget.AdvKind, i));
+        for (int i = 6; i < SearchAdvanced.FieldCount; i++) stops.Add(new SearchHit(SearchTarget.AdvField, i));
+        for (int i = 0; i < ButtonLabels.Length; i++) stops.Add(new SearchHit(SearchTarget.AdvButton, i));
+        return stops;
+    }
+
+    /// <summary>A stop's rectangle, in card coordinates.</summary>
+    public static SKRect RectOf(SearchHit stop) => stop.Target switch
+    {
+        SearchTarget.AdvField => FieldRect(stop.Index),
+        SearchTarget.AdvCheck => CheckRect(stop.Index),
+        SearchTarget.AdvKind => KindRect(stop.Index),
+        SearchTarget.AdvButton => ButtonRect(stop.Index),
+        _ => throw new ArgumentOutOfRangeException(nameof(stop), stop.Target, "not a stop in the popup"),
+    };
+
     /// <summary>Hit test inside the open popup, in card coordinates. Field/check/kind/button,
     /// or None for a miss INSIDE the panel; a point outside the panel returns Target None with
     /// Index -2 so the caller can close it.</summary>
@@ -202,13 +254,13 @@ public static class SearchAdvancedLayout
             var r = FieldRect(i); r.Inflate(2, 4);
             if (r.Contains(x, y)) return new SearchHit(SearchTarget.AdvField, i);
         }
-        for (int i = 0; i < 2; i++) if (CheckRect(i).Contains(x, y)) return new SearchHit(SearchTarget.AdvCheck, i);
+        for (int i = 0; i < CheckLabels.Length; i++) if (CheckRect(i).Contains(x, y)) return new SearchHit(SearchTarget.AdvCheck, i);
         for (int i = 0; i < SearchAdvanced.KindLabels.Length; i++)
         {
             var r = KindRect(i); r.Inflate(2, 3);
             if (r.Contains(x, y)) return new SearchHit(SearchTarget.AdvKind, i);
         }
-        for (int i = 0; i < 3; i++) if (ButtonRect(i).Contains(x, y)) return new SearchHit(SearchTarget.AdvButton, i);
+        for (int i = 0; i < ButtonLabels.Length; i++) if (ButtonRect(i).Contains(x, y)) return new SearchHit(SearchTarget.AdvButton, i);
         return new SearchHit(SearchTarget.None, -1);
     }
 }
@@ -257,7 +309,7 @@ public static class SearchAdvancedPainter
             if (i is 7 or 9)
                 CardText.Draw(canvas, "to", r.Left - 20, r.MidY + 4f, 11.5f, face, faint);
 
-            bool focus = s.AdvFocus == i;
+            bool focus = s.AdvFocusOn == SearchTarget.AdvField && s.AdvFocus == i;
             var rr = new SKRoundRect(r, 8);
             using (var fb = new SKPaint { Color = d.Row, IsAntialias = true }) canvas.DrawRoundRect(rr, fb);
             using (var fe = new SKPaint { Color = focus ? accent : d.Fade(56), IsAntialias = true, Style = SKPaintStyle.Stroke, StrokeWidth = 1.1f })
@@ -281,12 +333,7 @@ public static class SearchAdvancedPainter
             }
             else
             {
-                string ph = i switch
-                {
-                    0 => "blue lake photo", 1 => "summer holiday", 2 => "jpg heic raw", 3 => "draft copy",
-                    4 => "switches Content on", 5 => @"Downloads or C:\Users\you\Pictures",
-                    6 => "2026-01-01 · week · 2025", 7 => "2026-03-15", 8 => "1mb · huge", 9 => "100mb", _ => ""
-                };
+                string ph = SearchAdvancedLayout.Placeholders[i];
                 // 130, not 70: these placeholders are the only place a user learns the query
                 // grammar - `Downloads or C:\Users\you\Pictures`, `2026-01-01 · week · 2025` -
                 // so they must actually be read, not merely present. 70 measured 1.91-2.21:1 on
@@ -303,8 +350,8 @@ public static class SearchAdvancedPainter
         }
 
         // the checks
-        string[] checks = { "Match case", "Whole words" };
-        for (int i = 0; i < 2; i++)
+        string[] checks = SearchAdvancedLayout.CheckLabels;
+        for (int i = 0; i < checks.Length; i++)
         {
             var r = SearchAdvancedLayout.CheckRect(i);
             bool on = i == 0 ? adv.MatchCase : adv.WholeWords;
@@ -344,8 +391,8 @@ public static class SearchAdvancedPainter
         CardText.Draw(canvas, CardText.Ellipsize(composed.Length > 0 ? composed : "…", face, 11f, pv.Width), pv.Left, pv.MidY + 3.5f, 11f, face, faint);
 
         // the buttons
-        string[] btns = { "Clear", "Close", "Apply" };
-        for (int i = 0; i < 3; i++)
+        string[] btns = SearchAdvancedLayout.ButtonLabels;
+        for (int i = 0; i < btns.Length; i++)
         {
             var r = SearchAdvancedLayout.ButtonRect(i);
             bool primary = i == 2;
