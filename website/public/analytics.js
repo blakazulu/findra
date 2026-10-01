@@ -78,7 +78,7 @@
   }
   settings.addEventListener('blur', updateSettings);
   document.addEventListener('click', function (event) {
-    if (event.target.closest('[data-open-privacy-preferences]')) openPreferences();
+    if (event.target.closest('[data-open-privacy-preferences],a[href="#privacy-preferences"]')) openPreferences();
   });
   updateSettings();
   if (choice === 'granted') start();
