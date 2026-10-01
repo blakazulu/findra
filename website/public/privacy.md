@@ -135,7 +135,7 @@ country. Their policies explain their handling of this information:
 [Microsoft privacy statement](https://privacy.microsoft.com/privacystatement).
 Recordings describe your use of this website, never your desktop files or Findra searches.
 
-Open "Privacy preferences" on any website page to change your choice. Choosing
+Use <button type="button" data-open-privacy-preferences>Privacy preferences</button> in this policy to change your choice. The floating button hides five seconds after acceptance and stays visible if you have not accepted. Choosing
 "Reject optional analytics" withdraws consent, removes the Google Analytics and Clarity
 cookies accessible to this website and reloads the page to stop the loaded tools. It does
 not erase information already sent to Google or Microsoft, or cookies on other domains.

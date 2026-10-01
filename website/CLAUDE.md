@@ -110,3 +110,9 @@ Rules for `website/`, `build/Make-Pages.mjs`, `build/Ping-IndexNow.mjs`, `netlif
 `build/Make-Icon.mjs` (never hand-edit; `IconTests`). Share card 1200x630 and square 1080x1080, both
 opaque; the square is for posting by hand (Instagram reads no Open Graph). The share card sets type
 from `Quicksand-Regular.ttf` itself.
+
+## Website scrollbar and consent rule (2026-10-01)
+
+Every site we build must have native scrollbars styled to its own palette, including nested scroll areas. Use the standard scrollbar-color/scrollbar-width properties plus WebKit pseudo-elements for older Chromium and Safari, preserving native fallback, keyboard/touch scrolling, forced-colors and platform overlay behavior. Do not replace scrolling with JavaScript, force scrollbar visibility on touch devices, or override intentionally hidden carousel/code scrollbars.
+
+The floating privacy-preferences button stays visible until analytics are accepted, then hides after five seconds, including on returning visits. Reopening preferences cancels the hide timer. The privacy policy retains a permanent preferences control, so consent can always be changed or withdrawn. Analytics remain strictly opt-in; desktop apps and private account/document pages keep their existing no-tracking rules.

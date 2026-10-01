@@ -333,3 +333,5 @@ the measured size it would free before it happens.
 Apache-2.0. Free to use, clone and modify, with attribution to blakazulu and
 https://github.com/blakazulu/findra that travels with the code. See `LICENSE` for the terms
 and `NOTICE` for the attribution you must keep.
+
+Website rule: native, site-matched cross-browser scrollbars are required on every new site. Floating privacy preferences hide five seconds after opt-in; the privacy policy keeps a permanent reopen control (2026-10-01).

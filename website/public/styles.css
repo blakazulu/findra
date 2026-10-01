@@ -851,3 +851,16 @@ button.cmd { border-width: 1px; border-style: solid; text-align: left; width: 10
 /* The copy confirmation. A live region nested inside a button is pruned from the
    accessibility tree by ARIA's children-presentational rule, so it sits beside one. */
 .said { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+
+/* Site-matched native scrollbars. Unsupported browsers keep native controls. */
+* { scrollbar-width: auto; scrollbar-color: var(--accent) var(--ground-2); }
+*::-webkit-scrollbar { width: 12px; height: 12px; }
+*::-webkit-scrollbar-track { background: var(--ground-2); }
+*::-webkit-scrollbar-thumb { background: var(--accent); border: 3px solid var(--ground-2); border-radius: 999px; }
+*::-webkit-scrollbar-thumb:hover { background: var(--accent-hi); }
+*::-webkit-scrollbar-corner { background: var(--ground-2); }
+@media (forced-colors: active) {
+  * { scrollbar-color: auto; scrollbar-width: auto; }
+  *::-webkit-scrollbar-track, *::-webkit-scrollbar-corner { background: Canvas; }
+  *::-webkit-scrollbar-thumb { background: ButtonText; border-color: Canvas; }
+}

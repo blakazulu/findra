@@ -50,7 +50,7 @@
     var button = event.target.closest('button'); if (!button) return;
     var value = button.dataset.choice;
     if (!value) return;
-    remember(value); box.hidden = true;
+    remember(value); box.hidden = true; updateSettings();
     if (value === 'granted') start();
     else {
       window['ga-disable-G-909686JLLS'] = true;
@@ -59,7 +59,28 @@
       clearCookies(); if (started) location.reload();
     }
   });
-  var settings = document.createElement('button'); settings.type='button'; settings.className='findra-consent-settings'; settings.textContent='Privacy preferences'; settings.addEventListener('click',function(){box.hidden=false;box.querySelector('button').focus();}); document.body.appendChild(settings);
+  var settings = document.createElement('button'); settings.type='button'; settings.className='findra-consent-settings'; settings.textContent='Privacy preferences'; settings.addEventListener('click', openPreferences); document.body.appendChild(settings);
+  var settingsTimer;
+  function updateSettings() {
+    clearTimeout(settingsTimer);
+    settings.hidden = false;
+    if (choice === 'granted' && box.hidden) {
+      settingsTimer = setTimeout(function () {
+        // Never remove the keyboard user's focused control.
+        if (document.activeElement !== settings && box.hidden && choice === 'granted') settings.hidden = true;
+      }, 5000);
+    }
+  }
+  function openPreferences() {
+    clearTimeout(settingsTimer);
+    box.hidden = false;
+    box.querySelector('button').focus();
+  }
+  settings.addEventListener('blur', updateSettings);
+  document.addEventListener('click', function (event) {
+    if (event.target.closest('[data-open-privacy-preferences]')) openPreferences();
+  });
+  updateSettings();
   if (choice === 'granted') start();
 })();
 
