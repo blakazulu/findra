@@ -555,7 +555,6 @@ ${FOOTER}
 
 <script src="/app.js" defer></script>
 <script src="/analytics.js" defer></script>
-<link rel="stylesheet" href="/shayach-layout.css">
 <script src="/shayach-config.js" defer></script>
 <script src="https://shayach.co.il/v1/widget.js" defer></script>
 </body>

@@ -5,5 +5,3 @@
 .findra-consent-settings[hidden]{display:none!important}
 
 [data-open-privacy-preferences]{font:inherit;color:var(--accent);background:transparent;border:0;text-decoration:underline;cursor:pointer;}
-
-.findra-consent-settings{position:static;margin:12px}.findra-consent{right:76px}
