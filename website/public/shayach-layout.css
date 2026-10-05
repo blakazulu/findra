@@ -1,0 +1,5 @@
+/* Shayach occupies a reserved rail, never the reading area. */
+html{padding-right:64px!important;box-sizing:border-box!important;scroll-padding-bottom:20px}
+body{max-width:100%;margin-right:0!important;box-sizing:border-box}
+html::after{content:"";position:fixed;right:0;top:0;bottom:0;width:64px;background:#08090c;border-left:1px solid #35302b;z-index:900;pointer-events:none}
+@media(max-width:640px){html{padding-right:56px!important}html::after{width:56px}}
