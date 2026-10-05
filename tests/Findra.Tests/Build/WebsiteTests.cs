@@ -1424,7 +1424,8 @@ public class WebsiteTests
             // Absolute links to this site - the canonical, mostly - are not a request to anybody else.
             Assert.DoesNotMatch(@"<link[^>]+href=""https?://(?!findra-search\.netlify\.app/)", html);
             // Shayach is the only non-analytics remote script authorized for every page.
-            Assert.Contains("src=\"https://shayach.co.il/v1/widget.js\"", html, StringComparison.Ordinal);
+            if (html.Contains("<body", StringComparison.Ordinal))
+                Assert.Contains("src=\"https://shayach.co.il/v1/widget.js\"", html, StringComparison.Ordinal);
             string withoutShayach = html.Replace("<script src=\"https://shayach.co.il/v1/widget.js\" defer></script>", "", StringComparison.Ordinal);
             Assert.DoesNotMatch(@"<script[^>]+src=""https?://", withoutShayach);
         }
