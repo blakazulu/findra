@@ -1423,7 +1423,10 @@ public class WebsiteTests
                 Assert.Contains("src=\"/analytics.js\"", html, StringComparison.Ordinal);
             // Absolute links to this site - the canonical, mostly - are not a request to anybody else.
             Assert.DoesNotMatch(@"<link[^>]+href=""https?://(?!findra-search\.netlify\.app/)", html);
-            Assert.DoesNotMatch(@"<script[^>]+src=""https?://", html);
+            // Shayach is the only non-analytics remote script authorized for every page.
+            Assert.Contains("src=\"https://shayach.co.il/v1/widget.js\"", html, StringComparison.Ordinal);
+            string withoutShayach = html.Replace("<script src=\"https://shayach.co.il/v1/widget.js\" defer></script>", "", StringComparison.Ordinal);
+            Assert.DoesNotMatch(@"<script[^>]+src=""https?://", withoutShayach);
         }
 
         // Each face is on the disk, and its licence travels beside it: OFL condition 2.
