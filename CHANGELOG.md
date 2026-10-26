@@ -19,6 +19,13 @@ and Findra follows [Semantic Versioning](https://semver.org/spec/v2.0.0/).
 - Documentation: the notes for working on Findra's code are split by folder, so each part of the
   program carries its own rules beside it, and the Microsoft Store record says the listing is live.
 
+### Security
+
+- **The build no longer pulls in a flagged version of a cryptography library.** A test-only
+  dependency reached an older System.Security.Cryptography.Pkcs that two security advisories have
+  since been raised against; the version it uses is now pinned to a current one. This is in the
+  tests only and never shipped in Findra itself.
+
 ## [0.9.0] - 2026-09-30
 
 ### Added
