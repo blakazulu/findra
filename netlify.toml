@@ -135,3 +135,17 @@
   for = "/*.svg"
   [headers.values]
     Cache-Control = "public, max-age=604800"
+
+# Old address -> custom domain (host-specific, keeps path and query). Enabled after the
+# Microsoft Store listing moved to the new address (Submission 3, published 2026-10-27).
+[[redirects]]
+  from = "https://findra-search.netlify.app/*"
+  to = "https://findra.esekpo.co.il/:splat"
+  status = 301
+  force = true
+
+[[redirects]]
+  from = "http://findra-search.netlify.app/*"
+  to = "https://findra.esekpo.co.il/:splat"
+  status = 301
+  force = true
