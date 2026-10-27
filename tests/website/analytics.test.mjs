@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
 import assert from 'node:assert/strict';
 const source = readFileSync('website/public/analytics.js','utf8');
-function run(choice, hostname='findra-search.netlify.app') {
+function run(choice, hostname='findra.esekpo.co.il') {
   const added=[]; const commands=[];
   const element=()=>({setAttribute(){},addEventListener(){},querySelector(){return {focus(){}}},dataset:{}});
   const document={head:{appendChild:x=>added.push(x)},body:{appendChild:x=>added.push(x)},createElement:element,querySelectorAll:()=>[],referrer:'',cookie:''};

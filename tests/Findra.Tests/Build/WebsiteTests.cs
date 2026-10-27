@@ -20,7 +20,7 @@ using Xunit;
 /// </summary>
 public class WebsiteTests
 {
-    private const string Site = "https://findra-search.netlify.app";
+    private const string Site = "https://findra.esekpo.co.il";
 
     private static readonly string Index = Repo.Read("website/public/index.html");
     private static readonly string NumbersPage = Repo.Read("website/public/numbers/index.html");
@@ -1346,7 +1346,7 @@ public class WebsiteTests
     /// <summary>
     /// The IndexNow key file is named for what it contains, and the sitemap is what gets submitted.
     ///
-    /// <para>The engines fetch <c>https://findra-search.netlify.app/&lt;key&gt;.txt</c> and compare
+    /// <para>The engines fetch <c>https://findra.esekpo.co.il/&lt;key&gt;.txt</c> and compare
     /// its contents to the key in the submission; a mismatch is rejected silently, which is the
     /// worst shape a failure can take for something run by hand a few times a year. The key exists
     /// in one place - the file - and <c>build/Ping-IndexNow.mjs</c> reads it from there rather than
@@ -1422,7 +1422,7 @@ public class WebsiteTests
             if (html.Contains("<body", StringComparison.Ordinal))
                 Assert.Contains("src=\"/analytics.js\"", html, StringComparison.Ordinal);
             // Absolute links to this site - the canonical, mostly - are not a request to anybody else.
-            Assert.DoesNotMatch(@"<link[^>]+href=""https?://(?!findra-search\.netlify\.app/)", html);
+            Assert.DoesNotMatch(@"<link[^>]+href=""https?://(?!findra\.esekpo\.co\.il/)", html);
             // Shayach is the only non-analytics remote script authorized for every page.
             if (html.Contains("<body", StringComparison.Ordinal))
                 Assert.Contains("src=\"https://shayach.co.il/v1/widget.js\"", html, StringComparison.Ordinal);

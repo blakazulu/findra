@@ -1,7 +1,7 @@
 /* Optional analytics. No GA4/Clarity requests before an affirmative choice. */
 (function () {
   'use strict';
-  if (!['findra-search.netlify.app'].includes(location.hostname)) return;
+  if (!['findra.esekpo.co.il'].includes(location.hostname)) return;
   var key = 'findra-analytics-consent-v1', choice = null, started = false;
   try { choice = localStorage.getItem(key); } catch (_) {}
   if (choice !== 'granted' && choice !== 'denied') choice = null;
@@ -37,7 +37,7 @@
     document.cookie.split(';').forEach(function (row) {
       var name = row.trim().split('=')[0];
       if (!/^(_ga|_gid|_gat|_clck|_clsk)/.test(name)) return;
-      ['',location.hostname,'.findra-search.netlify.app'].forEach(function (domain) { document.cookie = name + '=; Max-Age=0; path=/; SameSite=Lax' + (domain ? '; domain='+domain : ''); });
+      ['',location.hostname,'.findra.esekpo.co.il'].forEach(function (domain) { document.cookie = name + '=; Max-Age=0; path=/; SameSite=Lax' + (domain ? '; domain='+domain : ''); });
     });
   }
   // Remove leftover first-party cookies when no grant is active (including an expired choice).

@@ -17,4 +17,4 @@
 User-agent: *
 Allow: /
 
-Sitemap: https://findra-search.netlify.app/sitemap.xml
+Sitemap: https://findra.esekpo.co.il/sitemap.xml

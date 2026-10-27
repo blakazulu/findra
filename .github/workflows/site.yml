@@ -39,7 +39,7 @@ jobs:
           version=$(sed -n 's:.*<Version>\(.*\)</Version>.*:\1:p' Directory.Build.props | head -1)
           echo "waiting for v$version on the live site"
           for attempt in $(seq 1 60); do
-            if curl -fsS "https://findra-search.netlify.app/?v=$attempt" | grep -q "data-stamp=\"version\">v$version "; then
+            if curl -fsS "https://findra.esekpo.co.il/?v=$attempt" | grep -q "data-stamp=\"version\">v$version "; then
               echo "live after $attempt checks"
               exit 0
             fi

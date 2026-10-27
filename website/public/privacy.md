@@ -113,7 +113,7 @@ anybody.
 ## The marketing website, not the desktop app
 
 The rules above describe the Findra desktop app. The website at
-https://findra-search.netlify.app is separate. Installing or using Findra does not enable
+https://findra.esekpo.co.il is separate. Installing or using Findra does not enable
 website analytics, and this website setup adds no analytics or telemetry to the app.
 
 No Google Analytics or Microsoft Clarity script loads until you choose

@@ -23,7 +23,7 @@ Multi-factor authentication is required on the source repository and on the sign
 
 ## Privacy
 
-Full policy: [findra-search.netlify.app/privacy](https://findra-search.netlify.app/privacy/).
+Full policy: [findra.esekpo.co.il/privacy](https://findra.esekpo.co.il/privacy/).
 
 This program will not transfer any information to other networked systems unless specifically
 requested.

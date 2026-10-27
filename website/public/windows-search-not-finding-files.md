@@ -48,8 +48,8 @@ findra --content on
 
 Findra can also find a photo by what it shows or the words written in it, and a recording by what
 was said in it, each an optional download that runs on your own machine. See
-[finding photos by description](https://findra-search.netlify.app/find-photos-by-description/)
-and [searching recordings by what was said](https://findra-search.netlify.app/search-recordings-by-speech/).
+[finding photos by description](https://findra.esekpo.co.il/find-photos-by-description/)
+and [searching recordings by what was said](https://findra.esekpo.co.il/search-recordings-by-speech/).
 
 ## The question went to the web
 

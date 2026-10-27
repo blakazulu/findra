@@ -5,7 +5,7 @@ queries, measured on one named desktop. It also finds files by what is written i
 shows and by what was said out loud, each an optional download. Free, open source, and nothing
 leaves your machine.
 
-- Home: https://findra-search.netlify.app/
+- Home: https://findra.esekpo.co.il/
 - Source: https://github.com/blakazulu/findra
 - Licence: Apache-2.0
 - Platform: Windows 10 and 11, x64 and arm64
@@ -31,7 +31,7 @@ Machine: AMD Ryzen 9 9900X3D, 47.1 GB RAM, NVMe SSD, Findra 0.5.1, n=50 per quer
 are from one machine, and it has an NVIDIA card. AMD and Intel graphics have not been tested on
 real hardware. On arm64, only the test suite and the headless
 diagnostics have run, on every push, on a GitHub runner with no graphics card. Every table is on
-https://findra-search.netlify.app/numbers/.
+https://findra.esekpo.co.il/numbers/.
 
 ## From a Findra user
 
@@ -46,26 +46,26 @@ Findra is listed in the [Microsoft Store](https://apps.microsoft.com/detail/9p78
 `winget install blakazulu.Findra` is the whole install. The installer on the releases page,
 https://github.com/blakazulu/findra/releases/latest, carries one for x64 and one for arm64 and has
 each new release first; the Windows Package Manager catalogue can take a few days to pick one up.
-Uninstalling and building from source are on https://findra-search.netlify.app/install/.
+Uninstalling and building from source are on https://findra.esekpo.co.il/install/.
 
 ## More
 
-- [What it finds](https://findra-search.netlify.app/features/): names, words inside documents,
+- [What it finds](https://findra.esekpo.co.il/features/): names, words inside documents,
   photos by what they show, and speech.
-- [Why Findra](https://findra-search.netlify.app/why/): how it differs from the search built into
+- [Why Findra](https://findra.esekpo.co.il/why/): how it differs from the search built into
   Windows.
-- [The numbers](https://findra-search.netlify.app/numbers/): every measured table, and the machine.
-- [Questions](https://findra-search.netlify.app/faq/): speed, privacy, install and hardware.
-- [Install](https://findra-search.netlify.app/install/): winget, the installer, uninstalling, and
+- [The numbers](https://findra.esekpo.co.il/numbers/): every measured table, and the machine.
+- [Questions](https://findra.esekpo.co.il/faq/): speed, privacy, install and hardware.
+- [Install](https://findra.esekpo.co.il/install/): winget, the installer, uninstalling, and
   building from source.
 
 ## Guides
 
-- [Windows Search is not finding my files](https://findra-search.netlify.app/windows-search-not-finding-files/):
+- [Windows Search is not finding my files](https://findra.esekpo.co.il/windows-search-not-finding-files/):
   why a file goes missing, and what finds it.
-- [Search inside PDFs and documents](https://findra-search.netlify.app/search-inside-pdfs/): the
+- [Search inside PDFs and documents](https://findra.esekpo.co.il/search-inside-pdfs/): the
   words inside your files, with nothing else to install.
-- [Find photos by describing them](https://findra-search.netlify.app/find-photos-by-description/):
+- [Find photos by describing them](https://findra.esekpo.co.il/find-photos-by-description/):
   type what is in the picture, not what the file is called.
-- [Search recordings by what was said](https://findra-search.netlify.app/search-recordings-by-speech/):
+- [Search recordings by what was said](https://findra.esekpo.co.il/search-recordings-by-speech/):
   find the recording by the sentence you remember hearing.

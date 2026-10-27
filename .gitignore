@@ -10,7 +10,7 @@ installer/redist/
 /2026-*.txt
 .superpowers/
 
-# The site under website/public is deployed to findra-search.netlify.app on every push to
+# The site under website/public is deployed to findra.esekpo.co.il on every push to
 # main, so it has to be in the repository. Netlify serves it straight from there with no
 # build step; netlify.toml names it as the publish directory.
 

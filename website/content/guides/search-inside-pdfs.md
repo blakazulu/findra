@@ -29,7 +29,7 @@ file are read.
 The older binary formats - .doc, .xls and .ppt - are found by name but not read inside. Code, JSON
 and logs are deliberately left to name search, because a search over the inside of every package
 file on a disk helps nobody. The words in a screenshot or a photographed receipt are read along
-with the [photos capability](https://findra-search.netlify.app/find-photos-by-description/), because
+with the [photos capability](https://findra.esekpo.co.il/find-photos-by-description/), because
 that is what opens a picture.
 
 ## What it costs
@@ -73,7 +73,7 @@ findra --searchindex "why:C:\Users\you\Documents\contract.pdf"
 
 The words Findra reads stay in an index on your own disk. Nothing is uploaded to be read or
 searched, there is no account and there is no telemetry. See the
-[privacy policy](https://findra-search.netlify.app/privacy/) for the one request Findra makes on
+[privacy policy](https://findra.esekpo.co.il/privacy/) for the one request Findra makes on
 its own.
 
 ## Try it

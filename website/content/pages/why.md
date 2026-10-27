@@ -6,7 +6,7 @@ than a claim about somebody else's product.
 **The names live in RAM, not in a database.** Findra reads the NTFS file table when it starts and
 holds every name in memory, and answers a filename search in under 4 ms median for every query
 measured. There is no overnight pass and no index to rebuild, so a file saved a minute ago is
-findable now. The measurements are on https://findra-search.netlify.app/numbers/.
+findable now. The measurements are on https://findra.esekpo.co.il/numbers/.
 
 **Reading inside a PDF needs nothing installed.** Findra decodes documents itself, in a process of
 its own that never runs elevated. There is no filter to install, no file type to register and no

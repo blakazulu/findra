@@ -48,32 +48,32 @@ readable without JavaScript.
 Every page also answers `Accept: text/markdown` with its Markdown source, and the same files are
 addressable directly:
 
-- [Home as Markdown](https://findra-search.netlify.app/index.md): what Findra is, how fast a
+- [Home as Markdown](https://findra.esekpo.co.il/index.md): what Findra is, how fast a
   filename search is, and how to install it.
 - The five pages that go deeper, each as Markdown written beside its page:
-  [What it finds](https://findra-search.netlify.app/features.md),
-  [Why Findra](https://findra-search.netlify.app/why.md),
-  [The numbers](https://findra-search.netlify.app/numbers.md),
-  [Questions](https://findra-search.netlify.app/faq.md) and
-  [Install](https://findra-search.netlify.app/install.md).
-- [About as Markdown](https://findra-search.netlify.app/about.md): the architecture, the
+  [What it finds](https://findra.esekpo.co.il/features.md),
+  [Why Findra](https://findra.esekpo.co.il/why.md),
+  [The numbers](https://findra.esekpo.co.il/numbers.md),
+  [Questions](https://findra.esekpo.co.il/faq.md) and
+  [Install](https://findra.esekpo.co.il/install.md).
+- [About as Markdown](https://findra.esekpo.co.il/about.md): the architecture, the
   three-process split, and who wrote it.
-- [Contact as Markdown](https://findra-search.netlify.app/contact.md): where to send a bug, a
+- [Contact as Markdown](https://findra.esekpo.co.il/contact.md): where to send a bug, a
   security report, or a question.
-- [Privacy as Markdown](https://findra-search.netlify.app/privacy.md): what is stored, where, and
+- [Privacy as Markdown](https://findra.esekpo.co.il/privacy.md): what is stored, where, and
   the one request Findra makes on its own. This file is the same one served in the repository as
   PRIVACY.md.
-- [Code signing policy as Markdown](https://findra-search.netlify.app/code-signing.md): the team
+- [Code signing policy as Markdown](https://findra.esekpo.co.il/code-signing.md): the team
   roles behind a release, and what Findra changes on the machine.
-- [Changelog as Markdown](https://findra-search.netlify.app/changelog.md): what each release
+- [Changelog as Markdown](https://findra.esekpo.co.il/changelog.md): what each release
   added, changed and fixed, newest first. It is CHANGELOG.md without the empty Unreleased section
   and without the entries about Findra's own documentation; the page at
-  https://findra-search.netlify.app/changelog/ is generated from exactly this file.
+  https://findra.esekpo.co.il/changelog/ is generated from exactly this file.
 - The four guides, each as Markdown and each the source its page is generated from:
-  [Windows Search is not finding my files](https://findra-search.netlify.app/windows-search-not-finding-files.md),
-  [Search inside PDFs and documents](https://findra-search.netlify.app/search-inside-pdfs.md),
-  [Find photos by describing them](https://findra-search.netlify.app/find-photos-by-description.md)
-  and [Search recordings by what was said](https://findra-search.netlify.app/search-recordings-by-speech.md).
+  [Windows Search is not finding my files](https://findra.esekpo.co.il/windows-search-not-finding-files.md),
+  [Search inside PDFs and documents](https://findra.esekpo.co.il/search-inside-pdfs.md),
+  [Find photos by describing them](https://findra.esekpo.co.il/find-photos-by-description.md)
+  and [Search recordings by what was said](https://findra.esekpo.co.il/search-recordings-by-speech.md).
 
 There is no llms-full.txt. Every page's Markdown is listed above at a stable URL and tests hold
 each one to its source; a concatenated extra copy would be one that nothing generates and
@@ -81,31 +81,31 @@ nothing tests, which is the drift this file has already been caught by once.
 
 ## Pages
 
-- [Findra](https://findra-search.netlify.app/): the product page - what Findra is, how fast a
+- [Findra](https://findra.esekpo.co.il/): the product page - what Findra is, how fast a
   filename search is, and how to install it.
-- [What it finds](https://findra-search.netlify.app/features/): the capabilities, what each one
+- [What it finds](https://findra.esekpo.co.il/features/): the capabilities, what each one
   downloads, and screenshots taken from the running application.
-- [Why Findra](https://findra-search.netlify.app/why/): how it differs from the search built into
+- [Why Findra](https://findra.esekpo.co.il/why/): how it differs from the search built into
   Windows.
-- [The numbers](https://findra-search.netlify.app/numbers/): every benchmark table, pasted from its
+- [The numbers](https://findra.esekpo.co.il/numbers/): every benchmark table, pasted from its
   own `--searchbench` output, and the machine that produced it.
-- [Questions](https://findra-search.netlify.app/faq/): straight answers about speed, privacy,
+- [Questions](https://findra.esekpo.co.il/faq/): straight answers about speed, privacy,
   install, hardware and disk space.
-- [Install](https://findra-search.netlify.app/install/): winget, the installer, uninstalling, and
+- [Install](https://findra.esekpo.co.il/install/): winget, the installer, uninstalling, and
   building from source.
-- [About](https://findra-search.netlify.app/about/): .NET 10, Avalonia, SkiaSharp and SQLite; the
+- [About](https://findra.esekpo.co.il/about/): .NET 10, Avalonia, SkiaSharp and SQLite; the
   elevated name helper, the interface and the content indexer, and why they are three processes.
-- [Contact](https://findra-search.netlify.app/contact/): no contact form, deliberately.
-- [Privacy](https://findra-search.netlify.app/privacy/): the full policy.
-- [Code signing policy](https://findra-search.netlify.app/code-signing/): who writes Findra, who
+- [Contact](https://findra.esekpo.co.il/contact/): no contact form, deliberately.
+- [Privacy](https://findra.esekpo.co.il/privacy/): the full policy.
+- [Code signing policy](https://findra.esekpo.co.il/code-signing/): who writes Findra, who
   approves a release and who signs it. Nothing is signed yet, and the page says so.
-- [Windows Search is not finding my files](https://findra-search.netlify.app/windows-search-not-finding-files/):
+- [Windows Search is not finding my files](https://findra.esekpo.co.il/windows-search-not-finding-files/):
   the four reasons a file goes missing, the fix for each inside Windows, and Findra's route.
-- [Search inside PDFs and documents](https://findra-search.netlify.app/search-inside-pdfs/): which
+- [Search inside PDFs and documents](https://findra.esekpo.co.il/search-inside-pdfs/): which
   formats Findra reads inside, what it costs, and what it skips.
-- [Find photos by describing them](https://findra-search.netlify.app/find-photos-by-description/):
+- [Find photos by describing them](https://findra.esekpo.co.il/find-photos-by-description/):
   the photos capability, the formats it looks at, and how to narrow a description down.
-- [Search recordings by what was said](https://findra-search.netlify.app/search-recordings-by-speech/):
+- [Search recordings by what was said](https://findra.esekpo.co.il/search-recordings-by-speech/):
   the speech capability, the transcription limit and the Hebrew second pass.
 
 ## Who makes it
@@ -119,7 +119,7 @@ phone number and no postal address, deliberately - the contact page says why.
 ## Source and packages
 
 - [Source on GitHub](https://github.com/blakazulu/findra): Apache-2.0 with a NOTICE file.
-- [Changelog](https://findra-search.netlify.app/changelog/): every release, newest first. The
+- [Changelog](https://findra.esekpo.co.il/changelog/): every release, newest first. The
   source is [CHANGELOG.md](https://github.com/blakazulu/findra/blob/main/CHANGELOG.md), in Keep a
   Changelog 1.1.0, and the release notes for any version are that version's section.
 - [SECURITY.md](https://github.com/blakazulu/findra/blob/main/SECURITY.md): how to report a
@@ -178,7 +178,7 @@ measured, 2.13 ms for "invoice", including the hop between processes. The worst 
 across the five measured name queries was 4.76 ms. 1,339,635 names were enumerated off the volume
 in 2.4 seconds when the name helper started, and the index holding them takes 172.0 MB of RAM.
 Measured with `findra --searchbench` on an AMD Ryzen 9 9900X3D, 47.1 GB of RAM, an NVMe SSD,
-Windows 11 Pro 10.0.26200.9445. Every table is on https://findra-search.netlify.app/numbers/.
+Windows 11 Pro 10.0.26200.9445. Every table is on https://findra.esekpo.co.il/numbers/.
 Yours will differ.
 
 **Does it need a graphics card?** No. Findra tries DirectML for the picture and meaning models and

@@ -6,11 +6,11 @@ Findra is listed in the [Microsoft Store](https://apps.microsoft.com/detail/9p78
 https://github.com/blakazulu/findra/releases/latest, carries one for x64 and one for arm64 and has
 each new release first; the Windows Package Manager catalogue can take a few days to pick one up.
 Every release note is that version's section of the changelog,
-https://findra-search.netlify.app/changelog/.
+https://findra.esekpo.co.il/changelog/.
 
 Neither the installer nor the executables are signed yet, so Windows will warn about an unknown
 publisher until that changes. The code signing policy,
-https://findra-search.netlify.app/code-signing/, says who writes Findra, who approves a release and
+https://findra.esekpo.co.il/code-signing/, says who writes Findra, who approves a release and
 who signs it.
 
 ## How do I uninstall Findra?

@@ -31,7 +31,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
-const SITE = 'https://findra-search.netlify.app';
+const SITE = 'https://findra.esekpo.co.il';
 
 // ---------------------------------------------------------------- the pages
 

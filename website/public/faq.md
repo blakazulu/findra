@@ -98,4 +98,4 @@ release page, checks it against the checksum GitHub publishes for it, and runs i
 winget upgrade for a winget copy. The installer or winget replaces the files, never Findra
 itself.
 
-Full text: https://findra-search.netlify.app/privacy/
+Full text: https://findra.esekpo.co.il/privacy/

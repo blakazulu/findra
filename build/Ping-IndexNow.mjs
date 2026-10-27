@@ -26,7 +26,7 @@ import { fileURLToPath } from 'node:url';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const PUBLIC = join(ROOT, 'website', 'public');
-const HOST = 'findra-search.netlify.app';
+const HOST = 'findra.esekpo.co.il';
 
 /// The key file is the source of truth. A bare 32-hex .txt at the root of the site whose contents
 /// are its own name is the shape IndexNow specifies; finding it here rather than storing the key
