@@ -12,7 +12,7 @@ what was said in a recording.
 
 Everything happens on your machine. There is no account, no cloud and no telemetry.
 
-Findra has a page of its own at https://findra-search.netlify.app. Its screenshots are the
+Findra has a page of its own at https://findra.esekpo.co.il. Its screenshots are the
 same renders as the ones here, drawn by the same commands.
 
 ![The Findra capsule, waiting on the desktop](docs/shots/capsule.png)
@@ -77,7 +77,7 @@ is the whole install, from the Windows Package Manager catalogue. The same progr
 [releases page](https://github.com/blakazulu/findra/releases/latest) as an installer for x64 and one
 for arm64, built by `installer/findra.iss`, and that page has each new release first - the
 catalogue can take a few days to pick one up. The site's
-[install section](https://findra-search.netlify.app/#install) says the same thing with a button.
+[install section](https://findra.esekpo.co.il/#install) says the same thing with a button.
 
 Building from source works too, and needs the .NET 10 SDK and nothing else.
 
@@ -95,7 +95,7 @@ needs administrator rights exactly once, to open the volume:
 Neither the installer nor the executables are signed yet, so Windows will warn about an
 unknown publisher until that changes; `docs/code-signing-policy.md` says where that stands and
 the site carries the same page at
-[/code-signing/](https://findra-search.netlify.app/code-signing/).
+[/code-signing/](https://findra.esekpo.co.il/code-signing/).
 
 Findra installs an update only when you press Update now. Check for updates in the tray, or
 Check now in Settings, asks whether a newer version exists; Update now then downloads the

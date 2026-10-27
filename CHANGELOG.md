@@ -16,6 +16,8 @@ and Findra follows [Semantic Versioning](https://semver.org/spec/v2.0.0/).
 
 ### Changed
 
+- **Findra's site has moved to https://findra.esekpo.co.il.** The old address forwards there, and
+  the README now links the new one.
 - Documentation: the notes for working on Findra's code are split by folder, so each part of the
   program carries its own rules beside it, and the Microsoft Store record says the listing is live.
 
